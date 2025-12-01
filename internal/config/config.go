@@ -2,6 +2,8 @@ package config
 
 import (
 	"flag"
+	"log/slog"
+	"strings"
 	"time"
 )
 
@@ -19,6 +21,8 @@ type Config struct {
 	Storage      StorageType
 	SQLitePath   string
 	HistoryTTL   time.Duration
+	LogFormat    string
+	LogLevel     string
 }
 
 func Parse() *Config {
@@ -33,6 +37,8 @@ func Parse() *Config {
 
 	flag.StringVar(&cfg.SQLitePath, "sqlite-path", "./history.db", "SQLite database path")
 	flag.DurationVar(&cfg.HistoryTTL, "history-ttl", time.Hour, "History retention time")
+	flag.StringVar(&cfg.LogFormat, "log-format", "text", "Log format: text or json")
+	flag.StringVar(&cfg.LogLevel, "log-level", "info", "Log level: debug, info, warn, error")
 
 	flag.Parse()
 
@@ -42,4 +48,18 @@ func Parse() *Config {
 	}
 
 	return cfg
+}
+
+// ParseLogLevel converts string log level to slog.Level
+func ParseLogLevel(level string) slog.Level {
+	switch strings.ToLower(level) {
+	case "debug":
+		return slog.LevelDebug
+	case "warn", "warning":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
 }

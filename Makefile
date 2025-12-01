@@ -1,4 +1,4 @@
-.PHONY: build test js-tests clean
+.PHONY: build test js-tests coverage clean
 
 # Go build
 build:
@@ -7,6 +7,11 @@ build:
 # Go unit tests
 test:
 	go test -mod=vendor -v ./internal/...
+
+# Test coverage
+coverage:
+	go test -mod=vendor -coverprofile=coverage.out ./internal/...
+	go tool cover -func=coverage.out | tail -1
 
 # E2E tests with Playwright in Docker
 js-tests:

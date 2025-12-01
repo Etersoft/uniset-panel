@@ -2,10 +2,10 @@ package poller
 
 import (
 	"context"
-	"log"
 	"sync"
 	"time"
 
+	"github.com/pv/uniset2-viewer-go/internal/logger"
 	"github.com/pv/uniset2-viewer-go/internal/storage"
 	"github.com/pv/uniset2-viewer-go/internal/uniset"
 )
@@ -86,7 +86,7 @@ func (p *Poller) poll() {
 	for _, objectName := range objects {
 		data, err := p.client.GetObjectData(objectName)
 		if err != nil {
-			log.Printf("poll %s failed: %v", objectName, err)
+			logger.Warn("Poll failed", "object", objectName, "error", err)
 			continue
 		}
 
@@ -98,7 +98,7 @@ func (p *Poller) poll() {
 		if data.Variables != nil {
 			for varName, value := range data.Variables {
 				if err := p.storage.Save(objectName, varName, value, now); err != nil {
-					log.Printf("save variable %s:%s failed: %v", objectName, varName, err)
+					logger.Warn("Save variable failed", "object", objectName, "var", varName, "error", err)
 				}
 			}
 		}
@@ -109,7 +109,7 @@ func (p *Poller) poll() {
 				for key, io := range data.IO.In {
 					varName := "io.in." + key
 					if err := p.storage.Save(objectName, varName, io.Value, now); err != nil {
-						log.Printf("save io.in %s:%s failed: %v", objectName, varName, err)
+						logger.Warn("Save IO input failed", "object", objectName, "var", varName, "error", err)
 					}
 				}
 			}
@@ -117,7 +117,7 @@ func (p *Poller) poll() {
 				for key, io := range data.IO.Out {
 					varName := "io.out." + key
 					if err := p.storage.Save(objectName, varName, io.Value, now); err != nil {
-						log.Printf("save io.out %s:%s failed: %v", objectName, varName, err)
+						logger.Warn("Save IO output failed", "object", objectName, "var", varName, "error", err)
 					}
 				}
 			}
@@ -127,7 +127,7 @@ func (p *Poller) poll() {
 	// Периодическая очистка старых данных
 	if time.Since(p.lastCleanupTime) > time.Minute {
 		if err := p.storage.Cleanup(now.Add(-p.ttl)); err != nil {
-			log.Printf("cleanup failed: %v", err)
+			logger.Warn("Cleanup failed", "error", err)
 		}
 		p.lastCleanupTime = now
 	}

@@ -3,14 +3,15 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/pv/uniset2-viewer-go/internal/api"
 	"github.com/pv/uniset2-viewer-go/internal/config"
+	"github.com/pv/uniset2-viewer-go/internal/logger"
 	"github.com/pv/uniset2-viewer-go/internal/poller"
 	"github.com/pv/uniset2-viewer-go/internal/storage"
 	"github.com/pv/uniset2-viewer-go/internal/uniset"
@@ -19,6 +20,9 @@ import (
 
 func main() {
 	cfg := config.Parse()
+
+	// Initialize logger
+	logger.Init(cfg.LogFormat, config.ParseLogLevel(cfg.LogLevel))
 
 	// Create uniset client
 	client := uniset.NewClient(cfg.UnisetURL)
@@ -31,12 +35,13 @@ func main() {
 	case config.StorageSQLite:
 		store, err = storage.NewSQLiteStorage(cfg.SQLitePath)
 		if err != nil {
-			log.Fatalf("Failed to create SQLite storage: %v", err)
+			logger.Error("Failed to create SQLite storage", "error", err)
+			os.Exit(1)
 		}
-		log.Printf("Using SQLite storage: %s", cfg.SQLitePath)
+		logger.Info("Using SQLite storage", "path", cfg.SQLitePath)
 	default:
 		store = storage.NewMemoryStorage()
-		log.Println("Using in-memory storage")
+		logger.Info("Using in-memory storage")
 	}
 	defer store.Close()
 
@@ -61,13 +66,16 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("Starting server on http://localhost%s", addr)
-		log.Printf("UniSet2 URL: %s", cfg.UnisetURL)
-		log.Printf("Poll interval: %s", cfg.PollInterval)
-		log.Printf("History TTL: %s", cfg.HistoryTTL)
+		logger.Info("Starting server",
+			"addr", addr,
+			"uniset_url", cfg.UnisetURL,
+			"poll_interval", cfg.PollInterval.String(),
+			"history_ttl", cfg.HistoryTTL.String(),
+		)
 
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server failed: %v", err)
+			logger.Error("Server failed", "error", err)
+			os.Exit(1)
 		}
 	}()
 
@@ -76,12 +84,18 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server...")
+	logger.Info("Shutting down server...")
+
+	// Cancel poller context
 	cancel()
 
-	if err := httpServer.Shutdown(context.Background()); err != nil {
-		log.Printf("Server shutdown error: %v", err)
+	// Graceful shutdown with timeout
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		logger.Error("Server shutdown error", "error", err)
 	}
 
-	log.Println("Server stopped")
+	logger.Info("Server stopped")
 }

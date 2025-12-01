@@ -32,6 +32,8 @@ go build -o uniset2-viewer ./cmd/server
 | `--storage` | `memory` | Тип хранилища: `memory` или `sqlite` |
 | `--sqlite-path` | `./history.db` | Путь к SQLite базе данных |
 | `--history-ttl` | `1h` | Время хранения истории |
+| `--log-format` | `text` | Формат логов: `text` или `json` |
+| `--log-level` | `info` | Уровень логирования: `debug`, `info`, `warn`, `error` |
 
 ### Примеры
 
@@ -86,7 +88,8 @@ uniset2-viewer-go/
 │   ├── uniset/              # HTTP клиент к uniset2
 │   ├── storage/             # хранилище истории
 │   ├── poller/              # периодический опрос
-│   └── api/                 # REST API сервера
+│   ├── api/                 # REST API сервера
+│   └── logger/              # structured logging (slog)
 ├── ui/
 │   ├── embed.go             # go:embed директивы
 │   ├── static/              # JS, CSS
