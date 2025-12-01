@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UniSet2 Viewer</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>UniSet2 Viewer</h1>
+        </header>
+
+        <div class="main-layout">
+            <aside class="sidebar">
+                <h2>Objects</h2>
+                <button id="refresh-objects" class="btn">Refresh</button>
+                <ul id="objects-list" class="objects-list"></ul>
+            </aside>
+
+            <main class="content">
+                <div class="tabs">
+                    <div id="tabs-header" class="tabs-header"></div>
+                    <div id="tabs-content" class="tabs-content">
+                        <div class="placeholder">
+                            Select an object from the list
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

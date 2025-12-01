@@ -1,0 +1,114 @@
+package poller
+
+import (
+	"context"
+	"log"
+	"sync"
+	"time"
+
+	"github.com/pv/uniset2-viewer-go/internal/storage"
+	"github.com/pv/uniset2-viewer-go/internal/uniset"
+)
+
+type Poller struct {
+	client   *uniset.Client
+	storage  storage.Storage
+	interval time.Duration
+	ttl      time.Duration
+
+	mu              sync.RWMutex
+	watchedObjects  map[string]bool
+	lastObjectData  map[string]*uniset.ObjectData
+	lastCleanupTime time.Time
+}
+
+func New(client *uniset.Client, store storage.Storage, interval, ttl time.Duration) *Poller {
+	return &Poller{
+		client:          client,
+		storage:         store,
+		interval:        interval,
+		ttl:             ttl,
+		watchedObjects:  make(map[string]bool),
+		lastObjectData:  make(map[string]*uniset.ObjectData),
+		lastCleanupTime: time.Now(),
+	}
+}
+
+// Watch добавляет объект в список наблюдения
+func (p *Poller) Watch(objectName string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.watchedObjects[objectName] = true
+}
+
+// Unwatch удаляет объект из списка наблюдения
+func (p *Poller) Unwatch(objectName string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.watchedObjects, objectName)
+}
+
+// GetLastData возвращает последние полученные данные объекта
+func (p *Poller) GetLastData(objectName string) *uniset.ObjectData {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.lastObjectData[objectName]
+}
+
+// Run запускает цикл опроса
+func (p *Poller) Run(ctx context.Context) {
+	ticker := time.NewTicker(p.interval)
+	defer ticker.Stop()
+
+	// Первый опрос сразу
+	p.poll()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			p.poll()
+		}
+	}
+}
+
+func (p *Poller) poll() {
+	p.mu.RLock()
+	objects := make([]string, 0, len(p.watchedObjects))
+	for obj := range p.watchedObjects {
+		objects = append(objects, obj)
+	}
+	p.mu.RUnlock()
+
+	now := time.Now()
+
+	for _, objectName := range objects {
+		data, err := p.client.GetObjectData(objectName)
+		if err != nil {
+			log.Printf("poll %s failed: %v", objectName, err)
+			continue
+		}
+
+		p.mu.Lock()
+		p.lastObjectData[objectName] = data
+		p.mu.Unlock()
+
+		// Сохраняем переменные в историю
+		if data.Variables != nil {
+			for varName, value := range data.Variables {
+				if err := p.storage.Save(objectName, varName, value, now); err != nil {
+					log.Printf("save variable %s:%s failed: %v", objectName, varName, err)
+				}
+			}
+		}
+	}
+
+	// Периодическая очистка старых данных
+	if time.Since(p.lastCleanupTime) > time.Minute {
+		if err := p.storage.Cleanup(now.Add(-p.ttl)); err != nil {
+			log.Printf("cleanup failed: %v", err)
+		}
+		p.lastCleanupTime = now
+	}
+}

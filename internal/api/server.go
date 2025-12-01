@@ -1,0 +1,47 @@
+package api
+
+import (
+	"io/fs"
+	"net/http"
+)
+
+type Server struct {
+	mux      *http.ServeMux
+	handlers *Handlers
+}
+
+func NewServer(handlers *Handlers, staticFS fs.FS) *Server {
+	s := &Server{
+		mux:      http.NewServeMux(),
+		handlers: handlers,
+	}
+	s.setupRoutes(staticFS)
+	return s
+}
+
+func (s *Server) setupRoutes(staticFS fs.FS) {
+	// API routes
+	s.mux.HandleFunc("GET /api/objects", s.handlers.GetObjects)
+	s.mux.HandleFunc("GET /api/objects/{name}", s.handlers.GetObjectData)
+	s.mux.HandleFunc("POST /api/objects/{name}/watch", s.handlers.WatchObject)
+	s.mux.HandleFunc("DELETE /api/objects/{name}/watch", s.handlers.UnwatchObject)
+	s.mux.HandleFunc("GET /api/objects/{name}/variables/{variable}/history", s.handlers.GetVariableHistory)
+	s.mux.HandleFunc("GET /api/objects/{name}/variables/{variable}/history/range", s.handlers.GetVariableHistoryRange)
+
+	// Static files
+	staticHandler := http.FileServer(http.FS(staticFS))
+	s.mux.Handle("/static/", staticHandler)
+
+	// Index page
+	s.mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeFileFS(w, r, staticFS, "templates/index.html")
+	})
+}
+
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.mux.ServeHTTP(w, r)
+}
