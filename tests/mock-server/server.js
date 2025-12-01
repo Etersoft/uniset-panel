@@ -49,6 +49,7 @@ const testProcData = {
           comment: 'comment for input1',
           id: 1,
           name: 'Input1_S',
+          textname: 'Вход 1 - Температура',
           smTestID: '1',
           value: 1,
           vartype: 'in'
@@ -58,6 +59,7 @@ const testProcData = {
           id: 19,
           initFromSM: '1',
           name: 'DumpSensor1_S',
+          textname: 'Датчик давления',
           value: 0,
           vartype: 'in'
         }
@@ -68,6 +70,7 @@ const testProcData = {
           name: 'DO_C',
           no_check_id: '1',
           comment: 'comment for output1',
+          textname: 'Выход 1 - Насос',
           value: 1,
           vartype: 'out'
         },
@@ -76,6 +79,7 @@ const testProcData = {
           id: 8,
           name: 'DO1_C',
           comment: 'comment for output2',
+          textname: 'Выход 2 - Клапан',
           value: 0,
           vartype: 'out'
         }

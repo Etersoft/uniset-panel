@@ -7,8 +7,129 @@ const state = {
     sensorsByName: new Map(), // sensorName -> sensorInfo
     timeRange: 900, // секунды (по умолчанию 15 минут)
     sidebarCollapsed: false, // свёрнутая боковая панель
-    collapsedSections: {} // состояние спойлеров
+    collapsedSections: {}, // состояние спойлеров
+    sse: {
+        eventSource: null,
+        connected: false,
+        pollInterval: 5000, // будет обновлено с сервера
+        reconnectAttempts: 0,
+        maxReconnectAttempts: 5,
+        reconnectDelay: 1000
+    }
 };
+
+// ============================================================================
+// SSE (Server-Sent Events) для realtime обновлений
+// ============================================================================
+
+function initSSE() {
+    if (state.sse.eventSource) {
+        state.sse.eventSource.close();
+    }
+
+    const url = '/api/events';
+    console.log('SSE: Подключение к', url);
+
+    const eventSource = new EventSource(url);
+    state.sse.eventSource = eventSource;
+
+    eventSource.addEventListener('connected', (e) => {
+        try {
+            const data = JSON.parse(e.data);
+            state.sse.connected = true;
+            state.sse.reconnectAttempts = 0;
+            state.sse.pollInterval = data.data?.pollInterval || 5000;
+            console.log('SSE: Подключено, poll interval:', state.sse.pollInterval, 'ms');
+
+            // Отключаем polling для всех открытых вкладок
+            state.tabs.forEach((tabState, objectName) => {
+                if (tabState.updateInterval) {
+                    clearInterval(tabState.updateInterval);
+                    tabState.updateInterval = null;
+                    console.log('SSE: Отключен polling для', objectName);
+                }
+            });
+        } catch (err) {
+            console.warn('SSE: Ошибка парсинга connected:', err);
+        }
+    });
+
+    eventSource.addEventListener('object_data', (e) => {
+        try {
+            const event = JSON.parse(e.data);
+            const objectName = event.objectName;
+            const data = event.data;
+
+            // Обновляем UI только для открытых вкладок
+            const tabState = state.tabs.get(objectName);
+            if (tabState) {
+                // Обновляем рендерер (таблицы, статистика и т.д.)
+                if (tabState.renderer) {
+                    tabState.renderer.update(data);
+                }
+
+                // Обновляем графики
+                tabState.charts.forEach((chartData, varName) => {
+                    updateChart(objectName, varName, chartData.chart);
+                });
+            }
+        } catch (err) {
+            console.warn('SSE: Ошибка обработки object_data:', err);
+        }
+    });
+
+    eventSource.onerror = (e) => {
+        console.warn('SSE: Ошибка соединения');
+        state.sse.connected = false;
+
+        if (state.sse.reconnectAttempts < state.sse.maxReconnectAttempts) {
+            state.sse.reconnectAttempts++;
+            const delay = state.sse.reconnectDelay * state.sse.reconnectAttempts;
+            console.log(`SSE: Переподключение через ${delay}ms (попытка ${state.sse.reconnectAttempts})`);
+            setTimeout(initSSE, delay);
+        } else {
+            console.warn('SSE: Превышено количество попыток, переход на polling');
+            enablePollingFallback();
+        }
+    };
+
+    eventSource.onopen = () => {
+        console.log('SSE: Соединение открыто');
+    };
+}
+
+// Включить polling как fallback при недоступности SSE
+function enablePollingFallback() {
+    console.log('Polling: Включение fallback режима');
+    state.tabs.forEach((tabState, objectName) => {
+        // Включаем polling для данных объекта
+        if (!tabState.updateInterval) {
+            tabState.updateInterval = setInterval(
+                () => loadObjectData(objectName),
+                state.sse.pollInterval
+            );
+            console.log('Polling: Включен для', objectName);
+        }
+
+        // Включаем polling для графиков
+        tabState.charts.forEach((chartData, varName) => {
+            if (!chartData.updateInterval) {
+                chartData.updateInterval = setInterval(async () => {
+                    await updateChart(objectName, varName, chartData.chart);
+                }, state.sse.pollInterval);
+            }
+        });
+    });
+}
+
+// Закрыть SSE соединение
+function closeSSE() {
+    if (state.sse.eventSource) {
+        state.sse.eventSource.close();
+        state.sse.eventSource = null;
+        state.sse.connected = false;
+    }
+}
 
 // ============================================================================
 // Система рендереров для разных типов объектов
@@ -86,6 +207,7 @@ class BaseObjectRenderer {
                 <thead>
                     <tr>
                         <th>Имя</th>
+                        <th>Описание</th>
                         <th>ID</th>
                         <th>Тип</th>
                         <th>Значение</th>
@@ -106,6 +228,7 @@ class BaseObjectRenderer {
                         <th>Имя</th>
                         <th>Интервал</th>
                         <th>Осталось</th>
+                        <th>Tick</th>
                     </tr>
                 </thead>
                 <tbody id="timers-${this.objectName}"></tbody>
@@ -114,7 +237,7 @@ class BaseObjectRenderer {
     }
 
     createVariablesSection() {
-        return this.createCollapsibleSection('variables', 'Переменные', `
+        return this.createCollapsibleSection('variables', 'Настройки', `
             <table class="variables-table">
                 <thead>
                     <tr>
@@ -414,12 +537,17 @@ function createTab(name, objectType, initialData) {
     restoreCollapsedSections(name);
 
     // Сохраняем состояние вкладки с рендерером
+    // Если SSE подключен, не запускаем polling (данные будут приходить через SSE)
+    const updateInterval = state.sse.connected
+        ? null
+        : setInterval(() => loadObjectData(name), state.sse.pollInterval);
+
     state.tabs.set(name, {
         charts: new Map(),
         variables: {},
         objectType: objectType,
         renderer: renderer,
-        updateInterval: setInterval(() => loadObjectData(name), 5000)
+        updateInterval: updateInterval
     });
 
     // Инициализация рендерера (настройка обработчиков и т.д.)
@@ -534,14 +662,13 @@ function renderIO(objectName, type, ioData) {
         const varName = `io.${type === 'inputs' ? 'in' : 'out'}.${key}`;
         const sensor = getSensorInfo(io.id) || getSensorInfo(io.name);
         const iotype = sensor?.iotype || (type === 'inputs' ? 'DI' : 'DO');
-        const textname = sensor?.textname || io.name || key;
+        // Сначала пробуем взять textname из ответа API, потом из справочника сенсоров
+        const textname = io.textname || sensor?.textname || '';
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>
-                <div class="variable-name">${io.name || key}</div>
-                <div class="variable-textname">${textname !== io.name ? textname : ''}</div>
-            </td>
+            <td class="variable-name">${io.name || key}</td>
+            <td class="variable-textname">${textname}</td>
             <td>${io.id}</td>
             <td><span class="variable-iotype iotype-${iotype.toLowerCase()}">${iotype}</span></td>
             <td class="variable-value" data-var="${varName}">${formatValue(io.value)}</td>
@@ -566,7 +693,7 @@ function renderIO(objectName, type, ioData) {
         const checkbox = tr.querySelector('input');
         checkbox.addEventListener('change', (e) => {
             if (e.target.checked) {
-                addChart(objectName, varName, io.id);
+                addChart(objectName, varName, io.id, textname);
             } else {
                 removeChart(objectName, varName);
             }
@@ -588,16 +715,23 @@ function hasChart(objectName, varName) {
     return tabState && tabState.charts.has(varName);
 }
 
-async function addChart(objectName, varName, sensorId) {
+async function addChart(objectName, varName, sensorId, passedTextname) {
     const tabState = state.tabs.get(objectName);
     if (!tabState || tabState.charts.has(varName)) return;
 
     const chartsContainer = document.getElementById(`charts-${objectName}`);
-    const sensor = sensorId ? getSensorInfo(sensorId) : null;
+    // Ищем сенсор по ID или по имени переменной
+    let sensor = sensorId ? getSensorInfo(sensorId) : null;
+    if (!sensor) {
+        // Пробуем найти по имени (последняя часть varName, например io.in.Input1_S -> Input1_S)
+        const shortName = varName.split('.').pop();
+        sensor = getSensorInfo(shortName);
+    }
     const isDiscrete = isDiscreteSignal(sensor);
     const color = getNextColor();
     const displayName = sensor?.name || varName.split('.').pop();
-    const textName = sensor?.textname || displayName;
+    // textname: сначала переданный параметр, потом из справочника сенсоров
+    const textName = passedTextname || sensor?.textname || '';
 
     // Создаём панель графика
     const chartDiv = document.createElement('div');
@@ -609,7 +743,7 @@ async function addChart(objectName, varName, sensorId) {
                 <span class="legend-color-picker" data-object="${objectName}" data-variable="${varName}" style="background:${color}" title="Нажмите для выбора цвета"></span>
                 <span class="chart-panel-title">${displayName}</span>
                 <span class="chart-panel-value" id="legend-value-${objectName}-${varName}">--</span>
-                <span class="chart-panel-description">${textName !== displayName ? textName : ''}</span>
+                <span class="chart-panel-textname">${textName}</span>
             </div>
             <div class="chart-panel-right">
                 <label class="fill-toggle" title="Заливка фона">
@@ -750,10 +884,12 @@ async function addChart(objectName, varName, sensorId) {
             updateInterval: null
         };
 
-        // Периодическое обновление
-        chartData.updateInterval = setInterval(async () => {
-            await updateChart(objectName, varName, chart);
-        }, 5000);
+        // Периодическое обновление только если SSE не подключен
+        if (!state.sse.connected) {
+            chartData.updateInterval = setInterval(async () => {
+                await updateChart(objectName, varName, chart);
+            }, state.sse.pollInterval);
+        }
 
         tabState.charts.set(varName, chartData);
 
@@ -946,7 +1082,7 @@ function renderTimers(objectName, timersData) {
     }
 
     if (timers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">Нет таймеров</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">Нет таймеров</td></tr>';
         return;
     }
 
@@ -957,6 +1093,7 @@ function renderTimers(objectName, timersData) {
             <td class="variable-name">${timer.name || '-'}</td>
             <td class="variable-value">${timer.msec} мс</td>
             <td class="variable-value">${timer.timeleft} мс</td>
+            <td class="variable-value">${timer.tick}</td>
         `;
         tbody.appendChild(tr);
     });
@@ -1018,7 +1155,8 @@ function renderLogServer(objectName, logServerData) {
             let valueHtml;
             if (formatState) {
                 const stateValue = String(logServerData[key]).toUpperCase();
-                const stateClass = stateValue === 'RUNNING' ? 'state-running' :
+                // Проверяем с учётом возможных опечаток (RUNNIG вместо RUNNING)
+                const stateClass = stateValue.startsWith('RUNN') ? 'state-running' :
                                    stateValue === 'STOPPED' ? 'state-stopped' : '';
                 valueHtml = `<span class="state-badge ${stateClass}">${logServerData[key]}</span>`;
             } else {
@@ -1154,20 +1292,32 @@ function renderStatisticsSensors(objectName, filterText = '') {
     const filterLower = filterText.toLowerCase();
     const sensors = tabState.statisticsData.sensors;
 
-    Object.entries(sensors).forEach(([sensorName, sensorValue]) => {
+    Object.entries(sensors).forEach(([sensorKey, sensorData]) => {
+        // sensorData может быть объектом {id, name, count} или просто числом
+        let sensorId, sensorName, sensorCount;
+
+        if (typeof sensorData === 'object' && sensorData !== null) {
+            // Формат: {id: 1, name: "Input1_S", count: 5}
+            sensorId = sensorData.id ?? '-';
+            sensorName = sensorData.name || sensorKey;
+            sensorCount = sensorData.count ?? 0;
+        } else {
+            // Формат: "SensorName": 5 (просто число срабатываний)
+            const sensorInfo = getSensorInfo(sensorKey);
+            sensorId = sensorInfo?.id || '-';
+            sensorName = sensorKey;
+            sensorCount = sensorData;
+        }
+
         if (filterText && !sensorName.toLowerCase().includes(filterLower)) {
             return;
         }
-
-        // Получить ID сенсора из конфигурации
-        const sensorInfo = getSensorInfo(sensorName);
-        const sensorId = sensorInfo?.id || '-';
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${sensorId}</td>
             <td class="variable-name">${sensorName}</td>
-            <td class="variable-value">${formatValue(sensorValue)}</td>
+            <td class="variable-value">${formatValue(sensorCount)}</td>
         `;
         tbody.appendChild(tr);
     });
@@ -1403,6 +1553,9 @@ function loadSettings() {
 
 // Инициализация
 document.addEventListener('DOMContentLoaded', () => {
+    // Инициализация SSE для realtime обновлений
+    initSSE();
+
     // Загружаем конфигурацию сенсоров (не блокируем загрузку объектов)
     loadSensorsConfig().catch(err => {
         console.warn('Не удалось загрузить конфигурацию сенсоров:', err);

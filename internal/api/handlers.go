@@ -17,15 +17,24 @@ type Handlers struct {
 	storage      storage.Storage
 	poller       *poller.Poller
 	sensorConfig *sensorconfig.SensorConfig
+	sseHub       *SSEHub
+	pollInterval time.Duration
 }
 
-func NewHandlers(client *uniset.Client, store storage.Storage, p *poller.Poller, sensorCfg *sensorconfig.SensorConfig) *Handlers {
+func NewHandlers(client *uniset.Client, store storage.Storage, p *poller.Poller, sensorCfg *sensorconfig.SensorConfig, pollInterval time.Duration) *Handlers {
 	return &Handlers{
 		client:       client,
 		storage:      store,
 		poller:       p,
 		sensorConfig: sensorCfg,
+		sseHub:       NewSSEHub(),
+		pollInterval: pollInterval,
 	}
+}
+
+// GetSSEHub возвращает SSE hub для использования в poller
+func (h *Handlers) GetSSEHub() *SSEHub {
+	return h.sseHub
 }
 
 func (h *Handlers) writeJSON(w http.ResponseWriter, data interface{}) {

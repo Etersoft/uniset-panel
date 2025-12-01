@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -385,5 +386,159 @@ func TestPollerCleanup(t *testing.T) {
 	// Verify cleanup was called (lastCleanupTime should be updated)
 	if time.Since(p.lastCleanupTime) > time.Second {
 		t.Error("cleanup time should have been updated")
+	}
+}
+
+func TestPollerEventCallback(t *testing.T) {
+	store := storage.NewMemoryStorage()
+	defer store.Close()
+
+	server := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		response := map[string]interface{}{
+			"TestProc": map[string]interface{}{
+				"Variables": map[string]interface{}{
+					"value": "42",
+				},
+			},
+			"object": map[string]interface{}{
+				"id":   6000,
+				"name": "TestProc",
+			},
+		}
+		json.NewEncoder(w).Encode(response)
+	})
+	defer server.Close()
+
+	client := uniset.NewClient(server.URL)
+	p := New(client, store, 50*time.Millisecond, time.Hour)
+
+	// Счётчик вызовов callback
+	var callbackCount int32
+	var lastObjectName string
+	var mu sync.Mutex
+
+	p.SetEventCallback(func(objectName string, data *uniset.ObjectData) {
+		atomic.AddInt32(&callbackCount, 1)
+		mu.Lock()
+		lastObjectName = objectName
+		mu.Unlock()
+	})
+
+	p.Watch("TestProc")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	go p.Run(ctx)
+
+	// Wait for polls
+	time.Sleep(180 * time.Millisecond)
+
+	count := atomic.LoadInt32(&callbackCount)
+	if count == 0 {
+		t.Error("expected callback to be called at least once")
+	}
+
+	mu.Lock()
+	objName := lastObjectName
+	mu.Unlock()
+
+	if objName != "TestProc" {
+		t.Errorf("expected objectName=TestProc, got %s", objName)
+	}
+}
+
+func TestPollerEventCallbackWithMultipleObjects(t *testing.T) {
+	store := storage.NewMemoryStorage()
+	defer store.Close()
+
+	server := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		var response map[string]interface{}
+
+		switch path {
+		case "/api/v01/Obj1":
+			response = map[string]interface{}{
+				"Obj1": map[string]interface{}{
+					"Variables": map[string]interface{}{"var": "1"},
+				},
+			}
+		case "/api/v01/Obj2":
+			response = map[string]interface{}{
+				"Obj2": map[string]interface{}{
+					"Variables": map[string]interface{}{"var": "2"},
+				},
+			}
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		json.NewEncoder(w).Encode(response)
+	})
+	defer server.Close()
+
+	client := uniset.NewClient(server.URL)
+	p := New(client, store, 50*time.Millisecond, time.Hour)
+
+	// Отслеживаем какие объекты получили события
+	receivedObjects := make(map[string]bool)
+	var mu sync.Mutex
+
+	p.SetEventCallback(func(objectName string, data *uniset.ObjectData) {
+		mu.Lock()
+		receivedObjects[objectName] = true
+		mu.Unlock()
+	})
+
+	p.Watch("Obj1")
+	p.Watch("Obj2")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+
+	go p.Run(ctx)
+
+	time.Sleep(130 * time.Millisecond)
+
+	mu.Lock()
+	obj1Received := receivedObjects["Obj1"]
+	obj2Received := receivedObjects["Obj2"]
+	mu.Unlock()
+
+	if !obj1Received {
+		t.Error("expected callback for Obj1")
+	}
+	if !obj2Received {
+		t.Error("expected callback for Obj2")
+	}
+}
+
+func TestPollerSetEventCallbackNil(t *testing.T) {
+	store := storage.NewMemoryStorage()
+	defer store.Close()
+
+	server := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		response := map[string]interface{}{
+			"TestProc": map[string]interface{}{
+				"Variables": map[string]interface{}{"v": "1"},
+			},
+		}
+		json.NewEncoder(w).Encode(response)
+	})
+	defer server.Close()
+
+	client := uniset.NewClient(server.URL)
+	p := New(client, store, 50*time.Millisecond, time.Hour)
+
+	// Не устанавливаем callback (nil по умолчанию)
+	p.Watch("TestProc")
+
+	// Не должен паниковать при nil callback
+	p.poll()
+
+	// Проверяем что данные всё равно сохраняются
+	data := p.GetLastData("TestProc")
+	if data == nil {
+		t.Error("expected data to be saved even without callback")
 	}
 }

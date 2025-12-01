@@ -62,8 +62,14 @@ func main() {
 	}
 
 	// Create API handlers and server
-	handlers := api.NewHandlers(client, store, p, sensorCfg)
+	handlers := api.NewHandlers(client, store, p, sensorCfg, cfg.PollInterval)
 	server := api.NewServer(handlers, ui.Content)
+
+	// Connect poller to SSE hub for broadcasting updates
+	sseHub := handlers.GetSSEHub()
+	p.SetEventCallback(func(objectName string, data *uniset.ObjectData) {
+		sseHub.BroadcastObjectData(objectName, data)
+	})
 
 	// Start poller
 	ctx, cancel := context.WithCancel(context.Background())

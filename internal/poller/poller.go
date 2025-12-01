@@ -10,6 +10,9 @@ import (
 	"github.com/pv/uniset2-viewer-go/internal/uniset"
 )
 
+// EventCallback вызывается при получении новых данных объекта
+type EventCallback func(objectName string, data *uniset.ObjectData)
+
 type Poller struct {
 	client   *uniset.Client
 	storage  storage.Storage
@@ -20,6 +23,8 @@ type Poller struct {
 	watchedObjects  map[string]bool
 	lastObjectData  map[string]*uniset.ObjectData
 	lastCleanupTime time.Time
+
+	eventCallback EventCallback
 }
 
 func New(client *uniset.Client, store storage.Storage, interval, ttl time.Duration) *Poller {
@@ -32,6 +37,13 @@ func New(client *uniset.Client, store storage.Storage, interval, ttl time.Durati
 		lastObjectData:  make(map[string]*uniset.ObjectData),
 		lastCleanupTime: time.Now(),
 	}
+}
+
+// SetEventCallback устанавливает callback для уведомления о новых данных
+func (p *Poller) SetEventCallback(cb EventCallback) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.eventCallback = cb
 }
 
 // Watch добавляет объект в список наблюдения
@@ -92,7 +104,13 @@ func (p *Poller) poll() {
 
 		p.mu.Lock()
 		p.lastObjectData[objectName] = data
+		callback := p.eventCallback
 		p.mu.Unlock()
+
+		// Уведомляем SSE клиентов о новых данных
+		if callback != nil {
+			callback(objectName, data)
+		}
 
 		// Сохраняем переменные в историю
 		if data.Variables != nil {

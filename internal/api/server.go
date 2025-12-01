@@ -28,6 +28,9 @@ func (s *Server) setupRoutes(staticFS fs.FS) {
 	s.mux.HandleFunc("GET /api/objects/{name}/variables/{variable}/history", s.handlers.GetVariableHistory)
 	s.mux.HandleFunc("GET /api/objects/{name}/variables/{variable}/history/range", s.handlers.GetVariableHistoryRange)
 
+	// SSE endpoint
+	s.mux.HandleFunc("GET /api/events", s.handlers.HandleSSE)
+
 	// Sensor config API
 	s.mux.HandleFunc("GET /api/sensors", s.handlers.GetSensors)
 	s.mux.HandleFunc("GET /api/sensors/{id}", s.handlers.GetSensorByID)
