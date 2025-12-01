@@ -1061,25 +1061,46 @@ window.toggleSection = function(sectionId) {
     }
 };
 
+// Хранилище данных таймеров для локального обновления timeleft
+const timerDataCache = {};
+let timerUpdateInterval = null;
+
 // Рендеринг таймеров
 function renderTimers(objectName, timersData) {
     const tbody = document.getElementById(`timers-${objectName}`);
     const countBadge = document.getElementById(`timers-count-${objectName}`);
     if (!tbody) return;
 
-    tbody.innerHTML = '';
-
     // Извлечь таймеры из объекта (исключая count)
     const timers = [];
     Object.entries(timersData).forEach(([key, timer]) => {
         if (key !== 'count' && typeof timer === 'object') {
-            timers.push(timer);
+            timers.push({...timer, _key: key});
         }
     });
+
+    // Сохраняем в кэш для локального обновления
+    timerDataCache[objectName] = {
+        timers: timers,
+        lastUpdate: Date.now()
+    };
 
     if (countBadge) {
         countBadge.textContent = timers.length;
     }
+
+    renderTimersTable(objectName, timers);
+
+    // Запускаем интервал локального обновления если ещё не запущен
+    startTimerUpdateInterval();
+}
+
+// Отрисовка таблицы таймеров
+function renderTimersTable(objectName, timers) {
+    const tbody = document.getElementById(`timers-${objectName}`);
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
 
     if (timers.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">Нет таймеров</td></tr>';
@@ -1088,15 +1109,65 @@ function renderTimers(objectName, timersData) {
 
     timers.forEach(timer => {
         const tr = document.createElement('tr');
+        tr.dataset.timerId = timer.id;
+
+        // Форматирование tick: -1 означает что таймер не активен
+        const tickDisplay = timer.tick === -1 ? '-' : timer.tick;
+        const tickClass = timer.tick === -1 ? 'timer-inactive' : '';
+
+        // Форматирование timeleft с прогресс-баром
+        const timeleftPercent = timer.msec > 0 ? Math.max(0, (timer.timeleft / timer.msec) * 100) : 0;
+        const timeleftClass = timer.timeleft <= 0 ? 'timer-expired' : '';
+
         tr.innerHTML = `
             <td>${timer.id}</td>
             <td class="variable-name">${timer.name || '-'}</td>
             <td class="variable-value">${timer.msec} мс</td>
-            <td class="variable-value">${timer.timeleft} мс</td>
-            <td class="variable-value">${timer.tick}</td>
+            <td class="variable-value ${timeleftClass}">
+                <div class="timeleft-cell">
+                    <span class="timeleft-value">${Math.max(0, timer.timeleft)} мс</span>
+                    <div class="timeleft-bar" style="width: ${timeleftPercent}%"></div>
+                </div>
+            </td>
+            <td class="variable-value ${tickClass}">${tickDisplay}</td>
         `;
         tbody.appendChild(tr);
     });
+}
+
+// Запуск интервала для локального обновления timeleft
+function startTimerUpdateInterval() {
+    if (timerUpdateInterval) return;
+
+    const UPDATE_INTERVAL = 100; // мс
+
+    timerUpdateInterval = setInterval(() => {
+        const now = Date.now();
+
+        Object.entries(timerDataCache).forEach(([objectName, cache]) => {
+            const elapsed = now - cache.lastUpdate;
+
+            // Обновляем timeleft для каждого таймера
+            cache.timers.forEach(timer => {
+                if (timer.tick !== -1 && timer.timeleft > 0) {
+                    timer.timeleft = Math.max(0, timer.timeleft - UPDATE_INTERVAL);
+                }
+            });
+
+            cache.lastUpdate = now;
+
+            // Перерисовываем таблицу
+            renderTimersTable(objectName, cache.timers);
+        });
+    }, UPDATE_INTERVAL);
+}
+
+// Остановка интервала обновления таймеров
+function stopTimerUpdateInterval() {
+    if (timerUpdateInterval) {
+        clearInterval(timerUpdateInterval);
+        timerUpdateInterval = null;
+    }
 }
 
 // Рендеринг информации об объекте
@@ -1106,14 +1177,28 @@ function renderObjectInfo(objectName, objectData) {
 
     tbody.innerHTML = '';
 
+    // Первая строка - важные метрики сообщений (объединённая)
+    const lostMessages = objectData.lostMessages ?? 0;
+    const maxQueue = objectData.maxSizeOfMessageQueue ?? '-';
+    const msgCountRow = document.createElement('tr');
+    msgCountRow.className = 'message-metrics-row';
+    const lostClass = lostMessages > 0 ? 'lost-messages-warning' : '';
+    msgCountRow.innerHTML = `
+        <td colspan="2" class="message-metrics">
+            <span class="metric-item ${lostClass}">Потеряно сообщений: <strong>${lostMessages}</strong></span>
+            <span class="metric-separator">|</span>
+            <span class="metric-item">Макс. размер очереди: <strong>${maxQueue}</strong></span>
+        </td>
+    `;
+    tbody.appendChild(msgCountRow);
+
+    // Остальные поля
     const fields = [
         { key: 'name', label: 'Имя' },
         { key: 'id', label: 'ID' },
         { key: 'objectType', label: 'Тип' },
         { key: 'isActive', label: 'Активен', format: v => v ? 'Да' : 'Нет' },
-        { key: 'msgCount', label: 'Сообщений' },
-        { key: 'lostMessages', label: 'Потеряно сообщений' },
-        { key: 'maxSizeOfMessageQueue', label: 'Макс. размер очереди' }
+        { key: 'msgCount', label: 'Сообщений в очереди' }
     ];
 
     fields.forEach(({ key, label, format }) => {

@@ -771,6 +771,66 @@ header h1 {
     color: var(--text-primary);
 }
 
+/* Message metrics row (lostMessages / maxQueue) */
+.message-metrics {
+    padding: 0.75rem 1rem;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+    font-size: 13px;
+}
+
+.message-metrics .metric-item {
+    color: var(--text-secondary);
+}
+
+.message-metrics .metric-item strong {
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', Consolas, monospace;
+}
+
+.message-metrics .metric-separator {
+    color: var(--text-muted);
+    margin: 0 0.75rem;
+}
+
+.message-metrics .lost-messages-warning {
+    color: var(--accent-orange);
+}
+
+.message-metrics .lost-messages-warning strong {
+    color: var(--accent-red);
+}
+
+/* Timer styles */
+.timeleft-cell {
+    position: relative;
+    min-width: 80px;
+}
+
+.timeleft-value {
+    position: relative;
+    z-index: 1;
+}
+
+.timeleft-bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    background: rgba(50, 116, 217, 0.2);
+    border-radius: 2px;
+    transition: width 0.1s linear;
+}
+
+.timer-expired .timeleft-value {
+    color: var(--text-muted);
+}
+
+.timer-inactive {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
 .stats-subtitle {
     font-size: 12px;
     font-weight: 500;
