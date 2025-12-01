@@ -1,0 +1,14 @@
+{
+  "name": "uniset2-viewer-e2e",
+  "version": "1.0.0",
+  "description": "E2E tests for uniset2-viewer",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0"
+  }
+}
