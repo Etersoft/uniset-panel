@@ -44,7 +44,10 @@ func (h *Handlers) GetObjects(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	h.writeJSON(w, list)
+	// Возвращаем в формате {objects: [...]} для совместимости с UI
+	h.writeJSON(w, map[string]interface{}{
+		"objects": list,
+	})
 }
 
 // GetObjectData возвращает текущие данные объекта

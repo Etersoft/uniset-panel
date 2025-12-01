@@ -30,14 +30,10 @@ func (s *Server) setupRoutes(staticFS fs.FS) {
 
 	// Static files
 	staticHandler := http.FileServer(http.FS(staticFS))
-	s.mux.Handle("/static/", staticHandler)
+	s.mux.Handle("GET /static/", staticHandler)
 
 	// Index page
-	s.mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
+	s.mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFileFS(w, r, staticFS, "templates/index.html")
 	})
 }

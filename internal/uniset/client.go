@@ -46,7 +46,7 @@ func (c *Client) doGet(path string) ([]byte, error) {
 }
 
 // GetObjectList возвращает список доступных объектов
-func (c *Client) GetObjectList() (*ObjectList, error) {
+func (c *Client) GetObjectList() (ObjectList, error) {
 	data, err := c.doGet("list")
 	if err != nil {
 		return nil, err
@@ -57,7 +57,7 @@ func (c *Client) GetObjectList() (*ObjectList, error) {
 		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
 
-	return &result, nil
+	return result, nil
 }
 
 // GetObjectData возвращает данные объекта

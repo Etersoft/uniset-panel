@@ -52,11 +52,11 @@ function renderObjectsList(objects) {
         return;
     }
 
-    objects.objects.forEach(obj => {
+    objects.objects.forEach(name => {
         const li = document.createElement('li');
-        li.textContent = obj.name;
-        li.dataset.name = obj.name;
-        li.addEventListener('click', () => openObjectTab(obj.name));
+        li.textContent = name;
+        li.dataset.name = name;
+        li.addEventListener('click', () => openObjectTab(name));
         list.appendChild(li);
     });
 }
@@ -106,6 +106,34 @@ function createTab(name) {
     panel.className = 'tab-panel';
     panel.dataset.name = name;
     panel.innerHTML = `
+        <div class="io-section">
+            <h3>Inputs</h3>
+            <table class="variables-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>ID</th>
+                        <th>Value</th>
+                        <th>Chart</th>
+                    </tr>
+                </thead>
+                <tbody id="inputs-${name}"></tbody>
+            </table>
+        </div>
+        <div class="io-section">
+            <h3>Outputs</h3>
+            <table class="variables-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>ID</th>
+                        <th>Value</th>
+                        <th>Chart</th>
+                    </tr>
+                </thead>
+                <tbody id="outputs-${name}"></tbody>
+            </table>
+        </div>
         <div class="variables-section">
             <h3>Variables</h3>
             <table class="variables-table">
@@ -177,6 +205,8 @@ async function loadObjectData(name) {
     try {
         const data = await fetchObjectData(name);
         renderVariables(name, data.Variables || {});
+        renderIO(name, 'inputs', data.io?.in || {});
+        renderIO(name, 'outputs', data.io?.out || {});
     } catch (err) {
         console.error(`Failed to load ${name}:`, err);
     }
@@ -196,6 +226,40 @@ function renderVariables(objectName, variables) {
             <td>
                 <input type="checkbox"
                        id="chart-${objectName}-${varName}"
+                       data-object="${objectName}"
+                       data-variable="${varName}"
+                       ${hasChart(objectName, varName) ? 'checked' : ''}>
+            </td>
+        `;
+
+        const checkbox = tr.querySelector('input');
+        checkbox.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                addChart(objectName, varName);
+            } else {
+                removeChart(objectName, varName);
+            }
+        });
+
+        tbody.appendChild(tr);
+    });
+}
+
+function renderIO(objectName, type, ioData) {
+    const tbody = document.getElementById(`${type}-${objectName}`);
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+
+    Object.entries(ioData).forEach(([key, io]) => {
+        const varName = `io.${type === 'inputs' ? 'in' : 'out'}.${key}`;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${io.name || key}</td>
+            <td>${io.id}</td>
+            <td class="variable-value">${formatValue(io.value)}</td>
+            <td>
+                <input type="checkbox"
                        data-object="${objectName}"
                        data-variable="${varName}"
                        ${hasChart(objectName, varName) ? 'checked' : ''}>

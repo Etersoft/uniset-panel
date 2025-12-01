@@ -102,6 +102,26 @@ func (p *Poller) poll() {
 				}
 			}
 		}
+
+		// Сохраняем IO данные
+		if data.IO != nil {
+			if data.IO.In != nil {
+				for key, io := range data.IO.In {
+					varName := "io.in." + key
+					if err := p.storage.Save(objectName, varName, io.Value, now); err != nil {
+						log.Printf("save io.in %s:%s failed: %v", objectName, varName, err)
+					}
+				}
+			}
+			if data.IO.Out != nil {
+				for key, io := range data.IO.Out {
+					varName := "io.out." + key
+					if err := p.storage.Save(objectName, varName, io.Value, now); err != nil {
+						log.Printf("save io.out %s:%s failed: %v", objectName, varName, err)
+					}
+				}
+			}
+		}
 	}
 
 	// Периодическая очистка старых данных

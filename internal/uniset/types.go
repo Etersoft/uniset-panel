@@ -1,17 +1,7 @@
 package uniset
 
-import "encoding/json"
-
-// ObjectInfo представляет информацию об объекте из /api/v01/list
-type ObjectInfo struct {
-	Name string `json:"name"`
-	ID   int64  `json:"id,omitempty"`
-}
-
-// ObjectList ответ от /api/v01/list
-type ObjectList struct {
-	Objects []ObjectInfo `json:"objects"`
-}
+// ObjectList список имён объектов из /api/v01/list
+type ObjectList []string
 
 // Timer информация о таймере
 type Timer struct {
@@ -36,13 +26,43 @@ type LogServer struct {
 	State string `json:"state"`
 }
 
+// IOVar переменная ввода/вывода
+type IOVar struct {
+	ID      int64       `json:"id"`
+	Name    string      `json:"name"`
+	Value   interface{} `json:"value"`
+	Comment string      `json:"comment,omitempty"`
+	VarType string      `json:"vartype,omitempty"`
+}
+
+// IOData входы и выходы объекта
+type IOData struct {
+	In  map[string]IOVar `json:"in,omitempty"`
+	Out map[string]IOVar `json:"out,omitempty"`
+}
+
+// ObjectInfo информация об объекте
+type ObjectInfo struct {
+	ID                    int64  `json:"id"`
+	Name                  string `json:"name"`
+	IsActive              bool   `json:"isActive"`
+	LostMessages          int64  `json:"lostMessages"`
+	MaxSizeOfMessageQueue int64  `json:"maxSizeOfMessageQueue"`
+	MsgCount              int64  `json:"msgCount"`
+	ObjectType            string `json:"objectType"`
+}
+
 // ObjectData данные объекта из /api/v01/{ObjectName}
 type ObjectData struct {
-	Name      string                     `json:"-"`
-	LogServer *LogServer                 `json:"LogServer,omitempty"`
-	Timers    map[string]json.RawMessage `json:"Timers,omitempty"`
-	Variables map[string]interface{}     `json:"Variables,omitempty"`
-	Sensors   map[string]Sensor          `json:"sensors,omitempty"`
+	Name       string                 `json:"-"`
+	LogServer  *LogServer             `json:"LogServer,omitempty"`
+	Timers     map[string]interface{} `json:"Timers,omitempty"`
+	Variables  map[string]interface{} `json:"Variables,omitempty"`
+	Statistics map[string]interface{} `json:"Statistics,omitempty"`
+	IO         *IOData                `json:"io,omitempty"`
+	Object     *ObjectInfo            `json:"object,omitempty"`
+	// Дополнительные пользовательские поля на верхнем уровне
+	Extra map[string]interface{} `json:"-"`
 }
 
 // HelpCommand команда из справки
