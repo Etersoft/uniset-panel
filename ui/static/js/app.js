@@ -1,13 +1,251 @@
 // Состояние приложения
 const state = {
     objects: [],
-    tabs: new Map(), // objectName -> { charts, updateInterval }
+    tabs: new Map(), // objectName -> { charts, updateInterval, chartStartTime, objectType, renderer }
     activeTab: null,
     sensors: new Map(), // sensorId -> sensorInfo
     sensorsByName: new Map(), // sensorName -> sensorInfo
     timeRange: 900, // секунды (по умолчанию 15 минут)
-    sharedTimeRange: { min: null, max: null } // общий диапазон времени для всех графиков
+    sidebarCollapsed: false, // свёрнутая боковая панель
+    collapsedSections: {} // состояние спойлеров
 };
+
+// ============================================================================
+// Система рендереров для разных типов объектов
+// ============================================================================
+
+// Реестр рендереров по типу объекта
+const objectRenderers = new Map();
+
+// Базовый класс рендерера (общий функционал)
+class BaseObjectRenderer {
+    constructor(objectName) {
+        this.objectName = objectName;
+    }
+
+    // Получить тип объекта (для отображения)
+    static getTypeName() {
+        return 'Object';
+    }
+
+    // Создать HTML-структуру панели
+    createPanelHTML() {
+        return `
+            <div class="tab-panel-loading">Загрузка...</div>
+        `;
+    }
+
+    // Инициализация после создания DOM
+    initialize() {
+        // Переопределяется в наследниках
+    }
+
+    // Обновить данные
+    update(data) {
+        // Переопределяется в наследниках
+    }
+
+    // Очистка при закрытии
+    destroy() {
+        // Переопределяется в наследниках
+    }
+
+    // Вспомогательные методы для создания секций
+    createCollapsibleSection(id, title, content, options = {}) {
+        const { badge = false, hidden = false } = options;
+        const badgeHtml = badge ? `<span class="io-section-badge" id="${id}-count-${this.objectName}">0</span>` : '';
+        const style = hidden ? 'style="display:none"' : '';
+        const sectionId = options.sectionId || `${id}-section-${this.objectName}`;
+
+        return `
+            <div class="collapsible-section" data-section="${id}-${this.objectName}" id="${sectionId}" ${style}>
+                <div class="collapsible-header" onclick="toggleSection('${id}-${this.objectName}')">
+                    <svg class="collapsible-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M6 9l6 6 6-6"/>
+                    </svg>
+                    <span class="collapsible-title">${title}</span>
+                    ${badgeHtml}
+                </div>
+                <div class="collapsible-content" id="section-${id}-${this.objectName}">
+                    ${content}
+                </div>
+            </div>
+        `;
+    }
+
+    createChartsSection() {
+        return this.createCollapsibleSection('charts', 'Графики', `
+            <div id="charts-${this.objectName}" class="charts-grid"></div>
+        `);
+    }
+
+    createIOSection(type, title) {
+        const typeLower = type.toLowerCase();
+        return this.createCollapsibleSection(typeLower, title, `
+            <table class="variables-table">
+                <thead>
+                    <tr>
+                        <th>Имя</th>
+                        <th>ID</th>
+                        <th>Тип</th>
+                        <th>Значение</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="${typeLower}-${this.objectName}"></tbody>
+            </table>
+        `, { badge: true });
+    }
+
+    createTimersSection() {
+        return this.createCollapsibleSection('timers', 'Таймеры', `
+            <table class="variables-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Имя</th>
+                        <th>Интервал</th>
+                        <th>Осталось</th>
+                    </tr>
+                </thead>
+                <tbody id="timers-${this.objectName}"></tbody>
+            </table>
+        `, { badge: true });
+    }
+
+    createVariablesSection() {
+        return this.createCollapsibleSection('variables', 'Переменные', `
+            <table class="variables-table">
+                <thead>
+                    <tr>
+                        <th colspan="2">
+                            <input type="text"
+                                   class="filter-input"
+                                   id="filter-variables-${this.objectName}"
+                                   placeholder="Фильтр по имени..."
+                                   data-object="${this.objectName}">
+                        </th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="variables-${this.objectName}"></tbody>
+            </table>
+        `);
+    }
+
+    createLogServerSection() {
+        return this.createCollapsibleSection('logserver', 'LogServer', `
+            <table class="info-table">
+                <tbody id="logserver-${this.objectName}"></tbody>
+            </table>
+        `, { hidden: true, sectionId: `logserver-section-${this.objectName}` });
+    }
+
+    createStatisticsSection() {
+        return this.createCollapsibleSection('statistics', 'Статистика', `
+            <div id="statistics-${this.objectName}"></div>
+        `, { hidden: true, sectionId: `statistics-section-${this.objectName}` });
+    }
+
+    createObjectInfoSection() {
+        return this.createCollapsibleSection('object', 'Информация об объекте', `
+            <table class="info-table">
+                <tbody id="object-info-${this.objectName}"></tbody>
+            </table>
+        `);
+    }
+}
+
+// Рендерер для UniSetManager (полный функционал)
+class UniSetManagerRenderer extends BaseObjectRenderer {
+    static getTypeName() {
+        return 'UniSetManager';
+    }
+
+    createPanelHTML() {
+        return `
+            ${this.createChartsSection()}
+            <div class="io-grid io-grid-3">
+                ${this.createIOSection('inputs', 'Входы')}
+                ${this.createIOSection('outputs', 'Выходы')}
+                ${this.createTimersSection()}
+            </div>
+            ${this.createVariablesSection()}
+            ${this.createLogServerSection()}
+            ${this.createStatisticsSection()}
+            ${this.createObjectInfoSection()}
+        `;
+    }
+
+    initialize() {
+        setupFilterHandlers(this.objectName);
+    }
+
+    update(data) {
+        renderVariables(this.objectName, data.Variables || {});
+        renderIO(this.objectName, 'inputs', data.io?.in || {});
+        renderIO(this.objectName, 'outputs', data.io?.out || {});
+        renderTimers(this.objectName, data.Timers || {});
+        renderObjectInfo(this.objectName, data.object);
+        renderLogServer(this.objectName, data.LogServer);
+        renderStatistics(this.objectName, data.Statistics);
+        updateChartLegends(this.objectName, data);
+    }
+}
+
+// Рендерер для UniSetObject (базовый объект без IO/Timers)
+class UniSetObjectRenderer extends BaseObjectRenderer {
+    static getTypeName() {
+        return 'UniSetObject';
+    }
+
+    createPanelHTML() {
+        return `
+            ${this.createChartsSection()}
+            ${this.createVariablesSection()}
+            ${this.createLogServerSection()}
+            ${this.createStatisticsSection()}
+            ${this.createObjectInfoSection()}
+        `;
+    }
+
+    initialize() {
+        setupFilterHandlers(this.objectName);
+    }
+
+    update(data) {
+        renderVariables(this.objectName, data.Variables || {});
+        renderObjectInfo(this.objectName, data.object);
+        renderLogServer(this.objectName, data.LogServer);
+        renderStatistics(this.objectName, data.Statistics);
+        updateChartLegends(this.objectName, data);
+    }
+}
+
+// Рендерер по умолчанию (fallback)
+class DefaultObjectRenderer extends UniSetManagerRenderer {
+    static getTypeName() {
+        return 'Default';
+    }
+}
+
+// Регистрация рендереров
+function registerRenderer(objectType, rendererClass) {
+    objectRenderers.set(objectType, rendererClass);
+}
+
+// Получить рендерер для типа объекта
+function getRendererClass(objectType) {
+    return objectRenderers.get(objectType) || DefaultObjectRenderer;
+}
+
+// Регистрируем стандартные рендереры
+registerRenderer('UniSetManager', UniSetManagerRenderer);
+registerRenderer('UniSetObject', UniSetObjectRenderer);
+
+// ============================================================================
+// Конец системы рендереров
+// ============================================================================
 
 // Цвета для графиков
 const chartColors = [
@@ -114,31 +352,47 @@ function renderObjectsList(objects) {
     });
 }
 
-function openObjectTab(name) {
+async function openObjectTab(name) {
     if (state.tabs.has(name)) {
         activateTab(name);
         return;
     }
 
-    createTab(name);
-    activateTab(name);
+    // Сначала загружаем данные, чтобы узнать тип объекта
+    try {
+        const data = await fetchObjectData(name);
+        const objectType = data.object?.objectType || 'Default';
 
-    watchObject(name).catch(console.error);
-    loadObjectData(name);
+        createTab(name, objectType, data);
+        activateTab(name);
+
+        watchObject(name).catch(console.error);
+    } catch (err) {
+        console.error(`Ошибка открытия вкладки ${name}:`, err);
+    }
 }
 
-function createTab(name) {
+function createTab(name, objectType, initialData) {
     const tabsHeader = document.getElementById('tabs-header');
     const tabsContent = document.getElementById('tabs-content');
 
     const placeholder = tabsContent.querySelector('.placeholder');
     if (placeholder) placeholder.remove();
 
-    // Кнопка вкладки
+    // Получаем класс рендерера для данного типа объекта
+    const RendererClass = getRendererClass(objectType);
+    const renderer = new RendererClass(name);
+
+    // Кнопка вкладки с индикатором типа
     const tabBtn = document.createElement('button');
     tabBtn.className = 'tab-btn';
     tabBtn.dataset.name = name;
-    tabBtn.innerHTML = `${name} <span class="close">&times;</span>`;
+    tabBtn.dataset.objectType = objectType;
+    tabBtn.innerHTML = `
+        <span class="tab-type-badge">${objectType}</span>
+        ${name}
+        <span class="close">&times;</span>
+    `;
     tabBtn.addEventListener('click', (e) => {
         if (e.target.classList.contains('close')) {
             closeTab(name);
@@ -148,73 +402,33 @@ function createTab(name) {
     });
     tabsHeader.appendChild(tabBtn);
 
-    // Панель содержимого
+    // Панель содержимого - создаётся рендерером
     const panel = document.createElement('div');
     panel.className = 'tab-panel';
     panel.dataset.name = name;
-    panel.innerHTML = `
-        <div class="charts-section">
-            <h3 class="section-header">Графики</h3>
-            <div id="charts-${name}" class="charts-grid"></div>
-        </div>
-        <div class="io-grid">
-            <div class="io-section">
-                <div class="io-section-header">
-                    <span class="io-section-title">Входы</span>
-                    <span class="io-section-badge" id="inputs-count-${name}">0</span>
-                </div>
-                <table class="variables-table">
-                    <thead>
-                        <tr>
-                            <th>Имя</th>
-                            <th>ID</th>
-                            <th>Тип</th>
-                            <th>Значение</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody id="inputs-${name}"></tbody>
-                </table>
-            </div>
-            <div class="io-section">
-                <div class="io-section-header">
-                    <span class="io-section-title">Выходы</span>
-                    <span class="io-section-badge" id="outputs-count-${name}">0</span>
-                </div>
-                <table class="variables-table">
-                    <thead>
-                        <tr>
-                            <th>Имя</th>
-                            <th>ID</th>
-                            <th>Тип</th>
-                            <th>Значение</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody id="outputs-${name}"></tbody>
-                </table>
-            </div>
-        </div>
-        <div class="variables-section">
-            <h3 class="section-header">Переменные</h3>
-            <table class="variables-table">
-                <thead>
-                    <tr>
-                        <th>Имя</th>
-                        <th>Значение</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody id="variables-${name}"></tbody>
-            </table>
-        </div>
-    `;
+    panel.dataset.objectType = objectType;
+    panel.innerHTML = renderer.createPanelHTML();
     tabsContent.appendChild(panel);
 
+    // Восстановить состояние спойлеров
+    restoreCollapsedSections(name);
+
+    // Сохраняем состояние вкладки с рендерером
     state.tabs.set(name, {
         charts: new Map(),
+        variables: {},
+        objectType: objectType,
+        renderer: renderer,
         updateInterval: setInterval(() => loadObjectData(name), 5000)
     });
+
+    // Инициализация рендерера (настройка обработчиков и т.д.)
+    renderer.initialize();
+
+    // Отрисовываем начальные данные
+    if (initialData) {
+        renderer.update(initialData);
+    }
 }
 
 function activateTab(name) {
@@ -237,6 +451,10 @@ function closeTab(name) {
             clearInterval(chartData.updateInterval);
             chartData.chart.destroy();
         });
+        // Вызываем destroy рендерера
+        if (tabState.renderer) {
+            tabState.renderer.destroy();
+        }
     }
 
     unwatchObject(name).catch(console.error);
@@ -259,53 +477,42 @@ function closeTab(name) {
 async function loadObjectData(name) {
     try {
         const data = await fetchObjectData(name);
-        renderVariables(name, data.Variables || {});
-        renderIO(name, 'inputs', data.io?.in || {});
-        renderIO(name, 'outputs', data.io?.out || {});
+        const tabState = state.tabs.get(name);
 
-        // Обновить значения в легендах графиков
-        updateChartLegends(name, data);
+        // Используем рендерер для обновления данных
+        if (tabState && tabState.renderer) {
+            tabState.renderer.update(data);
+        }
     } catch (err) {
         console.error(`Ошибка загрузки ${name}:`, err);
     }
 }
 
-function renderVariables(objectName, variables) {
+function renderVariables(objectName, variables, filterText = '') {
     const tbody = document.getElementById(`variables-${objectName}`);
     if (!tbody) return;
 
+    // Сохраняем переменные в state для фильтрации
+    const tabState = state.tabs.get(objectName);
+    if (tabState) {
+        tabState.variables = variables;
+    }
+
     tbody.innerHTML = '';
+    const filterLower = filterText.toLowerCase();
 
     Object.entries(variables).forEach(([varName, value]) => {
+        // Фильтрация по имени переменной
+        if (filterText && !varName.toLowerCase().includes(filterLower)) {
+            return;
+        }
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td class="variable-name">${varName}</td>
             <td class="variable-value">${formatValue(value)}</td>
-            <td>
-                <span class="chart-toggle">
-                    <input type="checkbox"
-                           id="chart-${objectName}-var-${varName}"
-                           data-object="${objectName}"
-                           data-variable="${varName}"
-                           ${hasChart(objectName, varName) ? 'checked' : ''}>
-                    <label class="chart-toggle-label" for="chart-${objectName}-var-${varName}">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 3v18h18"/>
-                            <path d="M18 9l-5 5-4-4-3 3"/>
-                        </svg>
-                    </label>
-                </span>
-            </td>
+            <td></td>
         `;
-
-        const checkbox = tr.querySelector('input');
-        checkbox.addEventListener('change', (e) => {
-            if (e.target.checked) {
-                addChart(objectName, varName, null);
-            } else {
-                removeChart(objectName, varName);
-            }
-        });
 
         tbody.appendChild(tr);
     });
@@ -398,8 +605,17 @@ async function addChart(objectName, varName, sensorId) {
     chartDiv.id = `chart-panel-${objectName}-${varName}`;
     chartDiv.innerHTML = `
         <div class="chart-panel-header">
-            <span class="chart-panel-title">${displayName}</span>
-            <div class="chart-panel-actions">
+            <div class="chart-panel-info">
+                <span class="legend-color-picker" data-object="${objectName}" data-variable="${varName}" style="background:${color}" title="Нажмите для выбора цвета"></span>
+                <span class="chart-panel-title">${displayName}</span>
+                <span class="chart-panel-value" id="legend-value-${objectName}-${varName}">--</span>
+                <span class="chart-panel-description">${textName !== displayName ? textName : ''}</span>
+            </div>
+            <div class="chart-panel-right">
+                <label class="fill-toggle" title="Заливка фона">
+                    <input type="checkbox" id="fill-${objectName}-${varName}" ${!isDiscrete ? 'checked' : ''}>
+                    <span class="fill-toggle-label">фон</span>
+                </label>
                 <button class="btn-icon" title="Закрыть" onclick="removeChartByButton('${objectName}', '${varName}')">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M18 6L6 18M6 6l12 12"/>
@@ -410,29 +626,14 @@ async function addChart(objectName, varName, sensorId) {
         <div class="chart-wrapper">
             <canvas id="canvas-${objectName}-${varName}"></canvas>
         </div>
-        <div class="chart-legend">
-            <table class="legend-table">
-                <thead>
-                    <tr>
-                        <th>Имя</th>
-                        <th>Описание</th>
-                        <th style="text-align:right">Значение</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>
-                            <span class="legend-color" style="background:${color}"></span>
-                            <span class="legend-name">${displayName}</span>
-                        </td>
-                        <td class="legend-textname">${textName}</td>
-                        <td class="legend-value" id="legend-value-${objectName}-${varName}">--</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
     `;
     chartsContainer.appendChild(chartDiv);
+
+    // Обработчик для чекбокса заливки
+    const fillCheckbox = document.getElementById(`fill-${objectName}-${varName}`);
+    fillCheckbox.addEventListener('change', (e) => {
+        toggleChartFill(objectName, varName, e.target.checked);
+    });
 
     // Загружаем историю
     try {
@@ -445,8 +646,11 @@ async function addChart(objectName, varName, sensorId) {
             y: p.value
         })) || [];
 
-        // Вычисляем общий диапазон времени
-        updateSharedTimeRange(historyData);
+        // Получаем диапазон времени (при первом графике устанавливается начало)
+        const timeRange = getTimeRangeForObject(objectName);
+
+        // Заливка по умолчанию только для аналоговых
+        const fillEnabled = !isDiscrete;
 
         // Конфигурация графика в зависимости от типа сигнала
         const chartConfig = {
@@ -456,8 +660,8 @@ async function addChart(objectName, varName, sensorId) {
                     label: displayName,
                     data: historyData,
                     borderColor: color,
-                    backgroundColor: isDiscrete ? color : `${color}20`,
-                    fill: !isDiscrete,
+                    backgroundColor: `${color}20`,
+                    fill: fillEnabled,
                     tension: 0,
                     stepped: isDiscrete ? 'before' : false,
                     pointRadius: 0,
@@ -492,8 +696,8 @@ async function addChart(objectName, varName, sensorId) {
                                 hour: 'HH:mm'
                             }
                         },
-                        min: state.sharedTimeRange.min,
-                        max: state.sharedTimeRange.max
+                        min: timeRange.min,
+                        max: timeRange.max
                     },
                     y: {
                         display: true,
@@ -574,12 +778,10 @@ async function updateChart(objectName, varName, chart) {
 
         chart.data.datasets[0].data = chartData;
 
-        // Обновляем общий диапазон времени
-        updateSharedTimeRange(chartData);
-
-        // Применяем общий диапазон
-        chart.options.scales.x.min = state.sharedTimeRange.min;
-        chart.options.scales.x.max = state.sharedTimeRange.max;
+        // Применяем диапазон времени (со смещением если нужно)
+        const timeRange = getTimeRangeForObject(objectName);
+        chart.options.scales.x.min = timeRange.min;
+        chart.options.scales.x.max = timeRange.max;
 
         chart.update('none');
 
@@ -596,20 +798,33 @@ async function updateChart(objectName, varName, chart) {
     }
 }
 
-// Обновить общий диапазон времени на основе данных
-function updateSharedTimeRange(chartData) {
-    if (!chartData || chartData.length === 0) return;
-
-    const times = chartData.map(d => d.x.getTime());
-    const minTime = Math.min(...times);
-    const maxTime = Math.max(...times);
-
-    if (state.sharedTimeRange.min === null || minTime < state.sharedTimeRange.min) {
-        state.sharedTimeRange.min = minTime;
+// Получить диапазон времени для графиков объекта
+function getTimeRangeForObject(objectName) {
+    const tabState = state.tabs.get(objectName);
+    if (!tabState) {
+        const now = Date.now();
+        return { min: now, max: now + state.timeRange * 1000 };
     }
-    if (state.sharedTimeRange.max === null || maxTime > state.sharedTimeRange.max) {
-        state.sharedTimeRange.max = maxTime;
+
+    // Если нет начального времени - установить текущее
+    if (!tabState.chartStartTime) {
+        tabState.chartStartTime = Date.now();
     }
+
+    const now = Date.now();
+    const rangeMs = state.timeRange * 1000;
+    let min = tabState.chartStartTime;
+    let max = min + rangeMs;
+
+    // Если текущее время достигло конца шкалы - сместить на 90%
+    if (now >= max) {
+        const shiftAmount = rangeMs * 0.9;
+        tabState.chartStartTime = min + shiftAmount;
+        min = tabState.chartStartTime;
+        max = min + rangeMs;
+    }
+
+    return { min, max };
 }
 
 // Синхронизировать диапазон времени для всех графиков
@@ -617,10 +832,12 @@ function syncAllChartsTimeRange(objectName) {
     const tabState = state.tabs.get(objectName);
     if (!tabState) return;
 
+    const timeRange = getTimeRangeForObject(objectName);
+
     tabState.charts.forEach((chartData, varName) => {
         const chart = chartData.chart;
-        chart.options.scales.x.min = state.sharedTimeRange.min;
-        chart.options.scales.x.max = state.sharedTimeRange.max;
+        chart.options.scales.x.min = timeRange.min;
+        chart.options.scales.x.max = timeRange.max;
         chart.update('none');
     });
 
@@ -699,6 +916,434 @@ window.removeChartByButton = function(objectName, varName) {
     removeChart(objectName, varName);
 };
 
+// Глобальная функция для сворачивания/разворачивания секций
+window.toggleSection = function(sectionId) {
+    const section = document.querySelector(`[data-section="${sectionId}"]`);
+    if (section) {
+        section.classList.toggle('collapsed');
+        saveCollapsedSections();
+    }
+};
+
+// Рендеринг таймеров
+function renderTimers(objectName, timersData) {
+    const tbody = document.getElementById(`timers-${objectName}`);
+    const countBadge = document.getElementById(`timers-count-${objectName}`);
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+
+    // Извлечь таймеры из объекта (исключая count)
+    const timers = [];
+    Object.entries(timersData).forEach(([key, timer]) => {
+        if (key !== 'count' && typeof timer === 'object') {
+            timers.push(timer);
+        }
+    });
+
+    if (countBadge) {
+        countBadge.textContent = timers.length;
+    }
+
+    if (timers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">Нет таймеров</td></tr>';
+        return;
+    }
+
+    timers.forEach(timer => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${timer.id}</td>
+            <td class="variable-name">${timer.name || '-'}</td>
+            <td class="variable-value">${timer.msec} мс</td>
+            <td class="variable-value">${timer.timeleft} мс</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// Рендеринг информации об объекте
+function renderObjectInfo(objectName, objectData) {
+    const tbody = document.getElementById(`object-info-${objectName}`);
+    if (!tbody || !objectData) return;
+
+    tbody.innerHTML = '';
+
+    const fields = [
+        { key: 'name', label: 'Имя' },
+        { key: 'id', label: 'ID' },
+        { key: 'objectType', label: 'Тип' },
+        { key: 'isActive', label: 'Активен', format: v => v ? 'Да' : 'Нет' },
+        { key: 'msgCount', label: 'Сообщений' },
+        { key: 'lostMessages', label: 'Потеряно сообщений' },
+        { key: 'maxSizeOfMessageQueue', label: 'Макс. размер очереди' }
+    ];
+
+    fields.forEach(({ key, label, format }) => {
+        if (objectData[key] !== undefined) {
+            const tr = document.createElement('tr');
+            const value = format ? format(objectData[key]) : objectData[key];
+            tr.innerHTML = `
+                <td class="info-label">${label}</td>
+                <td class="info-value">${value}</td>
+            `;
+            tbody.appendChild(tr);
+        }
+    });
+}
+
+// Рендеринг LogServer
+function renderLogServer(objectName, logServerData) {
+    const section = document.getElementById(`logserver-section-${objectName}`);
+    const tbody = document.getElementById(`logserver-${objectName}`);
+    if (!section || !tbody) return;
+
+    if (!logServerData) {
+        section.style.display = 'none';
+        return;
+    }
+
+    section.style.display = 'block';
+    tbody.innerHTML = '';
+
+    const fields = [
+        { key: 'host', label: 'Хост' },
+        { key: 'port', label: 'Порт' },
+        { key: 'state', label: 'Состояние', formatState: true }
+    ];
+
+    fields.forEach(({ key, label, formatState }) => {
+        if (logServerData[key] !== undefined) {
+            const tr = document.createElement('tr');
+            let valueHtml;
+            if (formatState) {
+                const stateValue = String(logServerData[key]).toUpperCase();
+                const stateClass = stateValue === 'RUNNING' ? 'state-running' :
+                                   stateValue === 'STOPPED' ? 'state-stopped' : '';
+                valueHtml = `<span class="state-badge ${stateClass}">${logServerData[key]}</span>`;
+            } else {
+                valueHtml = logServerData[key];
+            }
+            tr.innerHTML = `
+                <td class="info-label">${label}</td>
+                <td class="info-value">${valueHtml}</td>
+            `;
+            tbody.appendChild(tr);
+        }
+    });
+
+    // Если есть дополнительная информация в info
+    if (logServerData.info && typeof logServerData.info === 'object') {
+        Object.entries(logServerData.info).forEach(([key, value]) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="info-label">${key}</td>
+                <td class="info-value">${formatValue(value)}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+}
+
+// Рендеринг статистики
+function renderStatistics(objectName, statsData) {
+    const section = document.getElementById(`statistics-section-${objectName}`);
+    const container = document.getElementById(`statistics-${objectName}`);
+    if (!section || !container) return;
+
+    if (!statsData) {
+        section.style.display = 'none';
+        return;
+    }
+
+    section.style.display = 'block';
+
+    // Сохраняем данные статистики в state для фильтрации
+    const tabState = state.tabs.get(objectName);
+    if (tabState) {
+        tabState.statisticsData = statsData;
+    }
+
+    // Проверяем, был ли уже создан контейнер
+    let generalTable = container.querySelector('.stats-general-table');
+    let sensorsSection = container.querySelector('.stats-sensors-section');
+
+    if (!generalTable) {
+        // Первичный рендеринг - создаём структуру
+        container.innerHTML = `
+            <table class="info-table stats-general-table">
+                <tbody></tbody>
+            </table>
+            <div class="stats-sensors-section" style="display:none">
+                <div class="stats-subtitle">Сенсоры</div>
+                <input type="text"
+                       class="filter-input stats-filter"
+                       id="filter-stats-${objectName}"
+                       placeholder="Фильтр по имени датчика..."
+                       data-object="${objectName}">
+                <table class="variables-table stats-sensors-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Имя</th>
+                            <th>Срабатываний</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        `;
+
+        // Настроить обработчик фильтра
+        const filterInput = container.querySelector(`#filter-stats-${objectName}`);
+        if (filterInput) {
+            filterInput.addEventListener('input', (e) => {
+                renderStatisticsSensors(objectName, e.target.value);
+            });
+            filterInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    filterInput.value = '';
+                    filterInput.blur();
+                    renderStatisticsSensors(objectName, '');
+                }
+            });
+        }
+
+        generalTable = container.querySelector('.stats-general-table');
+        sensorsSection = container.querySelector('.stats-sensors-section');
+    }
+
+    // Обновляем общую статистику
+    const generalTbody = generalTable.querySelector('tbody');
+    generalTbody.innerHTML = '';
+
+    Object.entries(statsData).forEach(([key, value]) => {
+        if (key === 'sensors' && typeof value === 'object') {
+            return;
+        }
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td class="info-label">${key}</td>
+            <td class="info-value">${formatValue(value)}</td>
+        `;
+        generalTbody.appendChild(tr);
+    });
+
+    // Обновляем секцию сенсоров
+    if (statsData.sensors && typeof statsData.sensors === 'object' && Object.keys(statsData.sensors).length > 0) {
+        sensorsSection.style.display = 'block';
+        const currentFilter = container.querySelector(`#filter-stats-${objectName}`)?.value || '';
+        renderStatisticsSensors(objectName, currentFilter);
+    } else {
+        sensorsSection.style.display = 'none';
+    }
+}
+
+// Рендеринг таблицы сенсоров в статистике с фильтрацией
+function renderStatisticsSensors(objectName, filterText = '') {
+    const tabState = state.tabs.get(objectName);
+    if (!tabState || !tabState.statisticsData?.sensors) return;
+
+    const container = document.getElementById(`statistics-${objectName}`);
+    if (!container) return;
+
+    const tbody = container.querySelector('.stats-sensors-table tbody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    const filterLower = filterText.toLowerCase();
+    const sensors = tabState.statisticsData.sensors;
+
+    Object.entries(sensors).forEach(([sensorName, sensorValue]) => {
+        if (filterText && !sensorName.toLowerCase().includes(filterLower)) {
+            return;
+        }
+
+        // Получить ID сенсора из конфигурации
+        const sensorInfo = getSensorInfo(sensorName);
+        const sensorId = sensorInfo?.id || '-';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${sensorId}</td>
+            <td class="variable-name">${sensorName}</td>
+            <td class="variable-value">${formatValue(sensorValue)}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    if (tbody.children.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted)">Нет данных</td></tr>';
+    }
+}
+
+// Восстановление состояния спойлеров из localStorage
+function restoreCollapsedSections(objectName) {
+    try {
+        const saved = localStorage.getItem('uniset2-viewer-collapsed');
+        if (saved) {
+            state.collapsedSections = JSON.parse(saved);
+        }
+    } catch (err) {
+        console.warn('Ошибка загрузки состояния спойлеров:', err);
+    }
+
+    // Применить сохранённые состояния к секциям этого объекта
+    Object.entries(state.collapsedSections).forEach(([sectionId, collapsed]) => {
+        if (sectionId.endsWith(`-${objectName}`)) {
+            const section = document.querySelector(`[data-section="${sectionId}"]`);
+            if (section && collapsed) {
+                section.classList.add('collapsed');
+            }
+        }
+    });
+}
+
+// Сохранение состояния спойлеров в localStorage
+function saveCollapsedSections() {
+    const sections = document.querySelectorAll('.collapsible-section[data-section]');
+    const collapsed = {};
+
+    sections.forEach(section => {
+        const sectionId = section.dataset.section;
+        collapsed[sectionId] = section.classList.contains('collapsed');
+    });
+
+    state.collapsedSections = collapsed;
+
+    try {
+        localStorage.setItem('uniset2-viewer-collapsed', JSON.stringify(collapsed));
+    } catch (err) {
+        console.warn('Ошибка сохранения состояния спойлеров:', err);
+    }
+}
+
+// Color picker для изменения цвета графика
+let activeColorPicker = null;
+
+function showColorPicker(element, objectName, varName) {
+    // Закрыть предыдущий picker если открыт
+    hideColorPicker();
+
+    const tabState = state.tabs.get(objectName);
+    if (!tabState) return;
+
+    const chartData = tabState.charts.get(varName);
+    if (!chartData) return;
+
+    const currentColor = chartData.color;
+    const rect = element.getBoundingClientRect();
+
+    const popup = document.createElement('div');
+    popup.className = 'color-picker-popup';
+    popup.style.left = `${rect.left}px`;
+    popup.style.top = `${rect.bottom + 4}px`;
+
+    chartColors.forEach(color => {
+        const option = document.createElement('div');
+        option.className = 'color-picker-option';
+        if (color === currentColor) option.classList.add('selected');
+        option.style.background = color;
+        option.addEventListener('click', () => {
+            changeChartColor(objectName, varName, color);
+            hideColorPicker();
+        });
+        popup.appendChild(option);
+    });
+
+    document.body.appendChild(popup);
+    activeColorPicker = popup;
+
+    // Закрыть по клику вне popup
+    setTimeout(() => {
+        document.addEventListener('click', handleColorPickerOutsideClick);
+    }, 0);
+}
+
+function hideColorPicker() {
+    if (activeColorPicker) {
+        activeColorPicker.remove();
+        activeColorPicker = null;
+        document.removeEventListener('click', handleColorPickerOutsideClick);
+    }
+}
+
+function handleColorPickerOutsideClick(e) {
+    if (activeColorPicker && !activeColorPicker.contains(e.target) && !e.target.classList.contains('legend-color-picker')) {
+        hideColorPicker();
+    }
+}
+
+function changeChartColor(objectName, varName, newColor) {
+    const tabState = state.tabs.get(objectName);
+    if (!tabState) return;
+
+    const chartData = tabState.charts.get(varName);
+    if (!chartData) return;
+
+    // Обновить цвет в данных
+    chartData.color = newColor;
+
+    // Обновить цвет графика
+    const chart = chartData.chart;
+    chart.data.datasets[0].borderColor = newColor;
+    chart.data.datasets[0].backgroundColor = `${newColor}20`;
+    chart.update('none');
+
+    // Обновить цвет квадратика в шапке
+    const colorPicker = document.querySelector(`#chart-panel-${objectName}-${varName} .legend-color-picker`);
+    if (colorPicker) {
+        colorPicker.style.background = newColor;
+    }
+}
+
+// Переключение заливки графика
+function toggleChartFill(objectName, varName, fillEnabled) {
+    const tabState = state.tabs.get(objectName);
+    if (!tabState) return;
+
+    const chartData = tabState.charts.get(varName);
+    if (!chartData) return;
+
+    chartData.chart.data.datasets[0].fill = fillEnabled;
+    chartData.chart.update('none');
+}
+
+// Делегирование события для color picker
+document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('legend-color-picker')) {
+        const objectName = e.target.dataset.object;
+        const varName = e.target.dataset.variable;
+        showColorPicker(e.target, objectName, varName);
+    }
+});
+
+// Настройка обработчиков фильтра для вкладки
+function setupFilterHandlers(objectName) {
+    const filterInput = document.getElementById(`filter-variables-${objectName}`);
+    if (!filterInput) return;
+
+    // Обработка ввода
+    filterInput.addEventListener('input', (e) => {
+        const tabState = state.tabs.get(objectName);
+        if (tabState && tabState.variables) {
+            renderVariables(objectName, tabState.variables, e.target.value);
+        }
+    });
+
+    // Обработка ESC
+    filterInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            filterInput.value = '';
+            filterInput.blur();
+            const tabState = state.tabs.get(objectName);
+            if (tabState && tabState.variables) {
+                renderVariables(objectName, tabState.variables, '');
+            }
+        }
+    });
+}
+
 // Обработка выбора временного диапазона
 function setupTimeRangeSelector() {
     document.querySelectorAll('.time-range-btn').forEach(btn => {
@@ -706,15 +1351,54 @@ function setupTimeRangeSelector() {
             document.querySelectorAll('.time-range-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             state.timeRange = parseInt(btn.dataset.range, 10);
+            saveSettings();
 
-            // Обновить все активные графики
+            // Сбросить начальное время для всех вкладок при изменении интервала
             state.tabs.forEach((tabState, objectName) => {
+                if (tabState.charts.size > 0) {
+                    tabState.chartStartTime = Date.now();
+                }
                 tabState.charts.forEach((chartData, varName) => {
                     updateChart(objectName, varName, chartData.chart);
                 });
             });
         });
     });
+}
+
+// Сохранение настроек в localStorage
+function saveSettings() {
+    const settings = {
+        timeRange: state.timeRange,
+        sidebarCollapsed: state.sidebarCollapsed
+    };
+    localStorage.setItem('uniset2-viewer-settings', JSON.stringify(settings));
+}
+
+// Загрузка настроек из localStorage
+function loadSettings() {
+    try {
+        const saved = localStorage.getItem('uniset2-viewer-settings');
+        if (saved) {
+            const settings = JSON.parse(saved);
+
+            // Восстановить timeRange
+            if (settings.timeRange) {
+                state.timeRange = settings.timeRange;
+                document.querySelectorAll('.time-range-btn').forEach(btn => {
+                    btn.classList.toggle('active', parseInt(btn.dataset.range, 10) === state.timeRange);
+                });
+            }
+
+            // Восстановить состояние sidebar
+            if (settings.sidebarCollapsed) {
+                state.sidebarCollapsed = settings.sidebarCollapsed;
+                document.getElementById('sidebar').classList.add('collapsed');
+            }
+        }
+    } catch (err) {
+        console.warn('Ошибка загрузки настроек:', err);
+    }
 }
 
 // Инициализация
@@ -740,6 +1424,17 @@ document.addEventListener('DOMContentLoaded', () => {
             .catch(console.error);
     });
 
+    // Кнопка сворачивания боковой панели
+    document.getElementById('toggle-sidebar').addEventListener('click', () => {
+        const sidebar = document.getElementById('sidebar');
+        sidebar.classList.toggle('collapsed');
+        state.sidebarCollapsed = sidebar.classList.contains('collapsed');
+        saveSettings();
+    });
+
     // Настройка селектора временного диапазона
     setupTimeRangeSelector();
+
+    // Загрузка сохранённых настроек
+    loadSettings();
 });

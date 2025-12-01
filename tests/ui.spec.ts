@@ -52,12 +52,12 @@ test.describe('UniSet2 Viewer UI', () => {
     await page.waitForSelector('#objects-list li', { timeout: 10000 });
     await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
 
-    // Ждём загрузки переменных
-    await page.waitForSelector('.variables-section tbody tr', { timeout: 10000 });
+    // Ждём загрузки переменных (в collapsible секции)
+    await page.waitForSelector('[data-section^="variables-"] tbody tr', { timeout: 10000 });
 
     // Проверяем наличие таблицы переменных (заголовок на русском)
-    await expect(page.locator('.variables-section .section-header')).toContainText('Переменные');
-    await expect(page.locator('.variables-section tbody tr')).not.toHaveCount(0);
+    await expect(page.locator('[data-section^="variables-"] .collapsible-title')).toContainText('Переменные');
+    await expect(page.locator('[data-section^="variables-"] tbody tr')).not.toHaveCount(0);
   });
 
   test('should display inputs and outputs sections', async ({ page }) => {
@@ -66,12 +66,12 @@ test.describe('UniSet2 Viewer UI', () => {
     await page.waitForSelector('#objects-list li', { timeout: 10000 });
     await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
 
-    // Ждём загрузки данных
-    await page.waitForSelector('.io-section', { timeout: 10000 });
+    // Ждём загрузки данных (в collapsible секциях внутри io-grid)
+    await page.waitForSelector('.io-grid .collapsible-section', { timeout: 10000 });
 
     // Проверяем секции Входы и Выходы
-    await expect(page.locator('.io-section-title', { hasText: 'Входы' })).toBeVisible();
-    await expect(page.locator('.io-section-title', { hasText: 'Выходы' })).toBeVisible();
+    await expect(page.locator('.io-grid .collapsible-title', { hasText: 'Входы' })).toBeVisible();
+    await expect(page.locator('.io-grid .collapsible-title', { hasText: 'Выходы' })).toBeVisible();
   });
 
   test('should close tab on close button click', async ({ page }) => {
@@ -110,11 +110,11 @@ test.describe('UniSet2 Viewer UI', () => {
     await page.waitForSelector('#objects-list li', { timeout: 10000 });
     await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
 
-    // Ждём загрузки IO
-    await page.waitForSelector('.io-section tbody tr', { timeout: 10000 });
+    // Ждём загрузки IO (в collapsible секции внутри io-grid)
+    await page.waitForSelector('.io-grid .collapsible-section tbody tr', { timeout: 10000 });
 
     // Находим первый чекбокс в секции Входы (inputs) и кликаем на лейбл
-    const firstToggleLabel = page.locator('.io-section').first().locator('tbody tr:first-child .chart-toggle-label');
+    const firstToggleLabel = page.locator('.io-grid .collapsible-section').first().locator('tbody tr:first-child .chart-toggle-label');
     await firstToggleLabel.click();
 
     // Проверяем что появился график

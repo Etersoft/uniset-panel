@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UniSet2 Viewer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
@@ -14,23 +17,33 @@
             <h1>UniSet2 Viewer</h1>
             <div class="header-controls">
                 <div class="time-range-selector">
+                    <button class="time-range-btn" data-range="60">1m</button>
+                    <button class="time-range-btn" data-range="180">3m</button>
                     <button class="time-range-btn" data-range="300">5m</button>
                     <button class="time-range-btn active" data-range="900">15m</button>
                     <button class="time-range-btn" data-range="3600">1h</button>
+                    <button class="time-range-btn" data-range="10800">3h</button>
                 </div>
             </div>
         </header>
 
         <div class="main-layout">
-            <aside class="sidebar">
+            <aside class="sidebar" id="sidebar">
                 <div class="sidebar-header">
-                    <h2>Objects</h2>
-                    <button id="refresh-objects" class="btn-icon" title="Refresh">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M1 4v6h6M23 20v-6h-6"/>
-                            <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
-                        </svg>
-                    </button>
+                    <h2 class="sidebar-title">Objects</h2>
+                    <div class="sidebar-actions">
+                        <button id="refresh-objects" class="btn-icon" title="Обновить">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M1 4v6h6M23 20v-6h-6"/>
+                                <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+                            </svg>
+                        </button>
+                        <button id="toggle-sidebar" class="btn-icon" title="Свернуть панель">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M11 19l-7-7 7-7M18 19l-7-7 7-7"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
                 <div class="sidebar-content">
                     <ul id="objects-list" class="objects-list"></ul>
