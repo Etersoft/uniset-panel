@@ -9,9 +9,12 @@ import (
 	"syscall"
 	"time"
 
+	"log/slog"
+
 	"github.com/pv/uniset2-viewer-go/internal/api"
 	"github.com/pv/uniset2-viewer-go/internal/config"
 	"github.com/pv/uniset2-viewer-go/internal/logger"
+	"github.com/pv/uniset2-viewer-go/internal/logserver"
 	"github.com/pv/uniset2-viewer-go/internal/poller"
 	"github.com/pv/uniset2-viewer-go/internal/sensorconfig"
 	"github.com/pv/uniset2-viewer-go/internal/storage"
@@ -61,8 +64,13 @@ func main() {
 		logger.Info("Loaded sensor configuration", "file", cfg.ConFile, "sensors", sensorCfg.Count())
 	}
 
+	// Create LogServer manager
+	logServerMgr := logserver.NewManager(slog.Default())
+	defer logServerMgr.Close()
+
 	// Create API handlers and server
 	handlers := api.NewHandlers(client, store, p, sensorCfg, cfg.PollInterval)
+	handlers.SetLogServerManager(logServerMgr)
 	server := api.NewServer(handlers, ui.Content)
 
 	// Connect poller to SSE hub for broadcasting updates

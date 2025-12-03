@@ -32,6 +32,30 @@
 
 ## В работе
 
+### LogServer клиент (чтение логов в реальном времени)
+
+**Цель:** Подключение к LogServer UniSet2 для чтения и отображения логов в UI.
+
+**Протокол:** TCP, бинарное сообщение lsMessage (131 байт):
+- magic: 20201222, cmd: команда, data: уровень, logname: regexp фильтр
+
+**Этапы:**
+- [ ] `internal/logserver/types.go` - структура Message, команды, константы
+- [ ] `internal/logserver/client.go` - TCP клиент с auto-reconnect (5-10 сек)
+- [ ] `internal/logserver/client_test.go` - unit-тесты
+- [ ] API endpoints:
+  - [ ] `GET /api/logs/{object}/stream` - SSE поток логов
+  - [ ] `POST /api/logs/{object}/command` - отправка команды
+  - [ ] `GET /api/logs/{object}/status` - статус подключения
+- [ ] Интеграция в `cmd/server/main.go`
+- [ ] UI: LogViewer компонент (terminal-like, 2000 строк буфер)
+- [ ] CSS стили для логов
+
+**Решения:**
+- Reconnect: автоматический с задержкой 5-10 сек
+- Фильтрация: на сервере через cmdFilterMode
+- Буфер UI: 2000 строк
+
 ### UI исправления (текущая сессия)
 - [x] Переименовать "Переменные" в "Настройки"
 - [x] LogServer: исправить проверку RUNNING (опечатка RUNNIG в API)

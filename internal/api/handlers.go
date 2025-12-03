@@ -2,10 +2,12 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/pv/uniset2-viewer-go/internal/logserver"
 	"github.com/pv/uniset2-viewer-go/internal/poller"
 	"github.com/pv/uniset2-viewer-go/internal/sensorconfig"
 	"github.com/pv/uniset2-viewer-go/internal/storage"
@@ -13,12 +15,13 @@ import (
 )
 
 type Handlers struct {
-	client       *uniset.Client
-	storage      storage.Storage
-	poller       *poller.Poller
-	sensorConfig *sensorconfig.SensorConfig
-	sseHub       *SSEHub
-	pollInterval time.Duration
+	client         *uniset.Client
+	storage        storage.Storage
+	poller         *poller.Poller
+	sensorConfig   *sensorconfig.SensorConfig
+	sseHub         *SSEHub
+	pollInterval   time.Duration
+	logServerMgr   *logserver.Manager
 }
 
 func NewHandlers(client *uniset.Client, store storage.Storage, p *poller.Poller, sensorCfg *sensorconfig.SensorConfig, pollInterval time.Duration) *Handlers {
@@ -30,6 +33,11 @@ func NewHandlers(client *uniset.Client, store storage.Storage, p *poller.Poller,
 		sseHub:       NewSSEHub(),
 		pollInterval: pollInterval,
 	}
+}
+
+// SetLogServerManager устанавливает менеджер LogServer
+func (h *Handlers) SetLogServerManager(mgr *logserver.Manager) {
+	h.logServerMgr = mgr
 }
 
 // GetSSEHub возвращает SSE hub для использования в poller
@@ -272,4 +280,184 @@ func (h *Handlers) GetSensorByName(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.writeJSON(w, sensor.ToInfo())
+}
+
+// GetLogServerStatus возвращает статус подключения к LogServer объекта
+// GET /api/logs/{name}/status
+func (h *Handlers) GetLogServerStatus(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	if h.logServerMgr == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "LogServer manager not available")
+		return
+	}
+
+	client := h.logServerMgr.GetClient(name)
+	if client == nil {
+		h.writeJSON(w, &logserver.ConnectionStatus{
+			Connected: false,
+			Host:      "",
+			Port:      0,
+		})
+		return
+	}
+
+	h.writeJSON(w, client.GetStatus())
+}
+
+// HandleLogServerStream стримит логи объекта через SSE
+// GET /api/logs/{name}/stream?filter=...
+func (h *Handlers) HandleLogServerStream(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	if h.logServerMgr == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "LogServer manager not available")
+		return
+	}
+
+	// Получаем данные объекта для получения host:port LogServer
+	data, err := h.client.GetObjectData(name)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	if data.LogServer == nil {
+		h.writeError(w, http.StatusNotFound, "object has no LogServer")
+		return
+	}
+
+	host := data.LogServer.Host
+	port := data.LogServer.Port
+	if host == "" {
+		host = "localhost"
+	}
+	if port == 0 {
+		port = 3333
+	}
+
+	filter := r.URL.Query().Get("filter")
+
+	// Настраиваем SSE
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		h.writeError(w, http.StatusInternalServerError, "streaming not supported")
+		return
+	}
+
+	// Создаем стрим логов
+	ctx := r.Context()
+	stream, err := h.logServerMgr.NewLogStream(ctx, name, host, port, filter)
+	if err != nil {
+		// Отправляем ошибку как SSE событие
+		fmt.Fprintf(w, "event: error\ndata: %s\n\n", err.Error())
+		flusher.Flush()
+		return
+	}
+	defer stream.Close()
+
+	// Отправляем событие подключения
+	fmt.Fprintf(w, "event: connected\ndata: {\"host\":\"%s\",\"port\":%d}\n\n", host, port)
+	flusher.Flush()
+
+	// Стримим логи
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case line, ok := <-stream.Lines:
+			if !ok {
+				// Канал закрыт - LogServer отключился
+				fmt.Fprintf(w, "event: disconnected\ndata: {}\n\n")
+				flusher.Flush()
+				return
+			}
+			// Отправляем строку лога
+			fmt.Fprintf(w, "event: log\ndata: %s\n\n", line)
+			flusher.Flush()
+		}
+	}
+}
+
+// LogServerCommand структура команды для LogServer
+type LogServerCommand struct {
+	Command string `json:"command"` // setLevel, addLevel, delLevel, setFilter
+	Level   uint32 `json:"level,omitempty"`
+	Filter  string `json:"filter,omitempty"`
+}
+
+// SendLogServerCommand отправляет команду на LogServer объекта
+// POST /api/logs/{name}/command
+func (h *Handlers) SendLogServerCommand(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	if h.logServerMgr == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "LogServer manager not available")
+		return
+	}
+
+	var cmd LogServerCommand
+	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid command")
+		return
+	}
+
+	client := h.logServerMgr.GetClient(name)
+	if client == nil {
+		// Нет активного клиента - нужно сначала подключиться через stream
+		h.writeError(w, http.StatusNotFound, "no active connection to LogServer")
+		return
+	}
+
+	var err error
+	switch cmd.Command {
+	case "setLevel":
+		err = client.SetLogLevel(logserver.LogLevel(cmd.Level), cmd.Filter)
+	case "addLevel":
+		err = client.AddLogLevel(logserver.LogLevel(cmd.Level), cmd.Filter)
+	case "delLevel":
+		err = client.DelLogLevel(logserver.LogLevel(cmd.Level), cmd.Filter)
+	case "setFilter":
+		err = client.SetFilter(cmd.Filter)
+	case "list":
+		err = client.RequestList(cmd.Filter)
+	default:
+		h.writeError(w, http.StatusBadRequest, "unknown command: "+cmd.Command)
+		return
+	}
+
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	h.writeJSON(w, map[string]string{"status": "ok"})
+}
+
+// GetAllLogServerStatuses возвращает статусы всех LogServer подключений
+// GET /api/logs/status
+func (h *Handlers) GetAllLogServerStatuses(w http.ResponseWriter, r *http.Request) {
+	if h.logServerMgr == nil {
+		h.writeJSON(w, map[string]interface{}{})
+		return
+	}
+
+	h.writeJSON(w, h.logServerMgr.GetAllStatuses())
 }
