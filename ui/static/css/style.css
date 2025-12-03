@@ -324,6 +324,13 @@ header h1 {
 }
 
 /* Charts section */
+.charts-container {
+    height: 300px;
+    max-height: 300px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
 .charts-grid {
     display: flex;
     flex-direction: column;
@@ -337,6 +344,18 @@ header h1 {
     text-align: center;
     color: var(--text-muted);
     font-size: 13px;
+}
+
+.charts-resize-handle {
+    height: 6px;
+    background: var(--bg-tertiary);
+    cursor: ns-resize;
+    border-top: 1px solid var(--border-color);
+    transition: background 0.15s ease;
+}
+
+.charts-resize-handle:hover {
+    background: var(--accent-blue);
 }
 
 .chart-panel {
@@ -729,15 +748,176 @@ header h1 {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
     gap: 1rem;
-    margin-bottom: 1rem;
+    margin-bottom: 0;
 }
 
 .io-grid-3 {
     grid-template-columns: repeat(3, 1fr);
 }
 
+.io-grid.io-sequential {
+    grid-template-columns: 1fr;
+}
+
 .io-grid .collapsible-section {
     margin-bottom: 0;
+}
+
+/* IO/Timers section wrapper */
+.io-timers-section .collapsible-header {
+    display: flex;
+    align-items: center;
+}
+
+.io-sequential-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    margin-left: 1rem;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    transition: background 0.15s ease;
+}
+
+.io-sequential-toggle:hover {
+    background: var(--bg-hover);
+}
+
+.io-sequential-toggle input {
+    cursor: pointer;
+}
+
+.io-sequential-toggle span {
+    white-space: nowrap;
+}
+
+/* Sequential mode - unified table columns */
+.io-grid.io-sequential .collapsible-section {
+    margin-bottom: 0;
+}
+
+.io-grid.io-sequential .variables-table {
+    table-layout: fixed;
+}
+
+/* IO Section styling */
+.io-section .collapsible-header {
+    display: flex;
+    align-items: center;
+    padding: 0.4rem 0.75rem;
+    min-height: auto;
+}
+
+.io-section .collapsible-title {
+    font-size: 12px;
+}
+
+.io-section .collapsible-icon {
+    width: 14px;
+    height: 14px;
+}
+
+.io-filter-wrapper {
+    margin-right: 0.5rem;
+}
+
+.io-filter-input {
+    padding: 0.3rem 0.6rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 13px;
+    width: 180px;
+    outline: none;
+}
+
+.io-filter-input::placeholder {
+    color: var(--text-muted);
+}
+
+.io-filter-input:focus {
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 2px rgba(50, 116, 217, 0.2);
+}
+
+.io-table-container {
+    max-height: 200px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.io-resize-handle {
+    height: 6px;
+    background: var(--bg-tertiary);
+    cursor: ns-resize;
+    border-top: 1px solid var(--border-color);
+    transition: background 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.io-resize-handle:hover {
+    background: var(--accent-blue);
+}
+
+.io-resize-handle::after {
+    content: '';
+    width: 40px;
+    height: 2px;
+    background: var(--text-muted);
+    border-radius: 1px;
+}
+
+/* Chart column */
+.io-chart-col {
+    width: 30px;
+    text-align: center;
+    padding: 0.25rem !important;
+}
+
+/* Pin column */
+.io-pin-col {
+    width: 30px;
+    text-align: center;
+    padding: 0.25rem !important;
+}
+
+.io-pin-toggle {
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-muted);
+    display: inline-block;
+    width: 20px;
+    text-align: center;
+    user-select: none;
+}
+
+.io-pin-toggle:hover {
+    color: var(--text-primary);
+}
+
+.io-pin-toggle.pinned {
+    color: var(--accent-orange);
+}
+
+.io-row-pinned {
+    background: rgba(255, 170, 68, 0.1);
+}
+
+.io-unpin-all {
+    cursor: pointer;
+    font-size: 11px;
+    color: var(--accent-red);
+    font-weight: bold;
+}
+
+.io-unpin-all:hover {
+    color: #ff6b6b;
 }
 
 /* Info table (for Object, LogServer, Statistics) */
@@ -967,7 +1147,8 @@ header h1 {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    margin-left: auto;
+    flex: 1;
+    margin-left: 1rem;
 }
 
 .logviewer-status {
@@ -1004,6 +1185,47 @@ header h1 {
     50% { opacity: 0.4; }
 }
 
+/* Pause button */
+.log-pause-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.log-pause-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-blue);
+}
+
+.log-pause-btn.paused {
+    background: var(--accent-orange);
+    border-color: var(--accent-orange);
+    color: white;
+}
+
+.log-pause-btn .pause-icon {
+    font-size: 10px;
+}
+
+.log-pause-btn .pause-count {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent-orange);
+    display: none;
+}
+
+.log-pause-btn.paused .pause-count {
+    color: white;
+}
+
 /* Log level selector */
 .log-level-select {
     padding: 0.25rem 0.5rem;
@@ -1033,7 +1255,7 @@ header h1 {
     border-radius: 4px;
     color: var(--text-primary);
     font-size: 12px;
-    width: 150px;
+    width: 280px;
     outline: none;
 }
 
@@ -1128,7 +1350,7 @@ header h1 {
 }
 
 .logviewer-resize-handle:hover {
-    background: var(--bg-hover);
+    background: var(--accent-blue);
 }
 
 .logviewer-resize-handle::after {
@@ -1234,8 +1456,11 @@ header h1 {
 /* Log stats */
 .log-stats {
     font-size: 11px;
-    color: var(--text-muted);
-    margin-left: 0.5rem;
+    color: var(--text-secondary);
+    padding: 0.15rem 0.4rem;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    white-space: nowrap;
 }
 
 /* Log level dropdown */
@@ -1346,11 +1571,16 @@ header h1 {
     background: #4183e0;
 }
 
+/* Spacer to push right-side controls */
+.log-controls-spacer {
+    flex: 1;
+}
+
 /* Log filter wrapper */
 .log-filter-wrapper {
     display: flex;
     align-items: center;
-    gap: 0.375rem;
+    gap: 0.5rem;
 }
 
 .log-filter-options {
@@ -1361,9 +1591,9 @@ header h1 {
 .log-filter-option {
     display: flex;
     align-items: center;
-    gap: 0.2rem;
-    font-size: 10px;
-    color: var(--text-muted);
+    gap: 0.25rem;
+    font-size: 12px;
+    color: var(--text-secondary);
     cursor: pointer;
 }
 

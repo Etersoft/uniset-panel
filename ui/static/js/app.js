@@ -195,44 +195,123 @@ class BaseObjectRenderer {
     }
 
     createChartsSection() {
-        return this.createCollapsibleSection('charts', 'Графики', `
-            <div id="charts-${this.objectName}" class="charts-grid"></div>
-        `);
+        return `
+            <div class="collapsible-section" data-section="charts-${this.objectName}" id="charts-section-${this.objectName}">
+                <div class="collapsible-header" onclick="toggleSection('charts-${this.objectName}')">
+                    <svg class="collapsible-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M6 9l6 6 6-6"/>
+                    </svg>
+                    <span class="collapsible-title">Графики</span>
+                </div>
+                <div class="collapsible-content" id="section-charts-${this.objectName}">
+                    <div class="charts-container" id="charts-container-${this.objectName}">
+                        <div id="charts-${this.objectName}" class="charts-grid"></div>
+                    </div>
+                    <div class="charts-resize-handle" id="charts-resize-${this.objectName}"></div>
+                </div>
+            </div>
+        `;
+    }
+
+    createIOTimersSection() {
+        return `
+            <div class="collapsible-section io-timers-section" data-section="io-timers-${this.objectName}" id="io-timers-section-${this.objectName}">
+                <div class="collapsible-header" onclick="toggleSection('io-timers-${this.objectName}')">
+                    <svg class="collapsible-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M6 9l6 6 6-6"/>
+                    </svg>
+                    <span class="collapsible-title">I/O</span>
+                    <label class="io-sequential-toggle" onclick="event.stopPropagation()">
+                        <input type="checkbox" id="io-sequential-${this.objectName}" onchange="toggleIOLayout('${this.objectName}')">
+                        <span>Друг за другом</span>
+                    </label>
+                </div>
+                <div class="collapsible-content" id="section-io-timers-${this.objectName}">
+                    <div class="io-grid io-grid-3" id="io-grid-${this.objectName}">
+                        ${this.createIOSection('inputs', 'Входы')}
+                        ${this.createIOSection('outputs', 'Выходы')}
+                        ${this.createTimersSection()}
+                    </div>
+                </div>
+            </div>
+        `;
     }
 
     createIOSection(type, title) {
         const typeLower = type.toLowerCase();
-        return this.createCollapsibleSection(typeLower, title, `
-            <table class="variables-table">
-                <thead>
-                    <tr>
-                        <th>Имя</th>
-                        <th>ID</th>
-                        <th>Тип</th>
-                        <th>Значение</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody id="${typeLower}-${this.objectName}"></tbody>
-            </table>
-        `, { badge: true });
+        return `
+            <div class="collapsible-section io-section" data-section="${typeLower}-${this.objectName}" id="${typeLower}-section-${this.objectName}">
+                <div class="collapsible-header" onclick="toggleSection('${typeLower}-${this.objectName}')">
+                    <div class="io-filter-wrapper" onclick="event.stopPropagation()">
+                        <input type="text" class="io-filter-input" id="io-filter-${typeLower}-${this.objectName}"
+                               placeholder="Фильтр..." data-type="${typeLower}" data-object="${this.objectName}">
+                    </div>
+                    <svg class="collapsible-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M6 9l6 6 6-6"/>
+                    </svg>
+                    <span class="collapsible-title">${title}</span>
+                    <span class="io-section-badge" id="${typeLower}-count-${this.objectName}">0</span>
+                </div>
+                <div class="collapsible-content" id="section-${typeLower}-${this.objectName}">
+                    <div class="io-table-container" id="io-container-${typeLower}-${this.objectName}">
+                        <table class="variables-table io-table">
+                            <thead>
+                                <tr>
+                                    <th class="io-pin-col">
+                                        <span class="io-unpin-all" id="io-unpin-${typeLower}-${this.objectName}" title="Снять все закрепления" style="display:none">✕</span>
+                                    </th>
+                                    <th class="io-chart-col"></th>
+                                    <th>Имя</th>
+                                    <th>ID</th>
+                                    <th>Тип</th>
+                                    <th>Значение</th>
+                                </tr>
+                            </thead>
+                            <tbody id="${typeLower}-${this.objectName}"></tbody>
+                        </table>
+                    </div>
+                    <div class="io-resize-handle" id="io-resize-${typeLower}-${this.objectName}"></div>
+                </div>
+            </div>
+        `;
     }
 
     createTimersSection() {
-        return this.createCollapsibleSection('timers', 'Таймеры', `
-            <table class="variables-table">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Имя</th>
-                        <th>Интервал</th>
-                        <th>Осталось</th>
-                        <th>Tick</th>
-                    </tr>
-                </thead>
-                <tbody id="timers-${this.objectName}"></tbody>
-            </table>
-        `, { badge: true });
+        return `
+            <div class="collapsible-section io-section" data-section="timers-${this.objectName}" id="timers-section-${this.objectName}">
+                <div class="collapsible-header" onclick="toggleSection('timers-${this.objectName}')">
+                    <div class="io-filter-wrapper" onclick="event.stopPropagation()">
+                        <input type="text" class="io-filter-input" id="io-filter-timers-${this.objectName}"
+                               placeholder="Фильтр..." data-type="timers" data-object="${this.objectName}">
+                    </div>
+                    <svg class="collapsible-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M6 9l6 6 6-6"/>
+                    </svg>
+                    <span class="collapsible-title">Таймеры</span>
+                    <span class="io-section-badge" id="timers-count-${this.objectName}">0</span>
+                </div>
+                <div class="collapsible-content" id="section-timers-${this.objectName}">
+                    <div class="io-table-container" id="io-container-timers-${this.objectName}">
+                        <table class="variables-table io-table">
+                            <thead>
+                                <tr>
+                                    <th class="io-pin-col">
+                                        <span class="io-unpin-all" id="io-unpin-timers-${this.objectName}" title="Снять все закрепления" style="display:none">✕</span>
+                                    </th>
+                                    <th>ID</th>
+                                    <th>Имя</th>
+                                    <th>Интервал</th>
+                                    <th>Осталось</th>
+                                    <th>Tick</th>
+                                </tr>
+                            </thead>
+                            <tbody id="timers-${this.objectName}"></tbody>
+                        </table>
+                    </div>
+                    <div class="io-resize-handle" id="io-resize-timers-${this.objectName}"></div>
+                </div>
+            </div>
+        `;
     }
 
     createVariablesSection() {
@@ -316,14 +395,10 @@ class UniSetManagerRenderer extends BaseObjectRenderer {
     createPanelHTML() {
         return `
             ${this.createChartsSection()}
-            <div class="io-grid io-grid-3">
-                ${this.createIOSection('inputs', 'Входы')}
-                ${this.createIOSection('outputs', 'Выходы')}
-                ${this.createTimersSection()}
-            </div>
-            ${this.createVariablesSection()}
+            ${this.createIOTimersSection()}
             ${this.createLogViewerSection()}
             ${this.createLogServerSection()}
+            ${this.createVariablesSection()}
             ${this.createStatisticsSection()}
             ${this.createObjectInfoSection()}
         `;
@@ -331,9 +406,19 @@ class UniSetManagerRenderer extends BaseObjectRenderer {
 
     initialize() {
         setupFilterHandlers(this.objectName);
+        setupChartsResize(this.objectName);
+        loadIOLayoutState(this.objectName);
+        setupIOSections(this.objectName);
     }
 
     update(data) {
+        // Сохраняем данные для повторного рендеринга с фильтрами
+        const tabState = state.tabs.get(this.objectName);
+        if (tabState) {
+            tabState.ioData = data.io || {};
+            tabState.timersData = data.Timers || {};
+        }
+
         // Объединяем Variables и extra (дополнительные переменные не входящие в стандартные поля)
         const allVariables = { ...(data.Variables || {}), ...(data.extra || {}) };
         renderVariables(this.objectName, allVariables);
@@ -363,9 +448,9 @@ class UniSetObjectRenderer extends BaseObjectRenderer {
     createPanelHTML() {
         return `
             ${this.createChartsSection()}
-            ${this.createVariablesSection()}
             ${this.createLogViewerSection()}
             ${this.createLogServerSection()}
+            ${this.createVariablesSection()}
             ${this.createStatisticsSection()}
             ${this.createObjectInfoSection()}
         `;
@@ -373,6 +458,7 @@ class UniSetObjectRenderer extends BaseObjectRenderer {
 
     initialize() {
         setupFilterHandlers(this.objectName);
+        setupChartsResize(this.objectName);
     }
 
     update(data) {
@@ -495,7 +581,7 @@ class LogViewer {
         this.connected = false;
         this.isActive = false; // true если идёт попытка подключения или переподключения
         this.lines = [];
-        this.maxLines = 2000;
+        this.maxLines = 10000;
         this.autoScroll = true;
         this.currentLevel = 0; // 0 = по умолчанию (не отправлять setLevel)
         this.selectedLevels = new Set(); // выбранные уровни логов
@@ -507,6 +593,8 @@ class LogViewer {
         this.height = 200;
         this.hasReceivedLogs = false; // Получали ли логи
         this.matchCount = 0; // количество совпадений
+        this.paused = false; // пауза автопрокрутки
+        this.pausedBuffer = []; // буфер логов во время паузы
 
         this.init();
     }
@@ -525,12 +613,7 @@ class LogViewer {
                         <path d="M6 9l6 6 6-6"/>
                     </svg>
                     <span class="logviewer-title">Логи</span>
-                    <span class="log-stats" id="log-stats-${this.objectName}"></span>
                     <div class="logviewer-controls" onclick="event.stopPropagation()">
-                        <div class="logviewer-status">
-                            <span class="logviewer-status-dot" id="log-status-dot-${this.objectName}"></span>
-                            <span id="log-status-text-${this.objectName}">Отключено</span>
-                        </div>
                         <div class="log-level-wrapper" id="log-level-wrapper-${this.objectName}">
                             <button class="log-level-btn" id="log-level-btn-${this.objectName}" title="Выбор уровней логов">
                                 Уровни ▼
@@ -567,7 +650,7 @@ class LogViewer {
                         </div>
                         <div class="log-filter-wrapper">
                             <input type="text" class="log-filter-input" id="log-filter-${this.objectName}"
-                                   placeholder="Фильтр..." title="Фильтр (/ для фокуса)">
+                                   placeholder="Фильтр (/ для фокуса)..." title="Фильтр (/ для фокуса, Esc для очистки)">
                             <div class="log-filter-options">
                                 <label class="log-filter-option" title="Регулярные выражения">
                                     <input type="checkbox" id="log-filter-regex-${this.objectName}" checked> Regex
@@ -581,16 +664,28 @@ class LogViewer {
                             </div>
                             <span class="log-match-count" id="log-match-count-${this.objectName}"></span>
                         </div>
+                        <div class="log-controls-spacer"></div>
+                        <span class="log-stats" id="log-stats-${this.objectName}"></span>
+                        <div class="logviewer-status">
+                            <span class="logviewer-status-dot" id="log-status-dot-${this.objectName}"></span>
+                            <span id="log-status-text-${this.objectName}">Отключено</span>
+                        </div>
+                        <button class="log-pause-btn" id="log-pause-${this.objectName}" title="Пауза/Продолжить (Esc)">
+                            <span class="pause-icon">⏸</span>
+                            <span class="pause-count" id="log-pause-count-${this.objectName}"></span>
+                        </button>
+                        <button class="log-connect-btn" id="log-connect-${this.objectName}">Подключить</button>
                         <select class="log-buffer-select" id="log-buffer-${this.objectName}" title="Размер буфера">
                             <option value="500">500</option>
                             <option value="1000">1000</option>
-                            <option value="2000" selected>2000</option>
+                            <option value="2000">2000</option>
                             <option value="5000">5000</option>
-                            <option value="10000">10000</option>
+                            <option value="10000" selected>10000</option>
+                            <option value="20000">20000</option>
+                            <option value="50000">50000</option>
                         </select>
-                        <button class="log-download-btn" id="log-download-${this.objectName}" title="Скачать логи">⬇</button>
+                        <button class="log-download-btn" id="log-download-${this.objectName}" title="Скачать логи">💾</button>
                         <button class="log-clear-btn" id="log-clear-${this.objectName}" title="Очистить">Очистить</button>
-                        <button class="log-connect-btn" id="log-connect-${this.objectName}">Подключить</button>
                     </div>
                 </div>
                 <div class="logviewer-content">
@@ -638,6 +733,10 @@ class LogViewer {
         const downloadBtn = document.getElementById(`log-download-${this.objectName}`);
         downloadBtn.addEventListener('click', () => this.downloadLogs());
 
+        // Pause button
+        const pauseBtn = document.getElementById(`log-pause-${this.objectName}`);
+        pauseBtn.addEventListener('click', () => this.togglePause());
+
         // Level dropdown
         this.setupLevelDropdown();
 
@@ -656,32 +755,45 @@ class LogViewer {
         const regexCheckbox = document.getElementById(`log-filter-regex-${this.objectName}`);
         regexCheckbox.addEventListener('change', (e) => {
             this.filterRegex = e.target.checked;
+            this.saveFilterOptions();
             this.applyFilter();
         });
 
         const caseCheckbox = document.getElementById(`log-filter-case-${this.objectName}`);
         caseCheckbox.addEventListener('change', (e) => {
             this.filterCase = e.target.checked;
+            this.saveFilterOptions();
             this.applyFilter();
         });
 
         const onlyCheckbox = document.getElementById(`log-filter-only-${this.objectName}`);
         onlyCheckbox.addEventListener('change', (e) => {
             this.filterOnlyMatches = e.target.checked;
+            this.saveFilterOptions();
             this.applyFilter();
         });
 
-        // Hotkey "/" for filter focus
+        // Hotkey "/" for filter focus, Esc for pause toggle
         document.addEventListener('keydown', (e) => {
+            // Check if LogViewer section is visible
+            const section = document.getElementById(`logviewer-section-${this.objectName}`);
+            if (!section || section.classList.contains('collapsed')) return;
+
             if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
                 e.preventDefault();
                 filterInput.focus();
             }
-            if (e.key === 'Escape' && document.activeElement === filterInput) {
-                filterInput.value = '';
-                this.filter = '';
-                this.applyFilter();
-                filterInput.blur();
+            if (e.key === 'Escape') {
+                if (document.activeElement === filterInput) {
+                    // Clear filter and blur
+                    filterInput.value = '';
+                    this.filter = '';
+                    this.applyFilter();
+                    filterInput.blur();
+                } else if (document.activeElement.tagName !== 'INPUT') {
+                    // Toggle pause when not in input
+                    this.togglePause();
+                }
             }
         });
 
@@ -706,6 +818,44 @@ class LogViewer {
         // Load saved settings
         this.loadSavedLevels();
         this.loadSavedBufferSize();
+        this.loadFilterOptions();
+    }
+
+    saveFilterOptions() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-filter-options') || '{}');
+            saved[this.objectName] = {
+                regex: this.filterRegex,
+                case: this.filterCase,
+                only: this.filterOnlyMatches
+            };
+            localStorage.setItem('uniset2-viewer-filter-options', JSON.stringify(saved));
+        } catch (err) {
+            console.warn('Failed to save filter options:', err);
+        }
+    }
+
+    loadFilterOptions() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-filter-options') || '{}');
+            if (saved[this.objectName]) {
+                const opts = saved[this.objectName];
+                this.filterRegex = opts.regex !== undefined ? opts.regex : true;
+                this.filterCase = opts.case !== undefined ? opts.case : false;
+                this.filterOnlyMatches = opts.only !== undefined ? opts.only : false;
+
+                // Update checkboxes
+                const regexCheckbox = document.getElementById(`log-filter-regex-${this.objectName}`);
+                const caseCheckbox = document.getElementById(`log-filter-case-${this.objectName}`);
+                const onlyCheckbox = document.getElementById(`log-filter-only-${this.objectName}`);
+
+                if (regexCheckbox) regexCheckbox.checked = this.filterRegex;
+                if (caseCheckbox) caseCheckbox.checked = this.filterCase;
+                if (onlyCheckbox) onlyCheckbox.checked = this.filterOnlyMatches;
+            }
+        } catch (err) {
+            console.warn('Failed to load filter options:', err);
+        }
     }
 
     saveBufferSize() {
@@ -1029,6 +1179,14 @@ class LogViewer {
         }
 
         const line = { text, type, timestamp: new Date() };
+
+        // Если на паузе - накапливаем в буфер
+        if (this.paused) {
+            this.pausedBuffer.push(line);
+            this.updatePauseCount();
+            return;
+        }
+
         this.lines.push(line);
 
         // Limit lines - also need to remove from DOM
@@ -1159,6 +1317,63 @@ class LogViewer {
         if (statsEl) {
             statsEl.textContent = `${this.lines.length} / ${this.maxLines}`;
         }
+    }
+
+    togglePause() {
+        this.paused = !this.paused;
+        this.updatePauseUI();
+
+        if (!this.paused) {
+            // При снятии паузы - выгружаем накопленный буфер
+            this.flushPausedBuffer();
+        }
+    }
+
+    updatePauseUI() {
+        const pauseBtn = document.getElementById(`log-pause-${this.objectName}`);
+        const pauseIcon = pauseBtn?.querySelector('.pause-icon');
+
+        if (pauseBtn) {
+            pauseBtn.classList.toggle('paused', this.paused);
+            if (pauseIcon) {
+                pauseIcon.textContent = this.paused ? '▶' : '⏸';
+            }
+        }
+        this.updatePauseCount();
+    }
+
+    updatePauseCount() {
+        const countEl = document.getElementById(`log-pause-count-${this.objectName}`);
+        if (countEl) {
+            if (this.paused && this.pausedBuffer.length > 0) {
+                countEl.textContent = `+${this.pausedBuffer.length}`;
+                countEl.style.display = 'inline';
+            } else {
+                countEl.textContent = '';
+                countEl.style.display = 'none';
+            }
+        }
+    }
+
+    flushPausedBuffer() {
+        if (this.pausedBuffer.length === 0) return;
+
+        // Добавляем все накопленные строки
+        this.pausedBuffer.forEach(line => {
+            this.lines.push(line);
+        });
+
+        // Ограничиваем размер
+        if (this.lines.length > this.maxLines) {
+            this.lines = this.lines.slice(-this.maxLines);
+        }
+
+        // Очищаем буфер
+        this.pausedBuffer = [];
+        this.updatePauseCount();
+
+        // Перерисовываем все строки с учётом фильтра
+        this.applyFilter();
     }
 
     downloadLogs() {
@@ -1594,27 +1809,52 @@ function renderIO(objectName, type, ioData) {
     const countBadge = document.getElementById(`${type}-count-${objectName}`);
     if (!tbody) return;
 
-    tbody.innerHTML = '';
     const entries = Object.entries(ioData);
 
     if (countBadge) {
         countBadge.textContent = entries.length;
     }
 
+    // Получаем текущий фильтр и закреплённые строки
+    const filterInput = document.getElementById(`io-filter-${type}-${objectName}`);
+    const filterText = filterInput ? filterInput.value.toLowerCase() : '';
+    const pinnedRows = getIOPinnedRows(objectName, type);
+    const hasPinned = pinnedRows.size > 0;
+
+    // Показываем/скрываем кнопку "снять все"
+    const unpinBtn = document.getElementById(`io-unpin-${type}-${objectName}`);
+    if (unpinBtn) {
+        unpinBtn.style.display = hasPinned ? 'inline' : 'none';
+    }
+
+    tbody.innerHTML = '';
+
     entries.forEach(([key, io]) => {
         const varName = `io.${type === 'inputs' ? 'in' : 'out'}.${key}`;
         const sensor = getSensorInfo(io.id) || getSensorInfo(io.name);
         const iotype = sensor?.iotype || (type === 'inputs' ? 'DI' : 'DO');
-        // textname: приоритет - справочник сенсоров, потом comment из ответа API
         const textname = sensor?.textname || io.textname || io.comment || '';
+        const rowKey = io.id || key;
+        const isPinned = pinnedRows.has(String(rowKey));
+
+        // Фильтрация: если есть закреплённые - показываем только их, иначе фильтруем по тексту
+        const searchText = `${io.name || key} ${io.id} ${iotype} ${textname}`.toLowerCase();
+        const matchesFilter = !filterText || searchText.includes(filterText);
+        const shouldShow = hasPinned ? isPinned : matchesFilter;
+
+        if (!shouldShow) return;
 
         const tr = document.createElement('tr');
+        tr.className = isPinned ? 'io-row-pinned' : '';
+        tr.dataset.rowKey = rowKey;
+
         tr.innerHTML = `
-            <td class="variable-name" title="${textname}">${io.name || key}</td>
-            <td>${io.id}</td>
-            <td><span class="variable-iotype iotype-${iotype.toLowerCase()}">${iotype}</span></td>
-            <td class="variable-value" data-var="${varName}">${formatValue(io.value)}</td>
-            <td>
+            <td class="io-pin-col">
+                <span class="io-pin-toggle ${isPinned ? 'pinned' : ''}" data-row-key="${rowKey}" title="${isPinned ? 'Открепить' : 'Закрепить'}">
+                    ${isPinned ? '📌' : '○'}
+                </span>
+            </td>
+            <td class="io-chart-col">
                 <span class="chart-toggle">
                     <input type="checkbox"
                            id="chart-${objectName}-${varName}"
@@ -1630,9 +1870,21 @@ function renderIO(objectName, type, ioData) {
                     </label>
                 </span>
             </td>
+            <td class="variable-name" title="${textname}">${io.name || key}</td>
+            <td>${io.id}</td>
+            <td><span class="variable-iotype iotype-${iotype.toLowerCase()}">${iotype}</span></td>
+            <td class="variable-value" data-var="${varName}">${formatValue(io.value)}</td>
         `;
 
-        const checkbox = tr.querySelector('input');
+        // Pin toggle handler
+        const pinToggle = tr.querySelector('.io-pin-toggle');
+        pinToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleIOPin(objectName, type, rowKey);
+        });
+
+        // Chart toggle handler
+        const checkbox = tr.querySelector('input[type="checkbox"]');
         checkbox.addEventListener('change', (e) => {
             if (e.target.checked) {
                 addChart(objectName, varName, io.id, textname);
@@ -2042,16 +2294,39 @@ function renderTimersTable(objectName, timers) {
     const tbody = document.getElementById(`timers-${objectName}`);
     if (!tbody) return;
 
+    // Получаем текущий фильтр и закреплённые строки
+    const filterInput = document.getElementById(`io-filter-timers-${objectName}`);
+    const filterText = filterInput ? filterInput.value.toLowerCase() : '';
+    const pinnedRows = getIOPinnedRows(objectName, 'timers');
+    const hasPinned = pinnedRows.size > 0;
+
+    // Показываем/скрываем кнопку "снять все"
+    const unpinBtn = document.getElementById(`io-unpin-timers-${objectName}`);
+    if (unpinBtn) {
+        unpinBtn.style.display = hasPinned ? 'inline' : 'none';
+    }
+
     tbody.innerHTML = '';
 
     if (timers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">Нет таймеров</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">Нет таймеров</td></tr>';
         return;
     }
 
     timers.forEach(timer => {
+        const rowKey = timer.id || timer._key;
+        const isPinned = pinnedRows.has(String(rowKey));
+
+        // Фильтрация
+        const searchText = `${timer.id} ${timer.name || ''}`.toLowerCase();
+        const matchesFilter = !filterText || searchText.includes(filterText);
+        const shouldShow = hasPinned ? isPinned : matchesFilter;
+
+        if (!shouldShow) return;
+
         const tr = document.createElement('tr');
         tr.dataset.timerId = timer.id;
+        tr.className = isPinned ? 'io-row-pinned' : '';
 
         // Форматирование tick: -1 означает бесконечный таймер
         const tickDisplay = timer.tick === -1 ? '∞' : timer.tick;
@@ -2062,6 +2337,11 @@ function renderTimersTable(objectName, timers) {
         const timeleftClass = timer.timeleft <= 0 ? 'timer-expired' : '';
 
         tr.innerHTML = `
+            <td class="io-pin-col">
+                <span class="io-pin-toggle ${isPinned ? 'pinned' : ''}" data-row-key="${rowKey}" title="${isPinned ? 'Открепить' : 'Закрепить'}">
+                    ${isPinned ? '📌' : '○'}
+                </span>
+            </td>
             <td>${timer.id}</td>
             <td class="variable-name">${timer.name || '-'}</td>
             <td class="variable-value">${timer.msec} мс</td>
@@ -2073,6 +2353,14 @@ function renderTimersTable(objectName, timers) {
             </td>
             <td class="variable-value ${tickClass}">${tickDisplay}</td>
         `;
+
+        // Pin toggle handler
+        const pinToggle = tr.querySelector('.io-pin-toggle');
+        pinToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleIOPin(objectName, 'timers', rowKey);
+        });
+
         tbody.appendChild(tr);
     });
 }
@@ -2549,6 +2837,312 @@ function setupFilterHandlers(objectName) {
             }
         }
     });
+}
+
+// Настройка resize для графиков
+function setupChartsResize(objectName) {
+    const resizeHandle = document.getElementById(`charts-resize-${objectName}`);
+    const chartsContainer = document.getElementById(`charts-container-${objectName}`);
+
+    if (!resizeHandle || !chartsContainer) return;
+
+    let startY = 0;
+    let startHeight = 0;
+    let isResizing = false;
+
+    const onMouseMove = (e) => {
+        if (!isResizing) return;
+        const delta = e.clientY - startY;
+        const newHeight = Math.max(150, startHeight + delta);
+        chartsContainer.style.height = `${newHeight}px`;
+        chartsContainer.style.maxHeight = `${newHeight}px`;
+    };
+
+    const onMouseUp = () => {
+        if (!isResizing) return;
+        isResizing = false;
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        // Сохраняем высоту
+        saveChartsHeight(objectName, chartsContainer.offsetHeight);
+    };
+
+    resizeHandle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        isResizing = true;
+        startY = e.clientY;
+        startHeight = chartsContainer.offsetHeight || 300;
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = 'ns-resize';
+        document.body.style.userSelect = 'none';
+    });
+
+    // Загружаем сохранённую высоту
+    loadChartsHeight(objectName);
+}
+
+function saveChartsHeight(objectName, height) {
+    try {
+        const saved = JSON.parse(localStorage.getItem('uniset2-viewer-charts-height') || '{}');
+        saved[objectName] = height;
+        localStorage.setItem('uniset2-viewer-charts-height', JSON.stringify(saved));
+    } catch (err) {
+        console.warn('Failed to save charts height:', err);
+    }
+}
+
+function loadChartsHeight(objectName) {
+    try {
+        const saved = JSON.parse(localStorage.getItem('uniset2-viewer-charts-height') || '{}');
+        if (saved[objectName]) {
+            const chartsContainer = document.getElementById(`charts-container-${objectName}`);
+            if (chartsContainer) {
+                chartsContainer.style.height = `${saved[objectName]}px`;
+                chartsContainer.style.maxHeight = `${saved[objectName]}px`;
+            }
+        }
+    } catch (err) {
+        console.warn('Failed to load charts height:', err);
+    }
+}
+
+// Переключение режима отображения IO (горизонтально/вертикально)
+function toggleIOLayout(objectName) {
+    const checkbox = document.getElementById(`io-sequential-${objectName}`);
+    const ioGrid = document.getElementById(`io-grid-${objectName}`);
+
+    if (!checkbox || !ioGrid) return;
+
+    if (checkbox.checked) {
+        ioGrid.classList.add('io-sequential');
+    } else {
+        ioGrid.classList.remove('io-sequential');
+    }
+
+    // Сохраняем состояние
+    saveIOLayoutState(objectName, checkbox.checked);
+}
+
+function saveIOLayoutState(objectName, isSequential) {
+    try {
+        const saved = JSON.parse(localStorage.getItem('uniset2-viewer-io-layout') || '{}');
+        saved[objectName] = isSequential;
+        localStorage.setItem('uniset2-viewer-io-layout', JSON.stringify(saved));
+    } catch (err) {
+        console.warn('Failed to save IO layout state:', err);
+    }
+}
+
+function loadIOLayoutState(objectName) {
+    try {
+        const saved = JSON.parse(localStorage.getItem('uniset2-viewer-io-layout') || '{}');
+        if (saved[objectName]) {
+            const checkbox = document.getElementById(`io-sequential-${objectName}`);
+            const ioGrid = document.getElementById(`io-grid-${objectName}`);
+            if (checkbox && ioGrid) {
+                checkbox.checked = true;
+                ioGrid.classList.add('io-sequential');
+            }
+        }
+    } catch (err) {
+        console.warn('Failed to load IO layout state:', err);
+    }
+}
+
+// IO Section resize, filter, and pin functionality
+function setupIOSections(objectName) {
+    ['inputs', 'outputs', 'timers'].forEach(type => {
+        setupIOResize(objectName, type);
+        setupIOFilter(objectName, type);
+        setupIOUnpinAll(objectName, type);
+    });
+}
+
+function setupIOResize(objectName, type) {
+    const resizeHandle = document.getElementById(`io-resize-${type}-${objectName}`);
+    const container = document.getElementById(`io-container-${type}-${objectName}`);
+
+    if (!resizeHandle || !container) return;
+
+    let startY = 0;
+    let startHeight = 0;
+    let isResizing = false;
+
+    const onMouseMove = (e) => {
+        if (!isResizing) return;
+        const delta = e.clientY - startY;
+        const newHeight = Math.max(100, startHeight + delta);
+        container.style.height = `${newHeight}px`;
+        container.style.maxHeight = `${newHeight}px`;
+    };
+
+    const onMouseUp = () => {
+        if (!isResizing) return;
+        isResizing = false;
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        saveIOHeight(objectName, type, container.offsetHeight);
+    };
+
+    resizeHandle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        isResizing = true;
+        startY = e.clientY;
+        startHeight = container.offsetHeight || 200;
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = 'ns-resize';
+        document.body.style.userSelect = 'none';
+    });
+
+    loadIOHeight(objectName, type);
+}
+
+function saveIOHeight(objectName, type, height) {
+    try {
+        const saved = JSON.parse(localStorage.getItem('uniset2-viewer-io-heights') || '{}');
+        const key = `${objectName}-${type}`;
+        saved[key] = height;
+        localStorage.setItem('uniset2-viewer-io-heights', JSON.stringify(saved));
+    } catch (err) {
+        console.warn('Failed to save IO height:', err);
+    }
+}
+
+function loadIOHeight(objectName, type) {
+    try {
+        const saved = JSON.parse(localStorage.getItem('uniset2-viewer-io-heights') || '{}');
+        const key = `${objectName}-${type}`;
+        if (saved[key]) {
+            const container = document.getElementById(`io-container-${type}-${objectName}`);
+            if (container) {
+                container.style.height = `${saved[key]}px`;
+                container.style.maxHeight = `${saved[key]}px`;
+            }
+        }
+    } catch (err) {
+        console.warn('Failed to load IO height:', err);
+    }
+}
+
+function setupIOFilter(objectName, type) {
+    const filterInput = document.getElementById(`io-filter-${type}-${objectName}`);
+    if (!filterInput) return;
+
+    let filterTimeout = null;
+
+    filterInput.addEventListener('input', (e) => {
+        clearTimeout(filterTimeout);
+        filterTimeout = setTimeout(() => {
+            // Перерисовываем IO с новым фильтром
+            const tabState = state.tabs.get(objectName);
+            if (tabState) {
+                if (type === 'inputs' && tabState.ioData?.in) {
+                    renderIO(objectName, 'inputs', tabState.ioData.in);
+                } else if (type === 'outputs' && tabState.ioData?.out) {
+                    renderIO(objectName, 'outputs', tabState.ioData.out);
+                } else if (type === 'timers' && tabState.timersData) {
+                    renderTimers(objectName, tabState.timersData);
+                }
+            }
+        }, 200);
+    });
+
+    // ESC to clear and blur
+    filterInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            filterInput.value = '';
+            filterInput.blur();
+            // Перерисовываем
+            const tabState = state.tabs.get(objectName);
+            if (tabState) {
+                if (type === 'inputs' && tabState.ioData?.in) {
+                    renderIO(objectName, 'inputs', tabState.ioData.in);
+                } else if (type === 'outputs' && tabState.ioData?.out) {
+                    renderIO(objectName, 'outputs', tabState.ioData.out);
+                } else if (type === 'timers' && tabState.timersData) {
+                    renderTimers(objectName, tabState.timersData);
+                }
+            }
+        }
+    });
+}
+
+function setupIOUnpinAll(objectName, type) {
+    const unpinBtn = document.getElementById(`io-unpin-${type}-${objectName}`);
+    if (!unpinBtn) return;
+
+    unpinBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        clearIOPinnedRows(objectName, type);
+        // Перерисовываем
+        const tabState = state.tabs.get(objectName);
+        if (tabState) {
+            if (type === 'inputs' && tabState.ioData?.in) {
+                renderIO(objectName, 'inputs', tabState.ioData.in);
+            } else if (type === 'outputs' && tabState.ioData?.out) {
+                renderIO(objectName, 'outputs', tabState.ioData.out);
+            } else if (type === 'timers' && tabState.timersData) {
+                renderTimers(objectName, tabState.timersData);
+            }
+        }
+    });
+}
+
+// Pinned rows management
+function getIOPinnedRows(objectName, type) {
+    try {
+        const saved = JSON.parse(localStorage.getItem('uniset2-viewer-io-pinned') || '{}');
+        const key = `${objectName}-${type}`;
+        return new Set(saved[key] || []);
+    } catch (err) {
+        return new Set();
+    }
+}
+
+function saveIOPinnedRows(objectName, type, pinnedSet) {
+    try {
+        const saved = JSON.parse(localStorage.getItem('uniset2-viewer-io-pinned') || '{}');
+        const key = `${objectName}-${type}`;
+        saved[key] = Array.from(pinnedSet);
+        localStorage.setItem('uniset2-viewer-io-pinned', JSON.stringify(saved));
+    } catch (err) {
+        console.warn('Failed to save pinned rows:', err);
+    }
+}
+
+function toggleIOPin(objectName, type, rowKey) {
+    const pinned = getIOPinnedRows(objectName, type);
+    const keyStr = String(rowKey);
+
+    if (pinned.has(keyStr)) {
+        pinned.delete(keyStr);
+    } else {
+        pinned.add(keyStr);
+    }
+
+    saveIOPinnedRows(objectName, type, pinned);
+
+    // Перерисовываем
+    const tabState = state.tabs.get(objectName);
+    if (tabState) {
+        if (type === 'inputs' && tabState.ioData?.in) {
+            renderIO(objectName, 'inputs', tabState.ioData.in);
+        } else if (type === 'outputs' && tabState.ioData?.out) {
+            renderIO(objectName, 'outputs', tabState.ioData.out);
+        } else if (type === 'timers' && tabState.timersData) {
+            renderTimers(objectName, tabState.timersData);
+        }
+    }
+}
+
+function clearIOPinnedRows(objectName, type) {
+    saveIOPinnedRows(objectName, type, new Set());
 }
 
 // Обработка выбора временного диапазона
