@@ -498,9 +498,15 @@ class LogViewer {
         this.maxLines = 2000;
         this.autoScroll = true;
         this.currentLevel = 0; // 0 = по умолчанию (не отправлять setLevel)
+        this.selectedLevels = new Set(); // выбранные уровни логов
+        this.levelDropdownOpen = false;
         this.filter = '';
+        this.filterRegex = true; // использовать regexp
+        this.filterCase = false; // учитывать регистр
+        this.filterOnlyMatches = false; // показывать только совпадения
         this.height = 200;
         this.hasReceivedLogs = false; // Получали ли логи
+        this.matchCount = 0; // количество совпадений
 
         this.init();
     }
@@ -519,21 +525,70 @@ class LogViewer {
                         <path d="M6 9l6 6 6-6"/>
                     </svg>
                     <span class="logviewer-title">Логи</span>
+                    <span class="log-stats" id="log-stats-${this.objectName}"></span>
                     <div class="logviewer-controls" onclick="event.stopPropagation()">
                         <div class="logviewer-status">
                             <span class="logviewer-status-dot" id="log-status-dot-${this.objectName}"></span>
                             <span id="log-status-text-${this.objectName}">Отключено</span>
                         </div>
-                        <select class="log-level-select" id="log-level-${this.objectName}" title="Уровень логов">
-                            <option value="0" selected>По умолчанию</option>
-                            <option value="${LOG_LEVELS.CRIT}">CRIT</option>
-                            <option value="${LOG_LEVELS.CRIT | LOG_LEVELS.WARN}">WARN+</option>
-                            <option value="${LOG_LEVELS.CRIT | LOG_LEVELS.WARN | LOG_LEVELS.INFO}">INFO+</option>
-                            <option value="${LOG_LEVELS.CRIT | LOG_LEVELS.WARN | LOG_LEVELS.INFO | LOG_LEVELS.DEBUG}">DEBUG+</option>
-                            <option value="${LOG_LEVELS.ANY}">ALL</option>
+                        <div class="log-level-wrapper" id="log-level-wrapper-${this.objectName}">
+                            <button class="log-level-btn" id="log-level-btn-${this.objectName}" title="Выбор уровней логов">
+                                Уровни ▼
+                            </button>
+                            <div class="log-level-dropdown" id="log-level-dropdown-${this.objectName}">
+                                <div class="log-level-pills">
+                                    <button class="log-level-pill" data-level="CRIT">CRIT</button>
+                                    <button class="log-level-pill" data-level="WARN">WARN</button>
+                                    <button class="log-level-pill" data-level="INFO">INFO</button>
+                                    <button class="log-level-pill" data-level="DEBUG">DEBUG</button>
+                                </div>
+                                <div class="log-level-pills">
+                                    <button class="log-level-pill" data-level="LEVEL1">LVL1</button>
+                                    <button class="log-level-pill" data-level="LEVEL2">LVL2</button>
+                                    <button class="log-level-pill" data-level="LEVEL3">LVL3</button>
+                                    <button class="log-level-pill" data-level="LEVEL4">LVL4</button>
+                                    <button class="log-level-pill" data-level="LEVEL5">LVL5</button>
+                                </div>
+                                <div class="log-level-pills">
+                                    <button class="log-level-pill" data-level="LEVEL6">LVL6</button>
+                                    <button class="log-level-pill" data-level="LEVEL7">LVL7</button>
+                                    <button class="log-level-pill" data-level="LEVEL8">LVL8</button>
+                                    <button class="log-level-pill" data-level="LEVEL9">LVL9</button>
+                                    <button class="log-level-pill" data-level="ANY">ALL</button>
+                                </div>
+                                <div class="log-level-presets">
+                                    <button class="log-preset-btn" data-preset="errors">Ошибки</button>
+                                    <button class="log-preset-btn" data-preset="info">Инфо+</button>
+                                    <button class="log-preset-btn" data-preset="all">Всё</button>
+                                    <button class="log-preset-btn" data-preset="reset">Сброс</button>
+                                </div>
+                                <button class="log-level-apply" id="log-level-apply-${this.objectName}">Применить</button>
+                            </div>
+                        </div>
+                        <div class="log-filter-wrapper">
+                            <input type="text" class="log-filter-input" id="log-filter-${this.objectName}"
+                                   placeholder="Фильтр..." title="Фильтр (/ для фокуса)">
+                            <div class="log-filter-options">
+                                <label class="log-filter-option" title="Регулярные выражения">
+                                    <input type="checkbox" id="log-filter-regex-${this.objectName}" checked> Regex
+                                </label>
+                                <label class="log-filter-option" title="Учитывать регистр">
+                                    <input type="checkbox" id="log-filter-case-${this.objectName}"> Case
+                                </label>
+                                <label class="log-filter-option" title="Только совпадения">
+                                    <input type="checkbox" id="log-filter-only-${this.objectName}"> Только
+                                </label>
+                            </div>
+                            <span class="log-match-count" id="log-match-count-${this.objectName}"></span>
+                        </div>
+                        <select class="log-buffer-select" id="log-buffer-${this.objectName}" title="Размер буфера">
+                            <option value="500">500</option>
+                            <option value="1000">1000</option>
+                            <option value="2000" selected>2000</option>
+                            <option value="5000">5000</option>
+                            <option value="10000">10000</option>
                         </select>
-                        <input type="text" class="log-filter-input" id="log-filter-${this.objectName}"
-                               placeholder="Фильтр..." title="Фильтр по regexp">
+                        <button class="log-download-btn" id="log-download-${this.objectName}" title="Скачать логи">⬇</button>
                         <button class="log-clear-btn" id="log-clear-${this.objectName}" title="Очистить">Очистить</button>
                         <button class="log-connect-btn" id="log-connect-${this.objectName}">Подключить</button>
                     </div>
@@ -569,7 +624,6 @@ class LogViewer {
         const connectBtn = document.getElementById(`log-connect-${this.objectName}`);
         connectBtn.addEventListener('click', () => {
             if (this.isActive) {
-                // Если активно (подключены или пытаемся подключиться) - останавливаем
                 this.disconnect();
             } else {
                 this.connect();
@@ -580,27 +634,63 @@ class LogViewer {
         const clearBtn = document.getElementById(`log-clear-${this.objectName}`);
         clearBtn.addEventListener('click', () => this.clear());
 
-        // Level select
-        const levelSelect = document.getElementById(`log-level-${this.objectName}`);
-        levelSelect.addEventListener('change', (e) => {
-            this.currentLevel = parseInt(e.target.value);
-            // Отправляем setLevel только если выбран конкретный уровень (не 0)
-            if (this.connected && this.currentLevel > 0) {
-                this.sendCommand('setLevel', this.currentLevel);
-            }
-        });
+        // Download button
+        const downloadBtn = document.getElementById(`log-download-${this.objectName}`);
+        downloadBtn.addEventListener('click', () => this.downloadLogs());
 
-        // Filter input
+        // Level dropdown
+        this.setupLevelDropdown();
+
+        // Filter input with local filtering
         const filterInput = document.getElementById(`log-filter-${this.objectName}`);
         let filterTimeout = null;
         filterInput.addEventListener('input', (e) => {
             clearTimeout(filterTimeout);
             filterTimeout = setTimeout(() => {
                 this.filter = e.target.value;
-                if (this.connected) {
-                    this.sendCommand('setFilter', 0, this.filter);
-                }
-            }, 500);
+                this.applyFilter();
+            }, 300);
+        });
+
+        // Filter options
+        const regexCheckbox = document.getElementById(`log-filter-regex-${this.objectName}`);
+        regexCheckbox.addEventListener('change', (e) => {
+            this.filterRegex = e.target.checked;
+            this.applyFilter();
+        });
+
+        const caseCheckbox = document.getElementById(`log-filter-case-${this.objectName}`);
+        caseCheckbox.addEventListener('change', (e) => {
+            this.filterCase = e.target.checked;
+            this.applyFilter();
+        });
+
+        const onlyCheckbox = document.getElementById(`log-filter-only-${this.objectName}`);
+        onlyCheckbox.addEventListener('change', (e) => {
+            this.filterOnlyMatches = e.target.checked;
+            this.applyFilter();
+        });
+
+        // Hotkey "/" for filter focus
+        document.addEventListener('keydown', (e) => {
+            if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
+                e.preventDefault();
+                filterInput.focus();
+            }
+            if (e.key === 'Escape' && document.activeElement === filterInput) {
+                filterInput.value = '';
+                this.filter = '';
+                this.applyFilter();
+                filterInput.blur();
+            }
+        });
+
+        // Buffer size select
+        const bufferSelect = document.getElementById(`log-buffer-${this.objectName}`);
+        bufferSelect.addEventListener('change', (e) => {
+            this.maxLines = parseInt(e.target.value);
+            this.saveBufferSize();
+            this.updateStats();
         });
 
         // Resize handle
@@ -612,6 +702,195 @@ class LogViewer {
             const { scrollTop, scrollHeight, clientHeight } = logContainer;
             this.autoScroll = scrollHeight - scrollTop - clientHeight < 50;
         });
+
+        // Load saved settings
+        this.loadSavedLevels();
+        this.loadSavedBufferSize();
+    }
+
+    saveBufferSize() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-buffersize') || '{}');
+            saved[this.objectName] = this.maxLines;
+            localStorage.setItem('uniset2-viewer-buffersize', JSON.stringify(saved));
+        } catch (err) {
+            console.warn('Failed to save buffer size:', err);
+        }
+    }
+
+    loadSavedBufferSize() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-buffersize') || '{}');
+            if (saved[this.objectName]) {
+                this.maxLines = saved[this.objectName];
+                const bufferSelect = document.getElementById(`log-buffer-${this.objectName}`);
+                if (bufferSelect) {
+                    bufferSelect.value = this.maxLines;
+                }
+            }
+        } catch (err) {
+            console.warn('Failed to load buffer size:', err);
+        }
+    }
+
+    setupLevelDropdown() {
+        const btn = document.getElementById(`log-level-btn-${this.objectName}`);
+        const dropdown = document.getElementById(`log-level-dropdown-${this.objectName}`);
+        const wrapper = document.getElementById(`log-level-wrapper-${this.objectName}`);
+
+        // Toggle dropdown
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.levelDropdownOpen = !this.levelDropdownOpen;
+            dropdown.classList.toggle('open', this.levelDropdownOpen);
+        });
+
+        // Close on outside click
+        document.addEventListener('click', (e) => {
+            if (!wrapper.contains(e.target) && this.levelDropdownOpen) {
+                this.levelDropdownOpen = false;
+                dropdown.classList.remove('open');
+            }
+        });
+
+        // Level pills
+        const pills = dropdown.querySelectorAll('.log-level-pill');
+        pills.forEach(pill => {
+            pill.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const level = pill.dataset.level;
+                if (level === 'ANY') {
+                    // ANY toggles all levels
+                    if (this.selectedLevels.has('ANY')) {
+                        this.selectedLevels.clear();
+                    } else {
+                        this.selectedLevels.clear();
+                        this.selectedLevels.add('ANY');
+                    }
+                } else {
+                    // Remove ANY if specific level selected
+                    this.selectedLevels.delete('ANY');
+                    if (this.selectedLevels.has(level)) {
+                        this.selectedLevels.delete(level);
+                    } else {
+                        this.selectedLevels.add(level);
+                    }
+                }
+                this.updatePillsUI();
+            });
+        });
+
+        // Presets
+        const presets = dropdown.querySelectorAll('.log-preset-btn');
+        presets.forEach(preset => {
+            preset.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const type = preset.dataset.preset;
+                this.selectedLevels.clear();
+                switch (type) {
+                    case 'errors':
+                        this.selectedLevels.add('CRIT');
+                        this.selectedLevels.add('WARN');
+                        break;
+                    case 'info':
+                        this.selectedLevels.add('CRIT');
+                        this.selectedLevels.add('WARN');
+                        this.selectedLevels.add('INFO');
+                        break;
+                    case 'all':
+                        this.selectedLevels.add('ANY');
+                        break;
+                    case 'reset':
+                        // Already cleared
+                        break;
+                }
+                this.updatePillsUI();
+            });
+        });
+
+        // Apply button
+        const applyBtn = document.getElementById(`log-level-apply-${this.objectName}`);
+        applyBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.applyLevelSelection();
+            this.levelDropdownOpen = false;
+            dropdown.classList.remove('open');
+        });
+    }
+
+    updatePillsUI() {
+        const dropdown = document.getElementById(`log-level-dropdown-${this.objectName}`);
+        const pills = dropdown.querySelectorAll('.log-level-pill');
+        pills.forEach(pill => {
+            const level = pill.dataset.level;
+            pill.classList.toggle('active', this.selectedLevels.has(level));
+        });
+
+        // Update button text to show selected count
+        const btn = document.getElementById(`log-level-btn-${this.objectName}`);
+        if (this.selectedLevels.size === 0) {
+            btn.textContent = 'Уровни ▼';
+        } else if (this.selectedLevels.has('ANY')) {
+            btn.textContent = 'Все ▼';
+        } else {
+            btn.textContent = `Уровни (${this.selectedLevels.size}) ▼`;
+        }
+    }
+
+    applyLevelSelection() {
+        // Calculate combined mask
+        let mask = 0;
+        if (this.selectedLevels.has('ANY')) {
+            mask = LOG_LEVELS.ANY;
+        } else {
+            this.selectedLevels.forEach(level => {
+                if (LOG_LEVELS[level]) {
+                    mask |= LOG_LEVELS[level];
+                }
+            });
+        }
+
+        this.currentLevel = mask;
+        this.saveLevels();
+
+        // Send to server if connected
+        if (this.connected && mask > 0) {
+            this.sendCommand('setLevel', mask);
+        }
+    }
+
+    saveLevels() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-loglevels') || '{}');
+            saved[this.objectName] = Array.from(this.selectedLevels);
+            localStorage.setItem('uniset2-viewer-loglevels', JSON.stringify(saved));
+        } catch (err) {
+            console.warn('Failed to save log levels:', err);
+        }
+    }
+
+    loadSavedLevels() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-loglevels') || '{}');
+            if (saved[this.objectName]) {
+                this.selectedLevels = new Set(saved[this.objectName]);
+                this.updatePillsUI();
+                // Calculate mask for currentLevel
+                let mask = 0;
+                if (this.selectedLevels.has('ANY')) {
+                    mask = LOG_LEVELS.ANY;
+                } else {
+                    this.selectedLevels.forEach(level => {
+                        if (LOG_LEVELS[level]) {
+                            mask |= LOG_LEVELS[level];
+                        }
+                    });
+                }
+                this.currentLevel = mask;
+            }
+        } catch (err) {
+            console.warn('Failed to load log levels:', err);
+        }
     }
 
     setupResize() {
@@ -752,21 +1031,37 @@ class LogViewer {
         const line = { text, type, timestamp: new Date() };
         this.lines.push(line);
 
-        // Limit lines
+        // Limit lines - also need to remove from DOM
         if (this.lines.length > this.maxLines) {
             this.lines = this.lines.slice(-this.maxLines);
+            // Remove old lines from DOM
+            const linesContainer = document.getElementById(`log-lines-${this.objectName}`);
+            if (linesContainer && linesContainer.children.length > this.maxLines) {
+                const toRemove = linesContainer.children.length - this.maxLines;
+                for (let i = 0; i < toRemove; i++) {
+                    linesContainer.removeChild(linesContainer.firstChild);
+                }
+            }
         }
 
-        this.renderLine(line);
+        const matches = this.renderLine(line, this.lines.length - 1);
+        if (matches) {
+            this.matchCount++;
+            this.updateMatchCount();
+        }
+        this.updateStats();
         this.scrollToBottom();
     }
 
-    renderLine(line) {
+    renderLine(line, index = -1) {
         const linesContainer = document.getElementById(`log-lines-${this.objectName}`);
         if (!linesContainer) return;
 
         const div = document.createElement('div');
         div.className = 'log-line';
+        if (index >= 0) {
+            div.dataset.index = index;
+        }
 
         // Detect log level from text
         const levelClass = this.detectLogLevel(line.text);
@@ -777,8 +1072,112 @@ class LogViewer {
             div.classList.add('log-level-crit');
         }
 
-        div.textContent = line.text;
+        // Apply filter highlighting
+        const { html, matches } = this.highlightText(line.text);
+        if (matches) {
+            div.innerHTML = html;
+            div.classList.add('has-match');
+        } else {
+            div.textContent = line.text;
+            if (this.filterOnlyMatches && this.filter) {
+                div.classList.add('hidden');
+            }
+        }
+
         linesContainer.appendChild(div);
+        return matches;
+    }
+
+    highlightText(text) {
+        if (!this.filter) {
+            return { html: text, matches: false };
+        }
+
+        try {
+            let regex;
+            if (this.filterRegex) {
+                const flags = this.filterCase ? 'g' : 'gi';
+                regex = new RegExp(`(${this.filter})`, flags);
+            } else {
+                const escaped = this.filter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const flags = this.filterCase ? 'g' : 'gi';
+                regex = new RegExp(`(${escaped})`, flags);
+            }
+
+            if (regex.test(text)) {
+                // Reset lastIndex after test
+                regex.lastIndex = 0;
+                const html = text.replace(regex, '<mark class="log-highlight">$1</mark>');
+                return { html, matches: true };
+            }
+        } catch (e) {
+            // Invalid regex - just return text
+        }
+
+        return { html: text, matches: false };
+    }
+
+    applyFilter() {
+        const linesContainer = document.getElementById(`log-lines-${this.objectName}`);
+        if (!linesContainer) return;
+
+        // Re-render all lines with filter
+        linesContainer.innerHTML = '';
+        this.matchCount = 0;
+
+        this.lines.forEach((line, index) => {
+            const matches = this.renderLine(line, index);
+            if (matches) {
+                this.matchCount++;
+            }
+        });
+
+        // Update match count display
+        this.updateMatchCount();
+        this.updateStats();
+        this.scrollToBottom();
+    }
+
+    updateMatchCount() {
+        const countEl = document.getElementById(`log-match-count-${this.objectName}`);
+        if (countEl) {
+            if (this.filter && this.matchCount > 0) {
+                countEl.textContent = `${this.matchCount} совп.`;
+                countEl.classList.add('has-matches');
+            } else if (this.filter) {
+                countEl.textContent = '0 совп.';
+                countEl.classList.remove('has-matches');
+            } else {
+                countEl.textContent = '';
+                countEl.classList.remove('has-matches');
+            }
+        }
+    }
+
+    updateStats() {
+        const statsEl = document.getElementById(`log-stats-${this.objectName}`);
+        if (statsEl) {
+            statsEl.textContent = `${this.lines.length} / ${this.maxLines}`;
+        }
+    }
+
+    downloadLogs() {
+        if (this.lines.length === 0) return;
+
+        const content = this.lines.map(line => line.text).join('\n');
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const filename = `logs-${this.objectName}-${timestamp}.txt`;
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
 
     detectLogLevel(text) {

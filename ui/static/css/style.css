@@ -1231,6 +1231,209 @@ header h1 {
     background: #d98c23;
 }
 
+/* Log stats */
+.log-stats {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: 0.5rem;
+}
+
+/* Log level dropdown */
+.log-level-wrapper {
+    position: relative;
+}
+
+.log-level-btn {
+    padding: 0.25rem 0.5rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.log-level-btn:hover {
+    border-color: var(--accent-blue);
+}
+
+.log-level-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 1000;
+    min-width: 280px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    padding: 0.75rem;
+    margin-top: 4px;
+}
+
+.log-level-dropdown.open {
+    display: block;
+}
+
+.log-level-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    margin-bottom: 0.5rem;
+}
+
+.log-level-pill {
+    padding: 0.25rem 0.5rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    color: var(--text-secondary);
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.log-level-pill:hover {
+    border-color: var(--accent-blue);
+    color: var(--text-primary);
+}
+
+.log-level-pill.active {
+    background: var(--accent-green);
+    border-color: var(--accent-green);
+    color: white;
+}
+
+.log-level-presets {
+    display: flex;
+    gap: 0.375rem;
+    margin-bottom: 0.75rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.log-preset-btn {
+    padding: 0.2rem 0.4rem;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-muted);
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.log-preset-btn:hover {
+    border-color: var(--accent-blue);
+    color: var(--text-primary);
+}
+
+.log-level-apply {
+    width: 100%;
+    padding: 0.375rem;
+    background: var(--accent-blue);
+    border: none;
+    border-radius: 4px;
+    color: white;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.log-level-apply:hover {
+    background: #4183e0;
+}
+
+/* Log filter wrapper */
+.log-filter-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.log-filter-options {
+    display: flex;
+    gap: 0.375rem;
+}
+
+.log-filter-option {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    font-size: 10px;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.log-filter-option input {
+    margin: 0;
+    cursor: pointer;
+}
+
+.log-filter-option:hover {
+    color: var(--text-primary);
+}
+
+.log-match-count {
+    font-size: 10px;
+    color: var(--text-muted);
+    padding: 0.125rem 0.375rem;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+}
+
+.log-match-count.has-matches {
+    color: var(--accent-orange);
+    background: rgba(255, 170, 68, 0.15);
+}
+
+/* Log buffer select */
+.log-buffer-select {
+    padding: 0.2rem 0.4rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    font-size: 10px;
+    cursor: pointer;
+    outline: none;
+}
+
+.log-buffer-select:hover {
+    border-color: var(--accent-blue);
+}
+
+/* Log download button */
+.log-download-btn {
+    padding: 0.25rem 0.5rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.log-download-btn:hover {
+    border-color: var(--accent-blue);
+    color: var(--text-primary);
+}
+
+/* Log highlight */
+.log-highlight {
+    background: rgba(255, 230, 0, 0.4);
+    color: inherit;
+    padding: 0 2px;
+    border-radius: 2px;
+}
+
+.log-line.hidden {
+    display: none;
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
     .io-grid-3 {

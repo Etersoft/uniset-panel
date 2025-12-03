@@ -232,7 +232,7 @@ test.describe('UniSet2 Viewer UI', () => {
     await expect(page.locator('.logviewer-title')).toContainText('Логи');
   });
 
-  test('should have log level selector with default option', async ({ page }) => {
+  test('should have log level dropdown with pills', async ({ page }) => {
     await page.goto('/');
 
     await page.waitForSelector('#objects-list li', { timeout: 10000 });
@@ -240,16 +240,32 @@ test.describe('UniSet2 Viewer UI', () => {
 
     await page.waitForSelector('.logviewer-section', { timeout: 10000 });
 
-    // Проверяем селектор уровня логов
-    const levelSelect = page.locator('.log-level-select');
-    await expect(levelSelect).toBeVisible();
+    // Проверяем кнопку выбора уровня логов
+    const levelBtn = page.locator('.log-level-btn');
+    await expect(levelBtn).toBeVisible();
+    await expect(levelBtn).toContainText('Уровни');
 
-    // По умолчанию выбрано "По умолчанию" (value="0")
-    await expect(levelSelect).toHaveValue('0');
+    // Открываем dropdown
+    await levelBtn.click();
 
-    // Проверяем наличие опций (опции внутри select скрыты, проверяем их количество)
-    const options = levelSelect.locator('option');
-    await expect(options).toHaveCount(6); // По умолчанию, CRIT, WARN+, INFO+, DEBUG+, ALL
+    // Проверяем что dropdown открылся
+    const dropdown = page.locator('.log-level-dropdown');
+    await expect(dropdown).toHaveClass(/open/);
+
+    // Проверяем наличие pills для уровней
+    await expect(page.locator('.log-level-pill[data-level="CRIT"]')).toBeVisible();
+    await expect(page.locator('.log-level-pill[data-level="WARN"]')).toBeVisible();
+    await expect(page.locator('.log-level-pill[data-level="INFO"]')).toBeVisible();
+    await expect(page.locator('.log-level-pill[data-level="DEBUG"]')).toBeVisible();
+    await expect(page.locator('.log-level-pill[data-level="ANY"]')).toBeVisible();
+
+    // Проверяем пресеты
+    await expect(page.locator('.log-preset-btn[data-preset="errors"]')).toBeVisible();
+    await expect(page.locator('.log-preset-btn[data-preset="all"]')).toBeVisible();
+
+    // Закрываем dropdown кликом вне
+    await page.locator('.logviewer-title').click();
+    await expect(dropdown).not.toHaveClass(/open/);
   });
 
   test('should show connect button in LogViewer', async ({ page }) => {
@@ -344,6 +360,175 @@ test.describe('UniSet2 Viewer UI', () => {
     // После остановки кнопка должна вернуться к "Подключить"
     await expect(connectBtn).toContainText('Подключить', { timeout: 5000 });
     await expect(statusText).toHaveText('Отключено', { timeout: 5000 });
+  });
+
+  // === Новые тесты на функциональность LogViewer ===
+
+  test('should toggle level pills in dropdown', async ({ page }) => {
+    await page.goto('/');
+
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+
+    await page.waitForSelector('.logviewer-section', { timeout: 10000 });
+
+    // Открываем dropdown
+    await page.locator('.log-level-btn').click();
+    await expect(page.locator('.log-level-dropdown')).toHaveClass(/open/);
+
+    // Кликаем на pill CRIT
+    const critPill = page.locator('.log-level-pill[data-level="CRIT"]');
+    await critPill.click();
+    await expect(critPill).toHaveClass(/active/);
+
+    // Кликаем на pill WARN
+    const warnPill = page.locator('.log-level-pill[data-level="WARN"]');
+    await warnPill.click();
+    await expect(warnPill).toHaveClass(/active/);
+
+    // Проверяем что кнопка показывает количество выбранных
+    await expect(page.locator('.log-level-btn')).toContainText('(2)');
+
+    // Снимаем выбор с CRIT
+    await critPill.click();
+    await expect(critPill).not.toHaveClass(/active/);
+    await expect(page.locator('.log-level-btn')).toContainText('(1)');
+  });
+
+  test('should apply level presets', async ({ page }) => {
+    await page.goto('/');
+
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+
+    await page.waitForSelector('.logviewer-section', { timeout: 10000 });
+
+    // Открываем dropdown
+    await page.locator('.log-level-btn').click();
+
+    // Применяем пресет "Ошибки" (CRIT + WARN)
+    await page.locator('.log-preset-btn[data-preset="errors"]').click();
+    await expect(page.locator('.log-level-pill[data-level="CRIT"]')).toHaveClass(/active/);
+    await expect(page.locator('.log-level-pill[data-level="WARN"]')).toHaveClass(/active/);
+    await expect(page.locator('.log-level-pill[data-level="INFO"]')).not.toHaveClass(/active/);
+
+    // Применяем пресет "Всё"
+    await page.locator('.log-preset-btn[data-preset="all"]').click();
+    await expect(page.locator('.log-level-pill[data-level="ANY"]')).toHaveClass(/active/);
+    await expect(page.locator('.log-level-btn')).toContainText('Все');
+
+    // Сброс
+    await page.locator('.log-preset-btn[data-preset="reset"]').click();
+    await expect(page.locator('.log-level-pill[data-level="ANY"]')).not.toHaveClass(/active/);
+    await expect(page.locator('.log-level-btn')).toContainText('Уровни ▼');
+  });
+
+  test('should have filter options (Regex, Case, Only)', async ({ page }) => {
+    await page.goto('/');
+
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+
+    await page.waitForSelector('.logviewer-section', { timeout: 10000 });
+
+    // Проверяем наличие input фильтра
+    const filterInput = page.locator('.log-filter-input');
+    await expect(filterInput).toBeVisible();
+
+    // Проверяем наличие чекбоксов
+    await expect(page.locator('.log-filter-option').filter({ hasText: 'Regex' })).toBeVisible();
+    await expect(page.locator('.log-filter-option').filter({ hasText: 'Case' })).toBeVisible();
+    await expect(page.locator('.log-filter-option').filter({ hasText: 'Только' })).toBeVisible();
+
+    // По умолчанию Regex включен
+    const regexCheckbox = page.locator('input[id*="log-filter-regex"]');
+    await expect(regexCheckbox).toBeChecked();
+
+    // Case и Only выключены по умолчанию
+    const caseCheckbox = page.locator('input[id*="log-filter-case"]');
+    await expect(caseCheckbox).not.toBeChecked();
+
+    const onlyCheckbox = page.locator('input[id*="log-filter-only"]');
+    await expect(onlyCheckbox).not.toBeChecked();
+  });
+
+  test('should have buffer size selector', async ({ page }) => {
+    await page.goto('/');
+
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+
+    await page.waitForSelector('.logviewer-section', { timeout: 10000 });
+
+    // Проверяем наличие селектора размера буфера
+    const bufferSelect = page.locator('.log-buffer-select');
+    await expect(bufferSelect).toBeVisible();
+
+    // По умолчанию 2000
+    await expect(bufferSelect).toHaveValue('2000');
+
+    // Проверяем наличие опций
+    const options = bufferSelect.locator('option');
+    await expect(options).toHaveCount(5); // 500, 1000, 2000, 5000, 10000
+
+    // Меняем на 5000
+    await bufferSelect.selectOption('5000');
+    await expect(bufferSelect).toHaveValue('5000');
+  });
+
+  test('should have download button', async ({ page }) => {
+    await page.goto('/');
+
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+
+    await page.waitForSelector('.logviewer-section', { timeout: 10000 });
+
+    // Проверяем наличие кнопки скачивания
+    const downloadBtn = page.locator('.log-download-btn');
+    await expect(downloadBtn).toBeVisible();
+    await expect(downloadBtn).toHaveText('⬇');
+  });
+
+  test('should have stats display', async ({ page }) => {
+    await page.goto('/');
+
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+
+    await page.waitForSelector('.logviewer-section', { timeout: 10000 });
+
+    // Проверяем наличие элемента статистики (span может быть пустым изначально)
+    const stats = page.locator('.log-stats');
+    await expect(stats).toHaveCount(1);
+
+    // Stats обновляется при добавлении строк - проверяем структуру
+    // Элемент существует, текст появится при получении логов
+    const statsId = await stats.getAttribute('id');
+    expect(statsId).toContain('log-stats-TestProc');
+  });
+
+  test('should show match count when filtering', async ({ page }) => {
+    await page.goto('/');
+
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+
+    await page.waitForSelector('.logviewer-section', { timeout: 10000 });
+
+    // Вводим текст в фильтр
+    const filterInput = page.locator('.log-filter-input');
+    await filterInput.fill('test');
+
+    // Проверяем что счётчик совпадений появился (может быть 0 совп. т.к. логов нет)
+    const matchCount = page.locator('.log-match-count');
+    await expect(matchCount).toHaveText('0 совп.', { timeout: 2000 });
+
+    // Очищаем фильтр
+    await filterInput.fill('');
+
+    // Счётчик должен исчезнуть
+    await expect(matchCount).toHaveText('');
   });
 
 });
