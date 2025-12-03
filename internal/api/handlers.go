@@ -97,6 +97,26 @@ func (h *Handlers) GetObjectData(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		response["raw_data"] = rawDataParsed
+
+		// Извлекаем дополнительные переменные (не входящие в стандартные поля)
+		if objDataRaw, ok := data.RawData[name]; ok {
+			var objData map[string]interface{}
+			if err := json.Unmarshal(objDataRaw, &objData); err == nil {
+				extra := make(map[string]interface{})
+				knownFields := map[string]bool{
+					"LogServer": true, "Timers": true, "Variables": true,
+					"Statistics": true, "io": true, "object": true,
+				}
+				for k, v := range objData {
+					if !knownFields[k] {
+						extra[k] = v
+					}
+				}
+				if len(extra) > 0 {
+					response["extra"] = extra
+				}
+			}
+		}
 	}
 
 	h.writeJSON(w, response)

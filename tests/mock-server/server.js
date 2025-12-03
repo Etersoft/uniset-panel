@@ -10,7 +10,14 @@ const testProcData = {
     LogServer: {
       host: 'localhost',
       port: 6000,
-      state: 'RUNNIG'
+      state: 'RUNNIG',
+      info: {
+        host: 'localhost',
+        name: 'localhost:6000',
+        port: 6000,
+        sessMaxCount: 10,
+        sessions: []
+      }
     },
     Timers: {
       '2': { id: 2, msec: 3000, name: '', tick: -1, timeleft: 1500 },

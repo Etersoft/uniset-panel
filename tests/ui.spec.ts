@@ -55,8 +55,8 @@ test.describe('UniSet2 Viewer UI', () => {
     // Ждём загрузки переменных (в collapsible секции)
     await page.waitForSelector('[data-section^="variables-"] tbody tr', { timeout: 10000 });
 
-    // Проверяем наличие таблицы переменных (заголовок на русском)
-    await expect(page.locator('[data-section^="variables-"] .collapsible-title')).toContainText('Переменные');
+    // Проверяем наличие таблицы настроек (раздел переименован в Настройки)
+    await expect(page.locator('[data-section^="variables-"] .collapsible-title')).toContainText('Настройки');
     await expect(page.locator('[data-section^="variables-"] tbody tr')).not.toHaveCount(0);
   });
 
@@ -170,6 +170,50 @@ test.describe('UniSet2 Viewer UI', () => {
     await page.locator('.time-range-btn[data-range="3600"]').click();
     await expect(page.locator('.time-range-btn[data-range="3600"]')).toHaveClass(/active/);
     await expect(page.locator('.time-range-btn[data-range="300"]')).not.toHaveClass(/active/);
+  });
+
+  test('should show fallback renderer for unsupported object types', async ({ page }) => {
+    await page.goto('/');
+
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+
+    // UniSetActivator имеет тип который не поддерживается явно (не UniSetManager/UniSetObject)
+    const activator = page.locator('#objects-list li', { hasText: 'UniSetActivator' });
+    if (await activator.isVisible()) {
+      await activator.click();
+
+      // Ждём открытия вкладки
+      await expect(page.locator('.tab-btn', { hasText: 'UniSetActivator' })).toBeVisible();
+      await expect(page.locator('.tab-btn', { hasText: 'UniSetActivator' })).toHaveClass(/active/);
+
+      // Проверяем что отображается fallback warning
+      await expect(page.locator('.fallback-warning')).toBeVisible({ timeout: 10000 });
+      await expect(page.locator('.fallback-message')).toContainText('не поддерживается');
+
+      // Проверяем что есть сырой JSON
+      await expect(page.locator('.fallback-json')).toBeVisible();
+
+      // Проверяем что JSON содержит данные об объекте
+      const jsonContent = await page.locator('.fallback-json').textContent();
+      expect(jsonContent).toContain('object');
+    }
+  });
+
+  test('should display object type badge in fallback renderer', async ({ page }) => {
+    await page.goto('/');
+
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+
+    const activator = page.locator('#objects-list li', { hasText: 'UniSetActivator' });
+    if (await activator.isVisible()) {
+      await activator.click();
+
+      // Ждём загрузки fallback контента
+      await expect(page.locator('.fallback-warning')).toBeVisible({ timeout: 10000 });
+
+      // Ждём пока тип объекта появится в сообщении (заполняется при update после SSE/polling)
+      await expect(page.locator('.fallback-type')).toContainText('UniSetActivator', { timeout: 10000 });
+    }
   });
 
 });

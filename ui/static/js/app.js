@@ -211,7 +211,6 @@ class BaseObjectRenderer {
                         <th>Тип</th>
                         <th>Значение</th>
                         <th></th>
-                        <th>Описание</th>
                     </tr>
                 </thead>
                 <tbody id="${typeLower}-${this.objectName}"></tbody>
@@ -305,7 +304,9 @@ class UniSetManagerRenderer extends BaseObjectRenderer {
     }
 
     update(data) {
-        renderVariables(this.objectName, data.Variables || {});
+        // Объединяем Variables и extra (дополнительные переменные не входящие в стандартные поля)
+        const allVariables = { ...(data.Variables || {}), ...(data.extra || {}) };
+        renderVariables(this.objectName, allVariables);
         renderIO(this.objectName, 'inputs', data.io?.in || {});
         renderIO(this.objectName, 'outputs', data.io?.out || {});
         renderTimers(this.objectName, data.Timers || {});
@@ -337,7 +338,9 @@ class UniSetObjectRenderer extends BaseObjectRenderer {
     }
 
     update(data) {
-        renderVariables(this.objectName, data.Variables || {});
+        // Объединяем Variables и extra (дополнительные переменные не входящие в стандартные поля)
+        const allVariables = { ...(data.Variables || {}), ...(data.extra || {}) };
+        renderVariables(this.objectName, allVariables);
         renderObjectInfo(this.objectName, data.object);
         renderLogServer(this.objectName, data.LogServer);
         renderStatistics(this.objectName, data.Statistics);
@@ -373,7 +376,7 @@ class FallbackRenderer extends BaseObjectRenderer {
 
     update(data) {
         // Обновляем тип объекта в сообщении
-        const typeSpan = document.querySelector(`#panel-${this.objectName} .fallback-type`);
+        const typeSpan = document.querySelector(`.tab-panel[data-name="${this.objectName}"] .fallback-type`);
         if (typeSpan && data.object?.objectType) {
             typeSpan.textContent = data.object.objectType;
         }
@@ -712,7 +715,7 @@ function renderIO(objectName, type, ioData) {
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td class="variable-name">${io.name || key}</td>
+            <td class="variable-name" title="${textname}">${io.name || key}</td>
             <td>${io.id}</td>
             <td><span class="variable-iotype iotype-${iotype.toLowerCase()}">${iotype}</span></td>
             <td class="variable-value" data-var="${varName}">${formatValue(io.value)}</td>
@@ -732,7 +735,6 @@ function renderIO(objectName, type, ioData) {
                     </label>
                 </span>
             </td>
-            <td class="variable-textname">${textname}</td>
         `;
 
         const checkbox = tr.querySelector('input');
@@ -1304,14 +1306,42 @@ function renderLogServer(objectName, logServerData) {
 
     // Если есть дополнительная информация в info
     if (logServerData.info && typeof logServerData.info === 'object') {
-        Object.entries(logServerData.info).forEach(([key, value]) => {
+        const info = logServerData.info;
+
+        // Показываем sessMaxCount
+        if (info.sessMaxCount !== undefined) {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td class="info-label">${key}</td>
-                <td class="info-value">${formatValue(value)}</td>
+                <td class="info-label">Макс. сессий</td>
+                <td class="info-value">${info.sessMaxCount}</td>
             `;
             tbody.appendChild(tr);
-        });
+        }
+
+        // Показываем список сессий
+        if (info.sessions && Array.isArray(info.sessions)) {
+            const sessionsCount = info.sessions.length;
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="info-label">Активных сессий</td>
+                <td class="info-value">${sessionsCount}</td>
+            `;
+            tbody.appendChild(tr);
+
+            // Если есть активные сессии - показываем их
+            if (sessionsCount > 0) {
+                info.sessions.forEach((session, idx) => {
+                    const sessionTr = document.createElement('tr');
+                    const sessionInfo = typeof session === 'object' ?
+                        JSON.stringify(session) : String(session);
+                    sessionTr.innerHTML = `
+                        <td class="info-label" style="padding-left: 1.5rem">Сессия ${idx + 1}</td>
+                        <td class="info-value">${sessionInfo}</td>
+                    `;
+                    tbody.appendChild(sessionTr);
+                });
+            }
+        }
     }
 }
 

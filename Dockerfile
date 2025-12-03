@@ -18,6 +18,8 @@ RUN apk add --no-cache curl
 WORKDIR /app
 
 COPY --from=builder /app/uniset2-viewer .
+COPY --from=builder /app/ui/static ./ui/static/
+COPY --from=builder /app/config ./config/
 
 EXPOSE 8000
 

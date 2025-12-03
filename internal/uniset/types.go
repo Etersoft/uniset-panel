@@ -21,11 +21,21 @@ type Sensor struct {
 	Count int64  `json:"count"`
 }
 
+// LogServerInfo детальная информация о лог-сервере
+type LogServerInfo struct {
+	Host         string        `json:"host"`
+	Name         string        `json:"name"`
+	Port         int           `json:"port"`
+	SessMaxCount int           `json:"sessMaxCount"`
+	Sessions     []interface{} `json:"sessions"`
+}
+
 // LogServer информация о лог-сервере
 type LogServer struct {
-	Host  string `json:"host"`
-	Port  int    `json:"port"`
-	State string `json:"state"`
+	Host  string         `json:"host"`
+	Port  int            `json:"port"`
+	State string         `json:"state"`
+	Info  *LogServerInfo `json:"info,omitempty"`
 }
 
 // IOVar переменная ввода/вывода
