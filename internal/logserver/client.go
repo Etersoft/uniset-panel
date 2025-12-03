@@ -171,7 +171,6 @@ func (c *Client) ReadLogs(ctx context.Context, callback LogCallback) error {
 	for {
 		select {
 		case <-readCtx.Done():
-			c.logger.Debug("log reading cancelled")
 			return readCtx.Err()
 		default:
 		}
@@ -202,7 +201,7 @@ func (c *Client) ReadLogs(ctx context.Context, callback LogCallback) error {
 			c.connected = false
 			c.mu.Unlock()
 
-			c.logger.Error("read error", "error", err)
+			c.logger.Error("ошибка чтения логов", "error", err)
 			return fmt.Errorf("read logs: %w", err)
 		}
 

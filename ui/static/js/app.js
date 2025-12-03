@@ -270,7 +270,9 @@ class BaseObjectRenderer {
 
     // Инициализация LogViewer (вызывается после создания DOM если LogServer доступен)
     initLogViewer(logServerData) {
-        if (!logServerData || !logServerData.host) return;
+        if (!logServerData || !logServerData.host) {
+            return;
+        }
 
         const container = document.getElementById(`logviewer-container-${this.objectName}`);
         if (!container) return;
@@ -494,9 +496,10 @@ class LogViewer {
         this.lines = [];
         this.maxLines = 2000;
         this.autoScroll = true;
-        this.currentLevel = LOG_LEVELS.INFO | LOG_LEVELS.WARN | LOG_LEVELS.CRIT;
+        this.currentLevel = 0; // 0 = по умолчанию (не отправлять setLevel)
         this.filter = '';
         this.height = 200;
+        this.hasReceivedLogs = false; // Получали ли логи
 
         this.init();
     }
@@ -521,9 +524,10 @@ class LogViewer {
                             <span id="log-status-text-${this.objectName}">Отключено</span>
                         </div>
                         <select class="log-level-select" id="log-level-${this.objectName}" title="Уровень логов">
+                            <option value="0" selected>По умолчанию</option>
                             <option value="${LOG_LEVELS.CRIT}">CRIT</option>
                             <option value="${LOG_LEVELS.CRIT | LOG_LEVELS.WARN}">WARN+</option>
-                            <option value="${LOG_LEVELS.CRIT | LOG_LEVELS.WARN | LOG_LEVELS.INFO}" selected>INFO+</option>
+                            <option value="${LOG_LEVELS.CRIT | LOG_LEVELS.WARN | LOG_LEVELS.INFO}">INFO+</option>
                             <option value="${LOG_LEVELS.CRIT | LOG_LEVELS.WARN | LOG_LEVELS.INFO | LOG_LEVELS.DEBUG}">DEBUG+</option>
                             <option value="${LOG_LEVELS.ANY}">ALL</option>
                         </select>
@@ -538,6 +542,10 @@ class LogViewer {
                         <div class="log-placeholder" id="log-placeholder-${this.objectName}">
                             <span class="log-placeholder-icon">📋</span>
                             <span>Нажмите "Подключить" для просмотра логов</span>
+                        </div>
+                        <div class="log-waiting" id="log-waiting-${this.objectName}" style="display: none">
+                            <span class="log-waiting-text">Ожидание сообщений...</span>
+                            <span class="log-waiting-hint">Выберите уровень логов или дождитесь сообщений от процесса</span>
                         </div>
                         <div class="log-lines" id="log-lines-${this.objectName}" style="display: none"></div>
                     </div>
@@ -574,7 +582,8 @@ class LogViewer {
         const levelSelect = document.getElementById(`log-level-${this.objectName}`);
         levelSelect.addEventListener('change', (e) => {
             this.currentLevel = parseInt(e.target.value);
-            if (this.connected) {
+            // Отправляем setLevel только если выбран конкретный уровень (не 0)
+            if (this.connected && this.currentLevel > 0) {
                 this.sendCommand('setLevel', this.currentLevel);
             }
         });
@@ -661,11 +670,15 @@ class LogViewer {
 
         this.eventSource.addEventListener('connected', (e) => {
             this.connected = true;
+            this.hasReceivedLogs = false;
             this.updateStatus('connected');
-            this.showLogLines();
+            this.showWaiting(); // Показываем "ожидание сообщений"
 
-            // Send initial level
-            this.sendCommand('setLevel', this.currentLevel);
+            // НЕ отправляем setLevel автоматически - пользователь сам выбирает
+            // Если уровень уже был выбран до подключения, отправляем его
+            if (this.currentLevel > 0) {
+                this.sendCommand('setLevel', this.currentLevel);
+            }
 
             try {
                 const data = JSON.parse(e.data);
@@ -723,6 +736,12 @@ class LogViewer {
     }
 
     addLine(text, type = '') {
+        // При первом логе скрываем "ожидание" и показываем логи
+        if (!this.hasReceivedLogs) {
+            this.hasReceivedLogs = true;
+            this.showLogLines();
+        }
+
         const line = { text, type, timestamp: new Date() };
         this.lines.push(line);
 
@@ -780,10 +799,21 @@ class LogViewer {
         }
     }
 
-    showLogLines() {
+    showWaiting() {
         const placeholder = document.getElementById(`log-placeholder-${this.objectName}`);
+        const waiting = document.getElementById(`log-waiting-${this.objectName}`);
         const lines = document.getElementById(`log-lines-${this.objectName}`);
         if (placeholder) placeholder.style.display = 'none';
+        if (waiting) waiting.style.display = 'flex';
+        if (lines) lines.style.display = 'none';
+    }
+
+    showLogLines() {
+        const placeholder = document.getElementById(`log-placeholder-${this.objectName}`);
+        const waiting = document.getElementById(`log-waiting-${this.objectName}`);
+        const lines = document.getElementById(`log-lines-${this.objectName}`);
+        if (placeholder) placeholder.style.display = 'none';
+        if (waiting) waiting.style.display = 'none';
         if (lines) lines.style.display = 'block';
     }
 
