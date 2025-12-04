@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pv/uniset2-viewer-go/internal/ionc"
 	"github.com/pv/uniset2-viewer-go/internal/logger"
 	"github.com/pv/uniset2-viewer-go/internal/sm"
 	"github.com/pv/uniset2-viewer-go/internal/uniset"
@@ -104,6 +105,32 @@ func (h *SSEHub) BroadcastSensorUpdate(update sm.SensorUpdate) {
 	})
 }
 
+// BroadcastIONCSensorBatch отправляет батч обновлений IONC датчиков клиентам
+func (h *SSEHub) BroadcastIONCSensorBatch(updates []ionc.SensorUpdate) {
+	if len(updates) == 0 {
+		return
+	}
+
+	// Группируем по objectName
+	byObject := make(map[string][]uniset.IONCSensor)
+	var timestamp time.Time
+
+	for _, u := range updates {
+		byObject[u.ObjectName] = append(byObject[u.ObjectName], u.Sensor)
+		timestamp = u.Timestamp
+	}
+
+	// Отправляем по одному событию на объект
+	for objectName, sensors := range byObject {
+		h.Broadcast(SSEEvent{
+			Type:       "ionc_sensor_batch",
+			ObjectName: objectName,
+			Data:       sensors,
+			Timestamp:  timestamp,
+		})
+	}
+}
+
 // ClientCount возвращает количество подключённых клиентов
 func (h *SSEHub) ClientCount() int {
 	h.mu.RLock()
@@ -135,12 +162,13 @@ func (h *Handlers) HandleSSE(w http.ResponseWriter, r *http.Request) {
 	client := h.sseHub.AddClient(objectName)
 	defer h.sseHub.RemoveClient(client)
 
-	// Отправляем приветственное сообщение
+	// Отправляем приветственное сообщение с capabilities
 	h.sendSSEEvent(w, SSEEvent{
 		Type:      "connected",
 		Timestamp: time.Now(),
 		Data: map[string]interface{}{
 			"pollInterval": h.pollInterval.Milliseconds(),
+			"smEnabled":    h.smPoller != nil,
 		},
 	})
 	flusher.Flush()

@@ -1,5 +1,6 @@
 // Состояние приложения
-const state = {
+// Экспортируем на window для тестов
+const state = window.state = {
     objects: [],
     tabs: new Map(), // objectName -> { charts, updateInterval, chartStartTime, objectType, renderer }
     activeTab: null,
@@ -8,6 +9,9 @@ const state = {
     timeRange: 900, // секунды (по умолчанию 15 минут)
     sidebarCollapsed: false, // свёрнутая боковая панель
     collapsedSections: {}, // состояние спойлеров
+    capabilities: {
+        smEnabled: false // по умолчанию SM отключен
+    },
     sse: {
         eventSource: null,
         connected: false,
@@ -39,7 +43,10 @@ function initSSE() {
             state.sse.connected = true;
             state.sse.reconnectAttempts = 0;
             state.sse.pollInterval = data.data?.pollInterval || 5000;
-            console.log('SSE: Подключено, poll interval:', state.sse.pollInterval, 'ms');
+
+            // Сохраняем capabilities сервера
+            state.capabilities.smEnabled = data.data?.smEnabled || false;
+            console.log('SSE: Подключено, poll interval:', state.sse.pollInterval, 'ms, smEnabled:', state.capabilities.smEnabled);
 
             // Отключаем polling для всех открытых вкладок
             state.tabs.forEach((tabState, objectName) => {
@@ -68,8 +75,12 @@ function initSSE() {
                     tabState.renderer.update(data);
                 }
 
-                // Обновляем графики
+                // Обновляем графики (кроме внешних датчиков - они обновляются через SSE)
                 tabState.charts.forEach((chartData, varName) => {
+                    // Пропускаем внешние датчики (ext:) - у них нет истории на сервере
+                    if (varName.startsWith('ext:')) {
+                        return;
+                    }
                     updateChart(objectName, varName, chartData.chart);
                 });
             }
@@ -105,7 +116,8 @@ function initSSE() {
                         chartData.chart.data.datasets[0].data.shift();
                     }
 
-                    chartData.chart.update('none');
+                    // Синхронизируем временную шкалу для всех графиков объекта
+                    syncAllChartsTimeRange(objectName);
 
                     // Обновляем значение в легенде
                     const safeVarName = varName.replace(/:/g, '-');
@@ -117,6 +129,65 @@ function initSSE() {
             }
         } catch (err) {
             console.warn('SSE: Ошибка обработки sensor_data:', err);
+        }
+    });
+
+    // Обработка батча обновлений IONC датчиков (SharedMemory и подобные)
+    eventSource.addEventListener('ionc_sensor_batch', (e) => {
+        try {
+            const event = JSON.parse(e.data);
+            const objectName = event.objectName;
+            const sensors = event.data; // массив датчиков
+
+            // Находим вкладку с IONC рендерером
+            const tabState = state.tabs.get(objectName);
+            if (!tabState) return;
+
+            const timestamp = new Date(event.timestamp);
+            const chartsToUpdate = new Set();
+
+            // Обрабатываем все датчики
+            for (const sensor of sensors) {
+                // Обновляем таблицу датчиков
+                if (tabState.renderer?.handleIONCSensorUpdate) {
+                    tabState.renderer.handleIONCSensorUpdate(sensor);
+                }
+
+                // Обновляем график если есть
+                const varName = `ext:${sensor.name}`;
+                const chartData = tabState.charts.get(varName);
+                if (chartData) {
+                    const value = sensor.value;
+                    chartData.chart.data.datasets[0].data.push({ x: timestamp, y: value });
+                    chartsToUpdate.add(varName);
+
+                    // Обновляем значение в легенде
+                    const safeVarName = varName.replace(/:/g, '-');
+                    const legendEl = document.getElementById(`legend-value-${objectName}-${safeVarName}`);
+                    if (legendEl) {
+                        legendEl.textContent = formatValue(value);
+                    }
+                }
+            }
+
+            // Один раз синхронизируем временную шкалу
+            if (chartsToUpdate.size > 0) {
+                syncAllChartsTimeRange(objectName);
+            }
+
+            // Batch update для всех графиков
+            tabState.charts.forEach((chartData, varName) => {
+                // Ограничиваем количество точек
+                const data = chartData.chart.data.datasets[0].data;
+                const maxPoints = 1000;
+                while (data.length > maxPoints) {
+                    data.shift();
+                }
+                chartData.chart.update('none');
+            });
+
+        } catch (err) {
+            console.warn('SSE: Ошибка обработки ionc_sensor_batch:', err);
         }
     });
 
@@ -248,9 +319,7 @@ class BaseObjectRenderer {
                         <path d="M6 9l6 6 6-6"/>
                     </svg>
                     <span class="collapsible-title">Графики</span>
-                    <button class="add-sensor-btn" onclick="event.stopPropagation(); openSensorDialog('${this.objectName}')" title="Добавить датчик на график">
-                        + Датчик
-                    </button>
+                    <button class="add-sensor-btn" onclick="event.stopPropagation(); openSensorDialog('${this.objectName}')">+ Датчик</button>
                     <div class="section-reorder-buttons" onclick="event.stopPropagation()">
                         <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.objectName}', 'charts')" title="Переместить вверх">↑</button>
                         <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.objectName}', 'charts')" title="Переместить вниз">↓</button>
@@ -590,9 +659,720 @@ function getRendererClass(objectType) {
     return objectRenderers.get(objectType) || DefaultObjectRenderer;
 }
 
+// ============================================================================
+// IONotifyControllerRenderer - рендерер для SharedMemory и подобных объектов
+// ============================================================================
+
+class IONotifyControllerRenderer extends BaseObjectRenderer {
+    static getTypeName() {
+        return 'IONotifyController';
+    }
+
+    constructor(objectName) {
+        super(objectName);
+        this.sensors = [];
+        this.sensorMap = new Map();
+        this.filter = '';
+        this.typeFilter = 'all';
+        this.offset = 0;
+        this.limit = 100;
+        this.totalCount = 0;
+        this.loading = false;
+        this.subscribedSensorIds = new Set();
+        // Для батчевого рендеринга
+        this.pendingUpdates = new Map(); // id -> sensor
+        this.renderScheduled = false;
+    }
+
+    createPanelHTML() {
+        return `
+            ${this.createChartsSection()}
+            ${this.createSensorsSection()}
+            ${this.createLogViewerSection()}
+            ${this.createLogServerSection()}
+            ${this.createLostConsumersSection()}
+            ${this.createObjectInfoSection()}
+        `;
+    }
+
+    initialize() {
+        this.setupEventListeners();
+        this.loadSensors();
+        this.loadLostConsumers();
+        setupChartsResize(this.objectName);
+        setupIONCSensorsResize(this.objectName);
+    }
+
+    createSensorsSection() {
+        return `
+            <div class="collapsible-section reorderable-section ionc-sensors-section" data-section="ionc-sensors-${this.objectName}" data-section-id="ionc-sensors">
+                <div class="collapsible-header" onclick="toggleSection('ionc-sensors-${this.objectName}')">
+                    <svg class="collapsible-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M6 9l6 6 6-6"/>
+                    </svg>
+                    <span class="collapsible-title">Датчики</span>
+                    <span class="ionc-sensor-count" id="ionc-sensor-count-${this.objectName}">0</span>
+                    <div class="ionc-filter-bar" onclick="event.stopPropagation()">
+                        <input type="text" class="ionc-filter-input" id="ionc-filter-${this.objectName}" placeholder="Фильтр...">
+                        <select class="ionc-type-filter" id="ionc-type-filter-${this.objectName}">
+                            <option value="all">Все</option>
+                            <option value="AI">AI</option>
+                            <option value="DI">DI</option>
+                            <option value="AO">AO</option>
+                            <option value="DO">DO</option>
+                        </select>
+                    </div>
+                    <div class="section-reorder-buttons" onclick="event.stopPropagation()">
+                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.objectName}', 'ionc-sensors')" title="Переместить вверх">↑</button>
+                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.objectName}', 'ionc-sensors')" title="Переместить вниз">↓</button>
+                    </div>
+                </div>
+                <div class="collapsible-content" id="section-ionc-sensors-${this.objectName}">
+                    <div class="ionc-sensors-table-container" id="ionc-sensors-container-${this.objectName}">
+                        <table class="ionc-sensors-table">
+                            <thead>
+                                <tr>
+                                    <th class="ionc-col-pin">
+                                        <span class="ionc-unpin-all" id="ionc-unpin-${this.objectName}" title="Снять все закрепления" style="display:none">✕</span>
+                                    </th>
+                                    <th class="ionc-col-chart"></th>
+                                    <th class="ionc-col-id">ID</th>
+                                    <th class="ionc-col-name">Имя</th>
+                                    <th class="ionc-col-type">Тип</th>
+                                    <th class="ionc-col-value">Значение</th>
+                                    <th class="ionc-col-flags">Статус</th>
+                                    <th class="ionc-col-actions">Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody class="ionc-sensors-tbody" id="ionc-sensors-tbody-${this.objectName}">
+                                <tr><td colspan="8" class="ionc-loading">Загрузка...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="ionc-pagination" id="ionc-pagination-${this.objectName}"></div>
+                    <div class="ionc-resize-handle" id="ionc-resize-${this.objectName}"></div>
+                </div>
+            </div>
+        `;
+    }
+
+    createLostConsumersSection() {
+        return this.createCollapsibleSection(
+            'ionc-lost',
+            'Потерянные подписчики',
+            `<div class="ionc-lost-list" id="ionc-lost-list-${this.objectName}">
+                <span class="ionc-lost-empty">Нет потерянных подписчиков</span>
+            </div>`,
+            { badge: true }
+        );
+    }
+
+    setupEventListeners() {
+        const filterInput = document.getElementById(`ionc-filter-${this.objectName}`);
+        const typeFilter = document.getElementById(`ionc-type-filter-${this.objectName}`);
+
+        if (filterInput) {
+            let debounceTimer;
+            filterInput.addEventListener('input', (e) => {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    this.filter = e.target.value;
+                    this.offset = 0;
+                    this.loadSensors();
+                }, 300);
+            });
+
+            // ESC - сброс фильтра и потеря фокуса
+            filterInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    if (filterInput.value) {
+                        filterInput.value = '';
+                        this.filter = '';
+                        this.offset = 0;
+                        this.loadSensors();
+                    }
+                    filterInput.blur();
+                    e.preventDefault();
+                }
+            });
+        }
+
+        if (typeFilter) {
+            typeFilter.addEventListener('change', (e) => {
+                this.typeFilter = e.target.value;
+                this.offset = 0;
+                this.loadSensors();
+            });
+        }
+
+        // ESC на контейнере датчиков — сброс фильтра
+        const sensorsContainer = document.getElementById(`ionc-sensors-container-${this.objectName}`);
+        if (sensorsContainer) {
+            // Делаем контейнер фокусируемым
+            sensorsContainer.setAttribute('tabindex', '0');
+
+            // При клике на таблицу — фокус на контейнер (для работы ESC)
+            sensorsContainer.addEventListener('click', () => {
+                sensorsContainer.focus();
+            });
+
+            sensorsContainer.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && filterInput && this.filter) {
+                    filterInput.value = '';
+                    this.filter = '';
+                    this.offset = 0;
+                    this.loadSensors();
+                    e.preventDefault();
+                }
+            });
+        }
+    }
+
+    async loadSensors() {
+        if (this.loading) return;
+        this.loading = true;
+
+        const tbody = document.getElementById(`ionc-sensors-tbody-${this.objectName}`);
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="8" class="ionc-loading">Загрузка...</td></tr>';
+        }
+
+        try {
+            const response = await fetch(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/sensors?offset=${this.offset}&limit=${this.limit}`);
+            if (!response.ok) throw new Error('Failed to load sensors');
+
+            const data = await response.json();
+            this.totalCount = data.size || 0;
+
+            // Фильтруем локально
+            let sensors = data.sensors || [];
+            if (this.filter) {
+                const filterLower = this.filter.toLowerCase();
+                sensors = sensors.filter(s =>
+                    s.name.toLowerCase().includes(filterLower) ||
+                    String(s.id).includes(filterLower)
+                );
+            }
+            if (this.typeFilter !== 'all') {
+                sensors = sensors.filter(s => s.type === this.typeFilter);
+            }
+
+            this.sensors = sensors;
+            this.sensorMap.clear();
+            sensors.forEach(s => this.sensorMap.set(s.id, s));
+
+            this.renderSensorsTable();
+            this.renderPagination();
+            this.updateSensorCount();
+
+            // Подписываемся на SSE обновления для загруженных датчиков
+            this.subscribeToSSE();
+        } catch (err) {
+            console.error('Error loading IONC sensors:', err);
+            if (tbody) {
+                tbody.innerHTML = `<tr><td colspan="8" class="ionc-error">Ошибка загрузки: ${err.message}</td></tr>`;
+            }
+        } finally {
+            this.loading = false;
+        }
+    }
+
+    renderSensorsTable() {
+        const tbody = document.getElementById(`ionc-sensors-tbody-${this.objectName}`);
+        if (!tbody) return;
+
+        // Получаем закреплённые датчики
+        const pinnedSensors = this.getPinnedSensors();
+        const hasPinned = pinnedSensors.size > 0;
+
+        // Показываем/скрываем кнопку "снять все"
+        const unpinBtn = document.getElementById(`ionc-unpin-${this.objectName}`);
+        if (unpinBtn) {
+            unpinBtn.style.display = hasPinned ? 'inline' : 'none';
+        }
+
+        // Фильтруем датчики:
+        // - если есть текстовый фильтр — показываем все (для поиска новых датчиков)
+        // - иначе если есть закреплённые — показываем только их
+        let sensorsToShow = this.sensors;
+        if (!this.filter && hasPinned) {
+            sensorsToShow = this.sensors.filter(s => pinnedSensors.has(String(s.id)));
+        }
+
+        if (sensorsToShow.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="ionc-empty">Нет датчиков</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = sensorsToShow.map(sensor => this.renderSensorRow(sensor, pinnedSensors.has(String(sensor.id)))).join('');
+
+        // Добавляем обработчики событий
+        tbody.querySelectorAll('.ionc-btn-set').forEach(btn => {
+            btn.addEventListener('click', () => this.showSetDialog(parseInt(btn.dataset.id)));
+        });
+        tbody.querySelectorAll('.ionc-btn-freeze').forEach(btn => {
+            btn.addEventListener('click', () => this.toggleFreeze(parseInt(btn.dataset.id)));
+        });
+        tbody.querySelectorAll('.ionc-btn-consumers').forEach(btn => {
+            btn.addEventListener('click', () => this.showConsumersDialog(parseInt(btn.dataset.id)));
+        });
+        tbody.querySelectorAll('.ionc-pin-toggle').forEach(btn => {
+            btn.addEventListener('click', () => this.togglePin(parseInt(btn.dataset.id)));
+        });
+        tbody.querySelectorAll('.ionc-chart-checkbox').forEach(cb => {
+            cb.addEventListener('change', () => this.toggleSensorChart(parseInt(cb.dataset.id)));
+        });
+
+        // Обработчик кнопки "снять все"
+        if (unpinBtn) {
+            unpinBtn.onclick = () => this.unpinAll();
+        }
+    }
+
+    renderSensorRow(sensor, isPinned) {
+        const frozenClass = sensor.frozen ? 'ionc-sensor-frozen' : '';
+        const blockedClass = sensor.blocked ? 'ionc-sensor-blocked' : '';
+        const readonlyClass = sensor.readonly ? 'ionc-sensor-readonly' : '';
+
+        const flags = [];
+        if (sensor.frozen) flags.push('<span class="ionc-flag ionc-flag-frozen" title="Заморожен">❄</span>');
+        if (sensor.blocked) flags.push('<span class="ionc-flag ionc-flag-blocked" title="Заблокирован">🔒</span>');
+        if (sensor.readonly) flags.push('<span class="ionc-flag ionc-flag-readonly" title="Только чтение">👁</span>');
+        if (sensor.undefined) flags.push('<span class="ionc-flag ionc-flag-undefined" title="Не определён">?</span>');
+
+        const freezeBtn = sensor.frozen
+            ? `<button class="ionc-btn ionc-btn-unfreeze" data-id="${sensor.id}" title="Разморозить">🔥</button>`
+            : `<button class="ionc-btn ionc-btn-freeze" data-id="${sensor.id}" title="Заморозить">❄</button>`;
+
+        // Кнопка закрепления (pin)
+        const pinToggleClass = isPinned ? 'ionc-pin-toggle pinned' : 'ionc-pin-toggle';
+        const pinIcon = isPinned ? '📌' : '○';
+        const pinTitle = isPinned ? 'Открепить' : 'Закрепить';
+
+        // Checkbox для графика
+        const isOnChart = this.isSensorOnChart(sensor.name);
+        const varName = `ionc-${sensor.id}`;
+
+        return `
+            <tr class="ionc-sensor-row ${frozenClass} ${blockedClass} ${readonlyClass}" data-sensor-id="${sensor.id}">
+                <td class="ionc-col-pin">
+                    <span class="${pinToggleClass}" data-id="${sensor.id}" title="${pinTitle}">
+                        ${pinIcon}
+                    </span>
+                </td>
+                <td class="ionc-col-chart">
+                    <span class="ionc-chart-toggle">
+                        <input type="checkbox"
+                               class="ionc-chart-checkbox"
+                               id="ionc-chart-${this.objectName}-${varName}"
+                               data-id="${sensor.id}"
+                               data-name="${escapeHtml(sensor.name)}"
+                               ${isOnChart ? 'checked' : ''}>
+                        <label class="ionc-chart-label" for="ionc-chart-${this.objectName}-${varName}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 3v18h18"/>
+                                <path d="M18 9l-5 5-4-4-3 3"/>
+                            </svg>
+                        </label>
+                    </span>
+                </td>
+                <td class="ionc-col-id">${sensor.id}</td>
+                <td class="ionc-col-name">${escapeHtml(sensor.name)}</td>
+                <td class="ionc-col-type"><span class="ionc-type-badge ionc-type-${sensor.type}">${sensor.type}</span></td>
+                <td class="ionc-col-value">
+                    <span class="ionc-value" id="ionc-value-${this.objectName}-${sensor.id}">${sensor.value}</span>
+                </td>
+                <td class="ionc-col-flags">${flags.join(' ') || '—'}</td>
+                <td class="ionc-col-actions">
+                    <button class="ionc-btn ionc-btn-set" data-id="${sensor.id}" title="Установить значение" ${sensor.readonly ? 'disabled' : ''}>✎</button>
+                    ${freezeBtn}
+                    <button class="ionc-btn ionc-btn-consumers" data-id="${sensor.id}" title="Подписчики">👥</button>
+                </td>
+            </tr>
+        `;
+    }
+
+    // Управление закреплёнными датчиками
+    getPinnedSensors() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-ionc-pinned') || '{}');
+            return new Set(saved[this.objectName] || []);
+        } catch (err) {
+            return new Set();
+        }
+    }
+
+    savePinnedSensors(pinnedSet) {
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-ionc-pinned') || '{}');
+            saved[this.objectName] = Array.from(pinnedSet);
+            localStorage.setItem('uniset2-viewer-ionc-pinned', JSON.stringify(saved));
+        } catch (err) {
+            console.warn('Failed to save pinned sensors:', err);
+        }
+    }
+
+    togglePin(sensorId) {
+        const pinned = this.getPinnedSensors();
+        const idStr = String(sensorId);
+
+        if (pinned.has(idStr)) {
+            pinned.delete(idStr);
+        } else {
+            pinned.add(idStr);
+        }
+
+        this.savePinnedSensors(pinned);
+        this.renderSensorsTable();
+    }
+
+    unpinAll() {
+        this.savePinnedSensors(new Set());
+        this.renderSensorsTable();
+    }
+
+    isSensorOnChart(sensorName) {
+        const addedSensors = getExternalSensorsFromStorage(this.objectName);
+        return addedSensors.has(sensorName);
+    }
+
+    toggleSensorChart(sensorId) {
+        const sensor = this.sensorMap.get(sensorId);
+        if (!sensor) return;
+
+        const addedSensors = getExternalSensorsFromStorage(this.objectName);
+
+        if (addedSensors.has(sensor.name)) {
+            // Удаляем с графика
+            removeExternalSensor(this.objectName, sensor.name);
+        } else {
+            // Добавляем на график - используем существующую систему внешних датчиков
+            // Создаём объект датчика в формате, ожидаемом createExternalSensorChart
+            const sensorForChart = {
+                id: sensor.id,
+                name: sensor.name,
+                textname: sensor.name,
+                iotype: sensor.type,
+                value: sensor.value
+            };
+
+            // Добавляем в список внешних датчиков
+            addedSensors.add(sensor.name);
+            saveExternalSensorsToStorage(this.objectName, addedSensors);
+
+            // Добавляем в state.sensorsByName если его там нет
+            if (!state.sensorsByName.has(sensor.name)) {
+                state.sensorsByName.set(sensor.name, sensorForChart);
+                state.sensors.set(sensor.id, sensorForChart);
+            }
+
+            // Создаём график
+            createExternalSensorChart(this.objectName, sensorForChart);
+
+            // Подписываемся на IONC датчик (не SM!)
+            subscribeToIONCSensor(this.objectName, sensor.id);
+        }
+        // Не перерисовываем таблицу - checkbox сам обновляется
+    }
+
+    renderPagination() {
+        const container = document.getElementById(`ionc-pagination-${this.objectName}`);
+        if (!container) return;
+
+        const totalPages = Math.ceil(this.totalCount / this.limit);
+        const currentPage = Math.floor(this.offset / this.limit) + 1;
+
+        if (totalPages <= 1) {
+            container.innerHTML = `<span class="ionc-pagination-info">Всего: ${this.totalCount}</span>`;
+            return;
+        }
+
+        let html = `<span class="ionc-pagination-info">Стр. ${currentPage} из ${totalPages} (всего ${this.totalCount})</span>`;
+        html += '<div class="ionc-pagination-buttons">';
+
+        // Prev button
+        html += `<button class="ionc-page-btn" ${currentPage === 1 ? 'disabled' : ''} data-page="${currentPage - 1}">«</button>`;
+
+        // Page numbers
+        const maxButtons = 5;
+        let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+        let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+        if (endPage - startPage < maxButtons - 1) {
+            startPage = Math.max(1, endPage - maxButtons + 1);
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            const activeClass = i === currentPage ? 'active' : '';
+            html += `<button class="ionc-page-btn ${activeClass}" data-page="${i}">${i}</button>`;
+        }
+
+        // Next button
+        html += `<button class="ionc-page-btn" ${currentPage === totalPages ? 'disabled' : ''} data-page="${currentPage + 1}">»</button>`;
+        html += '</div>';
+
+        container.innerHTML = html;
+
+        // Add event listeners
+        container.querySelectorAll('.ionc-page-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const page = parseInt(btn.dataset.page);
+                if (page >= 1 && page <= totalPages) {
+                    this.offset = (page - 1) * this.limit;
+                    this.loadSensors();
+                }
+            });
+        });
+    }
+
+    updateSensorCount() {
+        const countEl = document.getElementById(`ionc-sensor-count-${this.objectName}`);
+        if (countEl) {
+            countEl.textContent = this.totalCount;
+        }
+    }
+
+    async showSetDialog(sensorId) {
+        const sensor = this.sensorMap.get(sensorId);
+        if (!sensor) return;
+
+        const newValue = prompt(`Установить значение для ${sensor.name} (ID: ${sensorId}):`, sensor.value);
+        if (newValue === null) return;
+
+        const value = parseInt(newValue, 10);
+        if (isNaN(value)) {
+            alert('Введите целое число');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/set`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sensor_id: sensorId, value: value })
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to set value');
+            }
+
+            // Обновляем локально
+            sensor.value = value;
+            const valueEl = document.getElementById(`ionc-value-${this.objectName}-${sensorId}`);
+            if (valueEl) valueEl.textContent = value;
+
+        } catch (err) {
+            alert(`Ошибка: ${err.message}`);
+        }
+    }
+
+    async toggleFreeze(sensorId) {
+        const sensor = this.sensorMap.get(sensorId);
+        if (!sensor) return;
+
+        try {
+            if (sensor.frozen) {
+                // Unfreeze
+                const response = await fetch(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/unfreeze`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sensor_id: sensorId })
+                });
+                if (!response.ok) throw new Error('Failed to unfreeze');
+                sensor.frozen = false;
+            } else {
+                // Freeze with current value
+                const response = await fetch(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/freeze`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sensor_id: sensorId, value: sensor.value })
+                });
+                if (!response.ok) throw new Error('Failed to freeze');
+                sensor.frozen = true;
+            }
+
+            // Re-render the row
+            const row = document.querySelector(`tr[data-sensor-id="${sensorId}"]`);
+            if (row) {
+                row.outerHTML = this.renderSensorRow(sensor);
+                // Re-attach event listeners
+                const newRow = document.querySelector(`tr[data-sensor-id="${sensorId}"]`);
+                newRow.querySelector('.ionc-btn-set')?.addEventListener('click', () => this.showSetDialog(sensorId));
+                newRow.querySelector('.ionc-btn-freeze, .ionc-btn-unfreeze')?.addEventListener('click', () => this.toggleFreeze(sensorId));
+                newRow.querySelector('.ionc-btn-consumers')?.addEventListener('click', () => this.showConsumersDialog(sensorId));
+            }
+        } catch (err) {
+            alert(`Ошибка: ${err.message}`);
+        }
+    }
+
+    async showConsumersDialog(sensorId) {
+        const sensor = this.sensorMap.get(sensorId);
+        if (!sensor) return;
+
+        try {
+            const response = await fetch(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/consumers?sensors=${sensorId}`);
+            if (!response.ok) throw new Error('Failed to load consumers');
+
+            const data = await response.json();
+            const sensorData = data.sensors?.[0];
+            const consumers = sensorData?.consumers || [];
+
+            let message = `Подписчики на ${sensor.name} (ID: ${sensorId}):\n\n`;
+            if (consumers.length === 0) {
+                message += 'Нет подписчиков';
+            } else {
+                consumers.forEach((c, i) => {
+                    message += `${i + 1}. ${c.name} (ID: ${c.id})\n`;
+                });
+            }
+            alert(message);
+        } catch (err) {
+            alert(`Ошибка: ${err.message}`);
+        }
+    }
+
+    async loadLostConsumers() {
+        try {
+            const response = await fetch(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/lost`);
+            if (!response.ok) return;
+
+            const data = await response.json();
+            const lost = data['lost consumers'] || [];
+
+            const listEl = document.getElementById(`ionc-lost-list-${this.objectName}`);
+            const countEl = document.getElementById(`ionc-lost-count-${this.objectName}`);
+
+            if (countEl) countEl.textContent = lost.length;
+
+            if (listEl) {
+                if (lost.length === 0) {
+                    listEl.innerHTML = '<span class="ionc-lost-empty">Нет потерянных подписчиков</span>';
+                } else {
+                    listEl.innerHTML = lost.map(c =>
+                        `<div class="ionc-lost-item">${escapeHtml(c.name)} (ID: ${c.id})</div>`
+                    ).join('');
+                }
+            }
+        } catch (err) {
+            console.error('Error loading lost consumers:', err);
+        }
+    }
+
+    update(data) {
+        // При обновлении объекта обновляем информацию
+        renderObjectInfo(this.objectName, data.object);
+        renderLogServer(this.objectName, data.LogServer);
+
+        // Инициализируем LogViewer если есть LogServer
+        this.initLogViewer(data.LogServer);
+    }
+
+    // Обработка SSE обновления датчика (батчевая версия)
+    handleIONCSensorUpdate(sensor) {
+        // Обновляем в sensorMap
+        if (this.sensorMap.has(sensor.id)) {
+            const oldSensor = this.sensorMap.get(sensor.id);
+            Object.assign(oldSensor, sensor);
+            // Добавляем в очередь на рендеринг
+            this.pendingUpdates.set(sensor.id, sensor);
+        }
+
+        // Планируем батчевый рендеринг
+        if (!this.renderScheduled) {
+            this.renderScheduled = true;
+            requestAnimationFrame(() => this.batchRenderUpdates());
+        }
+    }
+
+    // Батчевый рендеринг обновлений DOM
+    batchRenderUpdates() {
+        this.renderScheduled = false;
+
+        if (this.pendingUpdates.size === 0) return;
+
+        // Обновляем DOM для всех ожидающих датчиков
+        for (const [id, sensor] of this.pendingUpdates) {
+            // Обновляем значение
+            const valueEl = document.getElementById(`ionc-value-${this.objectName}-${id}`);
+            if (valueEl) {
+                valueEl.textContent = sensor.value;
+                // Добавляем анимацию при обновлении
+                valueEl.classList.add('ionc-value-updated');
+            }
+
+            // Обновляем флаги если изменились
+            const row = document.querySelector(`tr[data-sensor-id="${id}"]`);
+            if (row) {
+                row.classList.toggle('ionc-sensor-frozen', sensor.frozen);
+                row.classList.toggle('ionc-sensor-blocked', sensor.blocked);
+            }
+        }
+
+        // Очищаем очередь
+        this.pendingUpdates.clear();
+
+        // Убираем анимацию через 500ms
+        setTimeout(() => {
+            const updatedEls = document.querySelectorAll('.ionc-value-updated');
+            updatedEls.forEach(el => el.classList.remove('ionc-value-updated'));
+        }, 500);
+    }
+
+    // Подписка на SSE обновления для видимых датчиков
+    async subscribeToSSE() {
+        // Собираем ID датчиков на текущей странице
+        const sensorIds = this.sensors.map(s => s.id);
+        if (sensorIds.length === 0) return;
+
+        // Сначала отписываемся от старых подписок
+        await this.unsubscribeFromSSE();
+
+        try {
+            const response = await fetch(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/subscribe`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sensor_ids: sensorIds })
+            });
+
+            if (response.ok) {
+                sensorIds.forEach(id => this.subscribedSensorIds.add(id));
+                console.log(`IONC: Подписка на ${sensorIds.length} датчиков для ${this.objectName}`);
+            }
+        } catch (err) {
+            console.warn('IONC: Ошибка подписки на SSE:', err);
+        }
+    }
+
+    // Отписка от SSE обновлений
+    async unsubscribeFromSSE() {
+        if (this.subscribedSensorIds.size === 0) return;
+
+        try {
+            await fetch(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/unsubscribe`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sensor_ids: [] }) // пустой массив = отписка от всех
+            });
+            this.subscribedSensorIds.clear();
+            console.log(`IONC: Отписка от датчиков для ${this.objectName}`);
+        } catch (err) {
+            console.warn('IONC: Ошибка отписки от SSE:', err);
+        }
+    }
+
+    destroy() {
+        // Отписываемся от SSE обновлений при закрытии
+        this.unsubscribeFromSSE();
+        // Уничтожаем LogViewer
+        this.destroyLogViewer();
+    }
+}
+
 // Регистрируем стандартные рендереры
 registerRenderer('UniSetManager', UniSetManagerRenderer);
 registerRenderer('UniSetObject', UniSetObjectRenderer);
+registerRenderer('IONotifyController', IONotifyControllerRenderer);
 
 // ============================================================================
 // Конец системы рендереров
@@ -1707,18 +2487,30 @@ function openSensorDialog(objectName) {
     filterInput.value = '';
     filterInput.focus();
 
-    // Загрузить датчики если ещё не загружены
-    if (state.sensors.size === 0) {
-        renderSensorDialogContent('<div class="sensor-dialog-loading">Загрузка списка датчиков...</div>');
-        loadSensorsConfig().then(() => {
+    // Определяем источник датчиков в зависимости от smEnabled
+    if (state.capabilities.smEnabled) {
+        // SM включен - загружаем датчики из XML конфига
+        if (state.sensors.size === 0) {
+            renderSensorDialogContent('<div class="sensor-dialog-loading">Загрузка списка датчиков...</div>');
+            loadSensorsConfig().then(() => {
+                prepareSensorList();
+                renderSensorTable();
+            }).catch(err => {
+                renderSensorDialogContent('<div class="sensor-dialog-empty">Ошибка загрузки датчиков</div>');
+            });
+        } else {
             prepareSensorList();
             renderSensorTable();
-        }).catch(err => {
-            renderSensorDialogContent('<div class="sensor-dialog-empty">Ошибка загрузки датчиков</div>');
-        });
+        }
     } else {
-        prepareSensorList();
-        renderSensorTable();
+        // SM не настроен - показываем датчики из IONC таблицы
+        const tabState = state.tabs.get(objectName);
+        if (tabState && tabState.renderer && tabState.renderer.sensors) {
+            prepareSensorListFromIONC(tabState.renderer.sensors);
+            renderSensorTable();
+        } else {
+            renderSensorDialogContent('<div class="sensor-dialog-empty">Нет датчиков в таблице IONC</div>');
+        }
     }
 
     // Обработчик фильтра
@@ -1758,9 +2550,21 @@ function handleSensorDialogKeydown(e) {
     }
 }
 
-// Подготовить список датчиков
+// Подготовить список датчиков из XML конфига
 function prepareSensorList() {
     sensorDialogState.allSensors = Array.from(state.sensors.values());
+    sensorDialogState.filteredSensors = [...sensorDialogState.allSensors];
+}
+
+// Подготовить список датчиков из IONC таблицы
+function prepareSensorListFromIONC(ioncSensors) {
+    // Преобразуем формат IONC датчиков в формат диалога
+    sensorDialogState.allSensors = ioncSensors.map(sensor => ({
+        id: sensor.id,
+        name: sensor.name,
+        textname: '', // IONC датчики не имеют текстового описания
+        iotype: sensor.type // 'type' в IONC -> 'iotype' в диалоге
+    }));
     sensorDialogState.filteredSensors = [...sensorDialogState.allSensors];
 }
 
@@ -1873,9 +2677,66 @@ async function unsubscribeFromExternalSensor(objectName, sensorName) {
     }
 }
 
+// Подписаться на IONC датчик через API
+async function subscribeToIONCSensor(objectName, sensorId) {
+    try {
+        const response = await fetch(`/api/objects/${encodeURIComponent(objectName)}/ionc/subscribe`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sensor_ids: [sensorId] })
+        });
+        if (!response.ok) {
+            const err = await response.json();
+            console.warn('Ошибка подписки на IONC датчик:', err.error || response.statusText);
+        } else {
+            // Добавляем в список подписок рендерера
+            const tabState = state.tabs.get(objectName);
+            if (tabState && tabState.renderer && tabState.renderer.subscribedSensorIds) {
+                tabState.renderer.subscribedSensorIds.add(sensorId);
+            }
+            console.log(`IONC: Подписка на датчик ${sensorId} для ${objectName}`);
+        }
+    } catch (err) {
+        console.warn('Ошибка подписки на IONC датчик:', err);
+    }
+}
+
+// Отписаться от IONC датчика через API
+async function unsubscribeFromIONCSensor(objectName, sensorId) {
+    try {
+        const response = await fetch(`/api/objects/${encodeURIComponent(objectName)}/ionc/unsubscribe`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sensor_ids: [sensorId] })
+        });
+        if (!response.ok) {
+            const err = await response.json();
+            console.warn('Ошибка отписки от IONC датчика:', err.error || response.statusText);
+        } else {
+            // Удаляем из списка подписок рендерера
+            const tabState = state.tabs.get(objectName);
+            if (tabState && tabState.renderer && tabState.renderer.subscribedSensorIds) {
+                tabState.renderer.subscribedSensorIds.delete(sensorId);
+            }
+            console.log(`IONC: Отписка от датчика ${sensorId} для ${objectName}`);
+        }
+    } catch (err) {
+        console.warn('Ошибка отписки от IONC датчика:', err);
+    }
+}
+
 // Добавить внешний датчик на график
 function addExternalSensor(objectName, sensorName) {
-    const sensor = state.sensorsByName.get(sensorName);
+    let sensor;
+
+    if (state.capabilities.smEnabled) {
+        // SM включен - ищем датчик в глобальном списке
+        sensor = state.sensorsByName.get(sensorName);
+    } else {
+        // SM выключен - ищем датчик в списке диалога (из IONC)
+        sensor = sensorDialogState.allSensors.find(s => s.name === sensorName);
+    }
+
     if (!sensor) {
         console.error('Датчик не найден:', sensorName);
         return;
@@ -1895,8 +2756,13 @@ function addExternalSensor(objectName, sensorName) {
 
     console.log(`Добавлен внешний датчик ${sensorName} для ${objectName}`);
 
-    // Подписываемся на датчик через API
-    subscribeToExternalSensors(objectName, [sensorName]);
+    if (state.capabilities.smEnabled) {
+        // SM включен - подписываемся через SM API
+        subscribeToExternalSensors(objectName, [sensorName]);
+    } else {
+        // SM выключен - подписываемся через IONC API
+        subscribeToIONCSensor(objectName, sensor.id);
+    }
 }
 
 // Создать график для внешнего датчика
@@ -2052,6 +2918,19 @@ function createExternalSensorChart(objectName, sensor) {
         tabState.chartStartTime = Date.now();
     }
 
+    // Добавляем начальную точку с текущим значением
+    if (sensor.value !== undefined) {
+        const now = new Date();
+        chart.data.datasets[0].data.push({ x: now, y: sensor.value });
+        chart.update('none');
+
+        // Обновляем легенду
+        const legendEl = document.getElementById(`legend-value-${objectName}-${safeVarName}`);
+        if (legendEl) {
+            legendEl.textContent = formatValue(sensor.value);
+        }
+    }
+
     // Обработчик удаления
     chartDiv.querySelector('.chart-remove-btn').addEventListener('click', () => {
         removeExternalSensor(objectName, sensor.name);
@@ -2065,8 +2944,6 @@ function createExternalSensorChart(objectName, sensor) {
             chart.update('none');
         });
     }
-
-    console.log(`Создан график для внешнего датчика ${varName}`);
 }
 
 // Удалить внешний датчик с графика
@@ -2095,6 +2972,25 @@ function removeExternalSensor(objectName, sensorName) {
     addedSensors.delete(sensorName);
     saveExternalSensorsToStorage(objectName, addedSensors);
 
+    // Находим сенсор для получения ID
+    let sensor;
+    if (state.capabilities.smEnabled) {
+        sensor = state.sensorsByName.get(sensorName);
+    } else {
+        // Когда SM выключен, ищем в рендерере
+        if (tabState && tabState.renderer && tabState.renderer.sensors) {
+            sensor = tabState.renderer.sensors.find(s => s.name === sensorName);
+        }
+    }
+
+    // Снять галочку в таблице IONC (по sensor.id)
+    if (sensor) {
+        const ioncCheckbox = document.getElementById(`ionc-chart-${objectName}-ionc-${sensor.id}`);
+        if (ioncCheckbox) {
+            ioncCheckbox.checked = false;
+        }
+    }
+
     // Обновляем состояние диалога если открыт
     if (sensorDialogState.objectName === objectName) {
         sensorDialogState.addedSensors.delete(sensorName);
@@ -2104,7 +3000,11 @@ function removeExternalSensor(objectName, sensorName) {
     console.log(`Удалён внешний датчик ${sensorName} для ${objectName}`);
 
     // Отписываемся от датчика через API
-    unsubscribeFromExternalSensor(objectName, sensorName);
+    if (state.capabilities.smEnabled) {
+        unsubscribeFromExternalSensor(objectName, sensorName);
+    } else if (sensor) {
+        unsubscribeFromIONCSensor(objectName, sensor.id);
+    }
 }
 
 // Загрузить внешние датчики из localStorage
@@ -2136,33 +3036,85 @@ function restoreExternalSensors(objectName) {
     const sensors = getExternalSensorsFromStorage(objectName);
     if (sensors.size === 0) return;
 
-    // Ждём загрузки конфига сенсоров
-    const tryRestore = () => {
-        if (state.sensors.size === 0) {
-            setTimeout(tryRestore, 100);
-            return;
-        }
-
-        const restoredSensors = [];
-        sensors.forEach(sensorName => {
-            const sensor = state.sensorsByName.get(sensorName);
-            if (sensor) {
-                createExternalSensorChart(objectName, sensor);
-                restoredSensors.push(sensorName);
-            } else {
-                console.warn(`Внешний датчик ${sensorName} не найден в конфиге`);
+    if (state.capabilities.smEnabled) {
+        // SM включен - ждём загрузки конфига сенсоров
+        const tryRestore = () => {
+            if (state.sensors.size === 0) {
+                setTimeout(tryRestore, 100);
+                return;
             }
-        });
 
-        // Подписываемся на все восстановленные датчики одним запросом
-        if (restoredSensors.length > 0) {
-            subscribeToExternalSensors(objectName, restoredSensors);
-        }
+            const restoredSensors = [];
+            sensors.forEach(sensorName => {
+                const sensor = state.sensorsByName.get(sensorName);
+                if (sensor) {
+                    createExternalSensorChart(objectName, sensor);
+                    restoredSensors.push(sensorName);
+                } else {
+                    console.warn(`Внешний датчик ${sensorName} не найден в конфиге`);
+                }
+            });
 
-        console.log(`Восстановлено ${restoredSensors.length} внешних датчиков для ${objectName}`);
-    };
+            // Подписываемся на все восстановленные датчики одним запросом
+            if (restoredSensors.length > 0) {
+                subscribeToExternalSensors(objectName, restoredSensors);
+            }
 
-    tryRestore();
+            console.log(`Восстановлено ${restoredSensors.length} внешних датчиков для ${objectName}`);
+        };
+
+        tryRestore();
+    } else {
+        // SM выключен - ждём загрузки сенсоров рендерера (IONC)
+        const tryRestoreIONC = () => {
+            const tabState = state.tabs.get(objectName);
+            if (!tabState || !tabState.renderer || !tabState.renderer.sensors || tabState.renderer.sensors.length === 0) {
+                setTimeout(tryRestoreIONC, 100);
+                return;
+            }
+
+            const restoredSensorIds = [];
+            sensors.forEach(sensorName => {
+                const sensor = tabState.renderer.sensors.find(s => s.name === sensorName);
+                if (sensor) {
+                    // Адаптируем формат датчика для createExternalSensorChart
+                    const adaptedSensor = {
+                        id: sensor.id,
+                        name: sensor.name,
+                        textname: '', // IONC датчики не имеют текстового описания
+                        iotype: sensor.type,
+                        value: sensor.value
+                    };
+                    createExternalSensorChart(objectName, adaptedSensor);
+                    restoredSensorIds.push(sensor.id);
+                } else {
+                    console.warn(`IONC датчик ${sensorName} не найден`);
+                }
+            });
+
+            // Подписываемся на все восстановленные датчики через IONC
+            if (restoredSensorIds.length > 0) {
+                fetch(`/api/objects/${encodeURIComponent(objectName)}/ionc/subscribe`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sensor_ids: restoredSensorIds })
+                }).then(response => {
+                    if (response.ok) {
+                        restoredSensorIds.forEach(id => {
+                            tabState.renderer.subscribedSensorIds.add(id);
+                        });
+                        console.log(`IONC: Восстановлена подписка на ${restoredSensorIds.length} датчиков`);
+                    }
+                }).catch(err => {
+                    console.warn('Ошибка восстановления подписок IONC:', err);
+                });
+            }
+
+            console.log(`Восстановлено ${restoredSensorIds.length} внешних датчиков для ${objectName}`);
+        };
+
+        tryRestoreIONC();
+    }
 }
 
 // UI функции
@@ -2405,7 +3357,7 @@ function renderIO(objectName, type, ioData) {
         if (!shouldShow) return;
 
         const tr = document.createElement('tr');
-        tr.className = isPinned ? 'io-row-pinned' : '';
+        tr.className = '';
         tr.dataset.rowKey = rowKey;
 
         tr.innerHTML = `
@@ -2792,10 +3744,16 @@ function removeChart(objectName, varName) {
 
     document.getElementById(`chart-panel-${objectName}-${varName}`)?.remove();
 
-    // Снять галочку в таблице
+    // Снять галочку в таблице (обычная IO таблица)
     const checkbox = document.getElementById(`chart-${objectName}-${varName}`);
     if (checkbox) {
         checkbox.checked = false;
+    }
+
+    // Снять галочку в таблице IONC (датчики SharedMemory)
+    const ioncCheckbox = document.getElementById(`ionc-chart-${objectName}-${varName}`);
+    if (ioncCheckbox) {
+        ioncCheckbox.checked = false;
     }
 
     // Обновить видимость оси X на оставшихся графиках
@@ -2887,7 +3845,7 @@ function renderTimersTable(objectName, timers) {
 
         const tr = document.createElement('tr');
         tr.dataset.timerId = timer.id;
-        tr.className = isPinned ? 'io-row-pinned' : '';
+        tr.className = '';
 
         // Форматирование tick: -1 означает бесконечный таймер
         const tickDisplay = timer.tick === -1 ? '∞' : timer.tick;
@@ -3470,6 +4428,76 @@ function loadChartsHeight(objectName) {
     }
 }
 
+// Настройка resize для IONC секции датчиков
+function setupIONCSensorsResize(objectName) {
+    const resizeHandle = document.getElementById(`ionc-resize-${objectName}`);
+    const sensorsContainer = document.getElementById(`ionc-sensors-container-${objectName}`);
+
+    if (!resizeHandle || !sensorsContainer) return;
+
+    let startY = 0;
+    let startHeight = 0;
+    let isResizing = false;
+
+    const onMouseMove = (e) => {
+        if (!isResizing) return;
+        const delta = e.clientY - startY;
+        const newHeight = Math.max(200, startHeight + delta);
+        sensorsContainer.style.height = `${newHeight}px`;
+        sensorsContainer.style.maxHeight = `${newHeight}px`;
+    };
+
+    const onMouseUp = () => {
+        if (!isResizing) return;
+        isResizing = false;
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        // Сохраняем высоту
+        saveIONCSensorsHeight(objectName, sensorsContainer.offsetHeight);
+    };
+
+    resizeHandle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        isResizing = true;
+        startY = e.clientY;
+        startHeight = sensorsContainer.offsetHeight || 400;
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = 'ns-resize';
+        document.body.style.userSelect = 'none';
+    });
+
+    // Загружаем сохранённую высоту
+    loadIONCSensorsHeight(objectName);
+}
+
+function saveIONCSensorsHeight(objectName, height) {
+    try {
+        const saved = JSON.parse(localStorage.getItem('uniset2-viewer-ionc-height') || '{}');
+        saved[objectName] = height;
+        localStorage.setItem('uniset2-viewer-ionc-height', JSON.stringify(saved));
+    } catch (err) {
+        console.warn('Failed to save IONC sensors height:', err);
+    }
+}
+
+function loadIONCSensorsHeight(objectName) {
+    try {
+        const saved = JSON.parse(localStorage.getItem('uniset2-viewer-ionc-height') || '{}');
+        if (saved[objectName]) {
+            const sensorsContainer = document.getElementById(`ionc-sensors-container-${objectName}`);
+            if (sensorsContainer) {
+                sensorsContainer.style.height = `${saved[objectName]}px`;
+                sensorsContainer.style.maxHeight = `${saved[objectName]}px`;
+            }
+        }
+    } catch (err) {
+        console.warn('Failed to load IONC sensors height:', err);
+    }
+}
+
 // Переключение режима отображения IO (горизонтально/вертикально)
 function toggleIOLayout(objectName) {
     const checkbox = document.getElementById(`io-sequential-${objectName}`);
@@ -3941,7 +4969,7 @@ function loadSettings() {
 
 // Инициализация
 document.addEventListener('DOMContentLoaded', () => {
-    // Инициализация SSE для realtime обновлений
+    // Инициализация SSE для realtime обновлений (получаем capabilities при подключении)
     initSSE();
 
     // Загружаем конфигурацию сенсоров (не блокируем загрузку объектов)

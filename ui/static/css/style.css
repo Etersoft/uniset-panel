@@ -447,6 +447,23 @@ header h1 {
     text-transform: lowercase;
 }
 
+/* Chart remove button - consistent with io-pin-toggle */
+.chart-remove-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 2px 6px;
+    border-radius: 3px;
+    transition: all 0.15s;
+}
+
+.chart-remove-btn:hover {
+    color: var(--accent-red);
+    background: rgba(255, 100, 100, 0.1);
+}
+
 .chart-panel-actions {
     display: flex;
     gap: 0.25rem;
@@ -667,44 +684,44 @@ header h1 {
     color: var(--accent-purple);
 }
 
-/* Checkbox styled as toggle */
+/* Checkbox styled as toggle - единый стиль для всех таблиц */
 .chart-toggle {
-    position: relative;
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
 }
 
 .chart-toggle input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-    position: absolute;
+    display: none;
 }
 
 .chart-toggle-label {
-    display: inline-flex;
+    cursor: pointer;
+    display: flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
-    border-radius: 4px;
-    cursor: pointer;
-    color: var(--text-muted);
-    transition: all 0.15s ease;
-}
-
-.chart-toggle-label:hover {
-    background: var(--bg-hover);
-    color: var(--text-secondary);
-}
-
-.chart-toggle input:checked + .chart-toggle-label {
-    color: var(--accent-blue);
-    background: rgba(50, 116, 217, 0.15);
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+    transition: all 0.15s;
 }
 
 .chart-toggle-label svg {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
+    stroke: var(--text-muted);
+    transition: stroke 0.15s;
+}
+
+.chart-toggle-label:hover svg {
+    stroke: var(--text-primary);
+}
+
+.chart-toggle input:checked + .chart-toggle-label {
+    background: var(--accent-blue);
+}
+
+.chart-toggle input:checked + .chart-toggle-label svg {
+    stroke: white;
 }
 
 /* Scrollbar */
@@ -939,12 +956,15 @@ header h1 {
 
 .io-pin-toggle {
     cursor: pointer;
-    font-size: 12px;
+    font-size: 14px;
+    line-height: 20px;
     color: var(--text-muted);
     display: inline-block;
     width: 20px;
+    height: 20px;
     text-align: center;
     user-select: none;
+    transition: color 0.15s;
 }
 
 .io-pin-toggle:hover {
@@ -953,10 +973,6 @@ header h1 {
 
 .io-pin-toggle.pinned {
     color: var(--accent-orange);
-}
-
-.io-row-pinned {
-    background: rgba(255, 170, 68, 0.1);
 }
 
 .io-unpin-all {
@@ -1748,11 +1764,7 @@ header h1 {
     display: flex;
     gap: 2px;
     margin-left: auto;
-}
-
-.collapsible-header .section-reorder-buttons,
-.logviewer-header .section-reorder-buttons {
-    margin-left: 8px;
+    flex-shrink: 0;
 }
 
 .section-move-btn {
@@ -2003,4 +2015,359 @@ header h1 {
     .charts-grid {
         grid-template-columns: 1fr;
     }
+}
+
+/* ============================================================================
+   IONotifyController Renderer Styles
+   ============================================================================ */
+
+.ionc-sensors-section .collapsible-header {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.ionc-filter-bar {
+    display: flex;
+    gap: 0.5rem;
+    margin-left: 0.5rem;
+    align-items: center;
+}
+
+.ionc-filter-input {
+    width: 180px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.ionc-filter-input:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+}
+
+.ionc-type-filter {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.ionc-sensor-count {
+    background: var(--accent-blue);
+    color: white;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 10px;
+    margin-left: 0.5rem;
+}
+
+.ionc-sensors-table-container {
+    overflow-x: auto;
+    height: 400px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.ionc-sensors-table-container:focus {
+    outline: none;
+}
+
+.ionc-resize-handle {
+    height: 6px;
+    background: var(--border-color);
+    cursor: ns-resize;
+    margin-top: 4px;
+    border-radius: 3px;
+    transition: background 0.2s;
+}
+
+.ionc-resize-handle:hover {
+    background: var(--accent-blue);
+}
+
+.ionc-sensors-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.ionc-sensors-table th {
+    position: sticky;
+    top: 0;
+    background: var(--bg-tertiary);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-weight: 500;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+
+.ionc-sensors-table td {
+    padding: 0.4rem 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+
+.ionc-sensors-table tbody tr:hover {
+    background: var(--bg-hover);
+}
+
+.ionc-col-pin { width: 24px; text-align: center; }
+.ionc-col-chart { width: 24px; text-align: center; }
+.ionc-col-id { width: 70px; }
+.ionc-col-name { min-width: 200px; }
+.ionc-col-type { width: 60px; }
+.ionc-col-value { width: 100px; font-family: 'JetBrains Mono', monospace; }
+.ionc-col-flags { width: 80px; text-align: center; }
+.ionc-col-actions { width: 120px; text-align: center; white-space: nowrap; }
+
+/* Pin toggle - закрепление датчика */
+.ionc-pin-toggle {
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 20px;
+    color: var(--text-muted);
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    text-align: center;
+    user-select: none;
+    transition: color 0.15s;
+}
+
+.ionc-pin-toggle:hover {
+    color: var(--text-primary);
+}
+
+.ionc-pin-toggle.pinned {
+    color: var(--accent-orange);
+}
+
+.ionc-unpin-all {
+    cursor: pointer;
+    font-size: 11px;
+    color: var(--text-muted);
+    transition: color 0.15s;
+}
+
+.ionc-unpin-all:hover {
+    color: var(--accent-red);
+}
+
+/* Chart toggle - добавление на график */
+.ionc-chart-toggle {
+    display: inline-flex;
+    align-items: center;
+}
+
+.ionc-chart-checkbox {
+    display: none;
+}
+
+.ionc-chart-label {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+    transition: all 0.15s;
+}
+
+.ionc-chart-label svg {
+    width: 14px;
+    height: 14px;
+    stroke: var(--text-muted);
+    transition: stroke 0.15s;
+}
+
+.ionc-chart-label:hover svg {
+    stroke: var(--text-primary);
+}
+
+.ionc-chart-checkbox:checked + .ionc-chart-label {
+    background: var(--accent-blue);
+}
+
+.ionc-chart-checkbox:checked + .ionc-chart-label svg {
+    stroke: white;
+}
+
+.ionc-type-badge {
+    display: inline-block;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.ionc-type-AI { background: var(--accent-blue); color: white; }
+.ionc-type-DI { background: var(--accent-green); color: white; }
+.ionc-type-AO { background: var(--accent-orange); color: white; }
+.ionc-type-DO { background: var(--accent-purple); color: white; }
+
+.ionc-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+    transition: background-color 0.3s ease;
+}
+
+.ionc-value-updated {
+    background-color: var(--accent-green);
+    color: white;
+    border-radius: 3px;
+    padding: 0 4px;
+}
+
+.ionc-flag {
+    font-size: 0.9rem;
+    margin: 0 0.1rem;
+}
+
+.ionc-sensor-frozen {
+    background: rgba(255, 152, 48, 0.15);
+}
+
+.ionc-sensor-frozen:hover {
+    background: rgba(255, 152, 48, 0.25);
+}
+
+.ionc-sensor-blocked {
+    background: rgba(242, 73, 92, 0.15);
+}
+
+.ionc-sensor-blocked:hover {
+    background: rgba(242, 73, 92, 0.25);
+}
+
+.ionc-sensor-readonly td {
+    color: var(--text-muted);
+}
+
+.ionc-btn {
+    padding: 0.25rem 0.4rem;
+    font-size: 0.85rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s;
+    margin: 0 0.1rem;
+}
+
+.ionc-btn:hover:not(:disabled) {
+    background: var(--bg-hover);
+    border-color: var(--accent-blue);
+}
+
+.ionc-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.ionc-btn-set:hover:not(:disabled) {
+    border-color: var(--accent-green);
+}
+
+.ionc-btn-freeze:hover {
+    border-color: var(--accent-cyan);
+}
+
+.ionc-btn-unfreeze:hover {
+    border-color: var(--accent-orange);
+}
+
+.ionc-btn-consumers:hover {
+    border-color: var(--accent-purple);
+}
+
+.ionc-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem;
+    background: var(--bg-tertiary);
+    border-top: 1px solid var(--border-color);
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.ionc-pagination-info {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.ionc-pagination-buttons {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.ionc-page-btn {
+    padding: 0.25rem 0.5rem;
+    min-width: 2rem;
+    font-size: 0.8rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.ionc-page-btn:hover:not(:disabled) {
+    background: var(--bg-hover);
+    border-color: var(--accent-blue);
+}
+
+.ionc-page-btn.active {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+    color: white;
+}
+
+.ionc-page-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.ionc-loading,
+.ionc-empty,
+.ionc-error {
+    padding: 2rem;
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.ionc-error {
+    color: var(--accent-red);
+}
+
+.ionc-lost-list {
+    padding: 0.5rem;
+}
+
+.ionc-lost-empty {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.ionc-lost-item {
+    padding: 0.4rem 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.85rem;
+}
+
+.ionc-lost-item:last-child {
+    border-bottom: none;
 }

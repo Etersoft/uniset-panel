@@ -14,8 +14,8 @@ test.describe('UniSet2 Viewer UI', () => {
     // Ждём загрузки списка объектов (не должен быть пустым)
     await expect(page.locator('#objects-list li')).not.toHaveCount(0, { timeout: 10000 });
 
-    // Должно быть минимум 2 объекта
-    await expect(page.locator('#objects-list li')).toHaveCount(2, { timeout: 5000 });
+    // Должно быть минимум 3 объекта (UniSetActivator, TestProc, SharedMemory)
+    await expect(page.locator('#objects-list li')).toHaveCount(3, { timeout: 5000 });
 
     // Проверяем что TestProc в списке
     await expect(page.locator('#objects-list')).toContainText('TestProc');

@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/pv/uniset2-viewer-go/internal/ionc"
 	"github.com/pv/uniset2-viewer-go/internal/logserver"
 	"github.com/pv/uniset2-viewer-go/internal/poller"
 	"github.com/pv/uniset2-viewer-go/internal/sensorconfig"
@@ -24,6 +26,7 @@ type Handlers struct {
 	pollInterval   time.Duration
 	logServerMgr   *logserver.Manager
 	smPoller       *sm.Poller
+	ioncPoller     *ionc.Poller
 }
 
 func NewHandlers(client *uniset.Client, store storage.Storage, p *poller.Poller, sensorCfg *sensorconfig.SensorConfig, pollInterval time.Duration) *Handlers {
@@ -45,6 +48,11 @@ func (h *Handlers) SetLogServerManager(mgr *logserver.Manager) {
 // SetSMPoller устанавливает SM poller
 func (h *Handlers) SetSMPoller(p *sm.Poller) {
 	h.smPoller = p
+}
+
+// SetIONCPoller устанавливает IONC poller
+func (h *Handlers) SetIONCPoller(p *ionc.Poller) {
+	h.ioncPoller = p
 }
 
 // GetSSEHub возвращает SSE hub для использования в poller
@@ -584,5 +592,348 @@ func (h *Handlers) GetExternalSensors(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, map[string]interface{}{
 		"sensors": sensors,
 		"enabled": true,
+	})
+}
+
+// === IONotifyController API ===
+
+// GetIONCSensors возвращает список датчиков из IONotifyController объекта
+// GET /api/objects/{name}/ionc/sensors?offset=0&limit=100
+func (h *Handlers) GetIONCSensors(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	offset := 0
+	limit := 100
+
+	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
+			offset = o
+		}
+	}
+
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+
+	result, err := h.client.GetIONCSensors(name, offset, limit)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, result)
+}
+
+// GetIONCSensorValues получает значения конкретных датчиков
+// GET /api/objects/{name}/ionc/get?sensors=id1,name2,id3
+func (h *Handlers) GetIONCSensorValues(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	sensors := r.URL.Query().Get("sensors")
+	if sensors == "" {
+		h.writeError(w, http.StatusBadRequest, "sensors parameter required")
+		return
+	}
+
+	result, err := h.client.GetIONCSensorValues(name, sensors)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, result)
+}
+
+// IONCSetRequest запрос на установку значения датчика
+type IONCSetRequest struct {
+	SensorID int64 `json:"sensor_id"`
+	Value    int64 `json:"value"`
+}
+
+// SetIONCSensorValue устанавливает значение датчика
+// POST /api/objects/{name}/ionc/set
+func (h *Handlers) SetIONCSensorValue(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	var req IONCSetRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if err := h.client.SetIONCSensorValue(name, req.SensorID, req.Value); err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, map[string]interface{}{
+		"status":    "ok",
+		"sensor_id": req.SensorID,
+		"value":     req.Value,
+	})
+}
+
+// IONCFreezeRequest запрос на заморозку датчика
+type IONCFreezeRequest struct {
+	SensorID int64 `json:"sensor_id"`
+	Value    int64 `json:"value"`
+}
+
+// FreezeIONCSensor замораживает датчик
+// POST /api/objects/{name}/ionc/freeze
+func (h *Handlers) FreezeIONCSensor(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	var req IONCFreezeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if err := h.client.FreezeIONCSensor(name, req.SensorID, req.Value); err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, map[string]interface{}{
+		"status":    "frozen",
+		"sensor_id": req.SensorID,
+		"value":     req.Value,
+	})
+}
+
+// IONCUnfreezeRequest запрос на разморозку датчика
+type IONCUnfreezeRequest struct {
+	SensorID int64 `json:"sensor_id"`
+}
+
+// UnfreezeIONCSensor размораживает датчик
+// POST /api/objects/{name}/ionc/unfreeze
+func (h *Handlers) UnfreezeIONCSensor(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	var req IONCUnfreezeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if err := h.client.UnfreezeIONCSensor(name, req.SensorID); err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, map[string]interface{}{
+		"status":    "unfrozen",
+		"sensor_id": req.SensorID,
+	})
+}
+
+// GetIONCConsumers возвращает список подписчиков на датчики
+// GET /api/objects/{name}/ionc/consumers?sensors=id1,id2
+func (h *Handlers) GetIONCConsumers(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	sensors := r.URL.Query().Get("sensors")
+	if sensors == "" {
+		h.writeError(w, http.StatusBadRequest, "sensors parameter required")
+		return
+	}
+
+	result, err := h.client.GetIONCConsumers(name, sensors)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, result)
+}
+
+// GetIONCLostConsumers возвращает список потерянных подписчиков
+// GET /api/objects/{name}/ionc/lost
+func (h *Handlers) GetIONCLostConsumers(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	result, err := h.client.GetIONCLostConsumers(name)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, result)
+}
+
+// === IONC SSE Subscriptions ===
+
+// IONCSubscribeRequest запрос на подписку датчиков для SSE обновлений
+type IONCSubscribeRequest struct {
+	SensorIDs []int64 `json:"sensor_ids"`
+}
+
+// SubscribeIONCSensors подписывает на SSE обновления для датчиков объекта
+// POST /api/objects/{name}/ionc/subscribe
+func (h *Handlers) SubscribeIONCSensors(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	if h.ioncPoller == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "IONC poller not available")
+		return
+	}
+
+	var req IONCSubscribeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if len(req.SensorIDs) == 0 {
+		h.writeError(w, http.StatusBadRequest, "sensor_ids required")
+		return
+	}
+
+	h.ioncPoller.Subscribe(name, req.SensorIDs)
+
+	h.writeJSON(w, map[string]interface{}{
+		"status":     "subscribed",
+		"object":     name,
+		"sensor_ids": req.SensorIDs,
+	})
+}
+
+// UnsubscribeIONCSensors отписывает от SSE обновлений для датчиков объекта
+// POST /api/objects/{name}/ionc/unsubscribe
+func (h *Handlers) UnsubscribeIONCSensors(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	if h.ioncPoller == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "IONC poller not available")
+		return
+	}
+
+	var req IONCSubscribeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if len(req.SensorIDs) == 0 {
+		// Если не указаны конкретные датчики — отписываем все
+		h.ioncPoller.UnsubscribeAll(name)
+	} else {
+		h.ioncPoller.Unsubscribe(name, req.SensorIDs)
+	}
+
+	h.writeJSON(w, map[string]interface{}{
+		"status": "unsubscribed",
+		"object": name,
+	})
+}
+
+// GetIONCSubscriptions возвращает список подписок на IONC датчики объекта
+// GET /api/objects/{name}/ionc/subscriptions
+func (h *Handlers) GetIONCSubscriptions(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	if h.ioncPoller == nil {
+		h.writeJSON(w, map[string]interface{}{
+			"sensor_ids": []int64{},
+			"enabled":    false,
+		})
+		return
+	}
+
+	sensorIDs := h.ioncPoller.GetSubscriptions(name)
+	if sensorIDs == nil {
+		sensorIDs = []int64{}
+	}
+
+	h.writeJSON(w, map[string]interface{}{
+		"sensor_ids": sensorIDs,
+		"enabled":    true,
+	})
+}
+
+// SubscribeIONCSensorsQuery подписывает на SSE обновления из query string
+// GET /api/objects/{name}/ionc/subscribe?sensors=id1,id2,id3
+func (h *Handlers) SubscribeIONCSensorsQuery(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	if h.ioncPoller == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "IONC poller not available")
+		return
+	}
+
+	sensorsStr := r.URL.Query().Get("sensors")
+	if sensorsStr == "" {
+		h.writeError(w, http.StatusBadRequest, "sensors parameter required")
+		return
+	}
+
+	// Парсим список sensor IDs
+	var sensorIDs []int64
+	for _, idStr := range strings.Split(sensorsStr, ",") {
+		idStr = strings.TrimSpace(idStr)
+		if id, err := strconv.ParseInt(idStr, 10, 64); err == nil {
+			sensorIDs = append(sensorIDs, id)
+		}
+	}
+
+	if len(sensorIDs) == 0 {
+		h.writeError(w, http.StatusBadRequest, "no valid sensor IDs provided")
+		return
+	}
+
+	h.ioncPoller.Subscribe(name, sensorIDs)
+
+	h.writeJSON(w, map[string]interface{}{
+		"status":     "subscribed",
+		"object":     name,
+		"sensor_ids": sensorIDs,
 	})
 }

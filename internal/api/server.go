@@ -44,6 +44,21 @@ func (s *Server) setupRoutes(staticFS fs.FS) {
 	s.mux.HandleFunc("POST /api/objects/{name}/external-sensors", s.handlers.SubscribeExternalSensors)
 	s.mux.HandleFunc("DELETE /api/objects/{name}/external-sensors/{sensor}", s.handlers.UnsubscribeExternalSensor)
 
+	// IONotifyController API (for SharedMemory and similar objects)
+	s.mux.HandleFunc("GET /api/objects/{name}/ionc/sensors", s.handlers.GetIONCSensors)
+	s.mux.HandleFunc("GET /api/objects/{name}/ionc/get", s.handlers.GetIONCSensorValues)
+	s.mux.HandleFunc("POST /api/objects/{name}/ionc/set", s.handlers.SetIONCSensorValue)
+	s.mux.HandleFunc("POST /api/objects/{name}/ionc/freeze", s.handlers.FreezeIONCSensor)
+	s.mux.HandleFunc("POST /api/objects/{name}/ionc/unfreeze", s.handlers.UnfreezeIONCSensor)
+	s.mux.HandleFunc("GET /api/objects/{name}/ionc/consumers", s.handlers.GetIONCConsumers)
+	s.mux.HandleFunc("GET /api/objects/{name}/ionc/lost", s.handlers.GetIONCLostConsumers)
+
+	// IONC SSE subscriptions
+	s.mux.HandleFunc("POST /api/objects/{name}/ionc/subscribe", s.handlers.SubscribeIONCSensors)
+	s.mux.HandleFunc("POST /api/objects/{name}/ionc/unsubscribe", s.handlers.UnsubscribeIONCSensors)
+	s.mux.HandleFunc("GET /api/objects/{name}/ionc/subscriptions", s.handlers.GetIONCSubscriptions)
+	s.mux.HandleFunc("GET /api/objects/{name}/ionc/subscribe", s.handlers.SubscribeIONCSensorsQuery)
+
 	// LogServer API
 	s.mux.HandleFunc("GET /api/logs/status", s.handlers.GetAllLogServerStatuses)
 	s.mux.HandleFunc("GET /api/logs/{name}/status", s.handlers.GetLogServerStatus)

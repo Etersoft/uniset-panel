@@ -13,6 +13,7 @@ import (
 
 	"github.com/pv/uniset2-viewer-go/internal/api"
 	"github.com/pv/uniset2-viewer-go/internal/config"
+	"github.com/pv/uniset2-viewer-go/internal/ionc"
 	"github.com/pv/uniset2-viewer-go/internal/logger"
 	"github.com/pv/uniset2-viewer-go/internal/logserver"
 	"github.com/pv/uniset2-viewer-go/internal/poller"
@@ -95,6 +96,12 @@ func main() {
 		logger.Info("SM integration enabled", "url", cfg.SMURL, "poll_interval", smInterval)
 	}
 
+	// Create IONC poller for IONotifyController SSE updates
+	ioncPoller := ionc.NewPoller(client, cfg.PollInterval, func(updates []ionc.SensorUpdate) {
+		sseHub.BroadcastIONCSensorBatch(updates)
+	})
+	handlers.SetIONCPoller(ioncPoller)
+
 	// Start poller
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -106,6 +113,10 @@ func main() {
 		smPoller.Start()
 		defer smPoller.Stop()
 	}
+
+	// Start IONC poller
+	ioncPoller.Start()
+	defer ioncPoller.Stop()
 
 	// Start HTTP server
 	addr := fmt.Sprintf(":%d", cfg.Port)

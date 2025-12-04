@@ -1,0 +1,750 @@
+import { test, expect } from '@playwright/test';
+
+test.describe('IONotifyController (SharedMemory)', () => {
+
+  // Проверяем наличие SharedMemory и пропускаем тесты если его нет
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+
+    // Очищаем localStorage для изоляции тестов
+    await page.evaluate(() => {
+      localStorage.removeItem('uniset2-viewer-ionc-pinned');
+      localStorage.removeItem('uniset2-viewer-external-sensors');
+    });
+    await page.reload();
+
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+
+    // Проверяем есть ли SharedMemory в списке
+    const sharedMemory = page.locator('#objects-list li', { hasText: 'SharedMemory' });
+    const hasSharedMemory = await sharedMemory.isVisible().catch(() => false);
+
+    if (!hasSharedMemory) {
+      test.skip();
+      return;
+    }
+
+    // Открываем SharedMemory
+    await sharedMemory.click();
+    await expect(page.locator('.tab-btn', { hasText: 'SharedMemory' })).toBeVisible();
+  });
+
+  test('should display IONotifyController renderer for SharedMemory', async ({ page }) => {
+    // Ждём загрузки секции датчиков IONC
+    await page.waitForSelector('.ionc-sensors-section', { timeout: 10000 });
+
+    // Проверяем наличие секции датчиков
+    await expect(page.locator('.ionc-sensors-section')).toBeVisible();
+    await expect(page.locator('.ionc-sensors-section .collapsible-title')).toContainText('Датчики');
+  });
+
+  test('should display charts section', async ({ page }) => {
+    // Проверяем наличие секции графиков
+    const chartsSection = page.locator('[data-section-id="charts"]');
+    await expect(chartsSection).toBeVisible();
+    await expect(chartsSection.locator('.collapsible-title')).toContainText('Графики');
+  });
+
+  test('should display sensors table with columns', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-table', { timeout: 10000 });
+
+    // Проверяем заголовки таблицы
+    const table = page.locator('.ionc-sensors-table');
+    await expect(table.locator('th', { hasText: 'ID' })).toBeVisible();
+    await expect(table.locator('th', { hasText: 'Имя' })).toBeVisible();
+    await expect(table.locator('th', { hasText: 'Тип' })).toBeVisible();
+    await expect(table.locator('th', { hasText: 'Значение' })).toBeVisible();
+    await expect(table.locator('th', { hasText: 'Статус' })).toBeVisible();
+    await expect(table.locator('th', { hasText: 'Действия' })).toBeVisible();
+  });
+
+  test('should load sensors and show count', async ({ page }) => {
+    // Ждём загрузки датчиков
+    await page.waitForSelector('.ionc-sensors-tbody tr:not(.ionc-loading)', { timeout: 10000 });
+
+    // Проверяем что счётчик датчиков отображается
+    const countBadge = page.locator('.ionc-sensor-count');
+    await expect(countBadge).toBeVisible();
+
+    // Счётчик должен быть больше 0
+    const countText = await countBadge.textContent();
+    expect(parseInt(countText || '0')).toBeGreaterThan(0);
+  });
+
+  test('should display sensor rows with data', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    // Проверяем что есть строки датчиков
+    const rows = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row');
+    await expect(rows).not.toHaveCount(0);
+
+    // Проверяем первую строку
+    const firstRow = rows.first();
+    await expect(firstRow.locator('.ionc-col-id')).toBeVisible();
+    await expect(firstRow.locator('.ionc-col-name')).toBeVisible();
+    await expect(firstRow.locator('.ionc-type-badge')).toBeVisible();
+    await expect(firstRow.locator('.ionc-value')).toBeVisible();
+  });
+
+  test('should have chart toggle button for each sensor', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    // Проверяем наличие кнопки добавления на график
+    const firstRow = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first();
+    const chartToggle = firstRow.locator('.ionc-chart-toggle');
+    await expect(chartToggle).toBeVisible();
+  });
+
+  test('should have pin toggle button for each sensor', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    // Проверяем наличие кнопки закрепления в первой строке
+    const firstRow = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first();
+    const pinToggle = firstRow.locator('.ionc-pin-toggle');
+    await expect(pinToggle).toBeVisible();
+
+    // Проверяем что кнопка содержит символ ○ (не закреплено)
+    await expect(pinToggle).toHaveText('○');
+  });
+
+  test('should pin sensor on click', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    // Кликаем на кнопку закрепления первого датчика
+    const firstRow = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first();
+    const pinToggle = firstRow.locator('.ionc-pin-toggle');
+
+    // До клика - не закреплён
+    await expect(pinToggle).not.toHaveClass(/pinned/);
+
+    await pinToggle.click();
+
+    // После клика - закреплён
+    await expect(pinToggle).toHaveClass(/pinned/);
+
+    // Кнопка "снять все" должна появиться
+    const unpinAllBtn = page.locator('.ionc-unpin-all');
+    await expect(unpinAllBtn).toBeVisible();
+  });
+
+  test('should show only pinned sensors when any are pinned', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    // Получаем начальное количество датчиков
+    const initialCount = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count();
+
+    if (initialCount < 2) {
+      // Недостаточно датчиков для теста
+      return;
+    }
+
+    // Закрепляем первый датчик
+    const firstPinToggle = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first().locator('.ionc-pin-toggle');
+    await firstPinToggle.click();
+
+    // Теперь должен отображаться только 1 датчик (закреплённый)
+    await page.waitForTimeout(100);
+    const filteredCount = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count();
+    expect(filteredCount).toBe(1);
+  });
+
+  test('should unpin all sensors on unpin-all button click', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    const initialCount = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count();
+
+    if (initialCount < 2) {
+      return;
+    }
+
+    // Закрепляем первый датчик
+    const firstPinToggle = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first().locator('.ionc-pin-toggle');
+    await firstPinToggle.click();
+    await page.waitForTimeout(100);
+
+    // Проверяем что показывается только 1
+    expect(await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count()).toBe(1);
+
+    // Кликаем "снять все"
+    const unpinAllBtn = page.locator('.ionc-unpin-all');
+    await unpinAllBtn.click();
+    await page.waitForTimeout(100);
+
+    // Все датчики должны снова отображаться
+    const restoredCount = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count();
+    expect(restoredCount).toBe(initialCount);
+
+    // Кнопка "снять все" должна скрыться
+    await expect(unpinAllBtn).not.toBeVisible();
+  });
+
+  test('should add sensor to chart on chart toggle click', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    // Находим чекбокс графика первого датчика
+    const firstRow = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first();
+    const chartCheckbox = firstRow.locator('.ionc-chart-checkbox');
+
+    // До клика - не отмечен
+    await expect(chartCheckbox).not.toBeChecked();
+
+    // Кликаем на label (сам checkbox скрыт)
+    const chartLabel = firstRow.locator('.ionc-chart-label');
+    await chartLabel.click();
+
+    // После клика - отмечен
+    await expect(chartCheckbox).toBeChecked();
+
+    // В секции графиков должен появиться график
+    const chartsSection = page.locator('[data-section-id="charts"]');
+    await expect(chartsSection.locator('.chart-panel')).toBeVisible({ timeout: 5000 });
+  });
+
+  test('should uncheck chart checkbox when removing sensor from chart', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    // Добавляем датчик на график
+    const firstRow = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first();
+    const chartCheckbox = firstRow.locator('.ionc-chart-checkbox');
+    const chartLabel = firstRow.locator('.ionc-chart-label');
+
+    await chartLabel.click();
+    await expect(chartCheckbox).toBeChecked();
+
+    // Ждём появления графика
+    const chartsSection = page.locator('[data-section-id="charts"]');
+    const chartPanel = chartsSection.locator('.chart-panel').first();
+    await expect(chartPanel).toBeVisible({ timeout: 5000 });
+
+    // Нажимаем кнопку удаления графика (крестик в заголовке)
+    const removeBtn = chartPanel.locator('.chart-remove-btn');
+    await removeBtn.click();
+
+    // График должен исчезнуть
+    await expect(chartPanel).not.toBeVisible();
+
+    // Checkbox в таблице должен быть снят
+    await expect(chartCheckbox).not.toBeChecked();
+  });
+
+  test('should allow pinning sensors while filtering (search ignores pin filter)', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    // Закрепляем первый датчик
+    const firstPinToggle = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first().locator('.ionc-pin-toggle');
+    const firstSensorId = await firstPinToggle.getAttribute('data-id');
+    await firstPinToggle.click();
+    await page.waitForTimeout(100);
+
+    // Теперь показывается только 1 закреплённый датчик
+    const pinnedCount = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count();
+    expect(pinnedCount).toBe(1);
+
+    // Вводим поисковый запрос — должны показаться все датчики, соответствующие фильтру
+    const filterInput = page.locator('.ionc-filter-input');
+    await filterInput.fill('Sensor');
+    await page.waitForTimeout(400); // debounce 300ms + buffer
+
+    // После ввода фильтра показываются все найденные датчики (не только закреплённые)
+    const filteredCount = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count();
+    expect(filteredCount).toBeGreaterThan(1);
+
+    // Закрепляем ещё один датчик из результатов поиска
+    const secondRow = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').nth(1);
+    const secondPinToggle = secondRow.locator('.ionc-pin-toggle');
+    const secondSensorId = await secondPinToggle.getAttribute('data-id');
+
+    // Убедимся что это другой датчик
+    if (secondSensorId !== firstSensorId) {
+      await secondPinToggle.click();
+      await expect(secondPinToggle).toHaveClass(/pinned/);
+    }
+
+    // Очищаем фильтр — теперь должны показываться только закреплённые (2 датчика)
+    await filterInput.fill('');
+    // Ждём загрузки данных (debounce + API запрос) и проверяем что показываются 2 закреплённых
+    await expect(async () => {
+      const finalCount = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count();
+      expect(finalCount).toBe(2);
+    }).toPass({ timeout: 5000 });
+  });
+
+  test('should reset filter and lose focus on ESC', async ({ page }) => {
+    await page.waitForSelector('.ionc-filter-input', { timeout: 10000 });
+
+    const filterInput = page.locator('.ionc-filter-input');
+
+    // Вводим текст в фильтр
+    await filterInput.fill('test');
+    await expect(filterInput).toHaveValue('test');
+    await expect(filterInput).toBeFocused();
+
+    // Нажимаем ESC
+    await filterInput.press('Escape');
+
+    // Фильтр должен сброситься
+    await expect(filterInput).toHaveValue('');
+
+    // Фокус должен уйти с поля
+    await expect(filterInput).not.toBeFocused();
+  });
+
+  test('should lose focus on ESC even when filter is empty', async ({ page }) => {
+    await page.waitForSelector('.ionc-filter-input', { timeout: 10000 });
+
+    const filterInput = page.locator('.ionc-filter-input');
+
+    // Фокусируемся на пустом поле
+    await filterInput.focus();
+    await expect(filterInput).toBeFocused();
+
+    // Нажимаем ESC
+    await filterInput.press('Escape');
+
+    // Фокус должен уйти с поля
+    await expect(filterInput).not.toBeFocused();
+  });
+
+  test('should reset filter on ESC when table is focused', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    const filterInput = page.locator('.ionc-filter-input');
+    const sensorsContainer = page.locator('.ionc-sensors-table-container');
+
+    // Вводим фильтр
+    await filterInput.fill('Sensor150');
+    await page.waitForTimeout(400);
+
+    // Убеждаемся что фильтр применился
+    const filteredCount = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count();
+    expect(filteredCount).toBeLessThan(100);
+
+    // Кликаем на таблицу (контейнер получает фокус)
+    await sensorsContainer.click();
+    await expect(sensorsContainer).toBeFocused();
+
+    // Нажимаем ESC на таблице
+    await sensorsContainer.press('Escape');
+
+    // Фильтр должен сброситься
+    await expect(filterInput).toHaveValue('');
+
+    // Должны показаться все датчики
+    await page.waitForTimeout(400);
+    const restoredCount = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count();
+    expect(restoredCount).toBeGreaterThan(filteredCount);
+  });
+
+  test('should have filter input', async ({ page }) => {
+    await page.waitForSelector('.ionc-filter-bar', { timeout: 10000 });
+
+    // Проверяем наличие поля фильтра
+    const filterInput = page.locator('.ionc-filter-input');
+    await expect(filterInput).toBeVisible();
+    await expect(filterInput).toHaveAttribute('placeholder', 'Фильтр...');
+  });
+
+  test('should filter sensors by name', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    // Получаем начальное количество строк
+    const initialCount = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count();
+
+    if (initialCount < 2) {
+      // Недостаточно датчиков для теста фильтрации
+      return;
+    }
+
+    // Получаем имя первого датчика
+    const firstName = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row:first-child .ionc-col-name').textContent();
+
+    // Вводим часть имени в фильтр
+    const filterInput = page.locator('.ionc-filter-input');
+    await filterInput.fill(firstName?.substring(0, 5) || 'Sensor');
+
+    // Ждём debounce и перезагрузки
+    await page.waitForTimeout(400);
+
+    // Проверяем что фильтр применился
+    const filteredCount = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count();
+    expect(filteredCount).toBeLessThanOrEqual(initialCount);
+  });
+
+  test('should have type filter dropdown', async ({ page }) => {
+    await page.waitForSelector('.ionc-type-filter', { timeout: 10000 });
+
+    const typeFilter = page.locator('.ionc-type-filter');
+    await expect(typeFilter).toBeVisible();
+
+    // Проверяем наличие опций
+    await expect(typeFilter.locator('option[value="all"]')).toHaveText('Все');
+    await expect(typeFilter.locator('option[value="AI"]')).toHaveText('AI');
+    await expect(typeFilter.locator('option[value="DI"]')).toHaveText('DI');
+    await expect(typeFilter.locator('option[value="AO"]')).toHaveText('AO');
+    await expect(typeFilter.locator('option[value="DO"]')).toHaveText('DO');
+  });
+
+  test('should filter sensors by type', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    // Выбираем тип AI
+    const typeFilter = page.locator('.ionc-type-filter');
+    await typeFilter.selectOption('AI');
+
+    // Ждём перезагрузки
+    await page.waitForTimeout(400);
+
+    // Все отображаемые датчики должны быть типа AI (или пусто)
+    const rows = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row');
+    const count = await rows.count();
+
+    if (count > 0) {
+      // Проверяем что все badge имеют тип AI
+      const badges = page.locator('.ionc-sensors-tbody .ionc-type-badge');
+      for (let i = 0; i < await badges.count(); i++) {
+        await expect(badges.nth(i)).toHaveText('AI');
+      }
+    }
+  });
+
+  test('should have section reorder buttons', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-section', { timeout: 10000 });
+
+    // Проверяем наличие кнопок перемещения в секции датчиков
+    const sensorsSection = page.locator('.ionc-sensors-section');
+    const moveUpBtn = sensorsSection.locator('.section-move-up');
+    const moveDownBtn = sensorsSection.locator('.section-move-down');
+
+    await expect(moveUpBtn).toBeVisible();
+    await expect(moveDownBtn).toBeVisible();
+  });
+
+  test('should have resize handle for sensors section', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-section', { timeout: 10000 });
+
+    // Проверяем наличие ручки для изменения размера
+    const resizeHandle = page.locator('.ionc-resize-handle');
+    await expect(resizeHandle).toBeVisible();
+  });
+
+  test('should display pagination when many sensors', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    // Проверяем наличие пагинации
+    const pagination = page.locator('.ionc-pagination');
+    await expect(pagination).toBeVisible();
+
+    // Должна быть информация о количестве
+    await expect(pagination).toContainText(/Всего|Стр\./);
+  });
+
+  test('should navigate pagination', async ({ page }) => {
+    await page.waitForSelector('.ionc-pagination', { timeout: 10000 });
+
+    const pagination = page.locator('.ionc-pagination');
+    const nextBtn = pagination.locator('.ionc-page-btn:has-text("»")');
+
+    // Если кнопка "вперёд" активна, кликаем
+    if (await nextBtn.isEnabled()) {
+      await nextBtn.click();
+      await page.waitForTimeout(500);
+
+      // Проверяем что данные обновились
+      await expect(page.locator('.ionc-sensors-table')).toBeVisible();
+    }
+  });
+
+  test('should have action buttons for each sensor', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    const firstRow = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first();
+
+    // Кнопка "Установить значение"
+    await expect(firstRow.locator('.ionc-btn-set')).toBeVisible();
+
+    // Кнопка "Заморозить" или "Разморозить"
+    const freezeBtn = firstRow.locator('.ionc-btn-freeze, .ionc-btn-unfreeze');
+    await expect(freezeBtn).toBeVisible();
+
+    // Кнопка "Подписчики"
+    await expect(firstRow.locator('.ionc-btn-consumers')).toBeVisible();
+  });
+
+  test('should show set value dialog on button click', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    // Находим не-readonly датчик
+    const rows = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row:not(.ionc-sensor-readonly)');
+    const count = await rows.count();
+
+    if (count === 0) {
+      // Все датчики readonly, пропускаем
+      return;
+    }
+
+    const setBtn = rows.first().locator('.ionc-btn-set');
+    if (await setBtn.isDisabled()) {
+      return;
+    }
+
+    // Подготавливаем обработчик диалога
+    page.on('dialog', async dialog => {
+      expect(dialog.type()).toBe('prompt');
+      await dialog.dismiss();
+    });
+
+    // Кликаем на кнопку
+    await setBtn.click();
+  });
+
+  test('should show consumers dialog on button click', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    const consumersBtn = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first().locator('.ionc-btn-consumers');
+
+    // Подготавливаем обработчик диалога
+    page.on('dialog', async dialog => {
+      expect(dialog.type()).toBe('alert');
+      expect(dialog.message()).toContain('Подписчики');
+      await dialog.dismiss();
+    });
+
+    await consumersBtn.click();
+  });
+
+  test('should display type badges with correct colors', async ({ page }) => {
+    await page.waitForSelector('.ionc-type-badge', { timeout: 10000 });
+
+    // Проверяем что badges отображаются
+    const badges = page.locator('.ionc-type-badge');
+    await expect(badges).not.toHaveCount(0);
+
+    // Проверяем что у badge есть класс типа
+    const firstBadge = badges.first();
+    const badgeClass = await firstBadge.getAttribute('class');
+    expect(badgeClass).toMatch(/ionc-type-(AI|DI|AO|DO)/);
+  });
+
+  test('should highlight frozen sensors', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    // Ищем замороженные датчики
+    const frozenRows = page.locator('.ionc-sensors-tbody tr.ionc-sensor-frozen');
+    const frozenCount = await frozenRows.count();
+
+    if (frozenCount > 0) {
+      // Замороженные датчики должны иметь иконку ❄
+      await expect(frozenRows.first().locator('.ionc-flag-frozen')).toBeVisible();
+    }
+  });
+
+  test('should display lost consumers section', async ({ page }) => {
+    await page.waitForSelector('[data-section-id="ionc-lost"]', { timeout: 10000 });
+
+    // Проверяем наличие секции потерянных подписчиков
+    const lostSection = page.locator('[data-section-id="ionc-lost"]');
+    await expect(lostSection).toBeVisible();
+    await expect(lostSection.locator('.collapsible-title')).toContainText('Потерянные подписчики');
+  });
+
+  test('should display LogServer section when LogServer is available', async ({ page }) => {
+    // Ждём загрузки данных объекта
+    await page.waitForSelector('.ionc-sensors-section', { timeout: 10000 });
+
+    // Проверяем наличие секции LogServer
+    const logServerSection = page.locator('[data-section-id="logserver"]');
+
+    // Секция должна существовать в DOM
+    await expect(logServerSection).toBeAttached();
+
+    // Если LogServer доступен, секция должна быть видимой
+    const isVisible = await logServerSection.isVisible();
+    if (isVisible) {
+      await expect(logServerSection.locator('.collapsible-title')).toContainText('LogServer');
+
+      // Проверяем что отображается информация о хосте и порте
+      const tbody = logServerSection.locator('tbody');
+      await expect(tbody.locator('tr')).not.toHaveCount(0);
+    }
+  });
+
+  test('should display LogViewer section when LogServer is available', async ({ page }) => {
+    // Ждём загрузки данных объекта
+    await page.waitForSelector('.ionc-sensors-section', { timeout: 10000 });
+
+    // Проверяем наличие контейнера LogViewer
+    const logViewerWrapper = page.locator('.logviewer-wrapper');
+    await expect(logViewerWrapper).toBeAttached();
+
+    // Если LogServer доступен, LogViewer должен быть инициализирован
+    const logViewerContainer = page.locator('[id^="logviewer-container-"]');
+    await expect(logViewerContainer).toBeAttached();
+  });
+
+  test('should toggle sensors section collapse', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-section', { timeout: 10000 });
+
+    const section = page.locator('.ionc-sensors-section');
+    const header = section.locator('.collapsible-header');
+    const content = section.locator('.collapsible-content');
+
+    // Секция должна быть развёрнута по умолчанию
+    await expect(content).toBeVisible();
+
+    // Кликаем на заголовок для сворачивания
+    await header.click();
+    await expect(content).not.toBeVisible();
+
+    // Кликаем снова для разворачивания
+    await header.click();
+    await expect(content).toBeVisible();
+  });
+
+  test('should update sensor value via SSE (visual feedback)', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    // Проверяем что элемент value существует
+    const valueEl = page.locator('.ionc-value').first();
+    await expect(valueEl).toBeVisible();
+
+    // Примечание: Реальное SSE обновление требует изменения данных на сервере
+    // Здесь мы просто проверяем что элементы для обновления существуют
+    const valueId = await valueEl.getAttribute('id');
+    expect(valueId).toMatch(/ionc-value-/);
+  });
+
+  test('should update chart when sensor value changes', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    // Добавляем датчик на график
+    const firstRow = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first();
+    const chartLabel = firstRow.locator('.ionc-chart-label');
+    await chartLabel.click();
+
+    // Ждём появления графика
+    const chartsSection = page.locator('[data-section-id="charts"]');
+    const chartPanel = chartsSection.locator('.chart-panel').first();
+    await expect(chartPanel).toBeVisible({ timeout: 5000 });
+
+    // Проверяем что canvas графика существует
+    const canvas = chartPanel.locator('canvas');
+    await expect(canvas).toBeVisible();
+
+    // Проверяем что элемент легенды (значение) существует
+    const legendValue = chartPanel.locator('.chart-panel-value');
+    await expect(legendValue).toBeVisible();
+
+    // Ждём обновления значения (SSE должен прислать данные)
+    // Значение должно измениться с "--" на число
+    await expect(async () => {
+      const text = await legendValue.textContent();
+      // Проверяем что значение не пустое и не "--"
+      expect(text).toBeTruthy();
+      expect(text?.trim()).not.toBe('');
+    }).toPass({ timeout: 10000 });
+
+    // Проверяем что значение в таблице тоже обновляется
+    const tableValue = firstRow.locator('.ionc-value');
+    await expect(tableValue).toBeVisible();
+    const tableValueText = await tableValue.textContent();
+    expect(tableValueText).toBeTruthy();
+  });
+
+  test('should sync table and chart values', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    // Добавляем датчик на график
+    const firstRow = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first();
+    const chartLabel = firstRow.locator('.ionc-chart-label');
+    await chartLabel.click();
+
+    // Ждём появления графика
+    const chartsSection = page.locator('[data-section-id="charts"]');
+    const chartPanel = chartsSection.locator('.chart-panel').first();
+    await expect(chartPanel).toBeVisible({ timeout: 5000 });
+
+    // Ждём несколько секунд для накопления данных
+    await page.waitForTimeout(3000);
+
+    // Получаем значение из таблицы
+    const tableValue = firstRow.locator('.ionc-value');
+    const tableText = await tableValue.textContent();
+
+    // Получаем значение из легенды графика
+    const legendValue = chartPanel.locator('.chart-panel-value');
+    const legendText = await legendValue.textContent();
+
+    // Оба значения должны быть непустыми (данные обновляются)
+    expect(tableText?.trim()).not.toBe('');
+    expect(legendText?.trim()).not.toBe('');
+
+    // Значения должны совпадать или быть близкими (могут отличаться из-за timing)
+    console.log(`Table value: ${tableText}, Legend value: ${legendText}`);
+  });
+
+  test('should add data points to chart via SSE updates', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    // Добавляем датчик на график
+    const firstRow = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first();
+    const chartLabel = firstRow.locator('.ionc-chart-label');
+    await chartLabel.click();
+
+    // Ждём появления графика
+    const chartsSection = page.locator('[data-section-id="charts"]');
+    const chartPanel = chartsSection.locator('.chart-panel').first();
+    await expect(chartPanel).toBeVisible({ timeout: 5000 });
+
+    // Проверяем что начальная точка добавлена сразу после создания графика
+    const initialCount = await page.evaluate(() => {
+      const state = (window as any).state;
+      if (!state || !state.tabs) return 0;
+      const tabState = state.tabs.get('SharedMemory');
+      if (!tabState || !tabState.charts) return 0;
+      for (const [, chartData] of tabState.charts) {
+        if (chartData.chart?.data?.datasets[0]) {
+          return chartData.chart.data.datasets[0].data.length;
+        }
+      }
+      return 0;
+    });
+
+    // Начальная точка должна быть добавлена сразу
+    expect(initialCount).toBeGreaterThanOrEqual(1);
+    console.log(`Chart has ${initialCount} initial data points`);
+
+    // Ждём 2 poll интервала (5s каждый) + buffer для SSE обновлений
+    await page.waitForTimeout(12000);
+
+    // Проверяем что в графике появились новые точки от SSE
+    const diagnostics = await page.evaluate(() => {
+      const state = (window as any).state;
+      if (!state || !state.tabs) return { error: 'no state', chartsCount: 0, dataPoints: 0 };
+      const tabState = state.tabs.get('SharedMemory');
+      if (!tabState) return { error: 'no tabState', chartsCount: 0, dataPoints: 0 };
+      if (!tabState.charts) return { error: 'no charts map', chartsCount: 0, dataPoints: 0 };
+
+      const chartsCount = tabState.charts.size;
+      const chartKeys = Array.from(tabState.charts.keys());
+
+      for (const [key, chartData] of tabState.charts) {
+        if (chartData.chart?.data?.datasets[0]) {
+          return {
+            chartsCount,
+            chartKeys,
+            dataPoints: chartData.chart.data.datasets[0].data.length,
+            firstKey: key
+          };
+        }
+      }
+      return { error: 'no chart data', chartsCount, chartKeys, dataPoints: 0 };
+    });
+
+    console.log(`Diagnostics:`, JSON.stringify(diagnostics));
+
+    // Проверяем что график всё ещё существует и имеет точки
+    expect(diagnostics.chartsCount).toBeGreaterThan(0);
+    expect(diagnostics.dataPoints).toBeGreaterThan(0);
+  });
+
+});

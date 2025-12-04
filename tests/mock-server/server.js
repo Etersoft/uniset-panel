@@ -3,7 +3,7 @@ const http = require('http');
 const PORT = 9393;
 
 // Mock data
-const objects = ['UniSetActivator', 'TestProc'];
+const objects = ['UniSetActivator', 'TestProc', 'SharedMemory'];
 
 const testProcData = {
   TestProc: {
@@ -121,6 +121,48 @@ const unisetActivatorData = {
   }
 };
 
+// Mock sensors for SharedMemory (IONotifyController)
+const mockSensors = [];
+for (let i = 1; i <= 200; i++) {
+  const types = ['AI', 'DI', 'AO', 'DO'];
+  mockSensors.push({
+    id: i,
+    name: `Sensor${i}_S`,
+    type: types[i % 4],
+    value: Math.floor(Math.random() * 1000),
+    frozen: i % 20 === 0,
+    blocked: i % 30 === 0,
+    readonly: i % 10 === 0,
+    undefined: false
+  });
+}
+
+const sharedMemoryData = {
+  SharedMemory: {
+    LogServer: {
+      host: 'localhost',
+      port: 5003,
+      state: 'RUNNING',
+      info: {
+        host: 'localhost',
+        name: 'localhost:5003',
+        port: 5003,
+        sessMaxCount: 10,
+        sessions: []
+      }
+    }
+  },
+  object: {
+    id: 5003,
+    isActive: true,
+    lostMessages: 0,
+    maxSizeOfMessageQueue: 1000,
+    msgCount: 0,
+    name: 'SharedMemory',
+    objectType: 'IONotifyController'
+  }
+};
+
 const server = http.createServer((req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -141,6 +183,36 @@ const server = http.createServer((req, res) => {
         { desc: 'show log level', name: 'log' }
       ]
     }));
+  } else if (url === '/api/v01/SharedMemory') {
+    res.end(JSON.stringify(sharedMemoryData));
+  } else if (url === '/api/v01/SharedMemory/sensors' || url.startsWith('/api/v01/SharedMemory/sensors?')) {
+    // Parse offset and limit from query
+    const urlObj = new URL(url, `http://localhost:${PORT}`);
+    const offset = parseInt(urlObj.searchParams.get('offset') || '0');
+    const limit = parseInt(urlObj.searchParams.get('limit') || '100');
+
+    const paginatedSensors = mockSensors.slice(offset, offset + limit);
+    res.end(JSON.stringify({
+      sensors: paginatedSensors,
+      size: mockSensors.length,
+      offset: offset,
+      limit: limit
+    }));
+  } else if (url === '/api/v01/SharedMemory/lost') {
+    res.end(JSON.stringify({ 'lost consumers': [] }));
+  } else if (url.startsWith('/api/v01/SharedMemory/consumers')) {
+    // Parse sensor IDs from query
+    const urlObj = new URL(url, `http://localhost:${PORT}`);
+    const sensorsParam = urlObj.searchParams.get('sensors') || '';
+    const sensorIds = sensorsParam.split(',').filter(s => s).map(Number);
+
+    const sensors = sensorIds.map(id => ({
+      id: id,
+      name: `Sensor${id}_S`,
+      consumers: []
+    }));
+
+    res.end(JSON.stringify({ sensors }));
   } else {
     res.statusCode = 404;
     res.end(JSON.stringify({ error: 'Not found' }));
