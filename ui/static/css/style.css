@@ -1743,6 +1743,50 @@ header h1 {
     display: none;
 }
 
+/* Section reorder buttons */
+.section-reorder-buttons {
+    display: flex;
+    gap: 2px;
+    margin-left: auto;
+}
+
+.collapsible-header .section-reorder-buttons,
+.logviewer-header .section-reorder-buttons {
+    margin-left: 8px;
+}
+
+.section-move-btn {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+
+.section-move-btn:hover:not(:disabled) {
+    background: var(--bg-primary);
+    border-color: var(--accent-blue);
+    color: var(--text-primary);
+}
+
+.section-move-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+/* Logviewer wrapper for reordering */
+.logviewer-wrapper {
+    display: contents;
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
     .io-grid-3 {

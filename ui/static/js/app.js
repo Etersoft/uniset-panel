@@ -179,13 +179,17 @@ class BaseObjectRenderer {
         const sectionId = options.sectionId || `${id}-section-${this.objectName}`;
 
         return `
-            <div class="collapsible-section" data-section="${id}-${this.objectName}" id="${sectionId}" ${style}>
+            <div class="collapsible-section reorderable-section" data-section="${id}-${this.objectName}" data-section-id="${id}" id="${sectionId}" ${style}>
                 <div class="collapsible-header" onclick="toggleSection('${id}-${this.objectName}')">
                     <svg class="collapsible-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M6 9l6 6 6-6"/>
                     </svg>
                     <span class="collapsible-title">${title}</span>
                     ${badgeHtml}
+                    <div class="section-reorder-buttons" onclick="event.stopPropagation()">
+                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.objectName}', '${id}')" title="Переместить вверх">↑</button>
+                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.objectName}', '${id}')" title="Переместить вниз">↓</button>
+                    </div>
                 </div>
                 <div class="collapsible-content" id="section-${id}-${this.objectName}">
                     ${content}
@@ -196,12 +200,16 @@ class BaseObjectRenderer {
 
     createChartsSection() {
         return `
-            <div class="collapsible-section" data-section="charts-${this.objectName}" id="charts-section-${this.objectName}">
+            <div class="collapsible-section reorderable-section" data-section="charts-${this.objectName}" data-section-id="charts" id="charts-section-${this.objectName}">
                 <div class="collapsible-header" onclick="toggleSection('charts-${this.objectName}')">
                     <svg class="collapsible-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M6 9l6 6 6-6"/>
                     </svg>
                     <span class="collapsible-title">Графики</span>
+                    <div class="section-reorder-buttons" onclick="event.stopPropagation()">
+                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.objectName}', 'charts')" title="Переместить вверх">↑</button>
+                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.objectName}', 'charts')" title="Переместить вниз">↓</button>
+                    </div>
                 </div>
                 <div class="collapsible-content" id="section-charts-${this.objectName}">
                     <div class="charts-container" id="charts-container-${this.objectName}">
@@ -215,7 +223,7 @@ class BaseObjectRenderer {
 
     createIOTimersSection() {
         return `
-            <div class="collapsible-section io-timers-section" data-section="io-timers-${this.objectName}" id="io-timers-section-${this.objectName}">
+            <div class="collapsible-section io-timers-section reorderable-section" data-section="io-timers-${this.objectName}" data-section-id="io-timers" id="io-timers-section-${this.objectName}">
                 <div class="collapsible-header" onclick="toggleSection('io-timers-${this.objectName}')">
                     <svg class="collapsible-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M6 9l6 6 6-6"/>
@@ -229,6 +237,10 @@ class BaseObjectRenderer {
                         <input type="checkbox" id="io-sequential-${this.objectName}" onchange="toggleIOLayout('${this.objectName}')">
                         <span>Друг за другом</span>
                     </label>
+                    <div class="section-reorder-buttons" onclick="event.stopPropagation()">
+                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.objectName}', 'io-timers')" title="Переместить вверх">↑</button>
+                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.objectName}', 'io-timers')" title="Переместить вниз">↓</button>
+                    </div>
                 </div>
                 <div class="collapsible-content" id="section-io-timers-${this.objectName}">
                     <div class="io-grid io-grid-3" id="io-grid-${this.objectName}">
@@ -333,7 +345,10 @@ class BaseObjectRenderer {
 
     createLogViewerSection() {
         // Контейнер для LogViewer - будет инициализирован позже
-        return `<div id="logviewer-container-${this.objectName}"></div>`;
+        // Обёртка reorderable-section для возможности перемещения
+        return `<div class="reorderable-section logviewer-wrapper" data-section-id="logviewer" id="logviewer-wrapper-${this.objectName}">
+            <div id="logviewer-container-${this.objectName}"></div>
+        </div>`;
     }
 
     // Инициализация LogViewer (вызывается после создания DOM если LogServer доступен)
@@ -675,6 +690,10 @@ class LogViewer {
                         </select>
                         <button class="log-download-btn" id="log-download-${this.objectName}" title="Скачать логи">💾</button>
                         <button class="log-clear-btn" id="log-clear-${this.objectName}" title="Очистить">Очистить</button>
+                    </div>
+                    <div class="section-reorder-buttons" onclick="event.stopPropagation()">
+                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.objectName}', 'logviewer')" title="Переместить вверх">↑</button>
+                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.objectName}', 'logviewer')" title="Переместить вниз">↓</button>
                     </div>
                 </div>
                 <div class="logviewer-content">
@@ -1683,6 +1702,9 @@ function createTab(name, objectType, initialData) {
     // Восстановить состояние спойлеров
     restoreCollapsedSections(name);
 
+    // Восстановить порядок секций
+    loadSectionOrder(name);
+
     // Сохраняем состояние вкладки с рендерером
     // Если SSE подключен, не запускаем polling (данные будут приходить через SSE)
     const updateInterval = state.sse.connected
@@ -1699,6 +1721,9 @@ function createTab(name, objectType, initialData) {
 
     // Инициализация рендерера (настройка обработчиков и т.д.)
     renderer.initialize();
+
+    // Обновляем состояние кнопок перемещения секций
+    updateReorderButtons(name);
 
     // Отрисовываем начальные данные
     if (initialData) {
@@ -2940,6 +2965,145 @@ function loadIOLayoutState(objectName) {
     } catch (err) {
         console.warn('Failed to load IO layout state:', err);
     }
+}
+
+// === Section Reordering ===
+
+function moveSectionUp(objectName, sectionId) {
+    const section = getSectionElement(objectName, sectionId);
+    if (!section) return;
+
+    const prev = getPreviousReorderableSection(section);
+    if (prev) {
+        section.parentNode.insertBefore(section, prev);
+        saveSectionOrder(objectName);
+        updateReorderButtons(objectName);
+    }
+}
+
+function moveSectionDown(objectName, sectionId) {
+    const section = getSectionElement(objectName, sectionId);
+    if (!section) return;
+
+    const next = getNextReorderableSection(section);
+    if (next) {
+        section.parentNode.insertBefore(next, section);
+        saveSectionOrder(objectName);
+        updateReorderButtons(objectName);
+    }
+}
+
+function getSectionElement(objectName, sectionId) {
+    // Для logviewer ищем wrapper
+    if (sectionId === 'logviewer') {
+        return document.getElementById(`logviewer-wrapper-${objectName}`);
+    }
+    // Для остальных секций ищем по data-section-id
+    const panel = document.querySelector(`.tab-panel[data-name="${objectName}"]`);
+    if (!panel) return null;
+    return panel.querySelector(`.reorderable-section[data-section-id="${sectionId}"]`);
+}
+
+function getPreviousReorderableSection(element) {
+    let prev = element.previousElementSibling;
+    while (prev) {
+        if (prev.classList.contains('reorderable-section') && prev.style.display !== 'none') {
+            return prev;
+        }
+        prev = prev.previousElementSibling;
+    }
+    return null;
+}
+
+function getNextReorderableSection(element) {
+    let next = element.nextElementSibling;
+    while (next) {
+        if (next.classList.contains('reorderable-section') && next.style.display !== 'none') {
+            return next;
+        }
+        next = next.nextElementSibling;
+    }
+    return null;
+}
+
+function saveSectionOrder(objectName) {
+    try {
+        const panel = document.querySelector(`.tab-panel[data-name="${objectName}"]`);
+        if (!panel) return;
+
+        const sections = panel.querySelectorAll('.reorderable-section[data-section-id]');
+        const order = Array.from(sections).map(s => s.dataset.sectionId);
+
+        const saved = JSON.parse(localStorage.getItem('uniset2-viewer-section-order') || '{}');
+        saved[objectName] = order;
+        localStorage.setItem('uniset2-viewer-section-order', JSON.stringify(saved));
+    } catch (err) {
+        console.warn('Failed to save section order:', err);
+    }
+}
+
+function loadSectionOrder(objectName) {
+    try {
+        const saved = JSON.parse(localStorage.getItem('uniset2-viewer-section-order') || '{}');
+        const order = saved[objectName];
+        if (!order || !Array.isArray(order)) return;
+
+        const panel = document.querySelector(`.tab-panel[data-name="${objectName}"]`);
+        if (!panel) return;
+
+        // Собираем все reorderable секции в Map
+        const sections = new Map();
+        panel.querySelectorAll('.reorderable-section[data-section-id]').forEach(s => {
+            sections.set(s.dataset.sectionId, s);
+        });
+
+        if (sections.size === 0) return;
+
+        // Собираем секции в нужном порядке
+        const orderedSections = order
+            .map(id => sections.get(id))
+            .filter(s => s != null);
+
+        if (orderedSections.length < 2) return;
+
+        // Находим первую секцию в DOM (точка привязки)
+        const allSections = [...sections.values()];
+        allSections.sort((a, b) =>
+            a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1
+        );
+        let anchor = allSections[0];
+
+        // Вставляем в обратном порядке перед anchor
+        // После каждой вставки новый элемент становится anchor
+        for (let i = orderedSections.length - 1; i >= 0; i--) {
+            panel.insertBefore(orderedSections[i], anchor);
+            anchor = orderedSections[i];
+        }
+
+        updateReorderButtons(objectName);
+    } catch (err) {
+        console.warn('Failed to load section order:', err);
+    }
+}
+
+function updateReorderButtons(objectName) {
+    const panel = document.querySelector(`.tab-panel[data-name="${objectName}"]`);
+    if (!panel) return;
+
+    const sections = Array.from(panel.querySelectorAll('.reorderable-section[data-section-id]'))
+        .filter(s => s.style.display !== 'none');
+
+    sections.forEach((section, index) => {
+        const upBtn = section.querySelector('.section-move-up');
+        const downBtn = section.querySelector('.section-move-down');
+
+        if (upBtn) {
+            upBtn.disabled = index === 0;
+        }
+        if (downBtn) {
+            downBtn.disabled = index === sections.length - 1;
+        }
+    });
 }
 
 // IO Section resize, filter, and pin functionality

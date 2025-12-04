@@ -531,4 +531,88 @@ test.describe('UniSet2 Viewer UI', () => {
     await expect(matchCount).toHaveText('');
   });
 
+  test('should reorder sections with up/down buttons', async ({ page }) => {
+    await page.goto('/');
+
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+
+    // Ждём загрузки секций
+    await page.waitForSelector('.reorderable-section[data-section-id]', { timeout: 10000 });
+
+    // Получаем начальный порядок секций
+    const getSectionOrder = async () => {
+      return await page.evaluate(() => {
+        const sections = document.querySelectorAll('.tab-panel.active .reorderable-section[data-section-id]');
+        return Array.from(sections).map(s => (s as HTMLElement).dataset.sectionId);
+      });
+    };
+
+    const initialOrder = await getSectionOrder();
+    expect(initialOrder.length).toBeGreaterThan(2);
+
+    // Первая секция — кнопка вверх должна быть disabled
+    const firstSection = page.locator('.tab-panel.active .reorderable-section[data-section-id]').first();
+    const firstUpBtn = firstSection.locator('.section-move-up');
+    await expect(firstUpBtn).toBeDisabled();
+
+    // Последняя секция — кнопка вниз должна быть disabled
+    const lastSection = page.locator('.tab-panel.active .reorderable-section[data-section-id]').last();
+    const lastDownBtn = lastSection.locator('.section-move-down');
+    await expect(lastDownBtn).toBeDisabled();
+
+    // Нажимаем кнопку "вниз" у первой секции (перемещаем вниз)
+    const firstDownBtn = firstSection.locator('.section-move-down');
+    await firstDownBtn.click();
+
+    // Проверяем что порядок изменился
+    const newOrder = await getSectionOrder();
+    expect(newOrder[0]).toBe(initialOrder[1]);
+    expect(newOrder[1]).toBe(initialOrder[0]);
+
+    // Проверяем что кнопка "вверх" теперь не disabled (секция не первая)
+    // Нужно заново получить первую секцию т.к. DOM изменился
+    const movedSection = page.locator(`.tab-panel.active .reorderable-section[data-section-id="${initialOrder[0]}"]`);
+    const movedUpBtn = movedSection.locator('.section-move-up');
+    await expect(movedUpBtn).not.toBeDisabled();
+  });
+
+  test('should persist section order in localStorage', async ({ page }) => {
+    await page.goto('/');
+
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+
+    await page.waitForSelector('.reorderable-section[data-section-id]', { timeout: 10000 });
+
+    // Получаем начальный порядок
+    const getSectionOrder = async () => {
+      return await page.evaluate(() => {
+        const sections = document.querySelectorAll('.tab-panel.active .reorderable-section[data-section-id]');
+        return Array.from(sections).map(s => (s as HTMLElement).dataset.sectionId);
+      });
+    };
+
+    const initialOrder = await getSectionOrder();
+
+    // Перемещаем первую секцию вниз
+    const firstSection = page.locator('.tab-panel.active .reorderable-section[data-section-id]').first();
+    await firstSection.locator('.section-move-down').click();
+
+    const orderAfterMove = await getSectionOrder();
+
+    // Перезагружаем страницу
+    await page.reload();
+
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+
+    await page.waitForSelector('.reorderable-section[data-section-id]', { timeout: 10000 });
+
+    // Проверяем что порядок восстановился
+    const orderAfterReload = await getSectionOrder();
+    expect(orderAfterReload).toEqual(orderAfterMove);
+    expect(orderAfterReload).not.toEqual(initialOrder);
+  });
+
 });
