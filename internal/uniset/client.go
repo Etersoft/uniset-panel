@@ -61,6 +61,7 @@ func (c *Client) GetObjectList() (ObjectList, error) {
 }
 
 // GetObjectData возвращает данные объекта
+// Гибридный подход: парсим только нужные серверу поля, остальное — raw для UI
 func (c *Client) GetObjectData(objectName string) (*ObjectData, error) {
 	data, err := c.doGet(objectName)
 	if err != nil {
@@ -76,13 +77,7 @@ func (c *Client) GetObjectData(objectName string) (*ObjectData, error) {
 
 	var result ObjectData
 	result.Name = objectName
-
-	// Пробуем найти данные объекта по имени
-	if objData, ok := raw[objectName]; ok {
-		if err := json.Unmarshal(objData, &result); err != nil {
-			return nil, fmt.Errorf("unmarshal object data failed: %w", err)
-		}
-	}
+	result.RawData = raw
 
 	// Извлекаем поле "object" с информацией об объекте (id, objectType и т.д.)
 	if objectInfo, exists := raw["object"]; exists {
@@ -92,8 +87,20 @@ func (c *Client) GetObjectData(objectName string) (*ObjectData, error) {
 		}
 	}
 
-	// Сохраняем сырые данные для fallback рендерера
-	result.RawData = raw
+	// Пробуем найти данные объекта по имени — там находятся Variables, IO, LogServer
+	if objData, ok := raw[objectName]; ok {
+		// Парсим только нужные серверу поля
+		var serverFields struct {
+			LogServer *LogServer             `json:"LogServer,omitempty"`
+			Variables map[string]interface{} `json:"Variables,omitempty"`
+			IO        *IOData                `json:"io,omitempty"`
+		}
+		if err := json.Unmarshal(objData, &serverFields); err == nil {
+			result.LogServer = serverFields.LogServer
+			result.Variables = serverFields.Variables
+			result.IO = serverFields.IO
+		}
+	}
 
 	return &result, nil
 }

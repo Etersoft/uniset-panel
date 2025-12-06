@@ -65,17 +65,23 @@ type ObjectInfo struct {
 }
 
 // ObjectData данные объекта из /api/v01/{ObjectName}
+// Гибридный подход: сервер парсит только то, что ему нужно для своей логики,
+// остальное передаётся как raw данные на UI
 type ObjectData struct {
-	Name       string                 `json:"-"`
-	LogServer  *LogServer             `json:"LogServer,omitempty"`
-	Timers     map[string]interface{} `json:"Timers,omitempty"`
-	Variables  map[string]interface{} `json:"Variables,omitempty"`
-	Statistics map[string]interface{} `json:"Statistics,omitempty"`
-	IO         *IOData                `json:"io,omitempty"`
-	Object     *ObjectInfo            `json:"object,omitempty"`
-	// Дополнительные пользовательские поля на верхнем уровне
-	Extra map[string]interface{} `json:"-"`
-	// Сырые данные для fallback рендерера (все поля из JSON)
+	Name string `json:"-"`
+
+	// === Поля, нужные серверу (парсятся) ===
+	// Object - для определения типа объекта, ID
+	Object *ObjectInfo `json:"object,omitempty"`
+	// LogServer - для подключения к LogServer
+	LogServer *LogServer `json:"LogServer,omitempty"`
+	// Variables - для сохранения истории
+	Variables map[string]interface{} `json:"Variables,omitempty"`
+	// IO - для сохранения истории входов/выходов
+	IO *IOData `json:"io,omitempty"`
+
+	// === Raw данные для UI (не парсятся сервером) ===
+	// Все поля из JSON ответа объекта
 	RawData map[string]json.RawMessage `json:"-"`
 }
 

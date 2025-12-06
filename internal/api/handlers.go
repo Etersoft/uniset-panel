@@ -100,17 +100,16 @@ func (h *Handlers) GetObjectData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Формируем ответ включая raw_data для fallback рендерера
+	// Гибридный подход: передаём типизированные поля + raw_data для UI
 	response := map[string]interface{}{
-		"LogServer":  data.LogServer,
-		"Timers":     data.Timers,
-		"Variables":  data.Variables,
-		"Statistics": data.Statistics,
-		"io":         data.IO,
-		"object":     data.Object,
+		// Типизированные поля (нужны серверу, могут использоваться UI напрямую)
+		"object":    data.Object,
+		"LogServer": data.LogServer,
+		"Variables": data.Variables,
+		"io":        data.IO,
 	}
 
-	// Добавляем raw_data для fallback рендерера (для объектов без специализированного рендерера)
+	// Raw данные для UI — всё что пришло от объекта
 	if data.RawData != nil {
 		rawDataParsed := make(map[string]interface{})
 		for k, v := range data.RawData {
@@ -120,26 +119,6 @@ func (h *Handlers) GetObjectData(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		response["raw_data"] = rawDataParsed
-
-		// Извлекаем дополнительные переменные (не входящие в стандартные поля)
-		if objDataRaw, ok := data.RawData[name]; ok {
-			var objData map[string]interface{}
-			if err := json.Unmarshal(objDataRaw, &objData); err == nil {
-				extra := make(map[string]interface{})
-				knownFields := map[string]bool{
-					"LogServer": true, "Timers": true, "Variables": true,
-					"Statistics": true, "io": true, "object": true,
-				}
-				for k, v := range objData {
-					if !knownFields[k] {
-						extra[k] = v
-					}
-				}
-				if len(extra) > 0 {
-					response["extra"] = extra
-				}
-			}
-		}
 	}
 
 	h.writeJSON(w, response)
