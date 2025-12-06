@@ -60,6 +60,59 @@ header h1 {
     gap: 1rem;
 }
 
+/* SSE Status Indicator */
+.sse-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.sse-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: background-color 0.3s ease;
+}
+
+.sse-status.connected .sse-status-dot {
+    background: var(--accent-green);
+    box-shadow: 0 0 6px var(--accent-green);
+}
+
+.sse-status.reconnecting .sse-status-dot {
+    background: var(--accent-yellow);
+    animation: pulse 1s ease-in-out infinite;
+}
+
+.sse-status.polling .sse-status-dot {
+    background: var(--accent-blue);
+}
+
+.sse-status.disconnected .sse-status-dot {
+    background: var(--accent-red);
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+.sse-status-text {
+    white-space: nowrap;
+}
+
+.sse-status-time {
+    color: var(--text-muted);
+    font-size: 11px;
+    margin-left: 4px;
+}
+
 /* Time range selector */
 .time-range-selector {
     display: flex;
@@ -561,6 +614,7 @@ header h1 {
     cursor: pointer;
     user-select: none;
     transition: background 0.15s ease;
+    position: relative;
 }
 
 .collapsible-header:hover {
@@ -1799,21 +1853,57 @@ header h1 {
     display: contents;
 }
 
+/* Charts time range selector */
+.charts-time-range {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.charts-time-range .time-range-selector {
+    display: flex;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.charts-time-range .time-range-btn {
+    padding: 4px 10px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.15s ease;
+}
+
+.charts-time-range .time-range-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.charts-time-range .time-range-btn.active {
+    background: var(--accent-blue);
+    color: white;
+}
+
 /* Add sensor button */
 .add-sensor-btn {
-    padding: 2px 8px;
-    margin-left: 8px;
-    background: var(--accent-blue);
-    border: none;
-    border-radius: 3px;
-    color: white;
-    font-size: 11px;
+    padding: 4px 10px;
+    margin-left: 12px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    font-size: 13px;
     cursor: pointer;
     transition: all 0.15s ease;
 }
 
 .add-sensor-btn:hover {
-    background: var(--accent-blue-hover, #2980b9);
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--text-muted);
 }
 
 /* Sensor dialog modal */
@@ -2128,7 +2218,8 @@ header h1 {
 .ionc-col-type { width: 60px; }
 .ionc-col-value { width: 100px; font-family: 'JetBrains Mono', monospace; }
 .ionc-col-flags { width: 80px; text-align: center; }
-.ionc-col-actions { width: 120px; text-align: center; white-space: nowrap; }
+.ionc-col-consumers { width: 50px; text-align: center; }
+.ionc-col-actions { width: 80px; text-align: center; white-space: nowrap; }
 
 /* Pin toggle - закрепление датчика */
 .ionc-pin-toggle {

@@ -26,6 +26,54 @@ const state = window.state = {
 // SSE (Server-Sent Events) для realtime обновлений
 // ============================================================================
 
+// Обновление индикатора состояния SSE в header
+function updateSSEStatus(status, lastUpdate = null) {
+    const container = document.getElementById('sse-status');
+    const textEl = container?.querySelector('.sse-status-text');
+    if (!container || !textEl) return;
+
+    // Убираем все классы состояния
+    container.classList.remove('connected', 'reconnecting', 'polling', 'disconnected');
+
+    let text = '';
+    let title = '';
+
+    switch (status) {
+        case 'connected':
+            container.classList.add('connected');
+            text = 'SSE';
+            title = 'Подключено через Server-Sent Events';
+            break;
+        case 'reconnecting':
+            container.classList.add('reconnecting');
+            text = `Переподключение (${state.sse.reconnectAttempts}/${state.sse.maxReconnectAttempts})`;
+            title = 'Попытка восстановить SSE соединение';
+            break;
+        case 'polling':
+            container.classList.add('polling');
+            text = 'Polling';
+            title = 'Fallback режим: периодический опрос сервера';
+            break;
+        case 'disconnected':
+            container.classList.add('disconnected');
+            text = 'Отключено';
+            title = 'Нет соединения с сервером';
+            break;
+        default:
+            text = 'Подключение...';
+            title = 'Установка соединения';
+    }
+
+    // Добавляем время последнего обновления если есть
+    if (lastUpdate) {
+        const timeStr = lastUpdate.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        text += ` · ${timeStr}`;
+    }
+
+    textEl.textContent = text;
+    container.title = title;
+}
+
 function initSSE() {
     if (state.sse.eventSource) {
         state.sse.eventSource.close();
@@ -48,6 +96,9 @@ function initSSE() {
             state.capabilities.smEnabled = data.data?.smEnabled || false;
             console.log('SSE: Подключено, poll interval:', state.sse.pollInterval, 'ms, smEnabled:', state.capabilities.smEnabled);
 
+            // Обновляем индикатор статуса
+            updateSSEStatus('connected', new Date());
+
             // Отключаем polling для всех открытых вкладок
             state.tabs.forEach((tabState, objectName) => {
                 if (tabState.updateInterval) {
@@ -66,6 +117,9 @@ function initSSE() {
             const event = JSON.parse(e.data);
             const objectName = event.objectName;
             const data = event.data;
+
+            // Обновляем время последнего обновления в индикаторе
+            updateSSEStatus('connected', new Date());
 
             // Обновляем UI только для открытых вкладок
             const tabState = state.tabs.get(objectName);
@@ -199,9 +253,11 @@ function initSSE() {
             state.sse.reconnectAttempts++;
             const delay = state.sse.reconnectDelay * state.sse.reconnectAttempts;
             console.log(`SSE: Переподключение через ${delay}ms (попытка ${state.sse.reconnectAttempts})`);
+            updateSSEStatus('reconnecting');
             setTimeout(initSSE, delay);
         } else {
             console.warn('SSE: Превышено количество попыток, переход на polling');
+            updateSSEStatus('polling');
             enablePollingFallback();
         }
     };
@@ -320,6 +376,16 @@ class BaseObjectRenderer {
                     </svg>
                     <span class="collapsible-title">Графики</span>
                     <button class="add-sensor-btn" onclick="event.stopPropagation(); openSensorDialog('${this.objectName}')">+ Датчик</button>
+                    <div class="charts-time-range" onclick="event.stopPropagation()">
+                        <div class="time-range-selector">
+                            <button class="time-range-btn${state.timeRange === 60 ? ' active' : ''}" data-range="60">1m</button>
+                            <button class="time-range-btn${state.timeRange === 180 ? ' active' : ''}" data-range="180">3m</button>
+                            <button class="time-range-btn${state.timeRange === 300 ? ' active' : ''}" data-range="300">5m</button>
+                            <button class="time-range-btn${state.timeRange === 900 ? ' active' : ''}" data-range="900">15m</button>
+                            <button class="time-range-btn${state.timeRange === 3600 ? ' active' : ''}" data-range="3600">1h</button>
+                            <button class="time-range-btn${state.timeRange === 10800 ? ' active' : ''}" data-range="10800">3h</button>
+                        </div>
+                    </div>
                     <div class="section-reorder-buttons" onclick="event.stopPropagation()">
                         <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.objectName}', 'charts')" title="Переместить вверх">↑</button>
                         <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.objectName}', 'charts')" title="Переместить вниз">↓</button>
@@ -741,11 +807,12 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                                     <th class="ionc-col-type">Тип</th>
                                     <th class="ionc-col-value">Значение</th>
                                     <th class="ionc-col-flags">Статус</th>
+                                    <th class="ionc-col-consumers">Подписчики</th>
                                     <th class="ionc-col-actions">Действия</th>
                                 </tr>
                             </thead>
                             <tbody class="ionc-sensors-tbody" id="ionc-sensors-tbody-${this.objectName}">
-                                <tr><td colspan="8" class="ionc-loading">Загрузка...</td></tr>
+                                <tr><td colspan="9" class="ionc-loading">Загрузка...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -834,7 +901,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         const tbody = document.getElementById(`ionc-sensors-tbody-${this.objectName}`);
         if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="8" class="ionc-loading">Загрузка...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="ionc-loading">Загрузка...</td></tr>';
         }
 
         try {
@@ -870,7 +937,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         } catch (err) {
             console.error('Error loading IONC sensors:', err);
             if (tbody) {
-                tbody.innerHTML = `<tr><td colspan="8" class="ionc-error">Ошибка загрузки: ${err.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" class="ionc-error">Ошибка загрузки: ${err.message}</td></tr>`;
             }
         } finally {
             this.loading = false;
@@ -900,7 +967,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         }
 
         if (sensorsToShow.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="ionc-empty">Нет датчиков</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="ionc-empty">Нет датчиков</td></tr>';
             return;
         }
 
@@ -983,10 +1050,12 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                     <span class="ionc-value" id="ionc-value-${this.objectName}-${sensor.id}">${sensor.value}</span>
                 </td>
                 <td class="ionc-col-flags">${flags.join(' ') || '—'}</td>
+                <td class="ionc-col-consumers">
+                    <button class="ionc-btn ionc-btn-consumers" data-id="${sensor.id}" title="Показать подписчиков">👥</button>
+                </td>
                 <td class="ionc-col-actions">
                     <button class="ionc-btn ionc-btn-set" data-id="${sensor.id}" title="Установить значение" ${sensor.readonly ? 'disabled' : ''}>✎</button>
                     ${freezeBtn}
-                    <button class="ionc-btn ionc-btn-consumers" data-id="${sensor.id}" title="Подписчики">👥</button>
                 </td>
             </tr>
         `;
@@ -3281,6 +3350,11 @@ async function loadObjectData(name) {
         if (tabState && tabState.renderer) {
             tabState.renderer.update(data);
         }
+
+        // Если работаем в режиме polling - обновляем индикатор
+        if (!state.sse.connected) {
+            updateSSEStatus('polling', new Date());
+        }
     } catch (err) {
         console.error(`Ошибка загрузки ${name}:`, err);
     }
@@ -4912,21 +4986,29 @@ function clearIOPinnedRows(objectName, type) {
 
 // Обработка выбора временного диапазона
 function setupTimeRangeSelector() {
-    document.querySelectorAll('.time-range-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.time-range-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            state.timeRange = parseInt(btn.dataset.range, 10);
-            saveSettings();
+    // Используем делегирование событий для динамически создаваемых кнопок
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.time-range-btn');
+        if (!btn) return;
 
-            // Сбросить начальное время для всех вкладок при изменении интервала
-            state.tabs.forEach((tabState, objectName) => {
-                if (tabState.charts.size > 0) {
-                    tabState.chartStartTime = Date.now();
-                }
-                tabState.charts.forEach((chartData, varName) => {
-                    updateChart(objectName, varName, chartData.chart);
-                });
+        const range = parseInt(btn.dataset.range, 10);
+        if (isNaN(range)) return;
+
+        // Обновляем active класс на всех кнопках с тем же range
+        document.querySelectorAll('.time-range-btn').forEach(b => {
+            b.classList.toggle('active', parseInt(b.dataset.range, 10) === range);
+        });
+
+        state.timeRange = range;
+        saveSettings();
+
+        // Сбросить начальное время для всех вкладок при изменении интервала
+        state.tabs.forEach((tabState, objectName) => {
+            if (tabState.charts.size > 0) {
+                tabState.chartStartTime = Date.now();
+            }
+            tabState.charts.forEach((chartData, varName) => {
+                updateChart(objectName, varName, chartData.chart);
             });
         });
     });
