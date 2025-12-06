@@ -18,6 +18,7 @@ type Poller struct {
 	storage  storage.Storage
 	interval time.Duration
 	ttl      time.Duration
+	serverID string // ID сервера для storage
 
 	mu              sync.RWMutex
 	watchedObjects  map[string]bool
@@ -33,10 +34,18 @@ func New(client *uniset.Client, store storage.Storage, interval, ttl time.Durati
 		storage:         store,
 		interval:        interval,
 		ttl:             ttl,
+		serverID:        "", // будет использоваться DefaultServerID
 		watchedObjects:  make(map[string]bool),
 		lastObjectData:  make(map[string]*uniset.ObjectData),
 		lastCleanupTime: time.Now(),
 	}
+}
+
+// SetServerID устанавливает ID сервера для сохранения в storage
+func (p *Poller) SetServerID(id string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.serverID = id
 }
 
 // SetEventCallback устанавливает callback для уведомления о новых данных
@@ -115,7 +124,7 @@ func (p *Poller) poll() {
 		// Сохраняем переменные в историю
 		if data.Variables != nil {
 			for varName, value := range data.Variables {
-				if err := p.storage.Save(objectName, varName, value, now); err != nil {
+				if err := p.storage.Save(p.serverID, objectName, varName, value, now); err != nil {
 					logger.Warn("Save variable failed", "object", objectName, "var", varName, "error", err)
 				}
 			}
@@ -126,7 +135,7 @@ func (p *Poller) poll() {
 			if data.IO.In != nil {
 				for key, io := range data.IO.In {
 					varName := "io.in." + key
-					if err := p.storage.Save(objectName, varName, io.Value, now); err != nil {
+					if err := p.storage.Save(p.serverID, objectName, varName, io.Value, now); err != nil {
 						logger.Warn("Save IO input failed", "object", objectName, "var", varName, "error", err)
 					}
 				}
@@ -134,7 +143,7 @@ func (p *Poller) poll() {
 			if data.IO.Out != nil {
 				for key, io := range data.IO.Out {
 					varName := "io.out." + key
-					if err := p.storage.Save(objectName, varName, io.Value, now); err != nil {
+					if err := p.storage.Save(p.serverID, objectName, varName, io.Value, now); err != nil {
 						logger.Warn("Save IO output failed", "object", objectName, "var", varName, "error", err)
 					}
 				}

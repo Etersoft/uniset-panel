@@ -146,8 +146,8 @@ func TestPoller_Poll(t *testing.T) {
 		t.Error("expected at least one request to SM")
 	}
 
-	// Check storage has data
-	history, err := store.GetHistory("Object1", "ext:AI100_AS", time.Now().Add(-time.Minute), time.Now())
+	// Check storage has data (пустой serverID = default, т.к. SM глобальный)
+	history, err := store.GetHistory("", "Object1", "ext:AI100_AS", time.Now().Add(-time.Minute), time.Now())
 	if err != nil {
 		t.Errorf("GetHistory failed: %v", err)
 	}

@@ -8,10 +8,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pv/uniset2-viewer-go/internal/config"
 	"github.com/pv/uniset2-viewer-go/internal/ionc"
 	"github.com/pv/uniset2-viewer-go/internal/logserver"
 	"github.com/pv/uniset2-viewer-go/internal/poller"
 	"github.com/pv/uniset2-viewer-go/internal/sensorconfig"
+	"github.com/pv/uniset2-viewer-go/internal/server"
 	"github.com/pv/uniset2-viewer-go/internal/sm"
 	"github.com/pv/uniset2-viewer-go/internal/storage"
 	"github.com/pv/uniset2-viewer-go/internal/uniset"
@@ -27,6 +29,7 @@ type Handlers struct {
 	logServerMgr   *logserver.Manager
 	smPoller       *sm.Poller
 	ioncPoller     *ionc.Poller
+	serverManager  *server.Manager // менеджер нескольких серверов
 }
 
 func NewHandlers(client *uniset.Client, store storage.Storage, p *poller.Poller, sensorCfg *sensorconfig.SensorConfig, pollInterval time.Duration) *Handlers {
@@ -53,6 +56,16 @@ func (h *Handlers) SetSMPoller(p *sm.Poller) {
 // SetIONCPoller устанавливает IONC poller
 func (h *Handlers) SetIONCPoller(p *ionc.Poller) {
 	h.ioncPoller = p
+}
+
+// SetServerManager устанавливает менеджер серверов
+func (h *Handlers) SetServerManager(mgr *server.Manager) {
+	h.serverManager = mgr
+}
+
+// SetSSEHub устанавливает SSE hub
+func (h *Handlers) SetSSEHub(hub *SSEHub) {
+	h.sseHub = hub
 }
 
 // GetSSEHub возвращает SSE hub для использования в poller
@@ -86,7 +99,7 @@ func (h *Handlers) GetObjects(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetObjectData возвращает текущие данные объекта
-// GET /api/objects/{name}
+// GET /api/objects/{name}?server=serverID
 func (h *Handlers) GetObjectData(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
@@ -94,7 +107,30 @@ func (h *Handlers) GetObjectData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := h.client.GetObjectData(name)
+	serverID := r.URL.Query().Get("server")
+
+	var data *uniset.ObjectData
+	var err error
+
+	if h.serverManager != nil && serverID != "" {
+		// Используем конкретный сервер
+		data, err = h.serverManager.GetObjectData(serverID, name)
+	} else if h.serverManager != nil {
+		// Если сервер не указан, пробуем первый доступный
+		instance, exists := h.serverManager.GetFirstServer()
+		if !exists {
+			h.writeError(w, http.StatusServiceUnavailable, "no servers available")
+			return
+		}
+		data, err = instance.GetObjectData(name)
+	} else if h.client != nil {
+		// Fallback на старый клиент (для совместимости)
+		data, err = h.client.GetObjectData(name)
+	} else {
+		h.writeError(w, http.StatusServiceUnavailable, "no client configured")
+		return
+	}
+
 	if err != nil {
 		h.writeError(w, http.StatusBadGateway, err.Error())
 		return
@@ -125,7 +161,7 @@ func (h *Handlers) GetObjectData(w http.ResponseWriter, r *http.Request) {
 }
 
 // WatchObject добавляет объект в список наблюдения
-// POST /api/objects/{name}/watch
+// POST /api/objects/{name}/watch?server=serverID
 func (h *Handlers) WatchObject(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
@@ -133,12 +169,22 @@ func (h *Handlers) WatchObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.poller.Watch(name)
+	serverID := r.URL.Query().Get("server")
+
+	if h.serverManager != nil && serverID != "" {
+		if err := h.serverManager.Watch(serverID, name); err != nil {
+			h.writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	} else if h.poller != nil {
+		h.poller.Watch(name)
+	}
+
 	h.writeJSON(w, map[string]string{"status": "watching", "object": name})
 }
 
 // UnwatchObject удаляет объект из списка наблюдения
-// DELETE /api/objects/{name}/watch
+// DELETE /api/objects/{name}/watch?server=serverID
 func (h *Handlers) UnwatchObject(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
@@ -146,7 +192,17 @@ func (h *Handlers) UnwatchObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.poller.Unwatch(name)
+	serverID := r.URL.Query().Get("server")
+
+	if h.serverManager != nil && serverID != "" {
+		if err := h.serverManager.Unwatch(serverID, name); err != nil {
+			h.writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	} else if h.poller != nil {
+		h.poller.Unwatch(name)
+	}
+
 	h.writeJSON(w, map[string]string{"status": "unwatched", "object": name})
 }
 
@@ -168,7 +224,10 @@ func (h *Handlers) GetVariableHistory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	history, err := h.storage.GetLatest(objectName, variableName, count)
+	// serverID из query параметра, пустая строка = DefaultServerID
+	serverID := r.URL.Query().Get("server")
+
+	history, err := h.storage.GetLatest(serverID, objectName, variableName, count)
 	if err != nil {
 		h.writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -203,7 +262,10 @@ func (h *Handlers) GetVariableHistoryRange(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	history, err := h.storage.GetHistory(objectName, variableName, from, to)
+	// serverID из query параметра, пустая строка = DefaultServerID
+	serverID := r.URL.Query().Get("server")
+
+	history, err := h.storage.GetHistory(serverID, objectName, variableName, from, to)
 	if err != nil {
 		h.writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -331,7 +393,7 @@ func (h *Handlers) GetLogServerStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleLogServerStream стримит логи объекта через SSE
-// GET /api/logs/{name}/stream?filter=...
+// GET /api/logs/{name}/stream?filter=...&server=serverID
 func (h *Handlers) HandleLogServerStream(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
@@ -345,7 +407,27 @@ func (h *Handlers) HandleLogServerStream(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Получаем данные объекта для получения host:port LogServer
-	data, err := h.client.GetObjectData(name)
+	serverID := r.URL.Query().Get("server")
+
+	var data *uniset.ObjectData
+	var err error
+
+	if h.serverManager != nil && serverID != "" {
+		data, err = h.serverManager.GetObjectData(serverID, name)
+	} else if h.serverManager != nil {
+		instance, exists := h.serverManager.GetFirstServer()
+		if !exists {
+			h.writeError(w, http.StatusServiceUnavailable, "no servers available")
+			return
+		}
+		data, err = instance.GetObjectData(name)
+	} else if h.client != nil {
+		data, err = h.client.GetObjectData(name)
+	} else {
+		h.writeError(w, http.StatusServiceUnavailable, "no client configured")
+		return
+	}
+
 	if err != nil {
 		h.writeError(w, http.StatusBadGateway, err.Error())
 		return
@@ -915,4 +997,156 @@ func (h *Handlers) SubscribeIONCSensorsQuery(w http.ResponseWriter, r *http.Requ
 		"object":     name,
 		"sensor_ids": sensorIDs,
 	})
+}
+
+// ================== Server Management API ==================
+
+// GetServers возвращает список всех серверов со статусами
+// GET /api/servers
+func (h *Handlers) GetServers(w http.ResponseWriter, r *http.Request) {
+	if h.serverManager == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "server manager not initialized")
+		return
+	}
+
+	servers := h.serverManager.ListServers()
+	h.writeJSON(w, map[string]interface{}{
+		"servers": servers,
+		"count":   len(servers),
+	})
+}
+
+// AddServer добавляет новый сервер
+// POST /api/servers
+func (h *Handlers) AddServer(w http.ResponseWriter, r *http.Request) {
+	if h.serverManager == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "server manager not initialized")
+		return
+	}
+
+	var req struct {
+		URL  string `json:"url"`
+		ID   string `json:"id,omitempty"`
+		Name string `json:"name,omitempty"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+
+	if req.URL == "" {
+		h.writeError(w, http.StatusBadRequest, "url is required")
+		return
+	}
+
+	cfg := config.ServerConfig{
+		URL:  req.URL,
+		ID:   req.ID,
+		Name: req.Name,
+	}
+
+	// Генерируем ID если не указан
+	if cfg.ID == "" {
+		cfg.ID = generateServerID(cfg.URL)
+	}
+
+	if err := h.serverManager.AddServer(cfg); err != nil {
+		h.writeError(w, http.StatusConflict, err.Error())
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	h.writeJSON(w, map[string]interface{}{
+		"status": "added",
+		"server": map[string]string{
+			"id":   cfg.ID,
+			"url":  cfg.URL,
+			"name": cfg.Name,
+		},
+	})
+}
+
+// RemoveServer удаляет сервер по ID
+// DELETE /api/servers/{id}
+func (h *Handlers) RemoveServer(w http.ResponseWriter, r *http.Request) {
+	if h.serverManager == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "server manager not initialized")
+		return
+	}
+
+	serverID := r.PathValue("id")
+	if serverID == "" {
+		h.writeError(w, http.StatusBadRequest, "server id required")
+		return
+	}
+
+	if err := h.serverManager.RemoveServer(serverID); err != nil {
+		h.writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	h.writeJSON(w, map[string]interface{}{
+		"status": "removed",
+		"id":     serverID,
+	})
+}
+
+// GetServerStatus возвращает статус конкретного сервера
+// GET /api/servers/{id}/status
+func (h *Handlers) GetServerStatus(w http.ResponseWriter, r *http.Request) {
+	if h.serverManager == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "server manager not initialized")
+		return
+	}
+
+	serverID := r.PathValue("id")
+	if serverID == "" {
+		h.writeError(w, http.StatusBadRequest, "server id required")
+		return
+	}
+
+	instance, exists := h.serverManager.GetServer(serverID)
+	if !exists {
+		h.writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+
+	h.writeJSON(w, instance.GetStatus())
+}
+
+// GetAllObjectsWithServers возвращает объекты со всех серверов, сгруппированные по серверам
+// GET /api/all-objects
+func (h *Handlers) GetAllObjectsWithServers(w http.ResponseWriter, r *http.Request) {
+	if h.serverManager == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "server manager not initialized")
+		return
+	}
+
+	grouped, err := h.serverManager.GetAllObjectsGrouped()
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	// Считаем общее количество объектов
+	totalCount := 0
+	for _, server := range grouped {
+		totalCount += len(server.Objects)
+	}
+
+	h.writeJSON(w, map[string]interface{}{
+		"objects": grouped,
+		"count":   totalCount,
+	})
+}
+
+// generateServerID генерирует ID из URL (копия из config, чтобы не экспортировать)
+func generateServerID(url string) string {
+	// Простой хэш из URL
+	var hash uint32 = 0
+	for _, c := range url {
+		hash = hash*31 + uint32(c)
+	}
+	return fmt.Sprintf("%08x", hash)
 }

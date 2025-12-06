@@ -12,21 +12,22 @@ type DataPoint struct {
 
 // VariableHistory история значений переменной
 type VariableHistory struct {
-	ObjectName   string      `json:"object_name"`
-	VariableName string      `json:"variable_name"`
+	ServerID     string      `json:"serverId,omitempty"`
+	ObjectName   string      `json:"objectName"`
+	VariableName string      `json:"variableName"`
 	Points       []DataPoint `json:"points"`
 }
 
 // Storage интерфейс хранилища истории
 type Storage interface {
 	// Save сохраняет значение переменной
-	Save(objectName, variableName string, value interface{}, timestamp time.Time) error
+	Save(serverID, objectName, variableName string, value interface{}, timestamp time.Time) error
 
 	// GetHistory возвращает историю переменной за указанный период
-	GetHistory(objectName, variableName string, from, to time.Time) (*VariableHistory, error)
+	GetHistory(serverID, objectName, variableName string, from, to time.Time) (*VariableHistory, error)
 
 	// GetLatest возвращает последние N точек
-	GetLatest(objectName, variableName string, count int) (*VariableHistory, error)
+	GetLatest(serverID, objectName, variableName string, count int) (*VariableHistory, error)
 
 	// Cleanup удаляет данные старше указанного времени
 	Cleanup(olderThan time.Time) error
@@ -34,3 +35,6 @@ type Storage interface {
 	// Close закрывает хранилище
 	Close() error
 }
+
+// DefaultServerID используется когда serverID не указан
+const DefaultServerID = "default"

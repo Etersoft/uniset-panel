@@ -119,7 +119,7 @@ func TestSSEHubBroadcast(t *testing.T) {
 	}
 }
 
-func TestSSEHubBroadcastObjectData(t *testing.T) {
+func TestSSEHubBroadcastObjectDataWithServer(t *testing.T) {
 	hub := NewSSEHub()
 	client := hub.AddClient("")
 	defer hub.RemoveClient(client)
@@ -131,7 +131,7 @@ func TestSSEHubBroadcastObjectData(t *testing.T) {
 		},
 	}
 
-	hub.BroadcastObjectData("TestProc", data)
+	hub.BroadcastObjectDataWithServer("server1", "Server 1", "TestProc", data)
 
 	select {
 	case event := <-client.events:
@@ -140,6 +140,12 @@ func TestSSEHubBroadcastObjectData(t *testing.T) {
 		}
 		if event.ObjectName != "TestProc" {
 			t.Errorf("expected ObjectName=TestProc, got %s", event.ObjectName)
+		}
+		if event.ServerID != "server1" {
+			t.Errorf("expected ServerID=server1, got %s", event.ServerID)
+		}
+		if event.ServerName != "Server 1" {
+			t.Errorf("expected ServerName=Server 1, got %s", event.ServerName)
 		}
 	case <-time.After(100 * time.Millisecond):
 		t.Error("did not receive event")
@@ -280,7 +286,7 @@ func TestHandleSSEReceivesEvents(t *testing.T) {
 
 	// Отправляем событие через hub
 	hub := handlers.GetSSEHub()
-	hub.BroadcastObjectData("TestProc", &uniset.ObjectData{
+	hub.BroadcastObjectDataWithServer("server1", "Server 1", "TestProc", &uniset.ObjectData{
 		Name:      "TestProc",
 		Variables: map[string]interface{}{"var1": 42},
 	})
@@ -355,7 +361,7 @@ func TestPollerEventCallbackIntegration(t *testing.T) {
 	var mu sync.Mutex
 
 	p.SetEventCallback(func(objectName string, data *uniset.ObjectData) {
-		hub.BroadcastObjectData(objectName, data)
+		hub.BroadcastObjectDataWithServer("server1", "Server 1", objectName, data)
 	})
 
 	// Добавляем объект в watch

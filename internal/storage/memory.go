@@ -7,7 +7,7 @@ import (
 
 type memoryStorage struct {
 	mu   sync.RWMutex
-	data map[string][]DataPoint // key: "objectName:variableName"
+	data map[string][]DataPoint // key: "serverID:objectName:variableName"
 }
 
 func NewMemoryStorage() Storage {
@@ -16,15 +16,18 @@ func NewMemoryStorage() Storage {
 	}
 }
 
-func makeKey(objectName, variableName string) string {
-	return objectName + ":" + variableName
+func makeKey(serverID, objectName, variableName string) string {
+	if serverID == "" {
+		serverID = DefaultServerID
+	}
+	return serverID + ":" + objectName + ":" + variableName
 }
 
-func (m *memoryStorage) Save(objectName, variableName string, value interface{}, timestamp time.Time) error {
+func (m *memoryStorage) Save(serverID, objectName, variableName string, value interface{}, timestamp time.Time) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	key := makeKey(objectName, variableName)
+	key := makeKey(serverID, objectName, variableName)
 	m.data[key] = append(m.data[key], DataPoint{
 		Timestamp: timestamp,
 		Value:     value,
@@ -33,11 +36,11 @@ func (m *memoryStorage) Save(objectName, variableName string, value interface{},
 	return nil
 }
 
-func (m *memoryStorage) GetHistory(objectName, variableName string, from, to time.Time) (*VariableHistory, error) {
+func (m *memoryStorage) GetHistory(serverID, objectName, variableName string, from, to time.Time) (*VariableHistory, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	key := makeKey(objectName, variableName)
+	key := makeKey(serverID, objectName, variableName)
 	points := m.data[key]
 
 	var filtered []DataPoint
@@ -49,17 +52,18 @@ func (m *memoryStorage) GetHistory(objectName, variableName string, from, to tim
 	}
 
 	return &VariableHistory{
+		ServerID:     serverID,
 		ObjectName:   objectName,
 		VariableName: variableName,
 		Points:       filtered,
 	}, nil
 }
 
-func (m *memoryStorage) GetLatest(objectName, variableName string, count int) (*VariableHistory, error) {
+func (m *memoryStorage) GetLatest(serverID, objectName, variableName string, count int) (*VariableHistory, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	key := makeKey(objectName, variableName)
+	key := makeKey(serverID, objectName, variableName)
 	points := m.data[key]
 
 	var result []DataPoint
@@ -72,6 +76,7 @@ func (m *memoryStorage) GetLatest(objectName, variableName string, count int) (*
 	}
 
 	return &VariableHistory{
+		ServerID:     serverID,
 		ObjectName:   objectName,
 		VariableName: variableName,
 		Points:       result,

@@ -201,9 +201,10 @@ func (p *Poller) poll() {
 			}
 
 			// Сохраняем в storage (для истории графиков)
+			// SM глобальный, используем пустой serverID (будет DefaultServerID)
 			if p.storage != nil {
 				varName := "ext:" + sensorName
-				p.storage.Save(objectName, varName, float64(value.Value), now)
+				p.storage.Save("", objectName, varName, float64(value.Value), now)
 			}
 
 			// Вызываем callback для SSE

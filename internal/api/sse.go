@@ -27,7 +27,9 @@ type sseClient struct {
 
 // SSEEvent представляет событие для отправки клиенту
 type SSEEvent struct {
-	Type       string      `json:"type"`       // "object_data", "object_list", "error"
+	Type       string      `json:"type"` // "object_data", "object_list", "server_status", "error"
+	ServerID   string      `json:"serverId,omitempty"`
+	ServerName string      `json:"serverName,omitempty"`
 	ObjectName string      `json:"objectName,omitempty"`
 	Data       interface{} `json:"data,omitempty"`
 	Timestamp  time.Time   `json:"timestamp"`
@@ -85,13 +87,29 @@ func (h *SSEHub) Broadcast(event SSEEvent) {
 	}
 }
 
-// BroadcastObjectData отправляет данные объекта всем подписанным клиентам
-func (h *SSEHub) BroadcastObjectData(objectName string, data *uniset.ObjectData) {
+// BroadcastObjectDataWithServer отправляет данные объекта с информацией о сервере
+func (h *SSEHub) BroadcastObjectDataWithServer(serverID, serverName, objectName string, data *uniset.ObjectData) {
 	h.Broadcast(SSEEvent{
 		Type:       "object_data",
+		ServerID:   serverID,
+		ServerName: serverName,
 		ObjectName: objectName,
 		Data:       data,
 		Timestamp:  time.Now(),
+	})
+}
+
+// BroadcastServerStatus отправляет изменение статуса сервера
+func (h *SSEHub) BroadcastServerStatus(serverID, serverName string, connected bool, lastError string) {
+	h.Broadcast(SSEEvent{
+		Type:       "server_status",
+		ServerID:   serverID,
+		ServerName: serverName,
+		Data: map[string]interface{}{
+			"connected": connected,
+			"lastError": lastError,
+		},
+		Timestamp: time.Now(),
 	})
 }
 
@@ -105,8 +123,8 @@ func (h *SSEHub) BroadcastSensorUpdate(update sm.SensorUpdate) {
 	})
 }
 
-// BroadcastIONCSensorBatch отправляет батч обновлений IONC датчиков клиентам
-func (h *SSEHub) BroadcastIONCSensorBatch(updates []ionc.SensorUpdate) {
+// BroadcastIONCSensorBatchWithServer отправляет батч обновлений IONC датчиков с информацией о сервере
+func (h *SSEHub) BroadcastIONCSensorBatchWithServer(serverID, serverName string, updates []ionc.SensorUpdate) {
 	if len(updates) == 0 {
 		return
 	}
@@ -124,6 +142,8 @@ func (h *SSEHub) BroadcastIONCSensorBatch(updates []ionc.SensorUpdate) {
 	for objectName, sensors := range byObject {
 		h.Broadcast(SSEEvent{
 			Type:       "ionc_sensor_batch",
+			ServerID:   serverID,
+			ServerName: serverName,
 			ObjectName: objectName,
 			Data:       sensors,
 			Timestamp:  timestamp,

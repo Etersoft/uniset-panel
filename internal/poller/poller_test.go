@@ -170,8 +170,8 @@ func TestPollerPollSavesToStorage(t *testing.T) {
 	// Wait for a few polls
 	time.Sleep(180 * time.Millisecond)
 
-	// Check variable was saved
-	history, err := store.GetLatest("TestProc", "value", 10)
+	// Check variable was saved (пустой serverID = default)
+	history, err := store.GetLatest("", "TestProc", "value", 10)
 	if err != nil {
 		t.Fatalf("GetLatest failed: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestPollerPollSavesToStorage(t *testing.T) {
 	}
 
 	// Check IO was saved
-	ioHistory, err := store.GetLatest("TestProc", "io.in.sensor1", 10)
+	ioHistory, err := store.GetLatest("", "TestProc", "io.in.sensor1", 10)
 	if err != nil {
 		t.Fatalf("GetLatest for IO failed: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestPollerPollSavesToStorage(t *testing.T) {
 	}
 
 	// Check output was saved
-	outHistory, err := store.GetLatest("TestProc", "io.out.actuator1", 10)
+	outHistory, err := store.GetLatest("", "TestProc", "io.out.actuator1", 10)
 	if err != nil {
 		t.Fatalf("GetLatest for output failed: %v", err)
 	}

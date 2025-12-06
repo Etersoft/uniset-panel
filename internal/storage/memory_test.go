@@ -13,14 +13,14 @@ func TestMemoryStorageSaveAndGetLatest(t *testing.T) {
 
 	// Сохраняем несколько точек
 	for i := 0; i < 5; i++ {
-		err := store.Save("TestObj", "var1", i*10, now.Add(time.Duration(i)*time.Second))
+		err := store.Save("", "TestObj", "var1", i*10, now.Add(time.Duration(i)*time.Second))
 		if err != nil {
 			t.Fatalf("Save failed: %v", err)
 		}
 	}
 
 	// Получаем последние 3 точки
-	history, err := store.GetLatest("TestObj", "var1", 3)
+	history, err := store.GetLatest("", "TestObj", "var1", 3)
 	if err != nil {
 		t.Fatalf("GetLatest failed: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestMemoryStorageGetHistory(t *testing.T) {
 
 	// Сохраняем точки с интервалом в минуту
 	for i := 0; i < 10; i++ {
-		err := store.Save("TestObj", "var1", i, base.Add(time.Duration(i)*time.Minute))
+		err := store.Save("", "TestObj", "var1", i, base.Add(time.Duration(i)*time.Minute))
 		if err != nil {
 			t.Fatalf("Save failed: %v", err)
 		}
@@ -64,7 +64,7 @@ func TestMemoryStorageGetHistory(t *testing.T) {
 	from := base.Add(3 * time.Minute)
 	to := base.Add(7 * time.Minute)
 
-	history, err := store.GetHistory("TestObj", "var1", from, to)
+	history, err := store.GetHistory("", "TestObj", "var1", from, to)
 	if err != nil {
 		t.Fatalf("GetHistory failed: %v", err)
 	}
@@ -89,12 +89,12 @@ func TestMemoryStorageCleanup(t *testing.T) {
 	old := now.Add(-2 * time.Hour)
 
 	// Сохраняем старые данные
-	store.Save("TestObj", "var1", 100, old)
-	store.Save("TestObj", "var1", 101, old.Add(time.Minute))
+	store.Save("", "TestObj", "var1", 100, old)
+	store.Save("", "TestObj", "var1", 101, old.Add(time.Minute))
 
 	// Сохраняем новые данные
-	store.Save("TestObj", "var1", 200, now)
-	store.Save("TestObj", "var1", 201, now.Add(time.Minute))
+	store.Save("", "TestObj", "var1", 200, now)
+	store.Save("", "TestObj", "var1", 201, now.Add(time.Minute))
 
 	// Очищаем данные старше 1 часа
 	err := store.Cleanup(now.Add(-time.Hour))
@@ -103,7 +103,7 @@ func TestMemoryStorageCleanup(t *testing.T) {
 	}
 
 	// Должны остаться только новые данные
-	history, err := store.GetLatest("TestObj", "var1", 10)
+	history, err := store.GetLatest("", "TestObj", "var1", 10)
 	if err != nil {
 		t.Fatalf("GetLatest failed: %v", err)
 	}
@@ -123,13 +123,13 @@ func TestMemoryStorageMultipleVariables(t *testing.T) {
 
 	now := time.Now()
 
-	store.Save("Obj1", "var1", 10, now)
-	store.Save("Obj1", "var2", 20, now)
-	store.Save("Obj2", "var1", 30, now)
+	store.Save("", "Obj1", "var1", 10, now)
+	store.Save("", "Obj1", "var2", 20, now)
+	store.Save("", "Obj2", "var1", 30, now)
 
-	h1, _ := store.GetLatest("Obj1", "var1", 10)
-	h2, _ := store.GetLatest("Obj1", "var2", 10)
-	h3, _ := store.GetLatest("Obj2", "var1", 10)
+	h1, _ := store.GetLatest("", "Obj1", "var1", 10)
+	h2, _ := store.GetLatest("", "Obj1", "var2", 10)
+	h3, _ := store.GetLatest("", "Obj2", "var1", 10)
 
 	if len(h1.Points) != 1 || h1.Points[0].Value != 10 {
 		t.Error("Obj1:var1 mismatch")
@@ -146,12 +146,44 @@ func TestMemoryStorageEmptyHistory(t *testing.T) {
 	store := NewMemoryStorage()
 	defer store.Close()
 
-	history, err := store.GetLatest("NonExistent", "var", 10)
+	history, err := store.GetLatest("", "NonExistent", "var", 10)
 	if err != nil {
 		t.Fatalf("GetLatest failed: %v", err)
 	}
 
 	if len(history.Points) != 0 {
 		t.Errorf("expected empty history, got %d points", len(history.Points))
+	}
+}
+
+func TestMemoryStorageWithServerID(t *testing.T) {
+	store := NewMemoryStorage()
+	defer store.Close()
+
+	now := time.Now()
+
+	// Сохраняем данные для разных серверов
+	store.Save("server1", "Obj1", "var1", 100, now)
+	store.Save("server2", "Obj1", "var1", 200, now)
+	store.Save("", "Obj1", "var1", 300, now) // default server
+
+	// Данные должны быть изолированы по серверам
+	h1, _ := store.GetLatest("server1", "Obj1", "var1", 10)
+	h2, _ := store.GetLatest("server2", "Obj1", "var1", 10)
+	h3, _ := store.GetLatest("", "Obj1", "var1", 10) // default server
+
+	if len(h1.Points) != 1 || h1.Points[0].Value != 100 {
+		t.Errorf("server1 mismatch: expected 100, got %v", h1.Points[0].Value)
+	}
+	if len(h2.Points) != 1 || h2.Points[0].Value != 200 {
+		t.Errorf("server2 mismatch: expected 200, got %v", h2.Points[0].Value)
+	}
+	if len(h3.Points) != 1 || h3.Points[0].Value != 300 {
+		t.Errorf("default server mismatch: expected 300, got %v", h3.Points[0].Value)
+	}
+
+	// Проверяем serverID в ответе
+	if h1.ServerID != "server1" {
+		t.Errorf("expected ServerID=server1, got %s", h1.ServerID)
 	}
 }

@@ -660,4 +660,185 @@ test.describe('UniSet2 Viewer UI', () => {
     expect(orderAfterReload).not.toEqual(initialOrder);
   });
 
+  // === Тесты на бейджи серверов ===
+
+  test('should display server badges for connected servers with green color', async ({ page }) => {
+    await page.goto('/');
+
+    // Ждём загрузки списка объектов
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+
+    // Проверяем что есть бейджи серверов
+    const badges = page.locator('#objects-list li .server-badge');
+    await expect(badges.first()).toBeVisible();
+
+    // Все бейджи должны быть без класса disconnected (сервер подключён)
+    const allBadges = await badges.all();
+    for (const badge of allBadges) {
+      await expect(badge).not.toHaveClass(/disconnected/);
+    }
+
+    // Проверяем цвет фона подключённого сервера (зелёный #2a6a3a)
+    const firstBadge = badges.first();
+    const bgColor = await firstBadge.evaluate(el => getComputedStyle(el).backgroundColor);
+    // RGB для #2a6a3a = rgb(42, 106, 58)
+    expect(bgColor).toBe('rgb(42, 106, 58)');
+  });
+
+  test('should display server badge with disconnected class when server is down', async ({ page }) => {
+    // Мокаем ответ API чтобы симулировать отключённый сервер
+    await page.route('**/api/all-objects', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          count: 2,
+          objects: [
+            {
+              serverId: 'test-server-1',
+              serverName: 'Connected Server',
+              connected: true,
+              objects: ['TestObj1']
+            },
+            {
+              serverId: 'test-server-2',
+              serverName: 'Disconnected Server',
+              connected: false,
+              objects: ['TestObj2']
+            }
+          ]
+        })
+      });
+    });
+
+    await page.route('**/api/servers', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          count: 2,
+          servers: [
+            { id: 'test-server-1', url: 'http://localhost:9191', name: 'Connected Server', connected: true },
+            { id: 'test-server-2', url: 'http://localhost:9393', name: 'Disconnected Server', connected: false }
+          ]
+        })
+      });
+    });
+
+    await page.goto('/');
+
+    // Ждём загрузки списка объектов
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+
+    // Находим бейдж подключённого сервера (используем точное совпадение)
+    const connectedBadge = page.locator('#objects-list li .server-badge').filter({ hasText: /^Connected Server$/ });
+    await expect(connectedBadge).toBeVisible();
+    await expect(connectedBadge).not.toHaveClass(/disconnected/);
+
+    // Проверяем зелёный цвет
+    const connectedBgColor = await connectedBadge.evaluate(el => getComputedStyle(el).backgroundColor);
+    expect(connectedBgColor).toBe('rgb(42, 106, 58)'); // #2a6a3a
+
+    // Находим бейдж отключённого сервера
+    const disconnectedBadge = page.locator('#objects-list li .server-badge').filter({ hasText: /^Disconnected Server$/ });
+    await expect(disconnectedBadge).toBeVisible();
+    await expect(disconnectedBadge).toHaveClass(/disconnected/);
+
+    // Проверяем красный цвет
+    const disconnectedBgColor = await disconnectedBadge.evaluate(el => getComputedStyle(el).backgroundColor);
+    expect(disconnectedBgColor).toBe('rgb(106, 42, 42)'); // #6a2a2a
+  });
+
+  test('should have clear cache button', async ({ page }) => {
+    await page.goto('/');
+
+    // Проверяем наличие кнопки очистки кэша
+    const clearCacheBtn = page.locator('#clear-cache');
+    await expect(clearCacheBtn).toBeVisible();
+    await expect(clearCacheBtn).toHaveAttribute('title', 'Очистить кэш (LocalStorage)');
+  });
+
+  test('should clear localStorage on clear cache button click', async ({ page }) => {
+    await page.goto('/');
+
+    // Добавляем что-то в localStorage
+    await page.evaluate(() => {
+      localStorage.setItem('test-key', 'test-value');
+    });
+
+    // Проверяем что localStorage не пуст
+    const beforeClear = await page.evaluate(() => localStorage.length);
+    expect(beforeClear).toBeGreaterThan(0);
+
+    // Устанавливаем обработчик диалога подтверждения
+    page.on('dialog', async dialog => {
+      expect(dialog.type()).toBe('confirm');
+      expect(dialog.message()).toContain('Очистить все сохранённые настройки');
+      await dialog.accept();
+    });
+
+    // Кликаем на кнопку очистки кэша
+    await page.locator('#clear-cache').click();
+
+    // Страница должна перезагрузиться, ждём загрузки
+    await page.waitForLoadState('domcontentloaded');
+
+    // Проверяем что localStorage очищен (кроме настроек которые создаются при загрузке)
+    const afterClear = await page.evaluate(() => localStorage.getItem('test-key'));
+    expect(afterClear).toBeNull();
+  });
+
+  test('should show correct tooltip for server badges', async ({ page }) => {
+    // Мокаем ответ API
+    await page.route('**/api/all-objects', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          count: 2,
+          objects: [
+            {
+              serverId: 'srv1',
+              serverName: 'Server1',
+              connected: true,
+              objects: ['Obj1']
+            },
+            {
+              serverId: 'srv2',
+              serverName: 'Server2',
+              connected: false,
+              objects: ['Obj2']
+            }
+          ]
+        })
+      });
+    });
+
+    await page.route('**/api/servers', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          count: 2,
+          servers: [
+            { id: 'srv1', url: 'http://server1', name: 'Server1', connected: true },
+            { id: 'srv2', url: 'http://server2', name: 'Server2', connected: false }
+          ]
+        })
+      });
+    });
+
+    await page.goto('/');
+
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+
+    // Проверяем title для подключённого сервера
+    const connectedBadge = page.locator('#objects-list li .server-badge', { hasText: 'Server1' });
+    await expect(connectedBadge).toHaveAttribute('title', 'Сервер: Server1');
+
+    // Проверяем title для отключённого сервера (содержит "(отключен)")
+    const disconnectedBadge = page.locator('#objects-list li .server-badge', { hasText: 'Server2' });
+    await expect(disconnectedBadge).toHaveAttribute('title', 'Сервер: Server2 (отключен)');
+  });
+
 });

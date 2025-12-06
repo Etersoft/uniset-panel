@@ -9,7 +9,7 @@ services:
       dockerfile: Dockerfile
     environment:
       - UNISET_URL=http://localhost:9393
-    command: ./uniset2-viewer --port 8000 --uniset-url http://localhost:9393 --confile /app/config/test.xml
+    command: ./uniset2-viewer --addr :8000 --uniset-url http://localhost:9393 --confile /app/config/test.xml
     network_mode: host
     profiles:
       - dev
@@ -36,7 +36,7 @@ services:
       dockerfile: Dockerfile
     environment:
       - UNISET_URL=http://mock-uniset:9393
-    command: ./uniset2-viewer --port 8000 --uniset-url http://mock-uniset:9393 --confile /app/config/test.xml
+    command: ./uniset2-viewer --addr :8000 --uniset-url http://mock-uniset:9393 --confile /app/config/test.xml
     volumes:
       - ./config:/app/config:ro
     ports:
@@ -71,4 +71,4 @@ services:
         cd /tmp
         cp -r /app/* .
         npm install --no-fund --no-audit
-        npx playwright test --reporter=list
+        npx playwright test single/ --reporter=list

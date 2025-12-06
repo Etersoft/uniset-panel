@@ -839,7 +839,14 @@ test.describe('IONotifyController (SharedMemory)', () => {
     const initialCount = await page.evaluate(() => {
       const state = (window as any).state;
       if (!state || !state.tabs) return 0;
-      const tabState = state.tabs.get('SharedMemory');
+      // Ищем tabState по displayName (ключ теперь serverId:objectName)
+      let tabState = null;
+      for (const [, ts] of state.tabs) {
+        if (ts.displayName === 'SharedMemory') {
+          tabState = ts;
+          break;
+        }
+      }
       if (!tabState || !tabState.charts) return 0;
       for (const [, chartData] of tabState.charts) {
         if (chartData.chart?.data?.datasets[0]) {
@@ -860,7 +867,14 @@ test.describe('IONotifyController (SharedMemory)', () => {
     const diagnostics = await page.evaluate(() => {
       const state = (window as any).state;
       if (!state || !state.tabs) return { error: 'no state', chartsCount: 0, dataPoints: 0 };
-      const tabState = state.tabs.get('SharedMemory');
+      // Ищем tabState по displayName (ключ теперь serverId:objectName)
+      let tabState = null;
+      for (const [, ts] of state.tabs) {
+        if (ts.displayName === 'SharedMemory') {
+          tabState = ts;
+          break;
+        }
+      }
       if (!tabState) return { error: 'no tabState', chartsCount: 0, dataPoints: 0 };
       if (!tabState.charts) return { error: 'no charts map', chartsCount: 0, dataPoints: 0 };
 

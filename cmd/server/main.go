@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,6 +17,7 @@ import (
 	"github.com/pv/uniset2-viewer-go/internal/logserver"
 	"github.com/pv/uniset2-viewer-go/internal/poller"
 	"github.com/pv/uniset2-viewer-go/internal/sensorconfig"
+	"github.com/pv/uniset2-viewer-go/internal/server"
 	"github.com/pv/uniset2-viewer-go/internal/sm"
 	"github.com/pv/uniset2-viewer-go/internal/storage"
 	"github.com/pv/uniset2-viewer-go/internal/uniset"
@@ -29,9 +29,6 @@ func main() {
 
 	// Initialize logger
 	logger.Init(cfg.LogFormat, config.ParseLogLevel(cfg.LogLevel))
-
-	// Create uniset client
-	client := uniset.NewClient(cfg.UnisetURL)
 
 	// Create storage
 	var store storage.Storage
@@ -51,9 +48,6 @@ func main() {
 	}
 	defer store.Close()
 
-	// Create poller
-	p := poller.New(client, store, cfg.PollInterval, cfg.HistoryTTL)
-
 	// Load sensor configuration if provided
 	var sensorCfg *sensorconfig.SensorConfig
 	if cfg.ConFile != "" {
@@ -70,16 +64,45 @@ func main() {
 	logServerMgr := logserver.NewManager(slog.Default())
 	defer logServerMgr.Close()
 
-	// Create API handlers and server
-	handlers := api.NewHandlers(client, store, p, sensorCfg, cfg.PollInterval)
-	handlers.SetLogServerManager(logServerMgr)
-	server := api.NewServer(handlers, ui.Content)
+	// Create ServerManager
+	serverMgr := server.NewManager(store, cfg.PollInterval, cfg.HistoryTTL)
 
-	// Connect poller to SSE hub for broadcasting updates
-	sseHub := handlers.GetSSEHub()
-	p.SetEventCallback(func(objectName string, data *uniset.ObjectData) {
-		sseHub.BroadcastObjectData(objectName, data)
-	})
+	// Create SSE hub (needed for callbacks)
+	sseHub := api.NewSSEHub()
+
+	// Set callbacks for SSE broadcasting
+	serverMgr.SetObjectCallback(sseHub.BroadcastObjectDataWithServer)
+	serverMgr.SetIONCCallback(sseHub.BroadcastIONCSensorBatchWithServer)
+
+	// Add servers from configuration
+	for _, srvCfg := range cfg.Servers {
+		if err := serverMgr.AddServer(srvCfg); err != nil {
+			logger.Error("Failed to add server", "url", srvCfg.URL, "error", err)
+		} else {
+			logger.Info("Added server", "id", srvCfg.ID, "url", srvCfg.URL, "name", srvCfg.Name)
+		}
+	}
+
+	// Get first server's client and poller for API handlers
+	var client *uniset.Client
+	var pollerInstance *poller.Poller
+	var ioncPollerInstance *ionc.Poller
+	if instance, ok := serverMgr.GetFirstServer(); ok {
+		client = instance.Client
+		pollerInstance = instance.Poller
+		ioncPollerInstance = instance.IONCPoller
+	}
+
+	// Create API handlers
+	handlers := api.NewHandlers(client, store, pollerInstance, sensorCfg, cfg.PollInterval)
+	handlers.SetLogServerManager(logServerMgr)
+	handlers.SetServerManager(serverMgr)
+	handlers.SetSSEHub(sseHub)
+
+	// Set IONC poller if available
+	if ioncPollerInstance != nil {
+		handlers.SetIONCPoller(ioncPollerInstance)
+	}
 
 	// Create SM poller if configured
 	var smPoller *sm.Poller
@@ -96,17 +119,7 @@ func main() {
 		logger.Info("SM integration enabled", "url", cfg.SMURL, "poll_interval", smInterval)
 	}
 
-	// Create IONC poller for IONotifyController SSE updates
-	ioncPoller := ionc.NewPoller(client, cfg.PollInterval, func(updates []ionc.SensorUpdate) {
-		sseHub.BroadcastIONCSensorBatch(updates)
-	})
-	handlers.SetIONCPoller(ioncPoller)
-
-	// Start poller
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	go p.Run(ctx)
+	apiServer := api.NewServer(handlers, ui.Content)
 
 	// Start SM poller if configured
 	if smPoller != nil {
@@ -114,24 +127,20 @@ func main() {
 		defer smPoller.Stop()
 	}
 
-	// Start IONC poller
-	ioncPoller.Start()
-	defer ioncPoller.Stop()
-
 	// Start HTTP server
-	addr := fmt.Sprintf(":%d", cfg.Port)
 	httpServer := &http.Server{
-		Addr:    addr,
-		Handler: server,
+		Addr:    cfg.Addr,
+		Handler: apiServer,
 	}
 
 	go func() {
 		logArgs := []any{
-			"addr", addr,
-			"uniset_url", cfg.UnisetURL,
+			"addr", cfg.Addr,
 			"poll_interval", cfg.PollInterval.String(),
 			"history_ttl", cfg.HistoryTTL.String(),
+			"servers", len(cfg.Servers),
 		}
+
 		if cfg.ConFile != "" {
 			logArgs = append(logArgs, "confile", cfg.ConFile)
 		}
@@ -150,13 +159,14 @@ func main() {
 
 	logger.Info("Shutting down server...")
 
-	// Cancel poller context
-	cancel()
-
-	// Graceful shutdown with timeout
+	// Shutdown server manager
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
+	if err := serverMgr.Shutdown(shutdownCtx); err != nil {
+		logger.Error("Server manager shutdown error", "error", err)
+	}
 
+	// Graceful shutdown HTTP server with timeout
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		logger.Error("Server shutdown error", "error", err)
 	}

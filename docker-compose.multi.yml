@@ -1,0 +1,91 @@
+version: '3.8'
+
+# Multi-server test configuration
+# Usage: docker-compose -f docker-compose.multi.yml up --build --abort-on-container-exit
+
+services:
+  # First mock UniSet2 server (objects: TestProc, SharedMemory)
+  mock-uniset-1:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./tests/mock-server:/app
+    environment:
+      - PORT=9393
+      - SERVER_NAME=Server1
+    command: node server.js
+    expose:
+      - "9393"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9393/api/v01/list"]
+      interval: 2s
+      timeout: 5s
+      retries: 5
+
+  # Second mock UniSet2 server (different objects)
+  mock-uniset-2:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./tests/mock-server-2:/app
+    environment:
+      - PORT=9394
+      - SERVER_NAME=Server2
+    command: node server.js
+    expose:
+      - "9394"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9394/api/v01/list"]
+      interval: 2s
+      timeout: 5s
+      retries: 5
+
+  # Viewer with two UniSet servers
+  viewer-multi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: >
+      ./uniset2-viewer
+      --addr :8000
+      --uniset-url http://mock-uniset-1:9393
+      --uniset-url http://mock-uniset-2:9394
+      --confile /app/config/test.xml
+    volumes:
+      - ./config:/app/config:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      mock-uniset-1:
+        condition: service_healthy
+      mock-uniset-2:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/objects"]
+      interval: 2s
+      timeout: 5s
+      retries: 5
+
+  # Playwright tests for multi-server
+  e2e-multi:
+    image: mcr.microsoft.com/playwright:v1.40.0-jammy
+    working_dir: /app
+    shm_size: 1g
+    environment:
+      - BASE_URL=http://viewer-multi:8000
+      - MULTI_SERVER=true
+    volumes:
+      - ./tests:/app:ro
+      - ./tests/test-results:/app/test-results
+      - ./tests/playwright-report:/app/playwright-report
+    depends_on:
+      viewer-multi:
+        condition: service_healthy
+    entrypoint:
+      - bash
+      - -lc
+      - |
+        cd /tmp
+        cp -r /app/* .
+        npm install --no-fund --no-audit
+        npx playwright test multi/ --reporter=list

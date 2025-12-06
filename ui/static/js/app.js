@@ -2,7 +2,8 @@
 // Экспортируем на window для тестов
 const state = window.state = {
     objects: [],
-    tabs: new Map(), // objectName -> { charts, updateInterval, chartStartTime, objectType, renderer }
+    servers: new Map(), // serverId -> { id, url, name, connected }
+    tabs: new Map(), // tabKey -> { charts, updateInterval, chartStartTime, objectType, renderer, serverId, serverName, displayName }
     activeTab: null,
     sensors: new Map(), // sensorId -> sensorInfo
     sensorsByName: new Map(), // sensorName -> sensorInfo
@@ -115,14 +116,16 @@ function initSSE() {
     eventSource.addEventListener('object_data', (e) => {
         try {
             const event = JSON.parse(e.data);
-            const objectName = event.objectName;
-            const data = event.data;
+            const { objectName, serverId, data } = event;
 
             // Обновляем время последнего обновления в индикаторе
             updateSSEStatus('connected', new Date());
 
+            // Формируем ключ вкладки: serverId:objectName
+            const tabKey = `${serverId}:${objectName}`;
+
             // Обновляем UI только для открытых вкладок
-            const tabState = state.tabs.get(objectName);
+            const tabState = state.tabs.get(tabKey);
             if (tabState) {
                 // Обновляем рендерер (таблицы, статистика и т.д.)
                 if (tabState.renderer) {
@@ -135,7 +138,7 @@ function initSSE() {
                     if (varName.startsWith('ext:')) {
                         return;
                     }
-                    updateChart(objectName, varName, chartData.chart);
+                    updateChart(tabState.displayName, varName, chartData.chart);
                 });
             }
         } catch (err) {
@@ -190,11 +193,14 @@ function initSSE() {
     eventSource.addEventListener('ionc_sensor_batch', (e) => {
         try {
             const event = JSON.parse(e.data);
-            const objectName = event.objectName;
+            const { objectName, serverId } = event;
             const sensors = event.data; // массив датчиков
 
+            // Формируем ключ вкладки: serverId:objectName
+            const tabKey = `${serverId}:${objectName}`;
+
             // Находим вкладку с IONC рендерером
-            const tabState = state.tabs.get(objectName);
+            const tabState = state.tabs.get(tabKey);
             if (!tabState) return;
 
             const timestamp = new Date(event.timestamp);
@@ -217,7 +223,7 @@ function initSSE() {
 
                     // Обновляем значение в легенде
                     const safeVarName = varName.replace(/:/g, '-');
-                    const legendEl = document.getElementById(`legend-value-${objectName}-${safeVarName}`);
+                    const legendEl = document.getElementById(`legend-value-${tabState.displayName}-${safeVarName}`);
                     if (legendEl) {
                         legendEl.textContent = formatValue(value);
                     }
@@ -226,7 +232,7 @@ function initSSE() {
 
             // Один раз синхронизируем временную шкалу
             if (chartsToUpdate.size > 0) {
-                syncAllChartsTimeRange(objectName);
+                syncAllChartsTimeRange(tabState.displayName);
             }
 
             // Batch update для всех графиков
@@ -309,8 +315,9 @@ const objectRenderers = new Map();
 
 // Базовый класс рендерера (общий функционал)
 class BaseObjectRenderer {
-    constructor(objectName) {
+    constructor(objectName, tabKey = null) {
         this.objectName = objectName;
+        this.tabKey = tabKey || objectName; // tabKey для доступа к state.tabs
     }
 
     // Получить тип объекта (для отображения)
@@ -356,8 +363,8 @@ class BaseObjectRenderer {
                     <span class="collapsible-title">${title}</span>
                     ${badgeHtml}
                     <div class="section-reorder-buttons" onclick="event.stopPropagation()">
-                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.objectName}', '${id}')" title="Переместить вверх">↑</button>
-                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.objectName}', '${id}')" title="Переместить вниз">↓</button>
+                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.tabKey}', '${id}')" title="Переместить вверх">↑</button>
+                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.tabKey}', '${id}')" title="Переместить вниз">↓</button>
                     </div>
                 </div>
                 <div class="collapsible-content" id="section-${id}-${this.objectName}">
@@ -387,8 +394,8 @@ class BaseObjectRenderer {
                         </div>
                     </div>
                     <div class="section-reorder-buttons" onclick="event.stopPropagation()">
-                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.objectName}', 'charts')" title="Переместить вверх">↑</button>
-                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.objectName}', 'charts')" title="Переместить вниз">↓</button>
+                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.tabKey}', 'charts')" title="Переместить вверх">↑</button>
+                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.tabKey}', 'charts')" title="Переместить вниз">↓</button>
                     </div>
                 </div>
                 <div class="collapsible-content" id="section-charts-${this.objectName}">
@@ -418,8 +425,8 @@ class BaseObjectRenderer {
                         <span>Друг за другом</span>
                     </label>
                     <div class="section-reorder-buttons" onclick="event.stopPropagation()">
-                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.objectName}', 'io-timers')" title="Переместить вверх">↑</button>
-                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.objectName}', 'io-timers')" title="Переместить вниз">↓</button>
+                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.tabKey}', 'io-timers')" title="Переместить вверх">↑</button>
+                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.tabKey}', 'io-timers')" title="Переместить вниз">↓</button>
                     </div>
                 </div>
                 <div class="collapsible-content" id="section-io-timers-${this.objectName}">
@@ -542,7 +549,10 @@ class BaseObjectRenderer {
 
         // Создаём LogViewer только если его ещё нет
         if (!this.logViewer) {
-            this.logViewer = new LogViewer(this.objectName, container);
+            // Извлекаем serverId из tabKey (формат: serverId:objectName)
+            const tabState = state.tabs.get(this.tabKey);
+            const serverId = tabState ? tabState.serverId : null;
+            this.logViewer = new LogViewer(this.objectName, container, serverId);
             this.logViewer.restoreCollapsedState();
         }
     }
@@ -597,7 +607,7 @@ class UniSetManagerRenderer extends BaseObjectRenderer {
 
     update(data) {
         // Сохраняем данные для повторного рендеринга с фильтрами
-        const tabState = state.tabs.get(this.objectName);
+        const tabState = state.tabs.get(this.tabKey);
         if (tabState) {
             tabState.ioData = data.io || {};
             tabState.timersData = data.Timers || {};
@@ -690,8 +700,8 @@ class FallbackRenderer extends BaseObjectRenderer {
     }
 
     update(data) {
-        // Обновляем тип объекта в сообщении
-        const typeSpan = document.querySelector(`.tab-panel[data-name="${this.objectName}"] .fallback-type`);
+        // Обновляем тип объекта в сообщении (используем tabKey для поиска панели)
+        const typeSpan = document.querySelector(`.tab-panel[data-name="${this.tabKey}"] .fallback-type`);
         if (typeSpan && data.object?.objectType) {
             typeSpan.textContent = data.object.objectType;
         }
@@ -734,8 +744,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         return 'IONotifyController';
     }
 
-    constructor(objectName) {
-        super(objectName);
+    constructor(objectName, tabKey = null) {
+        super(objectName, tabKey);
         this.sensors = [];
         this.sensorMap = new Map();
         this.filter = '';
@@ -789,8 +799,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                         </select>
                     </div>
                     <div class="section-reorder-buttons" onclick="event.stopPropagation()">
-                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.objectName}', 'ionc-sensors')" title="Переместить вверх">↑</button>
-                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.objectName}', 'ionc-sensors')" title="Переместить вниз">↓</button>
+                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.tabKey}', 'ionc-sensors')" title="Переместить вверх">↑</button>
+                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.tabKey}', 'ionc-sensors')" title="Переместить вниз">↓</button>
                     </div>
                 </div>
                 <div class="collapsible-content" id="section-ionc-sensors-${this.objectName}">
@@ -1119,7 +1129,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     isSensorOnChart(sensorName) {
-        const addedSensors = getExternalSensorsFromStorage(this.objectName);
+        const addedSensors = getExternalSensorsFromStorage(this.tabKey);
         return addedSensors.has(sensorName);
     }
 
@@ -1127,11 +1137,11 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         const sensor = this.sensorMap.get(sensorId);
         if (!sensor) return;
 
-        const addedSensors = getExternalSensorsFromStorage(this.objectName);
+        const addedSensors = getExternalSensorsFromStorage(this.tabKey);
 
         if (addedSensors.has(sensor.name)) {
             // Удаляем с графика
-            removeExternalSensor(this.objectName, sensor.name);
+            removeExternalSensor(this.tabKey, sensor.name);
         } else {
             // Добавляем на график - используем существующую систему внешних датчиков
             // Создаём объект датчика в формате, ожидаемом createExternalSensorChart
@@ -1145,7 +1155,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
             // Добавляем в список внешних датчиков
             addedSensors.add(sensor.name);
-            saveExternalSensorsToStorage(this.objectName, addedSensors);
+            saveExternalSensorsToStorage(this.tabKey, addedSensors);
 
             // Добавляем в state.sensorsByName если его там нет
             if (!state.sensorsByName.has(sensor.name)) {
@@ -1154,7 +1164,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             }
 
             // Создаём график
-            createExternalSensorChart(this.objectName, sensorForChart);
+            createExternalSensorChart(this.tabKey, sensorForChart);
 
             // Подписываемся на IONC датчик (не SM!)
             subscribeToIONCSensor(this.objectName, sensor.id);
@@ -1690,9 +1700,10 @@ const LOG_LEVELS = {
 
 // Класс для управления просмотром логов объекта
 class LogViewer {
-    constructor(objectName, container) {
+    constructor(objectName, container, serverId = null) {
         this.objectName = objectName;
         this.container = container;
+        this.serverId = serverId;
         this.eventSource = null;
         this.connected = false;
         this.isActive = false; // true если идёт попытка подключения или переподключения
@@ -1804,8 +1815,8 @@ class LogViewer {
                         <button class="log-clear-btn" id="log-clear-${this.objectName}" title="Очистить">Очистить</button>
                     </div>
                     <div class="section-reorder-buttons" onclick="event.stopPropagation()">
-                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.objectName}', 'logviewer')" title="Переместить вверх">↑</button>
-                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.objectName}', 'logviewer')" title="Переместить вниз">↓</button>
+                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.tabKey}', 'logviewer')" title="Переместить вверх">↑</button>
+                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.tabKey}', 'logviewer')" title="Переместить вниз">↓</button>
                     </div>
                 </div>
                 <div class="logviewer-content">
@@ -2215,8 +2226,16 @@ class LogViewer {
         this.isActive = true;
         this.updateStatus('connecting');
 
-        const filter = this.filter ? `?filter=${encodeURIComponent(this.filter)}` : '';
-        const url = `/api/logs/${encodeURIComponent(this.objectName)}/stream${filter}`;
+        // Собираем query параметры
+        const params = new URLSearchParams();
+        if (this.filter) {
+            params.set('filter', this.filter);
+        }
+        if (this.serverId) {
+            params.set('server', this.serverId);
+        }
+        const queryString = params.toString();
+        const url = `/api/logs/${encodeURIComponent(this.objectName)}/stream${queryString ? '?' + queryString : ''}`;
 
         this.eventSource = new EventSource(url);
 
@@ -2662,30 +2681,61 @@ function getNextColor() {
 }
 
 // API вызовы
+async function fetchServers() {
+    const response = await fetch('/api/servers');
+    if (!response.ok) return null;
+    return response.json();
+}
+
 async function fetchObjects() {
-    const response = await fetch('/api/objects');
+    // Загружаем список серверов
+    const serversData = await fetchServers();
+    if (!serversData || !serversData.servers) {
+        throw new Error('Не удалось загрузить список серверов');
+    }
+
+    state.servers.clear();
+    serversData.servers.forEach(server => {
+        state.servers.set(server.id, {
+            id: server.id,
+            url: server.url,
+            name: server.name || server.url,
+            connected: server.connected
+        });
+    });
+
+    // Загружаем объекты со всех серверов
+    const response = await fetch('/api/all-objects');
     if (!response.ok) throw new Error('Не удалось загрузить список объектов');
     return response.json();
 }
 
-async function fetchObjectData(name) {
-    const response = await fetch(`/api/objects/${encodeURIComponent(name)}`);
+async function fetchObjectData(name, serverId = null) {
+    let url = `/api/objects/${encodeURIComponent(name)}`;
+    if (serverId) {
+        url += `?server=${encodeURIComponent(serverId)}`;
+    }
+    const response = await fetch(url);
     if (!response.ok) throw new Error('Не удалось загрузить данные объекта');
     return response.json();
 }
 
-async function watchObject(name) {
-    const response = await fetch(`/api/objects/${encodeURIComponent(name)}/watch`, {
-        method: 'POST'
-    });
+async function watchObject(name, serverId = null) {
+    let url = `/api/objects/${encodeURIComponent(name)}/watch`;
+    if (serverId) {
+        url += `?server=${encodeURIComponent(serverId)}`;
+    }
+    const response = await fetch(url, { method: 'POST' });
     if (!response.ok) throw new Error('Не удалось начать наблюдение');
     return response.json();
 }
 
-async function unwatchObject(name) {
-    const response = await fetch(`/api/objects/${encodeURIComponent(name)}/watch`, {
-        method: 'DELETE'
-    });
+async function unwatchObject(name, serverId = null) {
+    let url = `/api/objects/${encodeURIComponent(name)}/watch`;
+    if (serverId) {
+        url += `?server=${encodeURIComponent(serverId)}`;
+    }
+    const response = await fetch(url, { method: 'DELETE' });
     if (!response.ok) throw new Error('Не удалось остановить наблюдение');
     return response.json();
 }
@@ -3133,10 +3183,13 @@ function addExternalSensor(objectName, sensorName) {
 }
 
 // Создать график для внешнего датчика
-function createExternalSensorChart(objectName, sensor) {
-    const tabState = state.tabs.get(objectName);
+// tabKey - ключ для state.tabs (serverId:objectName)
+function createExternalSensorChart(tabKey, sensor) {
+    const tabState = state.tabs.get(tabKey);
     if (!tabState) return;
 
+    // Используем displayName из tabState для ID элементов (без serverId)
+    const objectName = tabState.displayName;
     const varName = `ext:${sensor.name}`; // Префикс ext: для внешних датчиков
 
     // Проверяем, не создан ли уже график
@@ -3298,9 +3351,9 @@ function createExternalSensorChart(objectName, sensor) {
         }
     }
 
-    // Обработчик удаления
+    // Обработчик удаления (передаём tabKey, а не objectName)
     chartDiv.querySelector('.chart-remove-btn').addEventListener('click', () => {
-        removeExternalSensor(objectName, sensor.name);
+        removeExternalSensor(tabKey, sensor.name);
     });
 
     // Обработчик чекбокса заливки
@@ -3314,10 +3367,13 @@ function createExternalSensorChart(objectName, sensor) {
 }
 
 // Удалить внешний датчик с графика
-function removeExternalSensor(objectName, sensorName) {
-    const tabState = state.tabs.get(objectName);
+// tabKey - ключ для state.tabs (serverId:objectName)
+function removeExternalSensor(tabKey, sensorName) {
+    const tabState = state.tabs.get(tabKey);
     if (!tabState) return;
 
+    // Используем displayName из tabState для ID элементов (без serverId)
+    const objectName = tabState.displayName;
     const varName = `ext:${sensorName}`;
     const safeVarName = varName.replace(/:/g, '-');
 
@@ -3334,10 +3390,10 @@ function removeExternalSensor(objectName, sensorName) {
         chartPanel.remove();
     }
 
-    // Удаляем из localStorage
-    const addedSensors = getExternalSensorsFromStorage(objectName);
+    // Удаляем из localStorage (используем tabKey как ключ)
+    const addedSensors = getExternalSensorsFromStorage(tabKey);
     addedSensors.delete(sensorName);
-    saveExternalSensorsToStorage(objectName, addedSensors);
+    saveExternalSensorsToStorage(tabKey, addedSensors);
 
     // Находим сенсор для получения ID
     let sensor;
@@ -3364,7 +3420,7 @@ function removeExternalSensor(objectName, sensorName) {
         renderSensorTable();
     }
 
-    console.log(`Удалён внешний датчик ${sensorName} для ${objectName}`);
+    console.log(`Удалён внешний датчик ${sensorName} для ${tabKey}`);
 
     // Отписываемся от датчика через API
     if (state.capabilities.smEnabled) {
@@ -3485,45 +3541,72 @@ function restoreExternalSensors(objectName) {
 }
 
 // UI функции
-function renderObjectsList(objects) {
+function renderObjectsList(data) {
     const list = document.getElementById('objects-list');
     list.innerHTML = '';
 
-    if (!objects || !objects.objects) {
+    if (!data || !data.objects || data.objects.length === 0) {
         list.innerHTML = '<li class="loading">Объекты не найдены</li>';
         return;
     }
 
-    objects.objects.forEach(name => {
-        const li = document.createElement('li');
-        li.textContent = name;
-        li.dataset.name = name;
-        li.addEventListener('click', () => openObjectTab(name));
-        list.appendChild(li);
+    // data.objects - массив { serverId, serverName, objects: [...] }
+    data.objects.forEach(serverData => {
+        const serverId = serverData.serverId;
+        const serverName = serverData.serverName || serverId;
+        const serverConnected = serverData.connected !== false;
+
+        if (!serverData.objects || serverData.objects.length === 0) return;
+
+        serverData.objects.forEach(name => {
+            const li = document.createElement('li');
+            li.dataset.name = name;
+            li.dataset.serverId = serverId;
+            li.dataset.serverName = serverName;
+
+            // Бейдж сервера + имя объекта
+            const badge = document.createElement('span');
+            badge.className = 'server-badge' + (serverConnected ? '' : ' disconnected');
+            badge.textContent = serverName;
+            badge.title = `Сервер: ${serverName}${serverConnected ? '' : ' (отключен)'}`;
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'object-name';
+            nameSpan.textContent = name;
+
+            li.appendChild(badge);
+            li.appendChild(nameSpan);
+
+            li.addEventListener('click', () => openObjectTab(name, serverId, serverName));
+            list.appendChild(li);
+        });
     });
 }
 
-async function openObjectTab(name) {
-    if (state.tabs.has(name)) {
-        activateTab(name);
+async function openObjectTab(name, serverId, serverName) {
+    // Составной ключ для tabs: serverId:objectName
+    const tabKey = `${serverId}:${name}`;
+
+    if (state.tabs.has(tabKey)) {
+        activateTab(tabKey);
         return;
     }
 
     // Сначала загружаем данные, чтобы узнать тип объекта
     try {
-        const data = await fetchObjectData(name);
+        const data = await fetchObjectData(name, serverId);
         const objectType = data.object?.objectType || 'Default';
 
-        createTab(name, objectType, data);
-        activateTab(name);
+        createTab(tabKey, name, objectType, data, serverId, serverName);
+        activateTab(tabKey);
 
-        watchObject(name).catch(console.error);
+        watchObject(name, serverId).catch(console.error);
     } catch (err) {
         console.error(`Ошибка открытия вкладки ${name}:`, err);
     }
 }
 
-function createTab(name, objectType, initialData) {
+function createTab(tabKey, displayName, objectType, initialData, serverId, serverName) {
     const tabsHeader = document.getElementById('tabs-header');
     const tabsContent = document.getElementById('tabs-content');
 
@@ -3532,23 +3615,29 @@ function createTab(name, objectType, initialData) {
 
     // Получаем класс рендерера для данного типа объекта
     const RendererClass = getRendererClass(objectType);
-    const renderer = new RendererClass(name);
+    const renderer = new RendererClass(displayName, tabKey);
 
-    // Кнопка вкладки с индикатором типа
+    // Кнопка вкладки с индикатором типа и сервера
     const tabBtn = document.createElement('button');
     tabBtn.className = 'tab-btn';
-    tabBtn.dataset.name = name;
+    tabBtn.dataset.name = tabKey;
     tabBtn.dataset.objectType = objectType;
-    tabBtn.innerHTML = `
+    tabBtn.dataset.serverId = serverId;
+
+    // Формируем HTML вкладки
+    const tabHTML = `
         <span class="tab-type-badge">${objectType}</span>
-        ${name}
+        <span class="tab-server-badge">${serverName}</span>
+        ${displayName}
         <span class="close">&times;</span>
     `;
+    tabBtn.innerHTML = tabHTML;
+
     tabBtn.addEventListener('click', (e) => {
         if (e.target.classList.contains('close')) {
-            closeTab(name);
+            closeTab(tabKey);
         } else {
-            activateTab(name);
+            activateTab(tabKey);
         }
     });
     tabsHeader.appendChild(tabBtn);
@@ -3556,39 +3645,43 @@ function createTab(name, objectType, initialData) {
     // Панель содержимого - создаётся рендерером
     const panel = document.createElement('div');
     panel.className = 'tab-panel';
-    panel.dataset.name = name;
+    panel.dataset.name = tabKey;
     panel.dataset.objectType = objectType;
+    panel.dataset.serverId = serverId;
     panel.innerHTML = renderer.createPanelHTML();
     tabsContent.appendChild(panel);
 
     // Восстановить состояние спойлеров
-    restoreCollapsedSections(name);
+    restoreCollapsedSections(tabKey);
 
     // Восстановить порядок секций
-    loadSectionOrder(name);
+    loadSectionOrder(tabKey);
 
     // Сохраняем состояние вкладки с рендерером
     // Если SSE подключен, не запускаем polling (данные будут приходить через SSE)
     const updateInterval = state.sse.connected
         ? null
-        : setInterval(() => loadObjectData(name), state.sse.pollInterval);
+        : setInterval(() => loadObjectData(displayName), state.sse.pollInterval);
 
-    state.tabs.set(name, {
+    state.tabs.set(tabKey, {
         charts: new Map(),
         variables: {},
         objectType: objectType,
         renderer: renderer,
-        updateInterval: updateInterval
+        updateInterval: updateInterval,
+        displayName: displayName,
+        serverId: serverId,
+        serverName: serverName
     });
 
     // Инициализация рендерера (настройка обработчиков и т.д.)
     renderer.initialize();
 
     // Восстанавливаем внешние датчики из localStorage
-    restoreExternalSensors(name);
+    restoreExternalSensors(displayName);
 
     // Обновляем состояние кнопок перемещения секций
-    updateReorderButtons(name);
+    updateReorderButtons(tabKey);
 
     // Отрисовываем начальные данные
     if (initialData) {
@@ -3789,13 +3882,31 @@ function formatValue(value) {
     return String(value);
 }
 
+// Находит tabKey по displayName (для обратной совместимости с кодом использующим objectName)
+function findTabKeyByDisplayName(displayName) {
+    for (const [tabKey, tabState] of state.tabs) {
+        if (tabState.displayName === displayName) {
+            return tabKey;
+        }
+    }
+    // Fallback: если не нашли, возможно это и есть tabKey
+    if (state.tabs.has(displayName)) {
+        return displayName;
+    }
+    return null;
+}
+
 function hasChart(objectName, varName) {
-    const tabState = state.tabs.get(objectName);
+    const tabKey = findTabKeyByDisplayName(objectName);
+    if (!tabKey) return false;
+    const tabState = state.tabs.get(tabKey);
     return tabState && tabState.charts.has(varName);
 }
 
 async function addChart(objectName, varName, sensorId, passedTextname) {
-    const tabState = state.tabs.get(objectName);
+    const tabKey = findTabKeyByDisplayName(objectName);
+    if (!tabKey) return;
+    const tabState = state.tabs.get(tabKey);
     if (!tabState || tabState.charts.has(varName)) return;
 
     const chartsContainer = document.getElementById(`charts-${objectName}`);
@@ -4104,7 +4215,9 @@ function updateChartLegends(objectName, data) {
 }
 
 function removeChart(objectName, varName) {
-    const tabState = state.tabs.get(objectName);
+    const tabKey = findTabKeyByDisplayName(objectName);
+    if (!tabKey) return;
+    const tabState = state.tabs.get(tabKey);
     if (!tabState) return;
 
     const chartData = tabState.charts.get(varName);
@@ -5364,6 +5477,14 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchObjects()
             .then(renderObjectsList)
             .catch(console.error);
+    });
+
+    // Кнопка очистки кэша
+    document.getElementById('clear-cache').addEventListener('click', () => {
+        if (confirm('Очистить все сохранённые настройки?\n\nБудут удалены:\n- порядок секций\n- выбранные графики\n- настройки LogViewer\n- состояние sidebar')) {
+            localStorage.clear();
+            location.reload();
+        }
     });
 
     // Кнопка сворачивания боковой панели

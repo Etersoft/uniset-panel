@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"flag"
 	"log/slog"
 	"strings"
@@ -14,9 +16,30 @@ const (
 	StorageSQLite StorageType = "sqlite"
 )
 
+// ServerConfig описывает конфигурацию одного UniSet2 сервера
+type ServerConfig struct {
+	ID   string `yaml:"id,omitempty"`   // уникальный идентификатор (генерируется если не указан)
+	URL  string `yaml:"url"`            // URL UniSet2 HTTP API
+	Name string `yaml:"name,omitempty"` // человекочитаемое имя (опционально)
+}
+
+// stringSlice реализует flag.Value для множественных строковых флагов
+type stringSlice []string
+
+func (s *stringSlice) String() string {
+	return strings.Join(*s, ",")
+}
+
+func (s *stringSlice) Set(value string) error {
+	*s = append(*s, value)
+	return nil
+}
+
 type Config struct {
-	UnisetURL      string
-	Port           int
+	// Серверы UniSet2 (новый формат)
+	Servers []ServerConfig
+
+	Addr           string // адрес для прослушивания (формат: :port или host:port)
 	PollInterval   time.Duration
 	Storage        StorageType
 	SQLitePath     string
@@ -24,6 +47,7 @@ type Config struct {
 	LogFormat      string
 	LogLevel       string
 	ConFile        string
+	ConfigFile     string        // путь к YAML конфигу
 	SMURL          string        // URL SharedMemory API (пусто = отключено)
 	SMPollInterval time.Duration // Интервал опроса SM (0 = использовать PollInterval)
 }
@@ -31,8 +55,10 @@ type Config struct {
 func Parse() *Config {
 	cfg := &Config{}
 
-	flag.StringVar(&cfg.UnisetURL, "uniset-url", "http://localhost:8080", "UniSet2 HTTP API URL")
-	flag.IntVar(&cfg.Port, "port", 9090, "Web server port")
+	var unisetURLs stringSlice
+
+	flag.Var(&unisetURLs, "uniset-url", "UniSet2 HTTP API URL (can be specified multiple times)")
+	flag.StringVar(&cfg.Addr, "addr", ":9090", "Listen address (e.g. :9090 or 127.0.0.1:9090)")
 	flag.DurationVar(&cfg.PollInterval, "poll-interval", 1*time.Second, "UniSet2 polling interval")
 
 	var storageStr string
@@ -43,6 +69,7 @@ func Parse() *Config {
 	flag.StringVar(&cfg.LogFormat, "log-format", "text", "Log format: text or json")
 	flag.StringVar(&cfg.LogLevel, "log-level", "info", "Log level: debug, info, warn, error")
 	flag.StringVar(&cfg.ConFile, "confile", "", "UniSet2 XML configuration file (sensors metadata)")
+	flag.StringVar(&cfg.ConfigFile, "config", "", "YAML configuration file for servers")
 	flag.StringVar(&cfg.SMURL, "sm-url", "", "SharedMemory HTTP API URL (empty = disabled)")
 	flag.DurationVar(&cfg.SMPollInterval, "sm-poll-interval", 0, "SharedMemory polling interval (0 = use poll-interval)")
 
@@ -53,7 +80,44 @@ func Parse() *Config {
 		cfg.Storage = StorageMemory
 	}
 
+	// Загрузка серверов из YAML конфига (если указан)
+	if cfg.ConfigFile != "" {
+		yamlServers, err := LoadServersFromYAML(cfg.ConfigFile)
+		if err != nil {
+			slog.Error("Failed to load config file", "path", cfg.ConfigFile, "error", err)
+		} else {
+			cfg.Servers = yamlServers
+		}
+	}
+
+	// Добавление серверов из CLI флагов (приоритет над YAML)
+	for _, url := range unisetURLs {
+		cfg.Servers = append(cfg.Servers, ServerConfig{
+			URL: url,
+		})
+	}
+
+	// Если серверы не указаны, использовать значение по умолчанию
+	if len(cfg.Servers) == 0 {
+		cfg.Servers = []ServerConfig{
+			{URL: "http://localhost:8080"},
+		}
+	}
+
+	// Генерация ID для серверов без явного ID
+	for i := range cfg.Servers {
+		if cfg.Servers[i].ID == "" {
+			cfg.Servers[i].ID = generateServerID(cfg.Servers[i].URL)
+		}
+	}
+
 	return cfg
+}
+
+// generateServerID генерирует короткий ID на основе URL
+func generateServerID(url string) string {
+	hash := sha256.Sum256([]byte(url))
+	return hex.EncodeToString(hash[:4]) // первые 8 символов hex
 }
 
 // ParseLogLevel converts string log level to slog.Level

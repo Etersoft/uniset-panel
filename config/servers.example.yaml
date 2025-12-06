@@ -1,0 +1,13 @@
+# Пример конфигурации серверов UniSet2
+# Использование: ./uniset2-viewer --config config/servers.yaml
+
+servers:
+  - url: http://localhost:8080
+    name: "Основной сервер"
+
+  - url: http://192.168.1.100:8080
+    id: backup
+    name: "Резервный сервер"
+
+  - url: http://192.168.1.101:8080
+    # name и id опциональны - будет сгенерирован ID из URL
