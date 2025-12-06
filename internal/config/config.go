@@ -33,7 +33,7 @@ func Parse() *Config {
 
 	flag.StringVar(&cfg.UnisetURL, "uniset-url", "http://localhost:8080", "UniSet2 HTTP API URL")
 	flag.IntVar(&cfg.Port, "port", 9090, "Web server port")
-	flag.DurationVar(&cfg.PollInterval, "poll-interval", 5*time.Second, "UniSet2 polling interval")
+	flag.DurationVar(&cfg.PollInterval, "poll-interval", 1*time.Second, "UniSet2 polling interval")
 
 	var storageStr string
 	flag.StringVar(&storageStr, "storage", "memory", "Storage type: memory or sqlite")

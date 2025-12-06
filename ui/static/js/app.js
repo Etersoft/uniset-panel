@@ -378,12 +378,12 @@ class BaseObjectRenderer {
                     <button class="add-sensor-btn" onclick="event.stopPropagation(); openSensorDialog('${this.objectName}')">+ Датчик</button>
                     <div class="charts-time-range" onclick="event.stopPropagation()">
                         <div class="time-range-selector">
-                            <button class="time-range-btn${state.timeRange === 60 ? ' active' : ''}" data-range="60">1m</button>
-                            <button class="time-range-btn${state.timeRange === 180 ? ' active' : ''}" data-range="180">3m</button>
-                            <button class="time-range-btn${state.timeRange === 300 ? ' active' : ''}" data-range="300">5m</button>
-                            <button class="time-range-btn${state.timeRange === 900 ? ' active' : ''}" data-range="900">15m</button>
-                            <button class="time-range-btn${state.timeRange === 3600 ? ' active' : ''}" data-range="3600">1h</button>
-                            <button class="time-range-btn${state.timeRange === 10800 ? ' active' : ''}" data-range="10800">3h</button>
+                            <button class="time-range-btn${state.timeRange === 60 ? ' active' : ''}" onclick="setTimeRange(60)">1m</button>
+                            <button class="time-range-btn${state.timeRange === 180 ? ' active' : ''}" onclick="setTimeRange(180)">3m</button>
+                            <button class="time-range-btn${state.timeRange === 300 ? ' active' : ''}" onclick="setTimeRange(300)">5m</button>
+                            <button class="time-range-btn${state.timeRange === 900 ? ' active' : ''}" onclick="setTimeRange(900)">15m</button>
+                            <button class="time-range-btn${state.timeRange === 3600 ? ' active' : ''}" onclick="setTimeRange(3600)">1h</button>
+                            <button class="time-range-btn${state.timeRange === 10800 ? ' active' : ''}" onclick="setTimeRange(10800)">3h</button>
                         </div>
                     </div>
                     <div class="section-reorder-buttons" onclick="event.stopPropagation()">
@@ -4984,35 +4984,28 @@ function clearIOPinnedRows(objectName, type) {
     saveIOPinnedRows(objectName, type, new Set());
 }
 
-// Обработка выбора временного диапазона
-function setupTimeRangeSelector() {
-    // Используем делегирование событий для динамически создаваемых кнопок
-    document.addEventListener('click', (e) => {
-        const btn = e.target.closest('.time-range-btn');
-        if (!btn) return;
+// Установка временного диапазона
+function setTimeRange(range) {
+    // Обновляем active класс на всех кнопках
+    document.querySelectorAll('.time-range-btn').forEach(btn => {
+        const btnRange = parseInt(btn.getAttribute('onclick')?.match(/setTimeRange\((\d+)\)/)?.[1], 10);
+        btn.classList.toggle('active', btnRange === range);
+    });
 
-        const range = parseInt(btn.dataset.range, 10);
-        if (isNaN(range)) return;
+    state.timeRange = range;
+    saveSettings();
 
-        // Обновляем active класс на всех кнопках с тем же range
-        document.querySelectorAll('.time-range-btn').forEach(b => {
-            b.classList.toggle('active', parseInt(b.dataset.range, 10) === range);
-        });
-
-        state.timeRange = range;
-        saveSettings();
-
-        // Сбросить начальное время для всех вкладок при изменении интервала
-        state.tabs.forEach((tabState, objectName) => {
-            if (tabState.charts.size > 0) {
-                tabState.chartStartTime = Date.now();
-            }
-            tabState.charts.forEach((chartData, varName) => {
-                updateChart(objectName, varName, chartData.chart);
-            });
+    // Сбросить начальное время для всех вкладок при изменении интервала
+    state.tabs.forEach((tabState, objectName) => {
+        if (tabState.charts.size > 0) {
+            tabState.chartStartTime = Date.now();
+        }
+        tabState.charts.forEach((chartData, varName) => {
+            updateChart(objectName, varName, chartData.chart);
         });
     });
 }
+
 
 // Сохранение настроек в localStorage
 function saveSettings() {
@@ -5082,9 +5075,6 @@ document.addEventListener('DOMContentLoaded', () => {
         state.sidebarCollapsed = sidebar.classList.contains('collapsed');
         saveSettings();
     });
-
-    // Настройка селектора временного диапазона
-    setupTimeRangeSelector();
 
     // Загрузка сохранённых настроек
     loadSettings();

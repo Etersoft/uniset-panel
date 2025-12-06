@@ -145,31 +145,76 @@ test.describe('UniSet2 Viewer UI', () => {
     }
   });
 
-  test('should have time range selector', async ({ page }) => {
+  test('should have time range selector in Charts section', async ({ page }) => {
     await page.goto('/');
 
-    // Проверяем наличие селектора временного диапазона
-    await expect(page.locator('.time-range-selector')).toBeVisible();
-    await expect(page.locator('.time-range-btn[data-range="300"]')).toBeVisible();
-    await expect(page.locator('.time-range-btn[data-range="900"]')).toBeVisible();
-    await expect(page.locator('.time-range-btn[data-range="3600"]')).toBeVisible();
+    // Открываем объект чтобы появилась секция Графики
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
 
-    // По умолчанию активен 15m (900 секунд)
-    await expect(page.locator('.time-range-btn[data-range="900"]')).toHaveClass(/active/);
+    // Ждём загрузки секции графиков в активной вкладке
+    const activePanel = page.locator('.tab-panel.active');
+    await activePanel.waitFor({ timeout: 10000 });
+
+    // Проверяем наличие селектора временного диапазона в секции Графики
+    await expect(activePanel.locator('.charts-time-range .time-range-selector')).toBeVisible();
+
+    // Проверяем наличие кнопок (используем exact match)
+    await expect(activePanel.locator('.time-range-btn', { hasText: /^5m$/ })).toBeVisible();
+    await expect(activePanel.locator('.time-range-btn', { hasText: /^15m$/ })).toBeVisible();
+    await expect(activePanel.locator('.time-range-btn', { hasText: /^1h$/ })).toBeVisible();
+
+    // По умолчанию активен 15m
+    await expect(activePanel.locator('.time-range-btn', { hasText: /^15m$/ })).toHaveClass(/active/);
   });
 
   test('should change time range on click', async ({ page }) => {
     await page.goto('/');
 
-    // Кликаем на 5m (300 секунд)
-    await page.locator('.time-range-btn[data-range="300"]').click();
-    await expect(page.locator('.time-range-btn[data-range="300"]')).toHaveClass(/active/);
-    await expect(page.locator('.time-range-btn[data-range="900"]')).not.toHaveClass(/active/);
+    // Открываем объект
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
 
-    // Кликаем на 1h (3600 секунд)
-    await page.locator('.time-range-btn[data-range="3600"]').click();
-    await expect(page.locator('.time-range-btn[data-range="3600"]')).toHaveClass(/active/);
-    await expect(page.locator('.time-range-btn[data-range="300"]')).not.toHaveClass(/active/);
+    const activePanel = page.locator('.tab-panel.active');
+    await activePanel.waitFor({ timeout: 10000 });
+
+    // Кликаем на 5m (exact match)
+    await activePanel.locator('.time-range-btn', { hasText: /^5m$/ }).click();
+    await expect(activePanel.locator('.time-range-btn', { hasText: /^5m$/ })).toHaveClass(/active/);
+    await expect(activePanel.locator('.time-range-btn', { hasText: /^15m$/ })).not.toHaveClass(/active/);
+
+    // Кликаем на 1h
+    await activePanel.locator('.time-range-btn', { hasText: /^1h$/ }).click();
+    await expect(activePanel.locator('.time-range-btn', { hasText: /^1h$/ })).toHaveClass(/active/);
+    await expect(activePanel.locator('.time-range-btn', { hasText: /^5m$/ })).not.toHaveClass(/active/);
+  });
+
+  test('should sync time range across multiple tabs', async ({ page }) => {
+    await page.goto('/');
+
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+
+    // Открываем TestProc
+    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.locator('.tab-panel.active').waitFor({ timeout: 10000 });
+
+    // Открываем SharedMemory (или другой объект если есть)
+    const smObject = page.locator('#objects-list li', { hasText: 'SharedMemory' });
+    if (await smObject.isVisible()) {
+      await smObject.click();
+      await page.waitForSelector('.tab-btn.active', { hasText: 'SharedMemory' });
+
+      // Меняем диапазон на 3m в активной вкладке
+      const activePanel = page.locator('.tab-panel.active');
+      await activePanel.locator('.time-range-btn', { hasText: /^3m$/ }).click();
+
+      // Переключаемся на TestProc
+      await page.locator('.tab-btn', { hasText: 'TestProc' }).click();
+
+      // Проверяем что диапазон 3m активен и там тоже
+      const testProcPanel = page.locator('.tab-panel.active');
+      await expect(testProcPanel.locator('.time-range-btn', { hasText: /^3m$/ })).toHaveClass(/active/);
+    }
   });
 
   test('should show fallback renderer for unsupported object types', async ({ page }) => {
