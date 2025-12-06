@@ -2462,3 +2462,211 @@ header h1 {
 .ionc-lost-item:last-child {
     border-bottom: none;
 }
+
+/* === IONC Action Dialog === */
+.ionc-dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, visibility 0.2s;
+}
+
+.ionc-dialog-overlay.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.ionc-dialog {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    width: 400px;
+    max-width: 90vw;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.ionc-dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.ionc-dialog-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.ionc-dialog-close {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 4px 8px;
+    line-height: 1;
+}
+
+.ionc-dialog-close:hover {
+    color: var(--text-primary);
+}
+
+.ionc-dialog-body {
+    padding: 16px;
+}
+
+.ionc-dialog-info {
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.ionc-dialog-info strong {
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+}
+
+.ionc-dialog-field {
+    margin-bottom: 12px;
+}
+
+.ionc-dialog-field label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.ionc-dialog-field input {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: var(--font-mono);
+}
+
+.ionc-dialog-field input:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+}
+
+.ionc-dialog-field input.error {
+    border-color: var(--accent-red);
+}
+
+.ionc-dialog-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+.ionc-dialog-error {
+    padding: 0 16px;
+    font-size: 12px;
+    color: var(--accent-red);
+    min-height: 0;
+    overflow: hidden;
+    transition: all 0.2s;
+}
+
+.ionc-dialog-error:not(:empty) {
+    padding: 8px 16px;
+    background: rgba(231, 76, 60, 0.1);
+    border-top: 1px solid rgba(231, 76, 60, 0.3);
+}
+
+.ionc-dialog-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+.ionc-dialog-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.ionc-dialog-btn-cancel {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+.ionc-dialog-btn-cancel:hover {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.ionc-dialog-btn-primary {
+    background: var(--accent-blue);
+    color: white;
+}
+
+.ionc-dialog-btn-primary:hover {
+    background: var(--accent-blue-hover, #2980b9);
+}
+
+.ionc-dialog-btn-freeze {
+    background: var(--accent-cyan, #00bcd4);
+    color: white;
+}
+
+.ionc-dialog-btn-freeze:hover {
+    background: #0097a7;
+}
+
+/* Consumers table in dialog */
+.ionc-dialog-consumers {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.ionc-dialog-consumers table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.ionc-dialog-consumers th {
+    background: var(--bg-tertiary);
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 500;
+    color: var(--text-secondary);
+    position: sticky;
+    top: 0;
+}
+
+.ionc-dialog-consumers td {
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.ionc-dialog-consumers tr:hover {
+    background: var(--bg-tertiary);
+}
+
+.ionc-dialog-empty {
+    padding: 24px;
+    text-align: center;
+    color: var(--text-muted);
+}

@@ -487,14 +487,95 @@ test.describe('IONotifyController (SharedMemory)', () => {
       return;
     }
 
-    // Подготавливаем обработчик диалога
-    page.on('dialog', async dialog => {
-      expect(dialog.type()).toBe('prompt');
-      await dialog.dismiss();
-    });
-
     // Кликаем на кнопку
     await setBtn.click();
+
+    // Проверяем что открылся кастомный диалог
+    const dialog = page.locator('.ionc-dialog-overlay.visible');
+    await expect(dialog).toBeVisible();
+
+    // Проверяем заголовок
+    await expect(page.locator('#ionc-dialog-title')).toContainText('Установить значение');
+
+    // Проверяем наличие поля ввода
+    await expect(page.locator('#ionc-set-value')).toBeVisible();
+
+    // Проверяем кнопки
+    await expect(page.locator('#ionc-set-confirm')).toBeVisible();
+    await expect(page.locator('.ionc-dialog-btn-cancel')).toBeVisible();
+
+    // Закрываем диалог
+    await page.locator('.ionc-dialog-btn-cancel').click();
+    await expect(dialog).not.toBeVisible();
+  });
+
+  test('should close set value dialog on ESC', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    const rows = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row:not(.ionc-sensor-readonly)');
+    const count = await rows.count();
+    if (count === 0) return;
+
+    const setBtn = rows.first().locator('.ionc-btn-set');
+    if (await setBtn.isDisabled()) return;
+
+    await setBtn.click();
+
+    const dialog = page.locator('.ionc-dialog-overlay.visible');
+    await expect(dialog).toBeVisible();
+
+    // Нажимаем ESC
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+  });
+
+  test('should close set value dialog on overlay click', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    const rows = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row:not(.ionc-sensor-readonly)');
+    const count = await rows.count();
+    if (count === 0) return;
+
+    const setBtn = rows.first().locator('.ionc-btn-set');
+    if (await setBtn.isDisabled()) return;
+
+    await setBtn.click();
+
+    const overlay = page.locator('.ionc-dialog-overlay.visible');
+    await expect(overlay).toBeVisible();
+
+    // Кликаем на overlay (не на сам диалог)
+    await overlay.click({ position: { x: 10, y: 10 } });
+    await expect(overlay).not.toBeVisible();
+  });
+
+  test('should show validation error for empty value', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    const rows = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row:not(.ionc-sensor-readonly)');
+    const count = await rows.count();
+    if (count === 0) return;
+
+    const setBtn = rows.first().locator('.ionc-btn-set');
+    if (await setBtn.isDisabled()) return;
+
+    await setBtn.click();
+
+    // Очищаем поле ввода
+    const input = page.locator('#ionc-set-value');
+    await input.fill('');
+
+    // Кликаем применить
+    await page.locator('#ionc-set-confirm').click();
+
+    // Проверяем что появилась ошибка
+    await expect(page.locator('#ionc-dialog-error')).not.toBeEmpty();
+
+    // Диалог должен остаться открытым
+    await expect(page.locator('.ionc-dialog-overlay.visible')).toBeVisible();
+
+    // Закрываем
+    await page.keyboard.press('Escape');
   });
 
   test('should show consumers dialog on button click', async ({ page }) => {
@@ -502,14 +583,73 @@ test.describe('IONotifyController (SharedMemory)', () => {
 
     const consumersBtn = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first().locator('.ionc-btn-consumers');
 
-    // Подготавливаем обработчик диалога
-    page.on('dialog', async dialog => {
-      expect(dialog.type()).toBe('alert');
-      expect(dialog.message()).toContain('Подписчики');
-      await dialog.dismiss();
-    });
-
     await consumersBtn.click();
+
+    // Проверяем что открылся кастомный диалог
+    const dialog = page.locator('.ionc-dialog-overlay.visible');
+    await expect(dialog).toBeVisible();
+
+    // Проверяем заголовок
+    await expect(page.locator('#ionc-dialog-title')).toContainText('Подписчики');
+
+    // Проверяем что есть информация о датчике
+    await expect(page.locator('.ionc-dialog-info')).toBeVisible();
+
+    // Проверяем кнопку закрытия
+    await expect(page.locator('.ionc-dialog-btn-cancel')).toContainText('Закрыть');
+
+    // Закрываем диалог
+    await page.locator('.ionc-dialog-btn-cancel').click();
+    await expect(dialog).not.toBeVisible();
+  });
+
+  test('should show freeze dialog on single click', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    // Ищем незамороженный датчик
+    const freezeBtn = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row .ionc-btn-freeze').first();
+    const btnCount = await freezeBtn.count();
+    if (btnCount === 0) return;
+
+    // Одинарный клик — ждём 300мс чтобы сработал таймер
+    await freezeBtn.click();
+    await page.waitForTimeout(300);
+
+    // Проверяем что открылся диалог заморозки
+    const dialog = page.locator('.ionc-dialog-overlay.visible');
+    await expect(dialog).toBeVisible();
+
+    // Проверяем заголовок
+    await expect(page.locator('#ionc-dialog-title')).toContainText('Заморозить');
+
+    // Проверяем наличие поля ввода значения заморозки
+    await expect(page.locator('#ionc-freeze-value')).toBeVisible();
+
+    // Проверяем подсказку про двойной клик
+    await expect(page.locator('.ionc-dialog-hint')).toContainText('Двойной клик');
+
+    // Закрываем
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+  });
+
+  test('should unfreeze on unfreeze button click', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    // Ищем замороженный датчик
+    const unfreezeBtn = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row .ionc-btn-unfreeze').first();
+    const btnCount = await unfreezeBtn.count();
+    if (btnCount === 0) {
+      // Нет замороженных датчиков — пропускаем
+      return;
+    }
+
+    // Клик на разморозку — должен сразу разморозить без диалога
+    await unfreezeBtn.click();
+
+    // Диалог не должен появиться
+    const dialog = page.locator('.ionc-dialog-overlay.visible');
+    await expect(dialog).not.toBeVisible();
   });
 
   test('should display type badges with correct colors', async ({ page }) => {

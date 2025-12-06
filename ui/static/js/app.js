@@ -977,8 +977,26 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         tbody.querySelectorAll('.ionc-btn-set').forEach(btn => {
             btn.addEventListener('click', () => this.showSetDialog(parseInt(btn.dataset.id)));
         });
+        // Кнопка заморозки: одинарный клик = диалог, двойной клик = быстрая заморозка
         tbody.querySelectorAll('.ionc-btn-freeze').forEach(btn => {
-            btn.addEventListener('click', () => this.toggleFreeze(parseInt(btn.dataset.id)));
+            let clickTimer = null;
+            const sensorId = parseInt(btn.dataset.id);
+            btn.addEventListener('click', () => {
+                if (clickTimer) {
+                    clearTimeout(clickTimer);
+                    clickTimer = null;
+                    this.quickFreeze(sensorId);
+                } else {
+                    clickTimer = setTimeout(() => {
+                        clickTimer = null;
+                        this.showFreezeDialog(sensorId);
+                    }, 250);
+                }
+            });
+        });
+        // Кнопка разморозки
+        tbody.querySelectorAll('.ionc-btn-unfreeze').forEach(btn => {
+            btn.addEventListener('click', () => this.unfreeze(parseInt(btn.dataset.id)));
         });
         tbody.querySelectorAll('.ionc-btn-consumers').forEach(btn => {
             btn.addEventListener('click', () => this.showConsumersDialog(parseInt(btn.dataset.id)));
@@ -1200,84 +1218,255 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         }
     }
 
-    async showSetDialog(sensorId) {
+    showSetDialog(sensorId) {
         const sensor = this.sensorMap.get(sensorId);
         if (!sensor) return;
 
-        const newValue = prompt(`Установить значение для ${sensor.name} (ID: ${sensorId}):`, sensor.value);
-        if (newValue === null) return;
+        const objectName = this.objectName;
+        const self = this;
 
-        const value = parseInt(newValue, 10);
-        if (isNaN(value)) {
-            alert('Введите целое число');
-            return;
-        }
+        const body = `
+            <div class="ionc-dialog-info">
+                Датчик: <strong>${escapeHtml(sensor.name)}</strong> (ID: ${sensorId})<br>
+                Текущее значение: <strong>${sensor.value}</strong>
+            </div>
+            <div class="ionc-dialog-field">
+                <label for="ionc-set-value">Новое значение:</label>
+                <input type="number" id="ionc-set-value" value="${sensor.value}">
+            </div>
+        `;
+
+        const footer = `
+            <button class="ionc-dialog-btn ionc-dialog-btn-cancel" onclick="closeIoncDialog()">Отмена</button>
+            <button class="ionc-dialog-btn ionc-dialog-btn-primary" id="ionc-set-confirm">Применить</button>
+        `;
+
+        const doSetValue = async () => {
+            const input = document.getElementById('ionc-set-value');
+            const value = parseInt(input.value, 10);
+
+            if (isNaN(value)) {
+                showIoncDialogError('Введите целое число');
+                input.classList.add('error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/objects/${encodeURIComponent(objectName)}/ionc/set`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sensor_id: sensorId, value: value })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'Failed to set value');
+                }
+
+                // Обновляем локально
+                sensor.value = value;
+                const valueEl = document.getElementById(`ionc-value-${objectName}-${sensorId}`);
+                if (valueEl) valueEl.textContent = value;
+
+                closeIoncDialog();
+            } catch (err) {
+                showIoncDialogError(`Ошибка: ${err.message}`);
+            }
+        };
+
+        openIoncDialog({
+            title: 'Установить значение',
+            body,
+            footer,
+            focusInput: true,
+            onConfirm: doSetValue
+        });
+
+        // Attach button handler
+        document.getElementById('ionc-set-confirm').addEventListener('click', doSetValue);
+    }
+
+    // Показать диалог заморозки (одинарный клик на ❄)
+    showFreezeDialog(sensorId) {
+        const sensor = this.sensorMap.get(sensorId);
+        if (!sensor) return;
+
+        const objectName = this.objectName;
+        const self = this;
+
+        const body = `
+            <div class="ionc-dialog-info">
+                Датчик: <strong>${escapeHtml(sensor.name)}</strong> (ID: ${sensorId})<br>
+                Текущее значение: <strong>${sensor.value}</strong>
+            </div>
+            <div class="ionc-dialog-field">
+                <label for="ionc-freeze-value">Значение заморозки:</label>
+                <input type="number" id="ionc-freeze-value" value="${sensor.value}">
+                <div class="ionc-dialog-hint">Двойной клик на ❄ — быстрая заморозка на текущем значении</div>
+            </div>
+        `;
+
+        const footer = `
+            <button class="ionc-dialog-btn ionc-dialog-btn-cancel" onclick="closeIoncDialog()">Отмена</button>
+            <button class="ionc-dialog-btn ionc-dialog-btn-freeze" id="ionc-freeze-confirm">❄ Заморозить</button>
+        `;
+
+        const doFreeze = async () => {
+            const input = document.getElementById('ionc-freeze-value');
+            const value = parseInt(input.value, 10);
+
+            if (isNaN(value)) {
+                showIoncDialogError('Введите целое число');
+                input.classList.add('error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/objects/${encodeURIComponent(objectName)}/ionc/freeze`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sensor_id: sensorId, value: value })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'Failed to freeze');
+                }
+
+                sensor.frozen = true;
+                sensor.value = value;
+                self.reRenderSensorRow(sensorId);
+                closeIoncDialog();
+            } catch (err) {
+                showIoncDialogError(`Ошибка: ${err.message}`);
+            }
+        };
+
+        openIoncDialog({
+            title: 'Заморозить датчик',
+            body,
+            footer,
+            focusInput: true,
+            onConfirm: doFreeze
+        });
+
+        document.getElementById('ionc-freeze-confirm').addEventListener('click', doFreeze);
+    }
+
+    // Быстрая заморозка на текущем значении (двойной клик на ❄)
+    async quickFreeze(sensorId) {
+        const sensor = this.sensorMap.get(sensorId);
+        if (!sensor) return;
 
         try {
-            const response = await fetch(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/set`, {
+            const response = await fetch(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/freeze`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sensor_id: sensorId, value: value })
+                body: JSON.stringify({ sensor_id: sensorId, value: sensor.value })
             });
 
             if (!response.ok) {
                 const err = await response.json();
-                throw new Error(err.error || 'Failed to set value');
+                throw new Error(err.error || 'Failed to freeze');
             }
 
-            // Обновляем локально
-            sensor.value = value;
-            const valueEl = document.getElementById(`ionc-value-${this.objectName}-${sensorId}`);
-            if (valueEl) valueEl.textContent = value;
-
+            sensor.frozen = true;
+            this.reRenderSensorRow(sensorId);
         } catch (err) {
-            alert(`Ошибка: ${err.message}`);
+            showIoncDialogError(`Ошибка: ${err.message}`);
         }
     }
 
-    async toggleFreeze(sensorId) {
+    // Разморозка (клик на 🔥)
+    async unfreeze(sensorId) {
         const sensor = this.sensorMap.get(sensorId);
         if (!sensor) return;
 
         try {
-            if (sensor.frozen) {
-                // Unfreeze
-                const response = await fetch(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/unfreeze`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sensor_id: sensorId })
-                });
-                if (!response.ok) throw new Error('Failed to unfreeze');
-                sensor.frozen = false;
-            } else {
-                // Freeze with current value
-                const response = await fetch(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/freeze`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sensor_id: sensorId, value: sensor.value })
-                });
-                if (!response.ok) throw new Error('Failed to freeze');
-                sensor.frozen = true;
+            const response = await fetch(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/unfreeze`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sensor_id: sensorId })
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to unfreeze');
             }
 
-            // Re-render the row
-            const row = document.querySelector(`tr[data-sensor-id="${sensorId}"]`);
-            if (row) {
-                row.outerHTML = this.renderSensorRow(sensor);
-                // Re-attach event listeners
-                const newRow = document.querySelector(`tr[data-sensor-id="${sensorId}"]`);
-                newRow.querySelector('.ionc-btn-set')?.addEventListener('click', () => this.showSetDialog(sensorId));
-                newRow.querySelector('.ionc-btn-freeze, .ionc-btn-unfreeze')?.addEventListener('click', () => this.toggleFreeze(sensorId));
-                newRow.querySelector('.ionc-btn-consumers')?.addEventListener('click', () => this.showConsumersDialog(sensorId));
-            }
+            sensor.frozen = false;
+            this.reRenderSensorRow(sensorId);
         } catch (err) {
-            alert(`Ошибка: ${err.message}`);
+            showIoncDialogError(`Ошибка: ${err.message}`);
         }
+    }
+
+    // Перерисовка строки датчика и переподключение обработчиков
+    reRenderSensorRow(sensorId) {
+        const sensor = this.sensorMap.get(sensorId);
+        if (!sensor) return;
+
+        const row = document.querySelector(`tr[data-sensor-id="${sensorId}"]`);
+        if (row) {
+            row.outerHTML = this.renderSensorRow(sensor);
+            this.attachRowEventListeners(sensorId);
+        }
+    }
+
+    // Подключение обработчиков к строке датчика
+    attachRowEventListeners(sensorId) {
+        const row = document.querySelector(`tr[data-sensor-id="${sensorId}"]`);
+        if (!row) return;
+
+        row.querySelector('.ionc-btn-set')?.addEventListener('click', () => this.showSetDialog(sensorId));
+        row.querySelector('.ionc-btn-consumers')?.addEventListener('click', () => this.showConsumersDialog(sensorId));
+
+        // Кнопка заморозки — одинарный/двойной клик
+        const freezeBtn = row.querySelector('.ionc-btn-freeze');
+        if (freezeBtn) {
+            let clickTimer = null;
+            freezeBtn.addEventListener('click', (e) => {
+                if (clickTimer) {
+                    // Двойной клик — быстрая заморозка
+                    clearTimeout(clickTimer);
+                    clickTimer = null;
+                    this.quickFreeze(sensorId);
+                } else {
+                    // Одинарный клик — ждём второй клик или открываем диалог
+                    clickTimer = setTimeout(() => {
+                        clickTimer = null;
+                        this.showFreezeDialog(sensorId);
+                    }, 250);
+                }
+            });
+        }
+
+        // Кнопка разморозки
+        row.querySelector('.ionc-btn-unfreeze')?.addEventListener('click', () => this.unfreeze(sensorId));
     }
 
     async showConsumersDialog(sensorId) {
         const sensor = this.sensorMap.get(sensorId);
         if (!sensor) return;
+
+        // Показываем диалог с индикатором загрузки
+        const loadingBody = `
+            <div class="ionc-dialog-info">
+                Датчик: <strong>${escapeHtml(sensor.name)}</strong> (ID: ${sensorId})
+            </div>
+            <div class="ionc-dialog-empty">Загрузка подписчиков...</div>
+        `;
+
+        const footer = `
+            <button class="ionc-dialog-btn ionc-dialog-btn-cancel" onclick="closeIoncDialog()">Закрыть</button>
+        `;
+
+        openIoncDialog({
+            title: 'Подписчики датчика',
+            body: loadingBody,
+            footer,
+            focusInput: false
+        });
 
         try {
             const response = await fetch(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/consumers?sensors=${sensorId}`);
@@ -1287,17 +1476,46 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             const sensorData = data.sensors?.[0];
             const consumers = sensorData?.consumers || [];
 
-            let message = `Подписчики на ${sensor.name} (ID: ${sensorId}):\n\n`;
+            let contentHtml;
             if (consumers.length === 0) {
-                message += 'Нет подписчиков';
+                contentHtml = `
+                    <div class="ionc-dialog-info">
+                        Датчик: <strong>${escapeHtml(sensor.name)}</strong> (ID: ${sensorId})
+                    </div>
+                    <div class="ionc-dialog-empty">Нет подписчиков</div>
+                `;
             } else {
-                consumers.forEach((c, i) => {
-                    message += `${i + 1}. ${c.name} (ID: ${c.id})\n`;
-                });
+                const rows = consumers.map(c => `
+                    <tr>
+                        <td>${c.id}</td>
+                        <td>${escapeHtml(c.name)}</td>
+                        <td>${escapeHtml(c.node || '')}</td>
+                    </tr>
+                `).join('');
+
+                contentHtml = `
+                    <div class="ionc-dialog-info">
+                        Датчик: <strong>${escapeHtml(sensor.name)}</strong> (ID: ${sensorId})<br>
+                        Подписчиков: <strong>${consumers.length}</strong>
+                    </div>
+                    <div class="ionc-dialog-consumers">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="width: 60px">ID</th>
+                                    <th>Имя</th>
+                                    <th style="width: 80px">Узел</th>
+                                </tr>
+                            </thead>
+                            <tbody>${rows}</tbody>
+                        </table>
+                    </div>
+                `;
             }
-            alert(message);
+
+            document.getElementById('ionc-dialog-body').innerHTML = contentHtml;
         } catch (err) {
-            alert(`Ошибка: ${err.message}`);
+            showIoncDialogError(`Ошибка: ${err.message}`);
         }
     }
 
@@ -2530,6 +2748,86 @@ function getSensorInfo(idOrName) {
 function isDiscreteSignal(sensor) {
     if (!sensor) return false;
     return sensor.isDiscrete === true || sensor.iotype === 'DI' || sensor.iotype === 'DO';
+}
+
+// === IONC Action Dialog ===
+
+const ioncDialogState = {
+    isOpen: false,
+    onConfirm: null,
+    onCancel: null
+};
+
+function openIoncDialog(options) {
+    const { title, body, footer, onConfirm, onCancel, focusInput } = options;
+
+    const overlay = document.getElementById('ionc-dialog-overlay');
+    const titleEl = document.getElementById('ionc-dialog-title');
+    const bodyEl = document.getElementById('ionc-dialog-body');
+    const footerEl = document.getElementById('ionc-dialog-footer');
+    const errorEl = document.getElementById('ionc-dialog-error');
+
+    titleEl.textContent = title;
+    bodyEl.innerHTML = body;
+    footerEl.innerHTML = footer;
+    errorEl.textContent = '';
+
+    ioncDialogState.isOpen = true;
+    ioncDialogState.onConfirm = onConfirm;
+    ioncDialogState.onCancel = onCancel;
+
+    overlay.classList.add('visible');
+
+    // Focus input if specified
+    if (focusInput) {
+        const input = bodyEl.querySelector('input');
+        if (input) {
+            input.focus();
+            input.select();
+        }
+    }
+
+    // Add ESC handler
+    document.addEventListener('keydown', handleIoncDialogKeydown);
+}
+
+function closeIoncDialog() {
+    const overlay = document.getElementById('ionc-dialog-overlay');
+    overlay.classList.remove('visible');
+    ioncDialogState.isOpen = false;
+    ioncDialogState.onConfirm = null;
+    ioncDialogState.onCancel = null;
+    document.removeEventListener('keydown', handleIoncDialogKeydown);
+}
+
+function handleIoncDialogKeydown(e) {
+    if (!ioncDialogState.isOpen) return;
+
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        if (ioncDialogState.onCancel) {
+            ioncDialogState.onCancel();
+        }
+        closeIoncDialog();
+    } else if (e.key === 'Enter') {
+        const input = document.querySelector('#ionc-dialog-body input');
+        if (input && document.activeElement === input) {
+            e.preventDefault();
+            if (ioncDialogState.onConfirm) {
+                ioncDialogState.onConfirm();
+            }
+        }
+    }
+}
+
+function showIoncDialogError(message) {
+    const errorEl = document.getElementById('ionc-dialog-error');
+    errorEl.textContent = message;
+}
+
+function clearIoncDialogError() {
+    const errorEl = document.getElementById('ionc-dialog-error');
+    errorEl.textContent = '';
 }
 
 // === Sensor Dialog ===

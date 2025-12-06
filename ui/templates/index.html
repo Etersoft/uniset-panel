@@ -57,6 +57,23 @@
         </div>
     </div>
 
+    <!-- IONC Action Dialog Modal -->
+    <div class="ionc-dialog-overlay" id="ionc-dialog-overlay" onclick="if(event.target === this) closeIoncDialog()">
+        <div class="ionc-dialog" id="ionc-dialog">
+            <div class="ionc-dialog-header">
+                <span class="ionc-dialog-title" id="ionc-dialog-title">Заголовок</span>
+                <button class="ionc-dialog-close" onclick="closeIoncDialog()" title="Закрыть (ESC)">&times;</button>
+            </div>
+            <div class="ionc-dialog-body" id="ionc-dialog-body">
+                <!-- Динамическое содержимое -->
+            </div>
+            <div class="ionc-dialog-error" id="ionc-dialog-error"></div>
+            <div class="ionc-dialog-footer" id="ionc-dialog-footer">
+                <!-- Динамические кнопки -->
+            </div>
+        </div>
+    </div>
+
     <!-- Sensor Dialog Modal -->
     <div class="sensor-dialog-overlay" id="sensor-dialog-overlay" onclick="if(event.target === this) closeSensorDialog()">
         <div class="sensor-dialog">
