@@ -529,6 +529,52 @@ test.describe('IONotifyController (SharedMemory)', () => {
     await expect(dialog).not.toBeVisible();
   });
 
+  test('should focus input field when set value dialog opens', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    const rows = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row:not(.ionc-sensor-readonly)');
+    const count = await rows.count();
+    if (count === 0) return;
+
+    const setBtn = rows.first().locator('.ionc-btn-set');
+    if (await setBtn.isDisabled()) return;
+
+    await setBtn.click();
+
+    const dialog = page.locator('.ionc-dialog-overlay.visible');
+    await expect(dialog).toBeVisible();
+
+    // Проверяем что input получил фокус
+    const input = page.locator('#ionc-set-value');
+    await expect(input).toBeFocused({ timeout: 500 });
+
+    // Закрываем
+    await page.keyboard.press('Escape');
+  });
+
+  test('should focus input field when freeze dialog opens', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    // Ищем незамороженный датчик
+    const freezeBtn = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row .ionc-btn-freeze').first();
+    const btnCount = await freezeBtn.count();
+    if (btnCount === 0) return;
+
+    // Одинарный клик — ждём 300мс чтобы сработал таймер
+    await freezeBtn.click();
+    await page.waitForTimeout(300);
+
+    const dialog = page.locator('.ionc-dialog-overlay.visible');
+    await expect(dialog).toBeVisible();
+
+    // Проверяем что input получил фокус
+    const input = page.locator('#ionc-freeze-value');
+    await expect(input).toBeFocused({ timeout: 500 });
+
+    // Закрываем
+    await page.keyboard.press('Escape');
+  });
+
   test('should close set value dialog on overlay click', async ({ page }) => {
     await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
 

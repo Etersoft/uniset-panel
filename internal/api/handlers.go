@@ -20,16 +20,17 @@ import (
 )
 
 type Handlers struct {
-	client         *uniset.Client
-	storage        storage.Storage
-	poller         *poller.Poller
-	sensorConfig   *sensorconfig.SensorConfig
-	sseHub         *SSEHub
-	pollInterval   time.Duration
-	logServerMgr   *logserver.Manager
-	smPoller       *sm.Poller
-	ioncPoller     *ionc.Poller
-	serverManager  *server.Manager // менеджер нескольких серверов
+	client          *uniset.Client
+	storage         storage.Storage
+	poller          *poller.Poller
+	sensorConfig    *sensorconfig.SensorConfig
+	sseHub          *SSEHub
+	pollInterval    time.Duration
+	logServerMgr    *logserver.Manager
+	smPoller        *sm.Poller
+	ioncPoller      *ionc.Poller
+	serverManager   *server.Manager // менеджер нескольких серверов
+	controlsEnabled bool            // true if confile was specified (IONC controls visible)
 }
 
 func NewHandlers(client *uniset.Client, store storage.Storage, p *poller.Poller, sensorCfg *sensorconfig.SensorConfig, pollInterval time.Duration) *Handlers {
@@ -63,6 +64,11 @@ func (h *Handlers) SetServerManager(mgr *server.Manager) {
 	h.serverManager = mgr
 }
 
+// SetControlsEnabled устанавливает доступность элементов управления IONC
+func (h *Handlers) SetControlsEnabled(enabled bool) {
+	h.controlsEnabled = enabled
+}
+
 // SetSSEHub устанавливает SSE hub
 func (h *Handlers) SetSSEHub(hub *SSEHub) {
 	h.sseHub = hub
@@ -82,6 +88,14 @@ func (h *Handlers) writeError(w http.ResponseWriter, status int, message string)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(map[string]string{"error": message})
+}
+
+// GetConfig возвращает конфигурацию приложения для UI
+// GET /api/config
+func (h *Handlers) GetConfig(w http.ResponseWriter, r *http.Request) {
+	h.writeJSON(w, map[string]interface{}{
+		"controlsEnabled": h.controlsEnabled,
+	})
 }
 
 // GetObjects возвращает список доступных объектов
@@ -289,30 +303,6 @@ func (h *Handlers) GetSensors(w http.ResponseWriter, r *http.Request) {
 		"sensors": h.sensorConfig.GetAllInfo(),
 		"count":   h.sensorConfig.Count(),
 	})
-}
-
-// GetSensorByID возвращает информацию о датчике по ID
-// GET /api/sensors/{id}
-func (h *Handlers) GetSensorByID(w http.ResponseWriter, r *http.Request) {
-	idStr := r.PathValue("id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		h.writeError(w, http.StatusBadRequest, "invalid sensor ID")
-		return
-	}
-
-	if h.sensorConfig == nil {
-		h.writeError(w, http.StatusNotFound, "sensor configuration not loaded")
-		return
-	}
-
-	sensor := h.sensorConfig.GetByID(id)
-	if sensor == nil {
-		h.writeError(w, http.StatusNotFound, "sensor not found")
-		return
-	}
-
-	h.writeJSON(w, sensor.ToInfo())
 }
 
 // GetSensorByName возвращает информацию о датчике по имени

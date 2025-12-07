@@ -13,11 +13,24 @@ const apiVersion = "v01"
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
+	Supplier   string // supplier name for set/freeze/unfreeze operations
 }
 
 func NewClient(baseURL string) *Client {
 	return &Client{
-		baseURL: baseURL,
+		baseURL:  baseURL,
+		Supplier: "TestProc", // default supplier
+		httpClient: &http.Client{
+			Timeout: 10 * time.Second,
+		},
+	}
+}
+
+// NewClientWithSupplier creates a new client with custom supplier
+func NewClientWithSupplier(baseURL, supplier string) *Client {
+	return &Client{
+		baseURL:  baseURL,
+		Supplier: supplier,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -261,27 +274,27 @@ func (c *Client) GetIONCSensorValues(objectName string, sensors string) (*IONCSe
 }
 
 // SetIONCSensorValue устанавливает значение датчика
-// GET /{objectName}/set?id=value
+// GET /api/v01/{objectName}/set?supplier={supplier}&id=value
 func (c *Client) SetIONCSensorValue(objectName string, sensorID int64, value int64) error {
-	path := fmt.Sprintf("%s/set?%d=%d", objectName, sensorID, value)
+	path := fmt.Sprintf("%s/set?supplier=%s&%d=%d", objectName, c.Supplier, sensorID, value)
 
 	_, err := c.doGet(path)
 	return err
 }
 
 // FreezeIONCSensor замораживает датчик
-// GET /{objectName}/freeze?id=value
+// GET /api/v01/{objectName}/freeze?supplier={supplier}&id=value
 func (c *Client) FreezeIONCSensor(objectName string, sensorID int64, value int64) error {
-	path := fmt.Sprintf("%s/freeze?%d=%d", objectName, sensorID, value)
+	path := fmt.Sprintf("%s/freeze?supplier=%s&%d=%d", objectName, c.Supplier, sensorID, value)
 
 	_, err := c.doGet(path)
 	return err
 }
 
 // UnfreezeIONCSensor размораживает датчик
-// GET /{objectName}/unfreeze?id
+// GET /api/v01/{objectName}/unfreeze?supplier={supplier}&id
 func (c *Client) UnfreezeIONCSensor(objectName string, sensorID int64) error {
-	path := fmt.Sprintf("%s/unfreeze?%d", objectName, sensorID)
+	path := fmt.Sprintf("%s/unfreeze?supplier=%s&%d", objectName, c.Supplier, sensorID)
 
 	_, err := c.doGet(path)
 	return err

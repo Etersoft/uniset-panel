@@ -57,7 +57,18 @@ func main() {
 			logger.Error("Failed to load sensor config", "file", cfg.ConFile, "error", err)
 			os.Exit(1)
 		}
-		logger.Info("Loaded sensor configuration", "file", cfg.ConFile, "sensors", sensorCfg.Count())
+		logger.Info("Loaded sensor configuration", "file", cfg.ConFile, "sensors", sensorCfg.Count(),
+			"objects", sensorCfg.ObjectCount(), "services", sensorCfg.ServiceCount())
+
+		// Validate that supplier exists in config (objects or services)
+		if !sensorCfg.HasObjectOrService(cfg.UnisetSupplier) {
+			logger.Error("Supplier not found in configuration",
+				"supplier", cfg.UnisetSupplier,
+				"hint", "Specify valid supplier with -uniset-supplier=<name>",
+				"note", "Supplier must exist in <objects> or <services> section of the config")
+			os.Exit(1)
+		}
+		logger.Info("Validated supplier", "supplier", cfg.UnisetSupplier)
 	}
 
 	// Create LogServer manager
@@ -65,7 +76,7 @@ func main() {
 	defer logServerMgr.Close()
 
 	// Create ServerManager
-	serverMgr := server.NewManager(store, cfg.PollInterval, cfg.HistoryTTL)
+	serverMgr := server.NewManager(store, cfg.PollInterval, cfg.HistoryTTL, cfg.UnisetSupplier)
 
 	// Create SSE hub (needed for callbacks)
 	sseHub := api.NewSSEHub()
@@ -98,6 +109,7 @@ func main() {
 	handlers.SetLogServerManager(logServerMgr)
 	handlers.SetServerManager(serverMgr)
 	handlers.SetSSEHub(sseHub)
+	handlers.SetControlsEnabled(cfg.ConFile != "") // Controls visible only if confile specified
 
 	// Set IONC poller if available
 	if ioncPollerInstance != nil {

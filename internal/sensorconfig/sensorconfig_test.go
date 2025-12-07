@@ -26,27 +26,6 @@ func TestParse(t *testing.T) {
 	}
 }
 
-func TestGetByID(t *testing.T) {
-	cfg, _ := Parse([]byte(testXML))
-
-	sensor := cfg.GetByID(1)
-	if sensor == nil {
-		t.Fatal("expected sensor with ID 1")
-	}
-
-	if sensor.Name != "Input1_S" {
-		t.Errorf("expected name Input1_S, got %s", sensor.Name)
-	}
-
-	if sensor.TextName != "Digital Input 1" {
-		t.Errorf("expected textname 'Digital Input 1', got '%s'", sensor.TextName)
-	}
-
-	if sensor.IOType != IOTypeDI {
-		t.Errorf("expected IOType DI, got %s", sensor.IOType)
-	}
-}
-
 func TestGetByName(t *testing.T) {
 	cfg, _ := Parse([]byte(testXML))
 
@@ -119,12 +98,9 @@ func TestIOTypeIsInput(t *testing.T) {
 func TestToInfo(t *testing.T) {
 	cfg, _ := Parse([]byte(testXML))
 
-	sensor := cfg.GetByID(1)
+	sensor := cfg.GetByName("Input1_S")
 	info := sensor.ToInfo()
 
-	if info.ID != 1 {
-		t.Errorf("expected ID 1, got %d", info.ID)
-	}
 	if info.Name != "Input1_S" {
 		t.Errorf("expected name Input1_S, got %s", info.Name)
 	}
@@ -145,9 +121,6 @@ func TestToInfo(t *testing.T) {
 func TestNilConfig(t *testing.T) {
 	var cfg *SensorConfig
 
-	if cfg.GetByID(1) != nil {
-		t.Error("expected nil for nil config")
-	}
 	if cfg.GetByName("test") != nil {
 		t.Error("expected nil for nil config")
 	}
@@ -163,7 +136,7 @@ func TestCaseInsensitiveIOType(t *testing.T) {
 	xmlLower := `<?xml version="1.0"?>
 <UNISETPLC>
 	<sensors>
-		<item id="1" iotype="di" name="Test" textname="Test"/>
+		<item iotype="di" name="Test" textname="Test"/>
 	</sensors>
 </UNISETPLC>`
 
@@ -172,8 +145,221 @@ func TestCaseInsensitiveIOType(t *testing.T) {
 		t.Fatalf("Parse failed: %v", err)
 	}
 
-	sensor := cfg.GetByID(1)
+	sensor := cfg.GetByName("Test")
 	if sensor.IOType != IOTypeDI {
 		t.Errorf("expected IOType DI (normalized), got %s", sensor.IOType)
+	}
+}
+
+// TestParseWithoutID verifies that XML without id attributes works correctly
+func TestParseWithoutID(t *testing.T) {
+	xmlNoID := `<?xml version="1.0" encoding="utf-8"?>
+<UNISETPLC>
+	<ObjectsMap idfromfile="0">
+		<sensors name="Sensors">
+			<item name="Sensor1" textname="First Sensor" iotype="DI"/>
+			<item name="Sensor2" textname="Second Sensor" iotype="AI"/>
+			<item name="Sensor3" textname="Third Sensor" iotype="DO"/>
+		</sensors>
+	</ObjectsMap>
+</UNISETPLC>`
+
+	cfg, err := Parse([]byte(xmlNoID))
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	// Check count
+	if cfg.Count() != 3 {
+		t.Errorf("expected 3 sensors, got %d", cfg.Count())
+	}
+
+	// Check that all sensors are accessible by name
+	s1 := cfg.GetByName("Sensor1")
+	if s1 == nil {
+		t.Fatal("expected Sensor1")
+	}
+	if s1.IOType != IOTypeDI {
+		t.Errorf("expected IOType DI, got %s", s1.IOType)
+	}
+	if s1.ID != 0 {
+		t.Errorf("expected ID 0 (not set), got %d", s1.ID)
+	}
+
+	s2 := cfg.GetByName("Sensor2")
+	if s2 == nil {
+		t.Fatal("expected Sensor2")
+	}
+	if s2.IOType != IOTypeAI {
+		t.Errorf("expected IOType AI, got %s", s2.IOType)
+	}
+
+	s3 := cfg.GetByName("Sensor3")
+	if s3 == nil {
+		t.Fatal("expected Sensor3")
+	}
+	if s3.IOType != IOTypeDO {
+		t.Errorf("expected IOType DO, got %s", s3.IOType)
+	}
+}
+
+// TestLoadFromFileWithoutID tests loading config/test-noid.xml file
+func TestLoadFromFileWithoutID(t *testing.T) {
+	cfg, err := LoadFromFile("../../config/test-noid.xml")
+	if err != nil {
+		t.Fatalf("LoadFromFile failed: %v", err)
+	}
+
+	// Should have 6 sensors
+	if cfg.Count() != 6 {
+		t.Errorf("expected 6 sensors, got %d", cfg.Count())
+	}
+
+	// Check specific sensors by name
+	tests := []struct {
+		name     string
+		iotype   IOType
+		textname string
+	}{
+		{"SES.AMC1_OPCUA_EM1", IOTypeDI, "Управление EM процессом обмена по opcua с ПЛК управления СЭС1"},
+		{"SES.AMC1_OPCUA_EM2", IOTypeDI, "Управление EM процессом обмена по opcua с ПЛК управления СЭС2"},
+		{"SES.PLC_IsMain1", IOTypeDI, "Текущий ПЛК - основной"},
+		{"SES.PLC_IsMain2", IOTypeDI, "Текущий ПЛК - основной"},
+		{"TestAnalog1", IOTypeAI, "Тестовый аналоговый датчик 1"},
+		{"TestAnalog2", IOTypeAO, "Тестовый аналоговый датчик 2"},
+	}
+
+	for _, tc := range tests {
+		s := cfg.GetByName(tc.name)
+		if s == nil {
+			t.Errorf("sensor %s not found", tc.name)
+			continue
+		}
+		if s.IOType != tc.iotype {
+			t.Errorf("sensor %s: expected IOType %s, got %s", tc.name, tc.iotype, s.IOType)
+		}
+		if s.TextName != tc.textname {
+			t.Errorf("sensor %s: expected textname %q, got %q", tc.name, tc.textname, s.TextName)
+		}
+		// ID should be 0 (not set in XML)
+		if s.ID != 0 {
+			t.Errorf("sensor %s: expected ID 0, got %d", tc.name, s.ID)
+		}
+	}
+
+	// Check GetAll returns all sensors
+	all := cfg.GetAll()
+	if len(all) != 6 {
+		t.Errorf("GetAll: expected 6 sensors, got %d", len(all))
+	}
+
+	// Check GetDiscrete and GetAnalog
+	discrete := cfg.GetDiscrete()
+	if len(discrete) != 4 {
+		t.Errorf("expected 4 discrete sensors, got %d", len(discrete))
+	}
+
+	analog := cfg.GetAnalog()
+	if len(analog) != 2 {
+		t.Errorf("expected 2 analog sensors, got %d", len(analog))
+	}
+}
+
+// TestParseObjectsAndServices tests parsing of objects and services sections
+func TestParseObjectsAndServices(t *testing.T) {
+	xmlWithObjectsServices := `<?xml version="1.0" encoding="utf-8"?>
+<UNISETPLC>
+	<ObjectsMap>
+		<sensors name="Sensors">
+			<item id="1" name="Sensor1" iotype="DI" textname="Test"/>
+		</sensors>
+		<objects name="UniObjects">
+			<item id="6000" name="TestProc"/>
+			<item id="6001" name="LProcessor"/>
+			<item id="6002" name="IOControl"/>
+		</objects>
+		<services name="Services">
+			<item id="5010" name="InfoServer"/>
+			<item id="5011" name="DBServer1"/>
+		</services>
+	</ObjectsMap>
+</UNISETPLC>`
+
+	cfg, err := Parse([]byte(xmlWithObjectsServices))
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	// Check sensors count
+	if cfg.Count() != 1 {
+		t.Errorf("expected 1 sensor, got %d", cfg.Count())
+	}
+
+	// Check objects count
+	if cfg.ObjectCount() != 3 {
+		t.Errorf("expected 3 objects, got %d", cfg.ObjectCount())
+	}
+
+	// Check services count
+	if cfg.ServiceCount() != 2 {
+		t.Errorf("expected 2 services, got %d", cfg.ServiceCount())
+	}
+
+	// Test HasObjectOrService
+	if !cfg.HasObjectOrService("TestProc") {
+		t.Error("expected TestProc in objects")
+	}
+	if !cfg.HasObjectOrService("LProcessor") {
+		t.Error("expected LProcessor in objects")
+	}
+	if !cfg.HasObjectOrService("InfoServer") {
+		t.Error("expected InfoServer in services")
+	}
+	if !cfg.HasObjectOrService("DBServer1") {
+		t.Error("expected DBServer1 in services")
+	}
+	if cfg.HasObjectOrService("NonExistent") {
+		t.Error("expected NonExistent to not be found")
+	}
+}
+
+// TestNilConfigObjectsServices tests that nil config returns expected values for objects/services
+func TestNilConfigObjectsServices(t *testing.T) {
+	var cfg *SensorConfig
+
+	if cfg.ObjectCount() != 0 {
+		t.Error("expected 0 objects for nil config")
+	}
+	if cfg.ServiceCount() != 0 {
+		t.Error("expected 0 services for nil config")
+	}
+	if cfg.HasObjectOrService("test") {
+		t.Error("expected false for nil config")
+	}
+}
+
+// TestLoadFromFileWithObjectsServices tests loading full config with objects/services
+func TestLoadFromFileWithObjectsServices(t *testing.T) {
+	cfg, err := LoadFromFile("../../config/test.xml")
+	if err != nil {
+		t.Fatalf("LoadFromFile failed: %v", err)
+	}
+
+	// Check that objects and services were parsed
+	if cfg.ObjectCount() == 0 {
+		t.Error("expected objects to be parsed from test.xml")
+	}
+	if cfg.ServiceCount() == 0 {
+		t.Error("expected services to be parsed from test.xml")
+	}
+
+	// TestProc should be in objects
+	if !cfg.HasObjectOrService("TestProc") {
+		t.Error("expected TestProc in objects")
+	}
+
+	// InfoServer should be in services
+	if !cfg.HasObjectOrService("InfoServer") {
+		t.Error("expected InfoServer in services")
 	}
 }

@@ -2828,13 +2828,15 @@ function openIoncDialog(options) {
 
     overlay.classList.add('visible');
 
-    // Focus input if specified
+    // Focus input if specified (use setTimeout to ensure element is visible)
     if (focusInput) {
-        const input = bodyEl.querySelector('input');
-        if (input) {
-            input.focus();
-            input.select();
-        }
+        setTimeout(() => {
+            const input = bodyEl.querySelector('input');
+            if (input) {
+                input.focus();
+                input.select();
+            }
+        }, 50);
     }
 
     // Add ESC handler

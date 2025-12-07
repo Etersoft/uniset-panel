@@ -33,7 +33,6 @@ func (s *Server) setupRoutes(staticFS fs.FS) {
 
 	// Sensor config API
 	s.mux.HandleFunc("GET /api/sensors", s.handlers.GetSensors)
-	s.mux.HandleFunc("GET /api/sensors/{id}", s.handlers.GetSensorByID)
 	s.mux.HandleFunc("GET /api/sensors/by-name/{name}", s.handlers.GetSensorByName)
 
 	// SharedMemory sensors API
@@ -71,6 +70,9 @@ func (s *Server) setupRoutes(staticFS fs.FS) {
 	s.mux.HandleFunc("DELETE /api/servers/{id}", s.handlers.RemoveServer)
 	s.mux.HandleFunc("GET /api/servers/{id}/status", s.handlers.GetServerStatus)
 	s.mux.HandleFunc("GET /api/all-objects", s.handlers.GetAllObjectsWithServers)
+
+	// Application config for UI
+	s.mux.HandleFunc("GET /api/config", s.handlers.GetConfig)
 
 	// Static files
 	staticHandler := http.FileServer(http.FS(staticFS))

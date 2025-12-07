@@ -37,6 +37,7 @@ type Manager struct {
 	storage      storage.Storage
 	pollInterval time.Duration
 	historyTTL   time.Duration
+	supplier     string // supplier name for set/freeze/unfreeze
 
 	// Callbacks для SSE
 	objectCallback ObjectEventCallback
@@ -51,12 +52,14 @@ func NewManager(
 	store storage.Storage,
 	pollInterval time.Duration,
 	historyTTL time.Duration,
+	supplier string,
 ) *Manager {
 	return &Manager{
 		instances:    make(map[string]*Instance),
 		storage:      store,
 		pollInterval: pollInterval,
 		historyTTL:   historyTTL,
+		supplier:     supplier,
 	}
 }
 
@@ -101,6 +104,7 @@ func (m *Manager) AddServer(cfg config.ServerConfig) error {
 		m.storage,
 		m.pollInterval,
 		m.historyTTL,
+		m.supplier,
 		m.objectCallback,
 		m.ioncCallback,
 	)

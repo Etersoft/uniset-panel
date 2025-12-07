@@ -50,6 +50,7 @@ type Config struct {
 	ConfigFile     string        // путь к YAML конфигу
 	SMURL          string        // URL SharedMemory API (пусто = отключено)
 	SMPollInterval time.Duration // Интервал опроса SM (0 = использовать PollInterval)
+	UnisetSupplier string        // Имя поставщика для операций set/freeze/unfreeze
 }
 
 func Parse() *Config {
@@ -72,6 +73,7 @@ func Parse() *Config {
 	flag.StringVar(&cfg.ConfigFile, "config", "", "YAML configuration file for servers")
 	flag.StringVar(&cfg.SMURL, "sm-url", "", "SharedMemory HTTP API URL (empty = disabled)")
 	flag.DurationVar(&cfg.SMPollInterval, "sm-poll-interval", 0, "SharedMemory polling interval (0 = use poll-interval)")
+	flag.StringVar(&cfg.UnisetSupplier, "uniset-supplier", "TestProc", "UniSet2 supplier name for set/freeze/unfreeze operations")
 
 	flag.Parse()
 

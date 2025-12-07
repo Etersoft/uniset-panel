@@ -671,64 +671,6 @@ func TestGetSensors_WithConfig(t *testing.T) {
 	}
 }
 
-// === GetSensorByID Tests ===
-
-func TestGetSensorByID_NoConfig(t *testing.T) {
-	unisetServer := mockUnisetServer()
-	defer unisetServer.Close()
-
-	handlers := setupTestHandlers(unisetServer)
-
-	req := httptest.NewRequest("GET", "/api/sensors/100", nil)
-	req.SetPathValue("id", "100")
-	w := httptest.NewRecorder()
-
-	handlers.GetSensorByID(w, req)
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected status 404, got %d", w.Code)
-	}
-}
-
-func TestGetSensorByID_InvalidID(t *testing.T) {
-	unisetServer := mockUnisetServer()
-	defer unisetServer.Close()
-
-	handlers := setupTestHandlers(unisetServer)
-
-	req := httptest.NewRequest("GET", "/api/sensors/invalid", nil)
-	req.SetPathValue("id", "invalid")
-	w := httptest.NewRecorder()
-
-	handlers.GetSensorByID(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400, got %d", w.Code)
-	}
-}
-
-func TestGetSensorByID_WithConfig(t *testing.T) {
-	unisetServer := mockUnisetServer()
-	defer unisetServer.Close()
-
-	client := uniset.NewClient(unisetServer.URL)
-	store := storage.NewMemoryStorage()
-	p := poller.New(client, store, 5*time.Second, time.Hour)
-	sensorCfg := createMockSensorConfig()
-	handlers := NewHandlers(client, store, p, sensorCfg, 5*time.Second)
-
-	req := httptest.NewRequest("GET", "/api/sensors/100", nil)
-	req.SetPathValue("id", "100")
-	w := httptest.NewRecorder()
-
-	handlers.GetSensorByID(w, req)
-
-	// Should be OK or NotFound depending on whether sensor exists
-	if w.Code != http.StatusOK && w.Code != http.StatusNotFound {
-		t.Errorf("expected status 200 or 404, got %d", w.Code)
-	}
-}
-
 // === GetSensorByName Tests ===
 
 func TestGetSensorByName_NoConfig(t *testing.T) {
@@ -1082,7 +1024,7 @@ func setupTestHandlersWithServerManager(servers map[string]*httptest.Server) *Ha
 	}
 
 	// Create server manager
-	serverMgr := server.NewManager(store, 5*time.Second, time.Hour)
+	serverMgr := server.NewManager(store, 5*time.Second, time.Hour, "TestProc")
 
 	// Add servers
 	for id, srv := range servers {

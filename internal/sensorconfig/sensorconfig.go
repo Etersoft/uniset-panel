@@ -45,11 +45,19 @@ type Sensor struct {
 	TextName string `xml:"textname,attr" json:"textname"`
 }
 
+// UniSetObject represents an object or service from XML config
+type UniSetObject struct {
+	ID   int64  `xml:"id,attr" json:"id"`
+	Name string `xml:"name,attr" json:"name"`
+}
+
 // SensorConfig holds all sensor configurations
+// Note: Name is the primary key, ID is optional (may be 0 if not present in XML)
 type SensorConfig struct {
-	sensors    map[int64]*Sensor  // by ID
-	byName     map[string]*Sensor // by Name
+	byName     map[string]*Sensor // by Name (primary)
 	allSensors []*Sensor
+	objects    map[string]*UniSetObject // objects by name
+	services   map[string]*UniSetObject // services by name
 }
 
 // XML parsing structures
@@ -61,7 +69,17 @@ type xmlRoot struct {
 }
 
 type xmlObjectsMap struct {
-	Sensors xmlSensors `xml:"sensors"`
+	Sensors  xmlSensors  `xml:"sensors"`
+	Objects  xmlObjects  `xml:"objects"`
+	Services xmlServices `xml:"services"`
+}
+
+type xmlObjects struct {
+	Items []UniSetObject `xml:"item"`
+}
+
+type xmlServices struct {
+	Items []UniSetObject `xml:"item"`
 }
 
 type xmlSensors struct {
@@ -71,9 +89,10 @@ type xmlSensors struct {
 // New creates an empty SensorConfig
 func New() *SensorConfig {
 	return &SensorConfig{
-		sensors:    make(map[int64]*Sensor),
 		byName:     make(map[string]*Sensor),
 		allSensors: make([]*Sensor, 0),
+		objects:    make(map[string]*UniSetObject),
+		services:   make(map[string]*UniSetObject),
 	}
 }
 
@@ -103,7 +122,7 @@ func Parse(data []byte) (*SensorConfig, error) {
 			// Normalize IOType to uppercase
 			sensor.IOType = IOType(strings.ToUpper(string(sensor.IOType)))
 
-			cfg.sensors[sensor.ID] = sensor
+			// Use Name as primary key (ID is optional, may be 0)
 			cfg.byName[sensor.Name] = sensor
 			cfg.allSensors = append(cfg.allSensors, sensor)
 		}
@@ -115,15 +134,19 @@ func Parse(data []byte) (*SensorConfig, error) {
 	// Collect sensors from ObjectsMap path (UNISETPLC > ObjectsMap > sensors)
 	addSensors(&root.ObjectsMap.Sensors)
 
-	return cfg, nil
-}
-
-// GetByID returns sensor by ID
-func (c *SensorConfig) GetByID(id int64) *Sensor {
-	if c == nil {
-		return nil
+	// Collect objects from ObjectsMap path (UNISETPLC > ObjectsMap > objects)
+	for i := range root.ObjectsMap.Objects.Items {
+		obj := &root.ObjectsMap.Objects.Items[i]
+		cfg.objects[obj.Name] = obj
 	}
-	return c.sensors[id]
+
+	// Collect services from ObjectsMap path (UNISETPLC > ObjectsMap > services)
+	for i := range root.ObjectsMap.Services.Items {
+		svc := &root.ObjectsMap.Services.Items[i]
+		cfg.services[svc.Name] = svc
+	}
+
+	return cfg, nil
 }
 
 // GetByName returns sensor by name
@@ -176,6 +199,32 @@ func (c *SensorConfig) Count() int {
 		return 0
 	}
 	return len(c.allSensors)
+}
+
+// HasObjectOrService checks if the given name exists in objects or services
+func (c *SensorConfig) HasObjectOrService(name string) bool {
+	if c == nil {
+		return false
+	}
+	_, inObjects := c.objects[name]
+	_, inServices := c.services[name]
+	return inObjects || inServices
+}
+
+// ObjectCount returns the number of registered objects
+func (c *SensorConfig) ObjectCount() int {
+	if c == nil {
+		return 0
+	}
+	return len(c.objects)
+}
+
+// ServiceCount returns the number of registered services
+func (c *SensorConfig) ServiceCount() int {
+	if c == nil {
+		return 0
+	}
+	return len(c.services)
 }
 
 // SensorInfo is a JSON-friendly version for API responses

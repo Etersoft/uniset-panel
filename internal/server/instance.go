@@ -43,10 +43,11 @@ func NewInstance(
 	store storage.Storage,
 	pollInterval time.Duration,
 	historyTTL time.Duration,
+	supplier string,
 	objectCallback ObjectEventCallback,
 	ioncCallback IONCEventCallback,
 ) *Instance {
-	client := uniset.NewClient(cfg.URL)
+	client := uniset.NewClientWithSupplier(cfg.URL, supplier)
 
 	// Создаём poller
 	p := poller.New(client, store, pollInterval, historyTTL)
