@@ -7,6 +7,14 @@ import (
 	"testing"
 )
 
+func expectSMPath(t *testing.T, got, suffix string) {
+	t.Helper()
+	if got == "/api/v2/"+suffix {
+		return
+	}
+	t.Errorf("unexpected path: %s", got)
+}
+
 func TestNewClient(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -31,9 +39,7 @@ func TestGetValues(t *testing.T) {
 	// Create mock server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check URL path
-		if r.URL.Path != "/api/v01/SharedMemory/get" {
-			t.Errorf("unexpected path: %s", r.URL.Path)
-		}
+		expectSMPath(t, r.URL.Path, "SharedMemory/get")
 
 		// Parse query string to get sensors
 		query := r.URL.RawQuery
@@ -212,11 +218,8 @@ func TestGetValue_NotFound(t *testing.T) {
 
 func TestIsAvailable(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v01/SharedMemory/" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		w.WriteHeader(http.StatusNotFound)
+		expectSMPath(t, r.URL.Path, "SharedMemory/")
+		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 

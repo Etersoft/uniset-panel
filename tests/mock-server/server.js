@@ -3,7 +3,7 @@ const http = require('http');
 const PORT = 9393;
 
 // Mock data
-const objects = ['UniSetActivator', 'TestProc', 'SharedMemory'];
+const objects = ['UniSetActivator', 'TestProc', 'SharedMemory', 'OPCUAClient1'];
 
 const testProcData = {
   TestProc: {
@@ -163,19 +163,99 @@ const sharedMemoryData = {
   }
 };
 
+// OPCUAExchange mock data
+const opcuaParams = {
+  polltime: 300,
+  updatetime: 300,
+  reconnectPause: 10000,
+  timeoutIterate: 0,
+  exchangeMode: 0,
+  writeToAllChannels: 0,
+  currentChannel: 0,
+  connectCount: 0,
+  activated: 1,
+  iolistSize: 8,
+  httpControlAllow: 0,
+  httpControlActive: 0,
+  errorHistoryMax: 100
+};
+
+const opcuaStatus = {
+  result: 'OK',
+  status: {
+    subscription: { enabled: true, items: 2 },
+    iolist_size: 8,
+    monitor: 'OK',
+    httpEnabledSetParams: true,
+    httpControlAllow: false,
+    httpControlActive: false,
+    errorHistorySize: 1,
+    errorHistoryMax: 100,
+    channels: [
+      { index: 0, status: 'OK', ok: true, addr: 'opc.tcp://localhost:48010' },
+      { index: 1, status: 'FAIL', ok: false, addr: 'opc.tcp://localhost:48020', disabled: true }
+    ]
+  }
+};
+
+const opcuaSensors = [
+  {
+    id: 1,
+    name: 'AI100_OPC',
+    iotype: 'AI',
+    value: 42.5,
+    tick: 10,
+    vtype: 'Double',
+    precision: 2,
+    status: 'OK',
+    nodeid: 'ns=2;s=Demo.Dynamic.Scalar.Double'
+  },
+  {
+    id: 2,
+    name: 'DO10_OPC',
+    iotype: 'DO',
+    value: 1,
+    tick: 11,
+    vtype: 'Bool',
+    precision: 0,
+    status: 'OK',
+    nodeid: 'ns=2;s=Demo.Dynamic.Scalar.Boolean'
+  }
+];
+
+const opcuaDiagnostics = {
+  result: 'OK',
+  summary: {
+    reconnects: 1,
+    errors: 0,
+    warnings: 2
+  },
+  lastErrors: [
+    {
+      time: '2024-01-01T10:00:00Z',
+      channel: 1,
+      operation: 'read',
+      statusCode: 'BadCommunicationError',
+      nodeid: 'ns=2;s=Demo.Dynamic.Scalar.Double'
+    }
+  ],
+  errorHistoryMax: 100,
+  errorHistorySize: 1
+};
+
 const server = http.createServer((req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   const url = req.url;
 
-  if (url === '/api/v01/list') {
+  if (url === '/api/v2/list') {
     res.end(JSON.stringify(objects));
-  } else if (url === '/api/v01/TestProc') {
+  } else if (url === '/api/v2/TestProc') {
     res.end(JSON.stringify(testProcData));
-  } else if (url === '/api/v01/UniSetActivator') {
+  } else if (url === '/api/v2/UniSetActivator') {
     res.end(JSON.stringify(unisetActivatorData));
-  } else if (url === '/api/v01/TestProc/help') {
+  } else if (url === '/api/v2/TestProc/help') {
     res.end(JSON.stringify({
       TestProc: [
         { desc: 'get value for parameter', name: 'params/get' },
@@ -183,9 +263,9 @@ const server = http.createServer((req, res) => {
         { desc: 'show log level', name: 'log' }
       ]
     }));
-  } else if (url === '/api/v01/SharedMemory') {
+  } else if (url === '/api/v2/SharedMemory') {
     res.end(JSON.stringify(sharedMemoryData));
-  } else if (url === '/api/v01/SharedMemory/sensors' || url.startsWith('/api/v01/SharedMemory/sensors?')) {
+  } else if (url === '/api/v2/SharedMemory/sensors' || url.startsWith('/api/v2/SharedMemory/sensors?')) {
     // Parse offset and limit from query
     const urlObj = new URL(url, `http://localhost:${PORT}`);
     const offset = parseInt(urlObj.searchParams.get('offset') || '0');
@@ -198,9 +278,9 @@ const server = http.createServer((req, res) => {
       offset: offset,
       limit: limit
     }));
-  } else if (url === '/api/v01/SharedMemory/lost') {
+  } else if (url === '/api/v2/SharedMemory/lost') {
     res.end(JSON.stringify({ 'lost consumers': [] }));
-  } else if (url.startsWith('/api/v01/SharedMemory/consumers')) {
+  } else if (url.startsWith('/api/v2/SharedMemory/consumers')) {
     // Parse sensor IDs from query
     const urlObj = new URL(url, `http://localhost:${PORT}`);
     const sensorsParam = urlObj.searchParams.get('sensors') || '';
@@ -213,6 +293,70 @@ const server = http.createServer((req, res) => {
     }));
 
     res.end(JSON.stringify({ sensors }));
+  } else if (url.startsWith('/api/v2/SharedMemory/get')) {
+    // Return mock sensor values to avoid noisy poller errors
+    const query = url.split('?')[1] || '';
+    const sensorsPart = query.split('&')[0] || '';
+    const sensorIds = sensorsPart.split(',').filter(Boolean);
+    const sensors = sensorIds.map(id => ({
+      id: Number(id) || 0,
+      name: `Sensor${id}_S`,
+      value: 0,
+      real_value: 0
+    }));
+    res.end(JSON.stringify({ sensors }));
+  } else if (url === '/api/v2/OPCUAClient1') {
+    res.end(JSON.stringify({
+      OPCUAClient1: {},
+      object: {
+        id: 2001,
+        isActive: true,
+        name: 'OPCUAClient1',
+        objectType: 'UniSetObject',
+        extensionType: 'OPCUAExchange'
+      }
+    }));
+  } else if (url === '/api/v2/OPCUAClient1/status') {
+    res.end(JSON.stringify(opcuaStatus));
+  } else if (url.startsWith('/api/v2/OPCUAClient1/getparam')) {
+    const urlObj = new URL(url, `http://localhost:${PORT}`);
+    const names = urlObj.searchParams.getAll('name');
+    const params = {};
+    if (names.length === 0) {
+      Object.assign(params, opcuaParams);
+    } else {
+      names.forEach(name => {
+        if (Object.prototype.hasOwnProperty.call(opcuaParams, name)) {
+          params[name] = opcuaParams[name];
+        }
+      });
+    }
+    res.end(JSON.stringify({ result: 'OK', params }));
+  } else if (url.startsWith('/api/v2/OPCUAClient1/setparam')) {
+    const urlObj = new URL(url, `http://localhost:${PORT}`);
+    urlObj.searchParams.forEach((value, key) => {
+      opcuaParams[key] = Number.isNaN(Number(value)) ? value : Number(value);
+    });
+    res.end(JSON.stringify({ result: 'OK', updated: opcuaParams }));
+  } else if (url === '/api/v2/OPCUAClient1/sensors' || url.startsWith('/api/v2/OPCUAClient1/sensors?')) {
+    res.end(JSON.stringify({
+      result: 'OK',
+      sensors: opcuaSensors,
+      total: opcuaSensors.length,
+      limit: 50,
+      offset: 0
+    }));
+  } else if (url.startsWith('/api/v2/OPCUAClient1/sensor')) {
+    const urlObj = new URL(url, `http://localhost:${PORT}`);
+    const id = parseInt(urlObj.searchParams.get('id') || '0', 10);
+    const sensor = opcuaSensors.find(s => s.id === id) || null;
+    res.end(JSON.stringify({ result: 'OK', sensor }));
+  } else if (url === '/api/v2/OPCUAClient1/diagnostics') {
+    res.end(JSON.stringify(opcuaDiagnostics));
+  } else if (url === '/api/v2/OPCUAClient1/takeControl') {
+    res.end(JSON.stringify({ result: 'OK', message: 'control taken', previousMode: 0, currentMode: 1 }));
+  } else if (url === '/api/v2/OPCUAClient1/releaseControl') {
+    res.end(JSON.stringify({ result: 'OK', message: 'control released', previousMode: 1, currentMode: 0 }));
   } else {
     res.statusCode = 404;
     res.end(JSON.stringify({ error: 'Not found' }));

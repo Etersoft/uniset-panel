@@ -79,6 +79,29 @@ func (h *Handlers) GetSSEHub() *SSEHub {
 	return h.sseHub
 }
 
+// getUniSetClient возвращает UniSet2 client с учётом serverID (multi-server)
+func (h *Handlers) getUniSetClient(serverID string) (*uniset.Client, int, string) {
+	if h.serverManager != nil {
+		if serverID != "" {
+			if instance, ok := h.serverManager.GetServer(serverID); ok {
+				return instance.Client, 0, ""
+			}
+			return nil, http.StatusNotFound, "server not found"
+		}
+
+		if instance, ok := h.serverManager.GetFirstServer(); ok {
+			return instance.Client, 0, ""
+		}
+		return nil, http.StatusServiceUnavailable, "no servers available"
+	}
+
+	if h.client != nil {
+		return h.client, 0, ""
+	}
+
+	return nil, http.StatusServiceUnavailable, "no client configured"
+}
+
 func (h *Handlers) writeJSON(w http.ResponseWriter, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(data)
@@ -987,6 +1010,260 @@ func (h *Handlers) SubscribeIONCSensorsQuery(w http.ResponseWriter, r *http.Requ
 		"object":     name,
 		"sensor_ids": sensorIDs,
 	})
+}
+
+// === OPCUAExchange API ===
+
+// GetOPCUAStatus возвращает статус OPCUAExchange
+// GET /api/objects/{name}/opcua/status
+func (h *Handlers) GetOPCUAStatus(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	result, err := client.GetOPCUAStatus(name)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, result)
+}
+
+// GetOPCUAParams читает параметры OPCUAExchange
+// GET /api/objects/{name}/opcua/params?name=polltime&name=updatetime
+func (h *Handlers) GetOPCUAParams(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	params := r.URL.Query()["name"]
+	if len(params) == 0 {
+		h.writeError(w, http.StatusBadRequest, "at least one name parameter required")
+		return
+	}
+
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	result, err := client.GetOPCUAParams(name, params)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, result)
+}
+
+// SetOPCUAParams устанавливает параметры OPCUAExchange
+// POST /api/objects/{name}/opcua/params
+func (h *Handlers) SetOPCUAParams(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	var payload map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	var params map[string]interface{}
+	if raw, ok := payload["params"].(map[string]interface{}); ok {
+		params = raw
+	} else {
+		params = payload
+	}
+
+	if len(params) == 0 {
+		h.writeError(w, http.StatusBadRequest, "no params provided")
+		return
+	}
+
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	result, err := client.SetOPCUAParams(name, params)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, result)
+}
+
+// GetOPCUASensors возвращает список сенсоров OPCUAExchange
+// GET /api/objects/{name}/opcua/sensors
+func (h *Handlers) GetOPCUASensors(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	limit := 0
+	offset := 0
+	filter := r.URL.Query().Get("filter")
+
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l >= 0 {
+			limit = l
+		}
+	}
+
+	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
+			offset = o
+		}
+	}
+
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	result, err := client.GetOPCUASensors(name, filter, limit, offset)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, result)
+}
+
+// GetOPCUASensor возвращает детали сенсора
+// GET /api/objects/{name}/opcua/sensors/{id}
+func (h *Handlers) GetOPCUASensor(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		h.writeError(w, http.StatusBadRequest, "sensor id required")
+		return
+	}
+
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid sensor id")
+		return
+	}
+
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	result, err := client.GetOPCUASensor(name, id)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, result)
+}
+
+// GetOPCUADiagnostics возвращает диагностику
+// GET /api/objects/{name}/opcua/diagnostics
+func (h *Handlers) GetOPCUADiagnostics(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	result, err := client.GetOPCUADiagnostics(name)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, result)
+}
+
+// TakeOPCUAControl включает HTTP-контроль
+// POST /api/objects/{name}/opcua/control/take
+func (h *Handlers) TakeOPCUAControl(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	result, err := client.TakeOPCUAControl(name)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, result)
+}
+
+// ReleaseOPCUAControl отключает HTTP-контроль
+// POST /api/objects/{name}/opcua/control/release
+func (h *Handlers) ReleaseOPCUAControl(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	result, err := client.ReleaseOPCUAControl(name)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, result)
 }
 
 // ================== Server Management API ==================

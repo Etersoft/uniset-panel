@@ -1231,6 +1231,272 @@ header h1 {
     padding: 0 1rem;
 }
 
+/* OPCUAExchange renderer */
+.opcua-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.opcua-actions .btn {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    border-radius: 4px;
+    padding: 0.35rem 0.65rem;
+    cursor: pointer;
+}
+
+.opcua-actions .btn.primary {
+    background: var(--accent-blue);
+    color: #fff;
+    border-color: var(--accent-blue);
+}
+
+.opcua-actions .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.opcua-note {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.opcua-note.error {
+    color: var(--accent-red);
+}
+
+.opcua-channels {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+.opcua-channel-card {
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.75rem;
+    background: var(--bg-secondary);
+}
+
+.opcua-channel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.35rem;
+    font-weight: 600;
+}
+
+.opcua-channel-state {
+    font-size: 12px;
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+}
+
+.opcua-channel-state.ok {
+    color: var(--accent-green);
+    border-color: var(--accent-green);
+}
+
+.opcua-channel-state.fail {
+    color: var(--accent-red);
+    border-color: var(--accent-red);
+}
+
+.opcua-flags {
+    display: grid;
+    gap: 0.35rem;
+    margin-top: 0.5rem;
+}
+
+.opcua-flag-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.opcua-flag-label {
+    color: var(--text-muted);
+}
+
+.opcua-flag-value.ok {
+    color: var(--accent-green);
+}
+
+.opcua-flag-value.fail {
+    color: var(--accent-red);
+}
+
+.opcua-params-table-wrapper,
+.opcua-sensors-table-wrapper {
+    overflow: auto;
+}
+
+.opcua-sensors-meta {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.opcua-sensors-table tbody tr {
+    cursor: pointer;
+}
+
+.opcua-sensors-table tbody tr:hover {
+    background: var(--bg-secondary);
+}
+
+.opcua-pagination {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.opcua-pagination-info {
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.opcua-sensor-card {
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.75rem;
+    margin-top: 0.5rem;
+    background: var(--bg-secondary);
+}
+
+.opcua-sensor-title {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.opcua-sensor-grid {
+    display: grid;
+    gap: 0.35rem;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.opcua-sensor-label {
+    color: var(--text-muted);
+    margin-right: 0.35rem;
+}
+
+.opcua-diagnostics-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.opcua-diagnostics-item {
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.5rem;
+    background: var(--bg-secondary);
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+}
+
+.opcua-param-input,
+.opcua-filter-input {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    border-radius: 4px;
+    padding: 0.35rem 0.5rem;
+    width: 100%;
+}
+
+.opcua-param-input:focus,
+.opcua-filter-input:focus {
+    border-color: var(--accent-blue);
+    outline: none;
+}
+
+.opcua-param-input::placeholder,
+.opcua-filter-input::placeholder {
+    color: var(--text-muted);
+}
+
+.opcua-sensors-container,
+.opcua-diagnostics-container {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.5rem;
+    min-height: 160px;
+    overflow: hidden;
+}
+
+.opcua-sensors-scroll,
+.opcua-diagnostics-scroll {
+    height: 100%;
+    overflow-y: auto;
+}
+
+.opcua-sensors-resize-handle,
+.opcua-diagnostics-resize-handle {
+    height: 6px;
+    background: var(--bg-tertiary);
+    cursor: ns-resize;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease;
+}
+
+.opcua-sensors-resize-handle:hover,
+.opcua-diagnostics-resize-handle:hover {
+    background: var(--accent-blue);
+}
+
+.opcua-sensors-resize-handle::after,
+.opcua-diagnostics-resize-handle::after {
+    content: '';
+    width: 40px;
+    height: 2px;
+    background: var(--text-muted);
+    border-radius: 1px;
+}
+
+.opcua-autorefresh {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-left: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.opcua-autorefresh-label {
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.opcua-interval-btn {
+    padding: 0.2rem 0.45rem;
+    font-size: 13px;
+}
+
+.opcua-last-update {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-left: 0.35rem;
+}
+
+.opcua-errors-table td,
+.opcua-errors-table th {
+    white-space: nowrap;
+}
+
 /* State badges for LogServer */
 .state-badge {
     display: inline-block;

@@ -2,7 +2,7 @@ package uniset
 
 import "encoding/json"
 
-// ObjectList список имён объектов из /api/v01/list
+// ObjectList список имён объектов из /api/v2/list
 type ObjectList []string
 
 // Timer информация о таймере
@@ -62,9 +62,11 @@ type ObjectInfo struct {
 	MaxSizeOfMessageQueue int64  `json:"maxSizeOfMessageQueue"`
 	MsgCount              int64  `json:"msgCount"`
 	ObjectType            string `json:"objectType"`
+	ExtensionType         string `json:"extensionType,omitempty"`
+	ExtensionsType        string `json:"extensionsType,omitempty"` // some endpoints return extensionsType
 }
 
-// ObjectData данные объекта из /api/v01/{ObjectName}
+// ObjectData данные объекта из /api/v2/{ObjectName}
 // Гибридный подход: сервер парсит только то, что ему нужно для своей логики,
 // остальное передаётся как raw данные на UI
 type ObjectData struct {
@@ -98,7 +100,7 @@ type HelpParameter struct {
 	Desc string `json:"desc"`
 }
 
-// HelpResponse ответ от /api/v01/{ObjectName}/help
+// HelpResponse ответ от /api/v2/{ObjectName}/help
 type HelpResponse struct {
 	Help []HelpCommand `json:"help"`
 }

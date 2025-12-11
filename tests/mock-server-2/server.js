@@ -69,20 +69,20 @@ const server = http.createServer((req, res) => {
   const url = req.url;
 
   // List objects
-  if (url === '/api/v01/list') {
+  if (url === '/api/v2/list') {
     res.writeHead(200);
     res.end(JSON.stringify(objects));
     return;
   }
 
   // Get object data
-  if (url === '/api/v01/Server2Controller') {
+  if (url === '/api/v2/Server2Controller') {
     res.writeHead(200);
     res.end(JSON.stringify(server2ControllerData));
     return;
   }
 
-  if (url === '/api/v01/BackupProcess') {
+  if (url === '/api/v2/BackupProcess') {
     res.writeHead(200);
     res.end(JSON.stringify(backupProcessData));
     return;

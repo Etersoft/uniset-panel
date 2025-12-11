@@ -17,7 +17,7 @@ services:
     expose:
       - "9393"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9393/api/v01/list"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9393/api/v2/list"]
       interval: 2s
       timeout: 5s
       retries: 5
@@ -35,7 +35,7 @@ services:
     expose:
       - "9394"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9394/api/v01/list"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9394/api/v2/list"]
       interval: 2s
       timeout: 5s
       retries: 5

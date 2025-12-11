@@ -702,8 +702,9 @@ class FallbackRenderer extends BaseObjectRenderer {
     update(data) {
         // Обновляем тип объекта в сообщении (используем tabKey для поиска панели)
         const typeSpan = document.querySelector(`.tab-panel[data-name="${this.tabKey}"] .fallback-type`);
-        if (typeSpan && data.object?.objectType) {
-            typeSpan.textContent = data.object.objectType;
+        const typeLabel = data.object?.extensionType || data.object?.extensionsType || data.object?.objectType;
+        if (typeSpan && typeLabel) {
+            typeSpan.textContent = typeLabel;
         }
 
         // Выводим JSON - используем raw_data если есть, иначе весь data
@@ -733,6 +734,30 @@ function registerRenderer(objectType, rendererClass) {
 // Получить рендерер для типа объекта
 function getRendererClass(objectType) {
     return objectRenderers.get(objectType) || DefaultObjectRenderer;
+}
+
+// Выбор рендерера: сначала extensionType, затем objectType
+function resolveRenderer(objectInfo = {}) {
+    const extensionType = objectInfo.extensionType || objectInfo.extensionsType;
+    const objectType = objectInfo.objectType || 'Default';
+
+    if (extensionType && objectRenderers.has(extensionType)) {
+        return {
+            RendererClass: objectRenderers.get(extensionType),
+            rendererType: extensionType,
+            badgeType: extensionType,
+            extensionType,
+            objectType
+        };
+    }
+
+    return {
+        RendererClass: getRendererClass(objectType),
+        rendererType: objectType,
+        badgeType: extensionType || objectType,
+        extensionType,
+        objectType
+    };
 }
 
 // ============================================================================
@@ -1666,10 +1691,887 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 }
 
+// ============================================================================ 
+// OPCUAExchangeRenderer - рендерер для OPCUAExchange extensionType
+// ============================================================================
+
+class OPCUAExchangeRenderer extends BaseObjectRenderer {
+    static getTypeName() {
+        return 'OPCUAExchange';
+    }
+
+    constructor(objectName, tabKey = null) {
+        super(objectName, tabKey);
+        this.status = null;
+        this.params = {};
+        this.paramNames = [
+            'polltime',
+            'updatetime',
+            'reconnectPause',
+            'timeoutIterate',
+            'exchangeMode',
+            'writeToAllChannels',
+            'currentChannel',
+            'connectCount',
+            'activated',
+            'iolistSize',
+            'httpControlAllow',
+            'httpControlActive',
+            'errorHistoryMax'
+        ];
+        this.sensors = [];
+        this.sensorsTotal = 0;
+        this.offset = 0;
+        this.limit = 50;
+        this.filter = '';
+        this.diagnostics = null;
+        this.loadingNote = '';
+        this.diagnosticsHeight = this.loadDiagnosticsHeight();
+        this.sensorsHeight = this.loadSensorsHeight();
+        this.statusInterval = this.loadStatusInterval();
+        this.statusTimer = null;
+    }
+
+    createPanelHTML() {
+        return `
+            ${this.createChartsSection()}
+            ${this.createOPCUAControlSection()}
+            ${this.createOPCUAStatusSection()}
+            ${this.createOPCUAParamsSection()}
+            ${this.createOPCUASensorsSection()}
+            ${this.createOPCUADiagnosticsSection()}
+            ${this.createLogViewerSection()}
+            ${this.createLogServerSection()}
+            ${this.createObjectInfoSection()}
+        `;
+    }
+
+    initialize() {
+        this.bindEvents();
+        this.reloadAll();
+        setupChartsResize(this.objectName);
+        this.setupDiagnosticsResize();
+        this.setupSensorsResize();
+        this.startStatusAutoRefresh();
+    }
+
+    destroy() {
+        this.destroyLogViewer();
+        this.stopStatusAutoRefresh();
+    }
+
+    async reloadAll() {
+        await Promise.allSettled([
+            this.loadStatus(),
+            this.loadParams(),
+            this.loadSensors(),
+            this.loadDiagnostics()
+        ]);
+    }
+
+    bindEvents() {
+        this.bindStatusIntervalButtons();
+
+        const refreshParams = document.getElementById(`opcua-params-refresh-${this.objectName}`);
+        if (refreshParams) {
+            refreshParams.addEventListener('click', () => this.loadParams());
+        }
+
+        const saveParams = document.getElementById(`opcua-params-save-${this.objectName}`);
+        if (saveParams) {
+            saveParams.addEventListener('click', () => this.saveParams());
+        }
+
+        const refreshSensors = document.getElementById(`opcua-sensors-refresh-${this.objectName}`);
+        if (refreshSensors) {
+            refreshSensors.addEventListener('click', () => this.loadSensors());
+        }
+
+        const filterInput = document.getElementById(`opcua-sensors-filter-${this.objectName}`);
+        if (filterInput) {
+            let debounce;
+            filterInput.addEventListener('input', () => {
+                clearTimeout(debounce);
+                debounce = setTimeout(() => {
+                    this.filter = filterInput.value.trim();
+                    this.offset = 0;
+                    this.loadSensors();
+                }, 250);
+            });
+        }
+
+        const refreshDiag = document.getElementById(`opcua-diagnostics-refresh-${this.objectName}`);
+        if (refreshDiag) {
+            refreshDiag.addEventListener('click', () => this.loadDiagnostics());
+        }
+
+        const takeControl = document.getElementById(`opcua-control-take-${this.objectName}`);
+        if (takeControl) {
+            takeControl.addEventListener('click', () => this.takeControl());
+        }
+
+        const releaseControl = document.getElementById(`opcua-control-release-${this.objectName}`);
+        if (releaseControl) {
+            releaseControl.addEventListener('click', () => this.releaseControl());
+        }
+    }
+
+    buildUrl(path) {
+        const tabState = state.tabs.get(this.tabKey);
+        const serverId = tabState?.serverId;
+        if (serverId) {
+            return `${path}${path.includes('?') ? '&' : '?'}server=${encodeURIComponent(serverId)}`;
+        }
+        return path;
+    }
+
+    async fetchJSON(path, options = {}) {
+        const url = this.buildUrl(path);
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(text || `HTTP ${response.status}`);
+        }
+        return response.json();
+    }
+
+    createOPCUAStatusSection() {
+        return this.createCollapsibleSection('opcua-status', 'Статус OPC UA', `
+            <div class="opcua-actions">
+                <div class="opcua-autorefresh" id="opcua-status-autorefresh-${this.objectName}">
+                    <span class="opcua-autorefresh-label">Авто:</span>
+                    ${this.renderStatusIntervalButtons()}
+                    <span class="opcua-last-update" id="opcua-status-last-${this.objectName}"></span>
+                </div>
+                <span class="opcua-note" id="opcua-status-note-${this.objectName}"></span>
+            </div>
+            <table class="info-table">
+                <tbody id="opcua-status-${this.objectName}"></tbody>
+            </table>
+            <div class="opcua-channels" id="opcua-channels-${this.objectName}"></div>
+        `, { sectionId: `opcua-status-section-${this.objectName}` });
+    }
+
+    createOPCUAControlSection() {
+        return this.createCollapsibleSection('opcua-control', 'HTTP-контроль', `
+            <div class="opcua-actions">
+                <button class="btn" id="opcua-control-take-${this.objectName}">Перехватить</button>
+                <button class="btn" id="opcua-control-release-${this.objectName}">Вернуть</button>
+                <span class="opcua-note" id="opcua-control-note-${this.objectName}"></span>
+            </div>
+            <div class="opcua-flags" id="opcua-control-flags-${this.objectName}"></div>
+        `, { sectionId: `opcua-control-section-${this.objectName}` });
+    }
+
+    createOPCUAParamsSection() {
+        return this.createCollapsibleSection('opcua-params', 'Параметры обмена', `
+            <div class="opcua-actions">
+                <button class="btn" id="opcua-params-refresh-${this.objectName}">Обновить</button>
+                <button class="btn primary" id="opcua-params-save-${this.objectName}">Применить</button>
+                <span class="opcua-note" id="opcua-params-note-${this.objectName}"></span>
+            </div>
+            <div class="opcua-params-table-wrapper">
+                <table class="variables-table opcua-params-table">
+                    <thead>
+                        <tr>
+                            <th>Параметр</th>
+                            <th>Текущее</th>
+                            <th>Новое значение</th>
+                        </tr>
+                    </thead>
+                    <tbody id="opcua-params-${this.objectName}"></tbody>
+                </table>
+            </div>
+        `, { sectionId: `opcua-params-section-${this.objectName}` });
+    }
+
+    createOPCUASensorsSection() {
+        return this.createCollapsibleSection('opcua-sensors', 'Датчики', `
+            <div class="opcua-actions">
+                <input type="text" class="opcua-filter-input" id="opcua-sensors-filter-${this.objectName}" placeholder="Фильтр по имени или типу (AI|AO|DI|DO)">
+                <button class="btn" id="opcua-sensors-refresh-${this.objectName}">Обновить</button>
+                <span class="opcua-note" id="opcua-sensors-note-${this.objectName}"></span>
+            </div>
+            <div class="opcua-sensors-container" id="opcua-sensors-container-${this.objectName}" style="height: ${this.sensorsHeight}px">
+                <div class="opcua-sensors-scroll">
+                    <div class="opcua-sensors-meta" id="opcua-sensors-meta-${this.objectName}"></div>
+                    <div class="opcua-sensors-table-wrapper">
+                        <table class="variables-table opcua-sensors-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Имя</th>
+                                    <th>Тип</th>
+                                    <th>Значение</th>
+                                    <th>Tick</th>
+                                    <th>VType</th>
+                                    <th>Precision</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="opcua-sensors-${this.objectName}"></tbody>
+                        </table>
+                    </div>
+                    <div class="opcua-pagination" id="opcua-sensors-pagination-${this.objectName}"></div>
+                    <div class="opcua-sensor-details" id="opcua-sensor-details-${this.objectName}"></div>
+                </div>
+            </div>
+            <div class="opcua-sensors-resize-handle" id="opcua-sensors-resize-${this.objectName}"></div>
+        `, { sectionId: `opcua-sensors-section-${this.objectName}` });
+    }
+
+    createOPCUADiagnosticsSection() {
+        return this.createCollapsibleSection('opcua-diagnostics', 'Диагностика', `
+            <div class="opcua-actions">
+                <button class="btn" id="opcua-diagnostics-refresh-${this.objectName}">Обновить</button>
+                <span class="opcua-note" id="opcua-diagnostics-note-${this.objectName}"></span>
+            </div>
+            <div class="opcua-diagnostics-container" id="opcua-diagnostics-container-${this.objectName}" style="height: ${this.diagnosticsHeight}px">
+                <div class="opcua-diagnostics-scroll" id="opcua-diagnostics-${this.objectName}"></div>
+            </div>
+            <div class="opcua-diagnostics-resize-handle" id="opcua-diagnostics-resize-${this.objectName}"></div>
+        `, { sectionId: `opcua-diagnostics-section-${this.objectName}` });
+    }
+
+    setNote(id, text, isError = false) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = text || '';
+        el.classList.toggle('error', !!(text && isError));
+    }
+
+    async loadStatus() {
+        try {
+            const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/opcua/status`);
+            this.status = data.status || null;
+            this.renderStatus();
+            this.renderControl();
+            this.updateStatusTimestamp();
+            this.setNote(`opcua-status-note-${this.objectName}`, '');
+        } catch (err) {
+            this.setNote(`opcua-status-note-${this.objectName}`, err.message, true);
+        }
+    }
+
+    renderStatus() {
+        const tbody = document.getElementById(`opcua-status-${this.objectName}`);
+        const channelsContainer = document.getElementById(`opcua-channels-${this.objectName}`);
+        if (!tbody || !channelsContainer) return;
+
+        tbody.innerHTML = '';
+        channelsContainer.innerHTML = '';
+
+        if (!this.status) {
+            tbody.innerHTML = '<tr><td colspan="2" class="text-muted">Нет данных</td></tr>';
+            return;
+        }
+
+        const status = this.status;
+        const rows = [
+            { label: 'Подписка', value: this.formatSubscription(status) },
+            { label: 'I/O list size', value: status.iolist_size ?? status.iolistSize },
+            { label: 'Monitor', value: status.monitor },
+            { label: 'httpEnabledSetParams', value: status.httpEnabledSetParams },
+            { label: 'httpControlAllow', value: status.httpControlAllow },
+            { label: 'httpControlActive', value: status.httpControlActive },
+            { label: 'Ошибок в истории', value: status.errorHistorySize },
+            { label: 'Лимит истории ошибок', value: status.errorHistoryMax }
+        ];
+
+        rows.forEach(row => {
+            if (row.value === undefined || row.value === null) return;
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="info-label">${row.label}</td>
+                <td class="info-value">${formatValue(row.value)}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        if (Array.isArray(status.channels) && status.channels.length > 0) {
+            status.channels.forEach(ch => {
+                const div = document.createElement('div');
+                div.className = 'opcua-channel-card';
+                const ok = ch.ok || ch.status === 'OK';
+                const disabled = ch.disabled ? 'disabled' : '';
+                div.innerHTML = `
+                    <div class="opcua-channel-header">
+                        <span class="opcua-channel-title">Канал ${ch.index}</span>
+                        <span class="opcua-channel-state ${ok ? 'ok' : 'fail'}">${ok ? 'OK' : 'FAIL'}</span>
+                    </div>
+                    <div class="opcua-channel-body">
+                        <div>Адрес: ${ch.addr || ch.address || '—'}</div>
+                        <div>Отключен: ${disabled ? 'Да' : 'Нет'}</div>
+                    </div>
+                `;
+                channelsContainer.appendChild(div);
+            });
+        }
+    }
+
+    renderControl() {
+        const container = document.getElementById(`opcua-control-flags-${this.objectName}`);
+        if (!container) return;
+
+        const allow = this.status?.httpControlAllow;
+        const active = this.status?.httpControlActive;
+        const enabledParams = this.status?.httpEnabledSetParams;
+        const allowText = allow ? 'Перехватить' : 'Контроль запрещён';
+
+        container.innerHTML = `
+            <div class="opcua-flag-row">
+                <span class="opcua-flag-label">Разрешён контроль:</span>
+                <span class="opcua-flag-value ${allow ? 'ok' : 'fail'}">${allow ? 'Да' : 'Нет'}</span>
+            </div>
+            <div class="opcua-flag-row">
+                <span class="opcua-flag-label">HTTP контроль активен:</span>
+                <span class="opcua-flag-value ${active ? 'ok' : 'fail'}">${active ? 'Да' : 'Нет'}</span>
+            </div>
+            <div class="opcua-flag-row">
+                <span class="opcua-flag-label">Разрешено менять параметры:</span>
+                <span class="opcua-flag-value ${enabledParams ? 'ok' : 'fail'}">${enabledParams ? 'Да' : 'Нет'}</span>
+            </div>
+        `;
+
+        const takeBtn = document.getElementById(`opcua-control-take-${this.objectName}`);
+        const releaseBtn = document.getElementById(`opcua-control-release-${this.objectName}`);
+        if (takeBtn) {
+            takeBtn.disabled = !allow;
+            takeBtn.title = allowText;
+        }
+        if (releaseBtn) {
+            releaseBtn.disabled = !allow;
+            releaseBtn.title = allowText;
+        }
+    }
+
+    formatSubscription(status) {
+        if (status.subscription) {
+            const sub = status.subscription;
+            const enabled = sub.enabled ? 'Вкл' : 'Выкл';
+            const items = sub.items !== undefined ? ` · items: ${sub.items}` : '';
+            return `${enabled}${items}`;
+        }
+        if (Array.isArray(status.read_attributes) || Array.isArray(status.write_attributes)) {
+            const read = (status.read_attributes || []).map(r => r.total).reduce((a, b) => a + (b || 0), 0);
+            const write = (status.write_attributes || []).map(r => r.total).reduce((a, b) => a + (b || 0), 0);
+            return `Read: ${read || 0}, Write: ${write || 0}`;
+        }
+        return '—';
+    }
+
+    async loadParams() {
+        try {
+            const query = this.paramNames.map(n => `name=${encodeURIComponent(n)}`).join('&');
+            const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/opcua/params?${query}`);
+            this.params = data.params || {};
+            this.renderParams();
+            this.setNote(`opcua-params-note-${this.objectName}`, '');
+        } catch (err) {
+            this.setNote(`opcua-params-note-${this.objectName}`, err.message, true);
+        }
+    }
+
+    renderParams() {
+        const tbody = document.getElementById(`opcua-params-${this.objectName}`);
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+        if (!this.params || Object.keys(this.params).length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-muted">Нет данных</td></tr>';
+            return;
+        }
+
+        this.paramNames.forEach(name => {
+            const current = this.params[name];
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="variable-name">${name}</td>
+                <td class="variable-value">${current !== undefined ? formatValue(current) : '—'}</td>
+                <td><input class="opcua-param-input" data-name="${name}" value="${current !== undefined ? current : ''}"></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    async saveParams() {
+        const tbody = document.getElementById(`opcua-params-${this.objectName}`);
+        if (!tbody) return;
+
+        const inputs = tbody.querySelectorAll('.opcua-param-input');
+        const changed = {};
+        inputs.forEach(input => {
+            const name = input.dataset.name;
+            const current = this.params[name];
+            const newValue = input.value;
+            if (newValue === '' || newValue === null) return;
+            if (String(current) !== newValue) {
+                changed[name] = newValue;
+            }
+        });
+
+        if (Object.keys(changed).length === 0) {
+            this.setNote(`opcua-params-note-${this.objectName}`, 'Нет изменений');
+            return;
+        }
+
+        try {
+            const data = await this.fetchJSON(
+                `/api/objects/${encodeURIComponent(this.objectName)}/opcua/params`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ params: changed })
+                }
+            );
+            this.params = { ...this.params, ...(data.updated || {}) };
+            this.renderParams();
+            this.setNote(`opcua-params-note-${this.objectName}`, 'Параметры применены');
+            this.loadStatus();
+        } catch (err) {
+            this.setNote(`opcua-params-note-${this.objectName}`, err.message, true);
+        }
+    }
+
+    async loadSensors() {
+        try {
+            let url = `/api/objects/${encodeURIComponent(this.objectName)}/opcua/sensors?limit=${this.limit}&offset=${this.offset}`;
+            if (this.filter) {
+                url += `&filter=${encodeURIComponent(this.filter)}`;
+            }
+            const data = await this.fetchJSON(url);
+            this.sensors = data.sensors || [];
+            this.sensorsTotal = typeof data.total === 'number' ? data.total : this.sensors.length;
+            this.renderSensors();
+            this.setNote(`opcua-sensors-note-${this.objectName}`, '');
+        } catch (err) {
+            this.setNote(`opcua-sensors-note-${this.objectName}`, err.message, true);
+        }
+    }
+
+    renderSensors() {
+        const tbody = document.getElementById(`opcua-sensors-${this.objectName}`);
+        const meta = document.getElementById(`opcua-sensors-meta-${this.objectName}`);
+        if (!tbody || !meta) return;
+
+        meta.textContent = `Всего: ${this.sensorsTotal} · Показано: ${this.offset} - ${this.offset + this.sensors.length}`;
+
+        if (!this.sensors || this.sensors.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-muted">Нет сенсоров</td></tr>';
+            this.renderSensorsPagination();
+            return;
+        }
+
+        tbody.innerHTML = this.sensors.map(sensor => `
+            <tr data-sensor-id="${sensor.id || ''}">
+                <td>${sensor.id ?? '—'}</td>
+                <td>${escapeHtml(sensor.name || '')}</td>
+                <td>${sensor.iotype || sensor.type || '—'}</td>
+                <td>${sensor.value ?? '—'}</td>
+                <td>${sensor.tick ?? '—'}</td>
+                <td>${sensor.vtype || '—'}</td>
+                <td>${sensor.precision ?? '—'}</td>
+                <td>${sensor.status || '—'}</td>
+            </tr>
+        `).join('');
+
+        tbody.querySelectorAll('tr[data-sensor-id]').forEach(row => {
+            row.addEventListener('click', () => {
+                const id = row.dataset.sensorId;
+                if (id) this.loadSensorDetails(parseInt(id, 10));
+            });
+        });
+
+        this.renderSensorsPagination();
+    }
+
+    renderSensorsPagination() {
+        const container = document.getElementById(`opcua-sensors-pagination-${this.objectName}`);
+        if (!container) return;
+
+        if (this.sensorsTotal <= this.limit) {
+            container.innerHTML = '';
+            return;
+        }
+
+        const hasPrev = this.offset > 0;
+        const hasNext = this.offset + this.limit < this.sensorsTotal;
+
+        container.innerHTML = `
+            <button class="btn" ${hasPrev ? '' : 'disabled'} id="opcua-sensors-prev-${this.objectName}">«</button>
+            <span class="opcua-pagination-info">${Math.floor(this.offset / this.limit) + 1} / ${Math.ceil(this.sensorsTotal / this.limit)}</span>
+            <button class="btn" ${hasNext ? '' : 'disabled'} id="opcua-sensors-next-${this.objectName}">»</button>
+        `;
+
+        const prev = document.getElementById(`opcua-sensors-prev-${this.objectName}`);
+        if (prev) prev.addEventListener('click', () => {
+            if (hasPrev) {
+                this.offset = Math.max(0, this.offset - this.limit);
+                this.loadSensors();
+            }
+        });
+
+        const next = document.getElementById(`opcua-sensors-next-${this.objectName}`);
+        if (next) next.addEventListener('click', () => {
+            if (hasNext) {
+                this.offset = this.offset + this.limit;
+                this.loadSensors();
+            }
+        });
+    }
+
+    async loadSensorDetails(id) {
+        try {
+            const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/opcua/sensors/${id}`);
+            this.renderSensorDetails(data.sensor);
+        } catch (err) {
+            this.setNote(`opcua-sensors-note-${this.objectName}`, err.message, true);
+        }
+    }
+
+    renderSensorDetails(sensor) {
+        const container = document.getElementById(`opcua-sensor-details-${this.objectName}`);
+        if (!container) return;
+
+        if (!sensor) {
+            container.innerHTML = '<div class="text-muted">Сенсор не найден</div>';
+            return;
+        }
+
+        const channels = Array.isArray(sensor.channels) ? sensor.channels.map(ch => {
+            const disabled = ch.disabled ? 'disabled' : '';
+            const status = ch.status || ch.statusCode || '';
+            return `<div class="opcua-sensor-channel">${ch.index !== undefined ? `#${ch.index}` : ''} ${status} ${disabled ? '(disabled)' : ''}</div>`;
+        }).join('') : '';
+
+        container.innerHTML = `
+            <div class="opcua-sensor-card">
+                <div class="opcua-sensor-title">${escapeHtml(sensor.name || '')} (${sensor.id})</div>
+                <div class="opcua-sensor-grid">
+                    <div><span class="opcua-sensor-label">NodeId:</span> ${escapeHtml(sensor.nodeid || '—')}</div>
+                    <div><span class="opcua-sensor-label">Тип:</span> ${sensor.iotype || sensor.type || '—'}</div>
+                    <div><span class="opcua-sensor-label">Значение:</span> ${sensor.value ?? '—'}</div>
+                    <div><span class="opcua-sensor-label">Tick:</span> ${sensor.tick ?? '—'}</div>
+                    <div><span class="opcua-sensor-label">VType:</span> ${sensor.vtype || '—'}</div>
+                    <div><span class="opcua-sensor-label">Precision:</span> ${sensor.precision ?? '—'}</div>
+                    <div><span class="opcua-sensor-label">Status:</span> ${sensor.status || '—'}</div>
+                </div>
+                ${channels ? `<div class="opcua-sensor-channels">${channels}</div>` : ''}
+            </div>
+        `;
+    }
+
+    async loadDiagnostics() {
+        try {
+            const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/opcua/diagnostics`);
+            this.diagnostics = data;
+            this.renderDiagnostics();
+            this.setNote(`opcua-diagnostics-note-${this.objectName}`, '');
+        } catch (err) {
+            this.setNote(`opcua-diagnostics-note-${this.objectName}`, err.message, true);
+        }
+    }
+
+    renderDiagnostics() {
+        const container = document.getElementById(`opcua-diagnostics-${this.objectName}`);
+        if (!container) return;
+
+        if (!this.diagnostics) {
+            container.innerHTML = '<div class="text-muted">Нет данных</div>';
+            return;
+        }
+
+        const summary = this.diagnostics.summary || {};
+        const errors = this.diagnostics.lastErrors || [];
+
+        let html = '<div class="opcua-diagnostics-summary">';
+        Object.entries(summary).forEach(([key, value]) => {
+            html += `<div class="opcua-diagnostics-item"><span>${key}</span><strong>${value}</strong></div>`;
+        });
+        html += '</div>';
+
+        if (errors.length > 0) {
+            html += '<table class="variables-table opcua-errors-table"><thead><tr><th>Время</th><th>Канал</th><th>Операция</th><th>StatusCode</th><th>NodeId</th></tr></thead><tbody>';
+            errors.forEach(err => {
+                html += `<tr>
+                    <td>${err.time || ''}</td>
+                    <td>${err.channel ?? ''}</td>
+                    <td>${err.operation || ''}</td>
+                    <td>${err.statusCode || ''}</td>
+                    <td>${escapeHtml(err.nodeid || '')}</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+        } else {
+            html += '<div class="text-muted">Ошибок нет</div>';
+        }
+
+        container.innerHTML = html;
+    }
+
+    renderStatusIntervalButtons() {
+        const options = [
+            { label: '5с', ms: 5000 },
+            { label: '10с', ms: 10000 },
+            { label: '15с', ms: 15000 },
+            { label: '1м', ms: 60000 },
+            { label: '5м', ms: 300000 }
+        ];
+        return options.map(opt => {
+            const active = this.statusInterval === opt.ms ? 'active' : '';
+            return `<button type="button" class="opcua-interval-btn time-range-btn ${active}" data-ms="${opt.ms}">${opt.label}</button>`;
+        }).join('');
+    }
+
+    bindStatusIntervalButtons() {
+        const wrapper = document.getElementById(`opcua-status-autorefresh-${this.objectName}`);
+        if (!wrapper) return;
+        wrapper.querySelectorAll('.opcua-interval-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const ms = parseInt(btn.dataset.ms, 10);
+                if (!isNaN(ms)) {
+                    this.statusInterval = ms;
+                    this.saveStatusInterval(ms);
+                    this.updateStatusIntervalUI();
+                    this.startStatusAutoRefresh();
+                }
+            });
+        });
+        this.updateStatusIntervalUI();
+    }
+
+    updateStatusIntervalUI() {
+        const wrapper = document.getElementById(`opcua-status-autorefresh-${this.objectName}`);
+        if (!wrapper) return;
+        wrapper.querySelectorAll('.opcua-interval-btn').forEach(btn => {
+            const ms = parseInt(btn.dataset.ms, 10);
+            btn.classList.toggle('active', ms === this.statusInterval);
+        });
+    }
+
+    updateStatusTimestamp() {
+        const el = document.getElementById(`opcua-status-last-${this.objectName}`);
+        if (!el) return;
+        const now = new Date();
+        const hh = now.getHours().toString().padStart(2, '0');
+        const mm = now.getMinutes().toString().padStart(2, '0');
+        const ss = now.getSeconds().toString().padStart(2, '0');
+        el.textContent = `обновлено ${hh}:${mm}:${ss}`;
+    }
+
+    startStatusAutoRefresh() {
+        this.stopStatusAutoRefresh();
+        if (!this.statusInterval || this.statusInterval <= 0) return;
+        this.statusTimer = setInterval(() => this.loadStatus(), this.statusInterval);
+    }
+
+    stopStatusAutoRefresh() {
+        if (this.statusTimer) {
+            clearInterval(this.statusTimer);
+            this.statusTimer = null;
+        }
+    }
+
+    loadStatusInterval() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-opcua-status-interval') || '{}');
+            const value = saved[this.objectName];
+            if (typeof value === 'number' && value > 0) {
+                return value;
+            }
+        } catch (err) {
+            console.warn('Failed to load status interval:', err);
+        }
+        return 5000;
+    }
+
+    saveStatusInterval(value) {
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-opcua-status-interval') || '{}');
+            saved[this.objectName] = value;
+            localStorage.setItem('uniset2-viewer-opcua-status-interval', JSON.stringify(saved));
+        } catch (err) {
+            console.warn('Failed to save status interval:', err);
+        }
+    }
+
+    loadDiagnosticsHeight() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-opcua-diagnostics') || '{}');
+            const value = saved[this.objectName];
+            if (typeof value === 'number' && value > 0) {
+                return value;
+            }
+        } catch (err) {
+            console.warn('Failed to load diagnostics height:', err);
+        }
+        return 260;
+    }
+
+    saveDiagnosticsHeight(value) {
+        this.diagnosticsHeight = value;
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-opcua-diagnostics') || '{}');
+            saved[this.objectName] = value;
+            localStorage.setItem('uniset2-viewer-opcua-diagnostics', JSON.stringify(saved));
+        } catch (err) {
+            console.warn('Failed to save diagnostics height:', err);
+        }
+    }
+
+    setupDiagnosticsResize() {
+        const handle = document.getElementById(`opcua-diagnostics-resize-${this.objectName}`);
+        const container = document.getElementById(`opcua-diagnostics-container-${this.objectName}`);
+        if (!handle || !container) return;
+
+        container.style.height = `${this.diagnosticsHeight}px`;
+
+        let startY = 0;
+        let startHeight = 0;
+        let isResizing = false;
+
+        const onMouseMove = (e) => {
+            if (!isResizing) return;
+            const delta = e.clientY - startY;
+            const newHeight = Math.max(160, Math.min(600, startHeight + delta));
+            container.style.height = `${newHeight}px`;
+        };
+
+        const onMouseUp = () => {
+            if (!isResizing) return;
+            isResizing = false;
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            const newHeight = parseInt(container.style.height, 10);
+            if (!Number.isNaN(newHeight)) {
+                this.saveDiagnosticsHeight(newHeight);
+            }
+        };
+
+        handle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            isResizing = true;
+            startY = e.clientY;
+            startHeight = container.offsetHeight;
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+            document.body.style.cursor = 'ns-resize';
+            document.body.style.userSelect = 'none';
+        });
+    }
+
+    loadSensorsHeight() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-opcua-sensors') || '{}');
+            const value = saved[this.objectName];
+            if (typeof value === 'number' && value > 0) {
+                return value;
+            }
+        } catch (err) {
+            console.warn('Failed to load sensors height:', err);
+        }
+        return 320;
+    }
+
+    saveSensorsHeight(value) {
+        this.sensorsHeight = value;
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-opcua-sensors') || '{}');
+            saved[this.objectName] = value;
+            localStorage.setItem('uniset2-viewer-opcua-sensors', JSON.stringify(saved));
+        } catch (err) {
+            console.warn('Failed to save sensors height:', err);
+        }
+    }
+
+    setupSensorsResize() {
+        const handle = document.getElementById(`opcua-sensors-resize-${this.objectName}`);
+        const container = document.getElementById(`opcua-sensors-container-${this.objectName}`);
+        if (!handle || !container) return;
+
+        container.style.height = `${this.sensorsHeight}px`;
+
+        let startY = 0;
+        let startHeight = 0;
+        let isResizing = false;
+
+        const onMouseMove = (e) => {
+            if (!isResizing) return;
+            const delta = e.clientY - startY;
+            const newHeight = Math.max(200, Math.min(700, startHeight + delta));
+            container.style.height = `${newHeight}px`;
+        };
+
+        const onMouseUp = () => {
+            if (!isResizing) return;
+            isResizing = false;
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            const newHeight = parseInt(container.style.height, 10);
+            if (!Number.isNaN(newHeight)) {
+                this.saveSensorsHeight(newHeight);
+            }
+        };
+
+        handle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            isResizing = true;
+            startY = e.clientY;
+            startHeight = container.offsetHeight;
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+            document.body.style.cursor = 'ns-resize';
+            document.body.style.userSelect = 'none';
+        });
+    }
+
+    async takeControl() {
+        if (this.status && this.status.httpControlAllow === false) {
+            this.setNote(`opcua-control-note-${this.objectName}`, 'Контроль запрещён', true);
+            return;
+        }
+
+        try {
+            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/opcua/control/take`, { method: 'POST' });
+            this.setNote(`opcua-control-note-${this.objectName}`, 'HTTP контроль активирован');
+            this.loadStatus();
+        } catch (err) {
+            this.setNote(`opcua-control-note-${this.objectName}`, err.message, true);
+        }
+    }
+
+    async releaseControl() {
+        if (this.status && this.status.httpControlAllow === false) {
+            this.setNote(`opcua-control-note-${this.objectName}`, 'Контроль запрещён', true);
+            return;
+        }
+
+        try {
+            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/opcua/control/release`, { method: 'POST' });
+            this.setNote(`opcua-control-note-${this.objectName}`, 'Контроль возвращён сенсору');
+            this.loadStatus();
+        } catch (err) {
+            this.setNote(`opcua-control-note-${this.objectName}`, err.message, true);
+        }
+    }
+
+    update(data) {
+        renderObjectInfo(this.objectName, data.object);
+        renderLogServer(this.objectName, data.LogServer);
+        updateChartLegends(this.objectName, data);
+        this.initLogViewer(data.LogServer);
+    }
+}
+
 // Регистрируем стандартные рендереры
 registerRenderer('UniSetManager', UniSetManagerRenderer);
 registerRenderer('UniSetObject', UniSetObjectRenderer);
 registerRenderer('IONotifyController', IONotifyControllerRenderer);
+registerRenderer('OPCUAExchange', OPCUAExchangeRenderer);
 
 // ============================================================================
 // Конец системы рендереров
@@ -3597,9 +4499,9 @@ async function openObjectTab(name, serverId, serverName) {
     // Сначала загружаем данные, чтобы узнать тип объекта
     try {
         const data = await fetchObjectData(name, serverId);
-        const objectType = data.object?.objectType || 'Default';
+        const rendererInfo = resolveRenderer(data.object || {});
 
-        createTab(tabKey, name, objectType, data, serverId, serverName);
+        createTab(tabKey, name, rendererInfo, data, serverId, serverName);
         activateTab(tabKey);
 
         watchObject(name, serverId).catch(console.error);
@@ -3608,27 +4510,31 @@ async function openObjectTab(name, serverId, serverName) {
     }
 }
 
-function createTab(tabKey, displayName, objectType, initialData, serverId, serverName) {
+function createTab(tabKey, displayName, rendererInfo, initialData, serverId, serverName) {
     const tabsHeader = document.getElementById('tabs-header');
     const tabsContent = document.getElementById('tabs-content');
 
     const placeholder = tabsContent.querySelector('.placeholder');
     if (placeholder) placeholder.remove();
 
-    // Получаем класс рендерера для данного типа объекта
-    const RendererClass = getRendererClass(objectType);
+    // Получаем класс рендерера для данного типа объекта/расширения
+    const RendererClass = rendererInfo.RendererClass || DefaultObjectRenderer;
     const renderer = new RendererClass(displayName, tabKey);
+    renderer.extensionType = rendererInfo.extensionType;
+    renderer.objectType = rendererInfo.objectType;
 
     // Кнопка вкладки с индикатором типа и сервера
     const tabBtn = document.createElement('button');
     tabBtn.className = 'tab-btn';
     tabBtn.dataset.name = tabKey;
-    tabBtn.dataset.objectType = objectType;
+    tabBtn.dataset.objectType = rendererInfo.rendererType;
     tabBtn.dataset.serverId = serverId;
+
+    const badgeType = rendererInfo.badgeType || rendererInfo.rendererType || 'Default';
 
     // Формируем HTML вкладки
     const tabHTML = `
-        <span class="tab-type-badge">${objectType}</span>
+        <span class="tab-type-badge">${badgeType}</span>
         <span class="tab-server-badge">${serverName}</span>
         ${displayName}
         <span class="close">&times;</span>
@@ -3648,7 +4554,7 @@ function createTab(tabKey, displayName, objectType, initialData, serverId, serve
     const panel = document.createElement('div');
     panel.className = 'tab-panel';
     panel.dataset.name = tabKey;
-    panel.dataset.objectType = objectType;
+    panel.dataset.objectType = rendererInfo.rendererType;
     panel.dataset.serverId = serverId;
     panel.innerHTML = renderer.createPanelHTML();
     tabsContent.appendChild(panel);
@@ -3668,7 +4574,8 @@ function createTab(tabKey, displayName, objectType, initialData, serverId, serve
     state.tabs.set(tabKey, {
         charts: new Map(),
         variables: {},
-        objectType: objectType,
+        objectType: rendererInfo.rendererType,
+        extensionType: rendererInfo.extensionType,
         renderer: renderer,
         updateInterval: updateInterval,
         displayName: displayName,
@@ -4436,6 +5343,7 @@ function renderObjectInfo(objectName, objectData) {
         { key: 'name', label: 'Имя' },
         { key: 'id', label: 'ID' },
         { key: 'objectType', label: 'Тип' },
+        { key: 'extensionType', label: 'Extension' },
         { key: 'isActive', label: 'Активен', format: v => v ? 'Да' : 'Нет' }
     ];
 

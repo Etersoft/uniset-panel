@@ -58,6 +58,16 @@ func (s *Server) setupRoutes(staticFS fs.FS) {
 	s.mux.HandleFunc("GET /api/objects/{name}/ionc/subscriptions", s.handlers.GetIONCSubscriptions)
 	s.mux.HandleFunc("GET /api/objects/{name}/ionc/subscribe", s.handlers.SubscribeIONCSensorsQuery)
 
+	// OPCUAExchange API
+	s.mux.HandleFunc("GET /api/objects/{name}/opcua/status", s.handlers.GetOPCUAStatus)
+	s.mux.HandleFunc("GET /api/objects/{name}/opcua/params", s.handlers.GetOPCUAParams)
+	s.mux.HandleFunc("POST /api/objects/{name}/opcua/params", s.handlers.SetOPCUAParams)
+	s.mux.HandleFunc("GET /api/objects/{name}/opcua/sensors", s.handlers.GetOPCUASensors)
+	s.mux.HandleFunc("GET /api/objects/{name}/opcua/sensors/{id}", s.handlers.GetOPCUASensor)
+	s.mux.HandleFunc("GET /api/objects/{name}/opcua/diagnostics", s.handlers.GetOPCUADiagnostics)
+	s.mux.HandleFunc("POST /api/objects/{name}/opcua/control/take", s.handlers.TakeOPCUAControl)
+	s.mux.HandleFunc("POST /api/objects/{name}/opcua/control/release", s.handlers.ReleaseOPCUAControl)
+
 	// LogServer API
 	s.mux.HandleFunc("GET /api/logs/status", s.handlers.GetAllLogServerStatuses)
 	s.mux.HandleFunc("GET /api/logs/{name}/status", s.handlers.GetLogServerStatus)

@@ -23,12 +23,12 @@
 Browser (HTML/JS/Charts)
     ↓ (REST API calls)
 Go HTTP Server (Port 8000)
-    ├→ UniSet Client (polls /api/v01/{object})
+    ├→ UniSet Client (polls /api/v2/{object})
     ├→ Poller (periodic data collection)
     ├→ Storage (memory or SQLite)
     └→ API Handlers (JSON responses)
     ↓ (HTTP requests)
-UniSet2 Processes (/api/v01/...)
+UniSet2 Processes (/api/v2/...)
 ```
 
 ### Структура пакетов

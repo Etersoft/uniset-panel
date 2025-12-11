@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
-const apiVersion = "v01"
+const apiVersion = "v2"
 
 type Client struct {
 	baseURL    string
@@ -42,17 +43,17 @@ func (c *Client) doGet(path string) ([]byte, error) {
 
 	resp, err := c.httpClient.Get(url)
 	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
+		return nil, fmt.Errorf("request %s failed: %w", url, err)
 	}
-	defer resp.Body.Close()
+
+	body, readErr := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if readErr != nil {
+		return nil, fmt.Errorf("read response from %s failed: %w", url, readErr)
+	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status: %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read body failed: %w", err)
+		return nil, fmt.Errorf("%s: status %d (%s)", url, resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	return body, nil
@@ -96,6 +97,13 @@ func (c *Client) GetObjectData(objectName string) (*ObjectData, error) {
 	if objectInfo, exists := raw["object"]; exists {
 		var info ObjectInfo
 		if err := json.Unmarshal(objectInfo, &info); err == nil {
+			// Некоторые объекты возвращают extensionsType - нормализуем в extensionType
+			if info.ExtensionType == "" && info.ExtensionsType != "" {
+				info.ExtensionType = info.ExtensionsType
+			}
+			if info.ExtensionsType != "" && info.ExtensionType == info.ExtensionsType {
+				info.ExtensionsType = ""
+			}
 			result.Object = &info
 		}
 	}
@@ -274,7 +282,7 @@ func (c *Client) GetIONCSensorValues(objectName string, sensors string) (*IONCSe
 }
 
 // SetIONCSensorValue устанавливает значение датчика
-// GET /api/v01/{objectName}/set?supplier={supplier}&id=value
+// GET /api/v2/{objectName}/set?supplier={supplier}&id=value
 func (c *Client) SetIONCSensorValue(objectName string, sensorID int64, value int64) error {
 	path := fmt.Sprintf("%s/set?supplier=%s&%d=%d", objectName, c.Supplier, sensorID, value)
 
@@ -283,7 +291,7 @@ func (c *Client) SetIONCSensorValue(objectName string, sensorID int64, value int
 }
 
 // FreezeIONCSensor замораживает датчик
-// GET /api/v01/{objectName}/freeze?supplier={supplier}&id=value
+// GET /api/v2/{objectName}/freeze?supplier={supplier}&id=value
 func (c *Client) FreezeIONCSensor(objectName string, sensorID int64, value int64) error {
 	path := fmt.Sprintf("%s/freeze?supplier=%s&%d=%d", objectName, c.Supplier, sensorID, value)
 
@@ -292,7 +300,7 @@ func (c *Client) FreezeIONCSensor(objectName string, sensorID int64, value int64
 }
 
 // UnfreezeIONCSensor размораживает датчик
-// GET /api/v01/{objectName}/unfreeze?supplier={supplier}&id
+// GET /api/v2/{objectName}/unfreeze?supplier={supplier}&id
 func (c *Client) UnfreezeIONCSensor(objectName string, sensorID int64) error {
 	path := fmt.Sprintf("%s/unfreeze?supplier=%s&%d", objectName, c.Supplier, sensorID)
 

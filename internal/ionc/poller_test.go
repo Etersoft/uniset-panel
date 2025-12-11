@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -267,26 +268,26 @@ func TestSensorUpdate_Fields(t *testing.T) {
 	}
 }
 
+func extractObjectFromPath(path string) string {
+	trimmed := strings.TrimPrefix(path, "/")
+	parts := strings.Split(trimmed, "/")
+	if len(parts) >= 3 && parts[0] == "api" {
+		// parts[1] is version (v2), parts[2] is object name
+		return parts[2]
+	}
+	return ""
+}
+
 func TestPoller_MultipleObjects(t *testing.T) {
 	requestsByObject := make(map[string]int)
 	var mu sync.Mutex
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Extract object name from path (e.g., /api/v01/ObjectName/get?...)
-		path := r.URL.Path
-		// Path format: /api/v01/{objectName}/get
-		// Skip /api/v01/ prefix - simple extraction
-		if len(path) > 9 { // len("/api/v01/") = 9
-			rest := path[9:]
-			// Find /get or end
-			for i, c := range rest {
-				if c == '/' {
-					mu.Lock()
-					requestsByObject[rest[:i]]++
-					mu.Unlock()
-					break
-				}
-			}
+		obj := extractObjectFromPath(r.URL.Path)
+		if obj != "" {
+			mu.Lock()
+			requestsByObject[obj]++
+			mu.Unlock()
 		}
 
 		response := uniset.IONCSensorsResponse{

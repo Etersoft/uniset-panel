@@ -7,11 +7,17 @@ import (
 	"testing"
 )
 
+func expectAPIVersionPath(t *testing.T, got, suffix string) {
+	t.Helper()
+	if got == "/api/v2/"+suffix {
+		return
+	}
+	t.Errorf("unexpected path: %s", got)
+}
+
 func TestGetObjectList(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v01/list" {
-			t.Errorf("unexpected path: %s", r.URL.Path)
-		}
+		expectAPIVersionPath(t, r.URL.Path, "list")
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode([]string{"Object1", "Object2", "Object3"})
 	}))
@@ -34,9 +40,7 @@ func TestGetObjectList(t *testing.T) {
 
 func TestGetObjectData(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v01/TestProc" {
-			t.Errorf("unexpected path: %s", r.URL.Path)
-		}
+		expectAPIVersionPath(t, r.URL.Path, "TestProc")
 		w.Header().Set("Content-Type", "application/json")
 		response := map[string]interface{}{
 			"TestProc": map[string]interface{}{
@@ -131,9 +135,7 @@ func TestGetObjectDataMinimal(t *testing.T) {
 
 func TestGetObjectHelp(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v01/TestProc/help" {
-			t.Errorf("unexpected path: %s", r.URL.Path)
-		}
+		expectAPIVersionPath(t, r.URL.Path, "TestProc/help")
 		w.Header().Set("Content-Type", "application/json")
 		response := map[string]interface{}{
 			"help": []map[string]interface{}{

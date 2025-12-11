@@ -19,16 +19,31 @@ import (
 	"github.com/pv/uniset2-viewer-go/internal/uniset"
 )
 
+func normalizeAPIPath(path string) string {
+	if strings.HasPrefix(path, "/api/") {
+		trimmed := strings.TrimPrefix(path, "/api/")
+		parts := strings.SplitN(trimmed, "/", 2)
+		if len(parts) == 2 {
+			return "/" + parts[1]
+		}
+	}
+	return path
+}
+
+func pathEquals(r *http.Request, suffix string) bool {
+	return normalizeAPIPath(r.URL.Path) == "/"+suffix
+}
+
 // mockUnisetServer создаёт тестовый сервер, эмулирующий uniset2 API
 func mockUnisetServer() *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
-		switch r.URL.Path {
-		case "/api/v01/list":
+		switch normalizeAPIPath(r.URL.Path) {
+		case "/list":
 			json.NewEncoder(w).Encode([]string{"TestProc", "AnotherObj"})
 
-		case "/api/v01/TestProc":
+		case "/TestProc":
 			response := map[string]interface{}{
 				"TestProc": map[string]interface{}{
 					"Variables": map[string]interface{}{
@@ -296,8 +311,8 @@ func mockSMServer() *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
-		switch {
-		case r.URL.Path == "/api/v01/SharedMemory/get":
+		switch normalizeAPIPath(r.URL.Path) {
+		case "/SharedMemory/get":
 			response := sm.GetResponse{
 				Sensors: []sm.SensorValue{
 					{ID: 100, Name: "AI100_AS", Value: 42},
@@ -306,7 +321,7 @@ func mockSMServer() *httptest.Server {
 			}
 			json.NewEncoder(w).Encode(response)
 
-		case r.URL.Path == "/api/v01/SharedMemory/":
+		case "/SharedMemory/":
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"object": map[string]interface{}{
 					"name": "SharedMemory",
@@ -726,7 +741,7 @@ func TestGetSMSensors(t *testing.T) {
 	// Mock uniset server that returns SM sensors
 	unisetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if r.URL.Path == "/api/v01/SharedMemory/" {
+		if pathEquals(r, "SharedMemory/") {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"sensors": []map[string]interface{}{
 					{"id": 100, "name": "AI100_AS", "type": "AI"},
@@ -1044,7 +1059,7 @@ func TestGetObjectDataWithServerParam(t *testing.T) {
 	// Create two mock UniSet servers with different data
 	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if r.URL.Path == "/api/v01/TestProc" {
+		if pathEquals(r, "TestProc") {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"TestProc": map[string]interface{}{
 					"Variables": map[string]interface{}{
@@ -1054,7 +1069,7 @@ func TestGetObjectDataWithServerParam(t *testing.T) {
 			})
 			return
 		}
-		if r.URL.Path == "/api/v01/list" {
+		if pathEquals(r, "list") {
 			json.NewEncoder(w).Encode([]string{"TestProc"})
 			return
 		}
@@ -1064,7 +1079,7 @@ func TestGetObjectDataWithServerParam(t *testing.T) {
 
 	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if r.URL.Path == "/api/v01/TestProc" {
+		if pathEquals(r, "TestProc") {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"TestProc": map[string]interface{}{
 					"Variables": map[string]interface{}{
@@ -1074,7 +1089,7 @@ func TestGetObjectDataWithServerParam(t *testing.T) {
 			})
 			return
 		}
-		if r.URL.Path == "/api/v01/list" {
+		if pathEquals(r, "list") {
 			json.NewEncoder(w).Encode([]string{"TestProc"})
 			return
 		}
@@ -1129,7 +1144,7 @@ func TestGetObjectDataWithServerParam(t *testing.T) {
 func TestGetObjectDataWithInvalidServer(t *testing.T) {
 	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if r.URL.Path == "/api/v01/list" {
+		if pathEquals(r, "list") {
 			json.NewEncoder(w).Encode([]string{"TestProc"})
 			return
 		}
@@ -1155,7 +1170,7 @@ func TestGetObjectDataWithInvalidServer(t *testing.T) {
 func TestWatchObjectWithServerParam(t *testing.T) {
 	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if r.URL.Path == "/api/v01/list" {
+		if pathEquals(r, "list") {
 			json.NewEncoder(w).Encode([]string{"TestProc"})
 			return
 		}
@@ -1188,7 +1203,7 @@ func TestWatchObjectWithServerParam(t *testing.T) {
 func TestUnwatchObjectWithServerParam(t *testing.T) {
 	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if r.URL.Path == "/api/v01/list" {
+		if pathEquals(r, "list") {
 			json.NewEncoder(w).Encode([]string{"TestProc"})
 			return
 		}
@@ -1228,7 +1243,7 @@ func TestUnwatchObjectWithServerParam(t *testing.T) {
 func TestGetAllObjectsGrouped(t *testing.T) {
 	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if r.URL.Path == "/api/v01/list" {
+		if pathEquals(r, "list") {
 			json.NewEncoder(w).Encode([]string{"Proc1", "Proc2"})
 			return
 		}
@@ -1238,7 +1253,7 @@ func TestGetAllObjectsGrouped(t *testing.T) {
 
 	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if r.URL.Path == "/api/v01/list" {
+		if pathEquals(r, "list") {
 			json.NewEncoder(w).Encode([]string{"Proc3", "Proc4"})
 			return
 		}
@@ -1335,7 +1350,7 @@ func createMockSensorConfig() *sensorconfig.SensorConfig {
 func createMockServerWithLogServer(logServerHost string, logServerPort int) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if r.URL.Path == "/api/v01/TestProc" {
+		if pathEquals(r, "TestProc") {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"TestProc": map[string]interface{}{
 					"Variables": map[string]interface{}{
@@ -1349,7 +1364,7 @@ func createMockServerWithLogServer(logServerHost string, logServerPort int) *htt
 			})
 			return
 		}
-		if r.URL.Path == "/api/v01/list" {
+		if pathEquals(r, "list") {
 			json.NewEncoder(w).Encode([]string{"TestProc"})
 			return
 		}
@@ -1475,7 +1490,7 @@ func TestHandleLogServerStream_ObjectWithoutLogServer(t *testing.T) {
 	// Server that returns object without LogServer
 	serverWithoutLogServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if r.URL.Path == "/api/v01/TestProc" {
+		if pathEquals(r, "TestProc") {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"TestProc": map[string]interface{}{
 					"Variables": map[string]interface{}{
@@ -1486,7 +1501,7 @@ func TestHandleLogServerStream_ObjectWithoutLogServer(t *testing.T) {
 			})
 			return
 		}
-		if r.URL.Path == "/api/v01/list" {
+		if pathEquals(r, "list") {
 			json.NewEncoder(w).Encode([]string{"TestProc"})
 			return
 		}

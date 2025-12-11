@@ -11,13 +11,13 @@ import (
 
 // SensorValue представляет значение датчика из SM
 type SensorValue struct {
-	ID        int64  `json:"id"`
-	Name      string `json:"name"`
-	Value     int64  `json:"value"`
+	ID        int64   `json:"id"`
+	Name      string  `json:"name"`
+	Value     int64   `json:"value"`
 	RealValue float64 `json:"real_value"`
-	TVSec     int64  `json:"tv_sec"`
-	TVNsec    int64  `json:"tv_nsec"`
-	Error     string `json:"error,omitempty"`
+	TVSec     int64   `json:"tv_sec"`
+	TVNsec    int64   `json:"tv_nsec"`
+	Error     string  `json:"error,omitempty"`
 }
 
 // GetResponse ответ от SM /get endpoint
@@ -52,24 +52,12 @@ func (c *Client) GetValues(sensors []string) (map[string]SensorValue, error) {
 		return make(map[string]SensorValue), nil
 	}
 
-	// Формируем URL: /api/v01/SharedMemory/get?name1,name2,id3&shortInfo
 	query := strings.Join(sensors, ",")
-	url := fmt.Sprintf("%s/api/v01/SharedMemory/get?%s&shortInfo", c.baseURL, query)
+	path := fmt.Sprintf("SharedMemory/get?%s&shortInfo", query)
 
-	resp, err := c.httpClient.Get(url)
+	body, err := c.doGet(path)
 	if err != nil {
-		return nil, fmt.Errorf("SM request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("SM returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read SM response failed: %w", err)
+		return nil, err
 	}
 
 	var result GetResponse
@@ -104,11 +92,27 @@ func (c *Client) GetValue(sensor string) (*SensorValue, error) {
 
 // IsAvailable проверяет доступность SM
 func (c *Client) IsAvailable() bool {
-	url := fmt.Sprintf("%s/api/v01/SharedMemory/", c.baseURL)
+	_, err := c.doGet("SharedMemory/")
+	return err == nil
+}
+
+// doGet выполняет запрос к SM API через /api/v2
+func (c *Client) doGet(path string) ([]byte, error) {
+	url := fmt.Sprintf("%s/api/v2/%s", c.baseURL, path)
 	resp, err := c.httpClient.Get(url)
 	if err != nil {
-		return false
+		return nil, fmt.Errorf("request %s failed: %w", url, err)
 	}
-	defer resp.Body.Close()
-	return resp.StatusCode == http.StatusOK
+
+	body, readErr := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if readErr != nil {
+		return nil, fmt.Errorf("read response from %s failed: %w", url, readErr)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%s: status %d (%s)", url, resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	return body, nil
 }

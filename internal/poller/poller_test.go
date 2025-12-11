@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -17,6 +18,17 @@ import (
 func newMockServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(handler)
+}
+
+func normalizeUniSetPath(path string) string {
+	if strings.HasPrefix(path, "/api/") {
+		trimmed := strings.TrimPrefix(path, "/api/")
+		parts := strings.SplitN(trimmed, "/", 2)
+		if len(parts) == 2 {
+			return "/" + parts[1]
+		}
+	}
+	return path
 }
 
 func TestPollerWatchUnwatch(t *testing.T) {
@@ -305,17 +317,17 @@ func TestPollerMultipleObjects(t *testing.T) {
 	defer store.Close()
 
 	server := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
+		path := normalizeUniSetPath(r.URL.Path)
 		var response map[string]interface{}
 
 		switch path {
-		case "/api/v01/Obj1":
+		case "/Obj1":
 			response = map[string]interface{}{
 				"Obj1": map[string]interface{}{
 					"Variables": map[string]interface{}{"var": "1"},
 				},
 			}
-		case "/api/v01/Obj2":
+		case "/Obj2":
 			response = map[string]interface{}{
 				"Obj2": map[string]interface{}{
 					"Variables": map[string]interface{}{"var": "2"},
@@ -453,17 +465,17 @@ func TestPollerEventCallbackWithMultipleObjects(t *testing.T) {
 	defer store.Close()
 
 	server := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
+		path := normalizeUniSetPath(r.URL.Path)
 		var response map[string]interface{}
 
 		switch path {
-		case "/api/v01/Obj1":
+		case "/Obj1":
 			response = map[string]interface{}{
 				"Obj1": map[string]interface{}{
 					"Variables": map[string]interface{}{"var": "1"},
 				},
 			}
-		case "/api/v01/Obj2":
+		case "/Obj2":
 			response = map[string]interface{}{
 				"Obj2": map[string]interface{}{
 					"Variables": map[string]interface{}{"var": "2"},
