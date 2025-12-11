@@ -210,4 +210,176 @@ test.describe('Multi-Server Support', () => {
     // In a real scenario with a down server, this would show disconnected badges
     expect(disconnectedCount).toBeGreaterThanOrEqual(0);
   });
+
+  test.describe('IONotifyController Multi-Server', () => {
+    test('should load IONC sensors from server 2 with server parameter', async ({ page }) => {
+      await page.goto('/');
+      await page.waitForSelector('#objects-list li', { timeout: 10000 });
+
+      // Monitor network requests
+      const requests: string[] = [];
+      page.on('request', request => {
+        if (request.url().includes('/api/')) {
+          requests.push(request.url());
+        }
+      });
+
+      // Click on SM2 (IONotifyController from server 2)
+      await page.locator('#objects-list li', { hasText: 'SM2' }).click();
+
+      // Wait for tab to open
+      await page.waitForSelector('.tab-btn[data-name*="SM2"]', { timeout: 5000 });
+
+      // Wait for sensors to load
+      await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+      // Check that API requests include server parameter
+      const sensorsRequest = requests.find(r => r.includes('/api/objects/SM2/ionc/sensors'));
+      expect(sensorsRequest).toBeDefined();
+      expect(sensorsRequest).toContain('server=');
+
+      // Verify sensors are displayed
+      const sensorRows = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row');
+      const count = await sensorRows.count();
+      expect(count).toBeGreaterThan(0);
+    });
+
+    test('should include server parameter in IONC value requests', async ({ page }) => {
+      await page.goto('/');
+      await page.waitForSelector('#objects-list li', { timeout: 10000 });
+
+      // Monitor network requests
+      const requests: string[] = [];
+      page.on('request', request => {
+        if (request.url().includes('/api/')) {
+          requests.push(request.url());
+        }
+      });
+
+      // Click on SM2
+      await page.locator('#objects-list li', { hasText: 'SM2' }).click();
+      await page.waitForSelector('.tab-btn[data-name*="SM2"]', { timeout: 5000 });
+      await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+      // Click on a sensor row to get its value
+      const firstRow = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first();
+      await firstRow.click();
+
+      // Wait for potential value request
+      await page.waitForTimeout(500);
+
+      // All SM2-related API requests should have server parameter
+      const sm2Requests = requests.filter(r => r.includes('/api/objects/SM2/'));
+      for (const req of sm2Requests) {
+        expect(req).toContain('server=');
+      }
+    });
+
+    test('should display sensors from different servers independently', async ({ page }) => {
+      await page.goto('/');
+      await page.waitForSelector('#objects-list li', { timeout: 10000 });
+
+      // Open SharedMemory (from server 1)
+      await page.locator('#objects-list li', { hasText: 'SharedMemory' }).click();
+      await page.waitForSelector('.tab-btn[data-name*="SharedMemory"]', { timeout: 5000 });
+      await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+      // Get sensor count from server 1
+      const server1SensorCount = await page.locator('.tab-panel.active .ionc-sensors-tbody tr.ionc-sensor-row').count();
+
+      // Open SM2 (from server 2)
+      await page.locator('#objects-list li', { hasText: 'SM2' }).click();
+      await page.waitForSelector('.tab-btn[data-name*="SM2"]', { timeout: 5000 });
+      await page.waitForSelector('.tab-panel.active .ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+      // Get sensor count from server 2
+      const server2SensorCount = await page.locator('.tab-panel.active .ionc-sensors-tbody tr.ionc-sensor-row').count();
+
+      // Both should have sensors
+      expect(server1SensorCount).toBeGreaterThan(0);
+      expect(server2SensorCount).toBeGreaterThan(0);
+
+      // Server 2 has 50 sensors (may show less with pagination)
+      expect(server2SensorCount).toBeLessThanOrEqual(50);
+    });
+  });
+
+  test.describe('OPCUAExchange Multi-Server', () => {
+    test('should load OPCUA sensors from server 2 with server parameter', async ({ page }) => {
+      await page.goto('/');
+      await page.waitForSelector('#objects-list li', { timeout: 10000 });
+
+      // Monitor network requests
+      const requests: string[] = [];
+      page.on('request', request => {
+        if (request.url().includes('/api/')) {
+          requests.push(request.url());
+        }
+      });
+
+      // Click on OPCUAClient2 (OPCUAExchange from server 2)
+      await page.locator('#objects-list li', { hasText: 'OPCUAClient2' }).click();
+
+      // Wait for tab to open
+      await page.waitForSelector('.tab-btn[data-name*="OPCUAClient2"]', { timeout: 5000 });
+
+      // Wait for OPCUA sensors section
+      await page.waitForSelector('.collapsible-title', { hasText: /Сенсоры|Датчики/ });
+
+      // Check that API requests include server parameter
+      const sensorsRequest = requests.find(r => r.includes('/api/objects/OPCUAClient2/opcua/sensors'));
+      if (sensorsRequest) {
+        expect(sensorsRequest).toContain('server=');
+      }
+
+      // Check status request also has server parameter
+      const statusRequest = requests.find(r => r.includes('/api/objects/OPCUAClient2/opcua/status'));
+      expect(statusRequest).toBeDefined();
+      expect(statusRequest).toContain('server=');
+    });
+
+    test('should include server parameter in OPCUA params request', async ({ page }) => {
+      await page.goto('/');
+      await page.waitForSelector('#objects-list li', { timeout: 10000 });
+
+      // Monitor network requests
+      const requests: string[] = [];
+      page.on('request', request => {
+        if (request.url().includes('/api/')) {
+          requests.push(request.url());
+        }
+      });
+
+      // Click on OPCUAClient2
+      await page.locator('#objects-list li', { hasText: 'OPCUAClient2' }).click();
+      await page.waitForSelector('.tab-btn[data-name*="OPCUAClient2"]', { timeout: 5000 });
+
+      // Wait for params to load
+      await page.waitForTimeout(1000);
+
+      // Check params request has server parameter
+      const paramsRequest = requests.find(r => r.includes('/api/objects/OPCUAClient2/opcua/params'));
+      expect(paramsRequest).toBeDefined();
+      expect(paramsRequest).toContain('server=');
+    });
+
+    test('should display OPCUA objects from different servers independently', async ({ page }) => {
+      await page.goto('/');
+      await page.waitForSelector('#objects-list li', { timeout: 10000 });
+
+      // Check both OPCUA objects are visible in the list
+      await expect(page.locator('#objects-list li', { hasText: 'OPCUAClient1' })).toBeVisible();
+      await expect(page.locator('#objects-list li', { hasText: 'OPCUAClient2' })).toBeVisible();
+
+      // Get server IDs
+      const opcua1Item = page.locator('#objects-list li', { hasText: 'OPCUAClient1' });
+      const opcua2Item = page.locator('#objects-list li', { hasText: 'OPCUAClient2' });
+
+      const opcua1ServerId = await opcua1Item.getAttribute('data-server-id');
+      const opcua2ServerId = await opcua2Item.getAttribute('data-server-id');
+
+      // They should be from different servers
+      expect(opcua1ServerId).not.toBe(opcua2ServerId);
+    });
+  });
 });

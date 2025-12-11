@@ -672,7 +672,7 @@ func (h *Handlers) GetExternalSensors(w http.ResponseWriter, r *http.Request) {
 // === IONotifyController API ===
 
 // GetIONCSensors возвращает список датчиков из IONotifyController объекта
-// GET /api/objects/{name}/ionc/sensors?offset=0&limit=100
+// GET /api/objects/{name}/ionc/sensors?offset=0&limit=100&server=...
 func (h *Handlers) GetIONCSensors(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
@@ -695,7 +695,14 @@ func (h *Handlers) GetIONCSensors(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	result, err := h.client.GetIONCSensors(name, offset, limit)
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	result, err := client.GetIONCSensors(name, offset, limit)
 	if err != nil {
 		h.writeError(w, http.StatusBadGateway, err.Error())
 		return
@@ -705,7 +712,7 @@ func (h *Handlers) GetIONCSensors(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetIONCSensorValues получает значения конкретных датчиков
-// GET /api/objects/{name}/ionc/get?sensors=id1,name2,id3
+// GET /api/objects/{name}/ionc/get?sensors=id1,name2,id3&server=...
 func (h *Handlers) GetIONCSensorValues(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
@@ -719,7 +726,14 @@ func (h *Handlers) GetIONCSensorValues(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.client.GetIONCSensorValues(name, sensors)
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	result, err := client.GetIONCSensorValues(name, sensors)
 	if err != nil {
 		h.writeError(w, http.StatusBadGateway, err.Error())
 		return
@@ -735,7 +749,7 @@ type IONCSetRequest struct {
 }
 
 // SetIONCSensorValue устанавливает значение датчика
-// POST /api/objects/{name}/ionc/set
+// POST /api/objects/{name}/ionc/set?server=...
 func (h *Handlers) SetIONCSensorValue(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
@@ -749,7 +763,14 @@ func (h *Handlers) SetIONCSensorValue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.client.SetIONCSensorValue(name, req.SensorID, req.Value); err != nil {
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	if err := client.SetIONCSensorValue(name, req.SensorID, req.Value); err != nil {
 		h.writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
@@ -768,7 +789,7 @@ type IONCFreezeRequest struct {
 }
 
 // FreezeIONCSensor замораживает датчик
-// POST /api/objects/{name}/ionc/freeze
+// POST /api/objects/{name}/ionc/freeze?server=...
 func (h *Handlers) FreezeIONCSensor(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
@@ -782,7 +803,14 @@ func (h *Handlers) FreezeIONCSensor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.client.FreezeIONCSensor(name, req.SensorID, req.Value); err != nil {
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	if err := client.FreezeIONCSensor(name, req.SensorID, req.Value); err != nil {
 		h.writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
@@ -800,7 +828,7 @@ type IONCUnfreezeRequest struct {
 }
 
 // UnfreezeIONCSensor размораживает датчик
-// POST /api/objects/{name}/ionc/unfreeze
+// POST /api/objects/{name}/ionc/unfreeze?server=...
 func (h *Handlers) UnfreezeIONCSensor(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
@@ -814,7 +842,14 @@ func (h *Handlers) UnfreezeIONCSensor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.client.UnfreezeIONCSensor(name, req.SensorID); err != nil {
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	if err := client.UnfreezeIONCSensor(name, req.SensorID); err != nil {
 		h.writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
@@ -826,7 +861,7 @@ func (h *Handlers) UnfreezeIONCSensor(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetIONCConsumers возвращает список подписчиков на датчики
-// GET /api/objects/{name}/ionc/consumers?sensors=id1,id2
+// GET /api/objects/{name}/ionc/consumers?sensors=id1,id2&server=...
 func (h *Handlers) GetIONCConsumers(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
@@ -840,7 +875,14 @@ func (h *Handlers) GetIONCConsumers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.client.GetIONCConsumers(name, sensors)
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	result, err := client.GetIONCConsumers(name, sensors)
 	if err != nil {
 		h.writeError(w, http.StatusBadGateway, err.Error())
 		return
@@ -850,7 +892,7 @@ func (h *Handlers) GetIONCConsumers(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetIONCLostConsumers возвращает список потерянных подписчиков
-// GET /api/objects/{name}/ionc/lost
+// GET /api/objects/{name}/ionc/lost?server=...
 func (h *Handlers) GetIONCLostConsumers(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
@@ -858,7 +900,14 @@ func (h *Handlers) GetIONCLostConsumers(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	result, err := h.client.GetIONCLostConsumers(name)
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	result, err := client.GetIONCLostConsumers(name)
 	if err != nil {
 		h.writeError(w, http.StatusBadGateway, err.Error())
 		return

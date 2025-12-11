@@ -1525,3 +1525,472 @@ func TestHandleLogServerStream_ObjectWithoutLogServer(t *testing.T) {
 		t.Errorf("expected status 404, got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+// === Multi-Server IONC Tests ===
+
+// createMockIONCServer creates a mock UniSet server that supports IONC endpoints
+func createMockIONCServer(sensorValue int) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		switch {
+		case pathEquals(r, "list"):
+			json.NewEncoder(w).Encode([]string{"SharedMemory"})
+		case pathEquals(r, "SharedMemory/sensors") || strings.HasPrefix(normalizeAPIPath(r.URL.Path), "/SharedMemory/sensors"):
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"sensors": []map[string]interface{}{
+					{"id": 100, "name": "AI100_AS", "type": "AI", "value": sensorValue},
+					{"id": 101, "name": "DI101_S", "type": "DI", "value": 0},
+				},
+				"size":   2,
+				"offset": 0,
+				"limit":  100,
+			})
+		case pathEquals(r, "SharedMemory/get") || strings.HasPrefix(normalizeAPIPath(r.URL.Path), "/SharedMemory/get"):
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"sensors": []map[string]interface{}{
+					{"id": 100, "name": "AI100_AS", "value": sensorValue, "real_value": float64(sensorValue)},
+				},
+			})
+		case pathEquals(r, "SharedMemory/set") || strings.HasPrefix(normalizeAPIPath(r.URL.Path), "/SharedMemory/set"):
+			json.NewEncoder(w).Encode(map[string]interface{}{"result": "OK"})
+		case pathEquals(r, "SharedMemory/freeze") || strings.HasPrefix(normalizeAPIPath(r.URL.Path), "/SharedMemory/freeze"):
+			json.NewEncoder(w).Encode(map[string]interface{}{"result": "OK"})
+		case pathEquals(r, "SharedMemory/unfreeze") || strings.HasPrefix(normalizeAPIPath(r.URL.Path), "/SharedMemory/unfreeze"):
+			json.NewEncoder(w).Encode(map[string]interface{}{"result": "OK"})
+		case pathEquals(r, "SharedMemory/consumers") || strings.HasPrefix(normalizeAPIPath(r.URL.Path), "/SharedMemory/consumers"):
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"sensors": []map[string]interface{}{
+					{"id": 100, "name": "AI100_AS", "consumers": []interface{}{}},
+				},
+			})
+		case pathEquals(r, "SharedMemory/lost") || strings.HasPrefix(normalizeAPIPath(r.URL.Path), "/SharedMemory/lost"):
+			json.NewEncoder(w).Encode(map[string]interface{}{"lost consumers": []interface{}{}})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+}
+
+func TestGetIONCSensors_WithServerParam(t *testing.T) {
+	// Create two servers with different sensor values
+	server1 := createMockIONCServer(100)
+	defer server1.Close()
+
+	server2 := createMockIONCServer(200)
+	defer server2.Close()
+
+	handlers := setupTestHandlersWithServerManager(map[string]*httptest.Server{
+		"server1": server1,
+		"server2": server2,
+	})
+
+	// Test server1
+	req := httptest.NewRequest("GET", "/api/objects/SharedMemory/ionc/sensors?server=server1", nil)
+	req.SetPathValue("name", "SharedMemory")
+	w := httptest.NewRecorder()
+
+	handlers.GetIONCSensors(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("server1: expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var response1 map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &response1)
+
+	sensors1 := response1["sensors"].([]interface{})
+	if len(sensors1) != 2 {
+		t.Errorf("server1: expected 2 sensors, got %d", len(sensors1))
+	}
+
+	// Test server2
+	req = httptest.NewRequest("GET", "/api/objects/SharedMemory/ionc/sensors?server=server2", nil)
+	req.SetPathValue("name", "SharedMemory")
+	w = httptest.NewRecorder()
+
+	handlers.GetIONCSensors(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("server2: expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestGetIONCSensors_InvalidServer(t *testing.T) {
+	server1 := createMockIONCServer(100)
+	defer server1.Close()
+
+	handlers := setupTestHandlersWithServerManager(map[string]*httptest.Server{
+		"server1": server1,
+	})
+
+	req := httptest.NewRequest("GET", "/api/objects/SharedMemory/ionc/sensors?server=nonexistent", nil)
+	req.SetPathValue("name", "SharedMemory")
+	w := httptest.NewRecorder()
+
+	handlers.GetIONCSensors(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected status 404 for invalid server, got %d", w.Code)
+	}
+}
+
+func TestGetIONCSensorValues_WithServerParam(t *testing.T) {
+	server1 := createMockIONCServer(100)
+	defer server1.Close()
+
+	server2 := createMockIONCServer(200)
+	defer server2.Close()
+
+	handlers := setupTestHandlersWithServerManager(map[string]*httptest.Server{
+		"server1": server1,
+		"server2": server2,
+	})
+
+	// Test server1
+	req := httptest.NewRequest("GET", "/api/objects/SharedMemory/ionc/get?sensors=100&server=server1", nil)
+	req.SetPathValue("name", "SharedMemory")
+	w := httptest.NewRecorder()
+
+	handlers.GetIONCSensorValues(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("server1: expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Test server2
+	req = httptest.NewRequest("GET", "/api/objects/SharedMemory/ionc/get?sensors=100&server=server2", nil)
+	req.SetPathValue("name", "SharedMemory")
+	w = httptest.NewRecorder()
+
+	handlers.GetIONCSensorValues(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("server2: expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestGetIONCSensorValues_InvalidServer(t *testing.T) {
+	server1 := createMockIONCServer(100)
+	defer server1.Close()
+
+	handlers := setupTestHandlersWithServerManager(map[string]*httptest.Server{
+		"server1": server1,
+	})
+
+	req := httptest.NewRequest("GET", "/api/objects/SharedMemory/ionc/get?sensors=100&server=nonexistent", nil)
+	req.SetPathValue("name", "SharedMemory")
+	w := httptest.NewRecorder()
+
+	handlers.GetIONCSensorValues(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected status 404 for invalid server, got %d", w.Code)
+	}
+}
+
+func TestSetIONCSensorValue_WithServerParam(t *testing.T) {
+	server1 := createMockIONCServer(100)
+	defer server1.Close()
+
+	server2 := createMockIONCServer(200)
+	defer server2.Close()
+
+	handlers := setupTestHandlersWithServerManager(map[string]*httptest.Server{
+		"server1": server1,
+		"server2": server2,
+	})
+
+	// Test server1
+	body := `{"sensor_id": 100, "value": 42}`
+	req := httptest.NewRequest("POST", "/api/objects/SharedMemory/ionc/set?server=server1", strings.NewReader(body))
+	req.SetPathValue("name", "SharedMemory")
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handlers.SetIONCSensorValue(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("server1: expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var response map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &response)
+
+	if response["status"] != "ok" {
+		t.Errorf("expected status=ok, got %v", response["status"])
+	}
+
+	// Test server2
+	req = httptest.NewRequest("POST", "/api/objects/SharedMemory/ionc/set?server=server2", strings.NewReader(body))
+	req.SetPathValue("name", "SharedMemory")
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+
+	handlers.SetIONCSensorValue(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("server2: expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestSetIONCSensorValue_InvalidServer(t *testing.T) {
+	server1 := createMockIONCServer(100)
+	defer server1.Close()
+
+	handlers := setupTestHandlersWithServerManager(map[string]*httptest.Server{
+		"server1": server1,
+	})
+
+	body := `{"sensor_id": 100, "value": 42}`
+	req := httptest.NewRequest("POST", "/api/objects/SharedMemory/ionc/set?server=nonexistent", strings.NewReader(body))
+	req.SetPathValue("name", "SharedMemory")
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handlers.SetIONCSensorValue(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected status 404 for invalid server, got %d", w.Code)
+	}
+}
+
+func TestFreezeIONCSensor_WithServerParam(t *testing.T) {
+	server1 := createMockIONCServer(100)
+	defer server1.Close()
+
+	server2 := createMockIONCServer(200)
+	defer server2.Close()
+
+	handlers := setupTestHandlersWithServerManager(map[string]*httptest.Server{
+		"server1": server1,
+		"server2": server2,
+	})
+
+	// Test server1
+	body := `{"sensor_id": 100, "value": 42}`
+	req := httptest.NewRequest("POST", "/api/objects/SharedMemory/ionc/freeze?server=server1", strings.NewReader(body))
+	req.SetPathValue("name", "SharedMemory")
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handlers.FreezeIONCSensor(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("server1: expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var response map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &response)
+
+	if response["status"] != "frozen" {
+		t.Errorf("expected status=frozen, got %v", response["status"])
+	}
+
+	// Test server2
+	req = httptest.NewRequest("POST", "/api/objects/SharedMemory/ionc/freeze?server=server2", strings.NewReader(body))
+	req.SetPathValue("name", "SharedMemory")
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+
+	handlers.FreezeIONCSensor(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("server2: expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestFreezeIONCSensor_InvalidServer(t *testing.T) {
+	server1 := createMockIONCServer(100)
+	defer server1.Close()
+
+	handlers := setupTestHandlersWithServerManager(map[string]*httptest.Server{
+		"server1": server1,
+	})
+
+	body := `{"sensor_id": 100, "value": 42}`
+	req := httptest.NewRequest("POST", "/api/objects/SharedMemory/ionc/freeze?server=nonexistent", strings.NewReader(body))
+	req.SetPathValue("name", "SharedMemory")
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handlers.FreezeIONCSensor(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected status 404 for invalid server, got %d", w.Code)
+	}
+}
+
+func TestUnfreezeIONCSensor_WithServerParam(t *testing.T) {
+	server1 := createMockIONCServer(100)
+	defer server1.Close()
+
+	server2 := createMockIONCServer(200)
+	defer server2.Close()
+
+	handlers := setupTestHandlersWithServerManager(map[string]*httptest.Server{
+		"server1": server1,
+		"server2": server2,
+	})
+
+	// Test server1
+	body := `{"sensor_id": 100}`
+	req := httptest.NewRequest("POST", "/api/objects/SharedMemory/ionc/unfreeze?server=server1", strings.NewReader(body))
+	req.SetPathValue("name", "SharedMemory")
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handlers.UnfreezeIONCSensor(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("server1: expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var response map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &response)
+
+	if response["status"] != "unfrozen" {
+		t.Errorf("expected status=unfrozen, got %v", response["status"])
+	}
+
+	// Test server2
+	req = httptest.NewRequest("POST", "/api/objects/SharedMemory/ionc/unfreeze?server=server2", strings.NewReader(body))
+	req.SetPathValue("name", "SharedMemory")
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+
+	handlers.UnfreezeIONCSensor(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("server2: expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestUnfreezeIONCSensor_InvalidServer(t *testing.T) {
+	server1 := createMockIONCServer(100)
+	defer server1.Close()
+
+	handlers := setupTestHandlersWithServerManager(map[string]*httptest.Server{
+		"server1": server1,
+	})
+
+	body := `{"sensor_id": 100}`
+	req := httptest.NewRequest("POST", "/api/objects/SharedMemory/ionc/unfreeze?server=nonexistent", strings.NewReader(body))
+	req.SetPathValue("name", "SharedMemory")
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handlers.UnfreezeIONCSensor(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected status 404 for invalid server, got %d", w.Code)
+	}
+}
+
+func TestGetIONCConsumers_WithServerParam(t *testing.T) {
+	server1 := createMockIONCServer(100)
+	defer server1.Close()
+
+	server2 := createMockIONCServer(200)
+	defer server2.Close()
+
+	handlers := setupTestHandlersWithServerManager(map[string]*httptest.Server{
+		"server1": server1,
+		"server2": server2,
+	})
+
+	// Test server1
+	req := httptest.NewRequest("GET", "/api/objects/SharedMemory/ionc/consumers?sensors=100&server=server1", nil)
+	req.SetPathValue("name", "SharedMemory")
+	w := httptest.NewRecorder()
+
+	handlers.GetIONCConsumers(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("server1: expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Test server2
+	req = httptest.NewRequest("GET", "/api/objects/SharedMemory/ionc/consumers?sensors=100&server=server2", nil)
+	req.SetPathValue("name", "SharedMemory")
+	w = httptest.NewRecorder()
+
+	handlers.GetIONCConsumers(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("server2: expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestGetIONCConsumers_InvalidServer(t *testing.T) {
+	server1 := createMockIONCServer(100)
+	defer server1.Close()
+
+	handlers := setupTestHandlersWithServerManager(map[string]*httptest.Server{
+		"server1": server1,
+	})
+
+	req := httptest.NewRequest("GET", "/api/objects/SharedMemory/ionc/consumers?sensors=100&server=nonexistent", nil)
+	req.SetPathValue("name", "SharedMemory")
+	w := httptest.NewRecorder()
+
+	handlers.GetIONCConsumers(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected status 404 for invalid server, got %d", w.Code)
+	}
+}
+
+func TestGetIONCLostConsumers_WithServerParam(t *testing.T) {
+	server1 := createMockIONCServer(100)
+	defer server1.Close()
+
+	server2 := createMockIONCServer(200)
+	defer server2.Close()
+
+	handlers := setupTestHandlersWithServerManager(map[string]*httptest.Server{
+		"server1": server1,
+		"server2": server2,
+	})
+
+	// Test server1
+	req := httptest.NewRequest("GET", "/api/objects/SharedMemory/ionc/lost?server=server1", nil)
+	req.SetPathValue("name", "SharedMemory")
+	w := httptest.NewRecorder()
+
+	handlers.GetIONCLostConsumers(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("server1: expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Test server2
+	req = httptest.NewRequest("GET", "/api/objects/SharedMemory/ionc/lost?server=server2", nil)
+	req.SetPathValue("name", "SharedMemory")
+	w = httptest.NewRecorder()
+
+	handlers.GetIONCLostConsumers(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("server2: expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestGetIONCLostConsumers_InvalidServer(t *testing.T) {
+	server1 := createMockIONCServer(100)
+	defer server1.Close()
+
+	handlers := setupTestHandlersWithServerManager(map[string]*httptest.Server{
+		"server1": server1,
+	})
+
+	req := httptest.NewRequest("GET", "/api/objects/SharedMemory/ionc/lost?server=nonexistent", nil)
+	req.SetPathValue("name", "SharedMemory")
+	w := httptest.NewRecorder()
+
+	handlers.GetIONCLostConsumers(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected status 404 for invalid server, got %d", w.Code)
+	}
+}

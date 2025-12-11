@@ -1,8 +1,15 @@
-.PHONY: build test js-tests js-tests-multi coverage clean
+.PHONY: build run test js-tests js-tests-multi coverage clean
 
 # Go build
 build:
 	go build -mod=vendor -o uniset2-viewer ./cmd/server
+
+# Run for development (connects to UniSet servers at 9090 and 9191)
+# Usage: make run UNISET_URLS="http://localhost:9090 http://localhost:9191"
+UNISET_URLS ?= http://localhost:9090 http://localhost:9191
+ADDR ?= :8000
+run:
+	go run -mod=vendor ./cmd/server $(addprefix --uniset-url ,$(UNISET_URLS)) --addr $(ADDR)
 
 # Go unit tests
 test:

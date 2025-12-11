@@ -73,4 +73,171 @@ test.describe('OPCUAExchange renderer', () => {
     await btn10s.click();
     await expect(btn10s).toHaveClass(/active/);
   });
+
+  test.describe('Sensor Filtering', () => {
+    test('should filter sensors by name', async ({ page }) => {
+      await page.goto('/');
+      await page.waitForSelector('#objects-list li', { timeout: 10000 });
+      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+
+      const panel = page.locator('.tab-panel.active');
+      await panel.waitFor({ timeout: 10000 });
+
+      // Wait for sensors to load
+      await page.waitForSelector(`#opcua-sensors-${OPCUA_OBJECT} tr`);
+
+      // Get initial row count
+      const initialCount = await panel.locator(`#opcua-sensors-${OPCUA_OBJECT} tr`).count();
+      expect(initialCount).toBeGreaterThan(0);
+
+      // Enter filter text
+      const filterInput = panel.locator(`#opcua-sensors-filter-${OPCUA_OBJECT}`);
+      await filterInput.fill('AI001');
+
+      // Wait for debounce and reload
+      await page.waitForTimeout(400);
+
+      // Should show filtered results
+      const filteredCount = await panel.locator(`#opcua-sensors-${OPCUA_OBJECT} tr`).count();
+      expect(filteredCount).toBeLessThanOrEqual(initialCount);
+
+      // Verify filtered sensor contains the filter text
+      const firstRow = panel.locator(`#opcua-sensors-${OPCUA_OBJECT} tr`).first();
+      await expect(firstRow).toContainText('AI001');
+    });
+
+    test('should filter sensors by type using dropdown', async ({ page }) => {
+      await page.goto('/');
+      await page.waitForSelector('#objects-list li', { timeout: 10000 });
+      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+
+      const panel = page.locator('.tab-panel.active');
+      await panel.waitFor({ timeout: 10000 });
+      await page.waitForSelector(`#opcua-sensors-${OPCUA_OBJECT} tr`);
+
+      // Select AI type filter
+      const typeFilter = panel.locator(`#opcua-type-filter-${OPCUA_OBJECT}`);
+      await typeFilter.selectOption('AI');
+
+      await page.waitForTimeout(400);
+
+      // All visible sensors should be AI type
+      const rows = panel.locator(`#opcua-sensors-${OPCUA_OBJECT} tr`);
+      const rowCount = await rows.count();
+      expect(rowCount).toBeGreaterThan(0);
+
+      // Check that at least first row contains AI badge
+      const firstRow = rows.first();
+      await expect(firstRow.locator('.opcua-type-AI')).toBeVisible();
+    });
+
+    test('should reset filter on ESC key', async ({ page }) => {
+      await page.goto('/');
+      await page.waitForSelector('#objects-list li', { timeout: 10000 });
+      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+
+      const panel = page.locator('.tab-panel.active');
+      await panel.waitFor({ timeout: 10000 });
+
+      const filterInput = panel.locator(`#opcua-sensors-filter-${OPCUA_OBJECT}`);
+      await filterInput.fill('AI001');
+      await page.waitForTimeout(400);
+
+      // Press ESC
+      await filterInput.press('Escape');
+
+      // Filter should be cleared
+      await expect(filterInput).toHaveValue('');
+
+      // Input should lose focus
+      await expect(filterInput).not.toBeFocused();
+    });
+
+    test('should show "no sensors" message when filter returns empty', async ({ page }) => {
+      await page.goto('/');
+      await page.waitForSelector('#objects-list li', { timeout: 10000 });
+      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+
+      const panel = page.locator('.tab-panel.active');
+      await panel.waitFor({ timeout: 10000 });
+
+      const filterInput = panel.locator(`#opcua-sensors-filter-${OPCUA_OBJECT}`);
+      await filterInput.fill('NONEXISTENT_SENSOR_XYZ');
+
+      await page.waitForTimeout(400);
+
+      // Should show "no sensors" message
+      await expect(panel.locator(`#opcua-sensors-${OPCUA_OBJECT}`)).toContainText(/Нет сенсоров/);
+    });
+  });
+
+  test.describe('UI Consistency', () => {
+    test('should have type filter dropdown', async ({ page }) => {
+      await page.goto('/');
+      await page.waitForSelector('#objects-list li', { timeout: 10000 });
+      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+
+      const panel = page.locator('.tab-panel.active');
+      await panel.waitFor({ timeout: 10000 });
+
+      // Type filter dropdown should exist
+      const typeFilter = panel.locator(`#opcua-type-filter-${OPCUA_OBJECT}`);
+      await expect(typeFilter).toBeVisible();
+
+      // Should have all type options
+      await expect(typeFilter.locator('option[value="all"]')).toHaveCount(1);
+      await expect(typeFilter.locator('option[value="AI"]')).toHaveCount(1);
+      await expect(typeFilter.locator('option[value="AO"]')).toHaveCount(1);
+      await expect(typeFilter.locator('option[value="DI"]')).toHaveCount(1);
+      await expect(typeFilter.locator('option[value="DO"]')).toHaveCount(1);
+    });
+
+    test('should display sensor count badge', async ({ page }) => {
+      await page.goto('/');
+      await page.waitForSelector('#objects-list li', { timeout: 10000 });
+      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+
+      const panel = page.locator('.tab-panel.active');
+      await panel.waitFor({ timeout: 10000 });
+      await page.waitForSelector(`#opcua-sensors-${OPCUA_OBJECT} tr`);
+
+      const countBadge = panel.locator(`#opcua-sensor-count-${OPCUA_OBJECT}`);
+      await expect(countBadge).toBeVisible();
+
+      const countText = await countBadge.textContent();
+      expect(parseInt(countText?.replace('+', '') || '0')).toBeGreaterThan(0);
+    });
+
+    test('should have type badges with correct colors', async ({ page }) => {
+      await page.goto('/');
+      await page.waitForSelector('#objects-list li', { timeout: 10000 });
+      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+
+      const panel = page.locator('.tab-panel.active');
+      await panel.waitFor({ timeout: 10000 });
+      await page.waitForSelector(`#opcua-sensors-${OPCUA_OBJECT} tr`);
+
+      // Check that type badges exist with proper classes
+      const badges = panel.locator('.opcua-type-badge');
+      const count = await badges.count();
+      expect(count).toBeGreaterThan(0);
+
+      // Verify first badge has correct class
+      const firstBadge = badges.first();
+      const badgeClass = await firstBadge.getAttribute('class');
+      expect(badgeClass).toMatch(/opcua-type-(AI|AO|DI|DO)/);
+    });
+
+    test('should have resize handle for sensors section', async ({ page }) => {
+      await page.goto('/');
+      await page.waitForSelector('#objects-list li', { timeout: 10000 });
+      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+
+      const panel = page.locator('.tab-panel.active');
+      await panel.waitFor({ timeout: 10000 });
+
+      const resizeHandle = panel.locator(`#opcua-sensors-resize-${OPCUA_OBJECT}`);
+      await expect(resizeHandle).toBeVisible();
+    });
+  });
 });

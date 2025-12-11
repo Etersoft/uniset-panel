@@ -1497,6 +1497,105 @@ header h1 {
     white-space: nowrap;
 }
 
+/* OPCUAExchange type badges (like IONC) */
+.opcua-type-badge {
+    display: inline-block;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+.opcua-type-AI { background: var(--accent-blue); color: white; }
+.opcua-type-DI { background: var(--accent-green); color: white; }
+.opcua-type-AO { background: var(--accent-orange); color: white; }
+.opcua-type-DO { background: var(--accent-purple); color: white; }
+
+/* OPCUAExchange type filter dropdown */
+.opcua-type-filter {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.opcua-type-filter:focus {
+    border-color: var(--accent-blue);
+    outline: none;
+}
+
+/* OPCUAExchange sensor count badge */
+.opcua-sensor-count {
+    background: var(--accent-blue);
+    color: white;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 10px;
+    margin-left: 0.5rem;
+}
+
+/* OPCUAExchange filter bar in header */
+.opcua-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: auto;
+    padding-right: 0.5rem;
+}
+
+.opcua-filter-bar .opcua-filter-input {
+    width: 180px;
+}
+
+/* OPCUAExchange virtual scroll styles */
+.opcua-sensors-viewport {
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.opcua-sensors-spacer {
+    width: 100%;
+    pointer-events: none;
+}
+
+.opcua-sensors-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.opcua-sensors-table th {
+    position: sticky;
+    top: 0;
+    background: var(--bg-tertiary);
+    z-index: 10;
+}
+
+.opcua-sensors-table tbody tr {
+    height: 32px;
+    cursor: pointer;
+}
+
+.opcua-sensors-table tbody tr:hover {
+    background: var(--bg-hover);
+}
+
+/* OPCUAExchange loading indicator */
+.opcua-loading-more {
+    text-align: center;
+    padding: 0.75rem;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.opcua-no-sensors {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-muted);
+}
+
 /* State badges for LogServer */
 .state-badge {
     display: inline-block;

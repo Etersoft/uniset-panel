@@ -198,30 +198,26 @@ const opcuaStatus = {
   }
 };
 
-const opcuaSensors = [
-  {
-    id: 1,
-    name: 'AI100_OPC',
-    iotype: 'AI',
-    value: 42.5,
-    tick: 10,
-    vtype: 'Double',
-    precision: 2,
-    status: 'OK',
-    nodeid: 'ns=2;s=Demo.Dynamic.Scalar.Double'
-  },
-  {
-    id: 2,
-    name: 'DO10_OPC',
-    iotype: 'DO',
-    value: 1,
-    tick: 11,
-    vtype: 'Bool',
-    precision: 0,
-    status: 'OK',
-    nodeid: 'ns=2;s=Demo.Dynamic.Scalar.Boolean'
-  }
-];
+// Generate 100 mock OPCUA sensors for testing virtual scroll and filtering
+const opcuaSensors = [];
+const sensorTypes = ['AI', 'AO', 'DI', 'DO'];
+const vtypes = { AI: 'Double', AO: 'Double', DI: 'Bool', DO: 'Bool' };
+
+for (let i = 1; i <= 100; i++) {
+  const iotype = sensorTypes[(i - 1) % 4];
+  const isAnalog = iotype.startsWith('A');
+  opcuaSensors.push({
+    id: i,
+    name: `${iotype}${String(i).padStart(3, '0')}_OPC`,
+    iotype: iotype,
+    value: isAnalog ? (42.5 + i * 0.1) : (i % 2),
+    tick: 10 + i,
+    vtype: vtypes[iotype],
+    precision: isAnalog ? 2 : 0,
+    status: i % 10 === 0 ? 'ERROR' : 'OK',
+    nodeid: `ns=2;s=Demo.Dynamic.${iotype}.Item${i}`
+  });
+}
 
 const opcuaDiagnostics = {
   result: 'OK',
@@ -339,12 +335,29 @@ const server = http.createServer((req, res) => {
     });
     res.end(JSON.stringify({ result: 'OK', updated: opcuaParams }));
   } else if (url === '/api/v2/OPCUAClient1/sensors' || url.startsWith('/api/v2/OPCUAClient1/sensors?')) {
+    const urlObj = new URL(url, `http://localhost:${PORT}`);
+    const offset = parseInt(urlObj.searchParams.get('offset') || '0', 10);
+    const limit = parseInt(urlObj.searchParams.get('limit') || '50', 10);
+    const filter = (urlObj.searchParams.get('filter') || '').toLowerCase();
+
+    // Apply filter by name or type
+    let filtered = opcuaSensors;
+    if (filter) {
+      filtered = opcuaSensors.filter(s =>
+        s.name.toLowerCase().includes(filter) ||
+        s.iotype.toLowerCase() === filter
+      );
+    }
+
+    // Apply pagination
+    const paginatedSensors = filtered.slice(offset, offset + limit);
+
     res.end(JSON.stringify({
       result: 'OK',
-      sensors: opcuaSensors,
-      total: opcuaSensors.length,
-      limit: 50,
-      offset: 0
+      sensors: paginatedSensors,
+      total: filtered.length,
+      limit: limit,
+      offset: offset
     }));
   } else if (url.startsWith('/api/v2/OPCUAClient1/sensor')) {
     const urlObj = new URL(url, `http://localhost:${PORT}`);

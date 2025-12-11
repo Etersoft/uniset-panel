@@ -785,6 +785,15 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         this.renderScheduled = false;
     }
 
+    buildUrl(path) {
+        const tabState = state.tabs.get(this.tabKey);
+        const serverId = tabState?.serverId;
+        if (serverId) {
+            return `${path}${path.includes('?') ? '&' : '?'}server=${encodeURIComponent(serverId)}`;
+        }
+        return path;
+    }
+
     createPanelHTML() {
         return `
             ${this.createChartsSection()}
@@ -940,7 +949,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         }
 
         try {
-            const response = await fetch(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/sensors?offset=${this.offset}&limit=${this.limit}`);
+            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/sensors?offset=${this.offset}&limit=${this.limit}`);
+            const response = await fetch(url);
             if (!response.ok) throw new Error('Failed to load sensors');
 
             const data = await response.json();
@@ -1287,7 +1297,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             }
 
             try {
-                const response = await fetch(`/api/objects/${encodeURIComponent(objectName)}/ionc/set`, {
+                const url = self.buildUrl(`/api/objects/${encodeURIComponent(objectName)}/ionc/set`);
+                const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ sensor_id: sensorId, value: value })
@@ -1357,7 +1368,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             }
 
             try {
-                const response = await fetch(`/api/objects/${encodeURIComponent(objectName)}/ionc/freeze`, {
+                const url = self.buildUrl(`/api/objects/${encodeURIComponent(objectName)}/ionc/freeze`);
+                const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ sensor_id: sensorId, value: value })
@@ -1394,7 +1406,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         if (!sensor) return;
 
         try {
-            const response = await fetch(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/freeze`, {
+            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/freeze`);
+            const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sensor_id: sensorId, value: sensor.value })
@@ -1418,7 +1431,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         if (!sensor) return;
 
         try {
-            const response = await fetch(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/unfreeze`, {
+            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/unfreeze`);
+            const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sensor_id: sensorId })
@@ -1504,7 +1518,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         });
 
         try {
-            const response = await fetch(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/consumers?sensors=${sensorId}`);
+            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/consumers?sensors=${sensorId}`);
+            const response = await fetch(url);
             if (!response.ok) throw new Error('Failed to load consumers');
 
             const data = await response.json();
@@ -1556,7 +1571,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
     async loadLostConsumers() {
         try {
-            const response = await fetch(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/lost`);
+            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/lost`);
+            const response = await fetch(url);
             if (!response.ok) return;
 
             const data = await response.json();
@@ -1651,7 +1667,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         await this.unsubscribeFromSSE();
 
         try {
-            const response = await fetch(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/subscribe`, {
+            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/subscribe`);
+            const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sensor_ids: sensorIds })
@@ -1671,7 +1688,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         if (this.subscribedSensorIds.size === 0) return;
 
         try {
-            await fetch(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/unsubscribe`, {
+            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/unsubscribe`);
+            await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sensor_ids: [] }) // пустой массив = отписка от всех
@@ -1719,17 +1737,30 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             'httpControlActive',
             'errorHistoryMax'
         ];
-        this.sensors = [];
-        this.sensorsTotal = 0;
-        this.offset = 0;
-        this.limit = 50;
-        this.filter = '';
         this.diagnostics = null;
         this.loadingNote = '';
         this.diagnosticsHeight = this.loadDiagnosticsHeight();
         this.sensorsHeight = this.loadSensorsHeight();
         this.statusInterval = this.loadStatusInterval();
         this.statusTimer = null;
+
+        // Virtual scroll properties
+        this.allSensors = [];
+        this.sensorsTotal = 0;
+        this.rowHeight = 32;
+        this.bufferRows = 10;
+        this.startIndex = 0;
+        this.endIndex = 0;
+
+        // Infinite scroll properties
+        this.chunkSize = 200;
+        this.hasMore = true;
+        this.isLoadingChunk = false;
+
+        // Filter state
+        this.filter = '';
+        this.typeFilter = 'all';
+        this.filterDebounce = null;
     }
 
     createPanelHTML() {
@@ -1752,6 +1783,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         setupChartsResize(this.objectName);
         this.setupDiagnosticsResize();
         this.setupSensorsResize();
+        this.setupVirtualScroll();
         this.startStatusAutoRefresh();
     }
 
@@ -1789,14 +1821,31 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
         const filterInput = document.getElementById(`opcua-sensors-filter-${this.objectName}`);
         if (filterInput) {
-            let debounce;
             filterInput.addEventListener('input', () => {
-                clearTimeout(debounce);
-                debounce = setTimeout(() => {
+                clearTimeout(this.filterDebounce);
+                this.filterDebounce = setTimeout(() => {
                     this.filter = filterInput.value.trim();
-                    this.offset = 0;
                     this.loadSensors();
-                }, 250);
+                }, 300);
+            });
+            filterInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    if (filterInput.value) {
+                        filterInput.value = '';
+                        this.filter = '';
+                        this.loadSensors();
+                    }
+                    filterInput.blur();
+                    e.preventDefault();
+                }
+            });
+        }
+
+        const typeFilter = document.getElementById(`opcua-type-filter-${this.objectName}`);
+        if (typeFilter) {
+            typeFilter.addEventListener('change', () => {
+                this.typeFilter = typeFilter.value;
+                this.loadSensors();
             });
         }
 
@@ -1888,33 +1937,39 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     createOPCUASensorsSection() {
         return this.createCollapsibleSection('opcua-sensors', 'Датчики', `
             <div class="opcua-actions">
-                <input type="text" class="opcua-filter-input" id="opcua-sensors-filter-${this.objectName}" placeholder="Фильтр по имени или типу (AI|AO|DI|DO)">
+                <input type="text" class="opcua-filter-input" id="opcua-sensors-filter-${this.objectName}" placeholder="Фильтр по имени...">
+                <select class="opcua-type-filter" id="opcua-type-filter-${this.objectName}">
+                    <option value="all">Все типы</option>
+                    <option value="AI">AI</option>
+                    <option value="AO">AO</option>
+                    <option value="DI">DI</option>
+                    <option value="DO">DO</option>
+                </select>
                 <button class="btn" id="opcua-sensors-refresh-${this.objectName}">Обновить</button>
+                <span class="opcua-sensor-count" id="opcua-sensor-count-${this.objectName}">0</span>
                 <span class="opcua-note" id="opcua-sensors-note-${this.objectName}"></span>
             </div>
             <div class="opcua-sensors-container" id="opcua-sensors-container-${this.objectName}" style="height: ${this.sensorsHeight}px">
-                <div class="opcua-sensors-scroll">
-                    <div class="opcua-sensors-meta" id="opcua-sensors-meta-${this.objectName}"></div>
-                    <div class="opcua-sensors-table-wrapper">
-                        <table class="variables-table opcua-sensors-table">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Имя</th>
-                                    <th>Тип</th>
-                                    <th>Значение</th>
-                                    <th>Tick</th>
-                                    <th>VType</th>
-                                    <th>Precision</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody id="opcua-sensors-${this.objectName}"></tbody>
-                        </table>
-                    </div>
-                    <div class="opcua-pagination" id="opcua-sensors-pagination-${this.objectName}"></div>
-                    <div class="opcua-sensor-details" id="opcua-sensor-details-${this.objectName}"></div>
+                <div class="opcua-sensors-viewport" id="opcua-sensors-viewport-${this.objectName}">
+                    <div class="opcua-sensors-spacer" id="opcua-sensors-spacer-${this.objectName}"></div>
+                    <table class="variables-table opcua-sensors-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Имя</th>
+                                <th>Тип</th>
+                                <th>Значение</th>
+                                <th>Tick</th>
+                                <th>VType</th>
+                                <th>Precision</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="opcua-sensors-${this.objectName}"></tbody>
+                    </table>
+                    <div class="opcua-loading-more" id="opcua-loading-more-${this.objectName}" style="display: none;">Загрузка...</div>
                 </div>
+                <div class="opcua-sensor-details" id="opcua-sensor-details-${this.objectName}"></div>
             </div>
             <div class="opcua-sensors-resize-handle" id="opcua-sensors-resize-${this.objectName}"></div>
         `, { sectionId: `opcua-sensors-section-${this.objectName}` });
@@ -2134,90 +2189,174 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     async loadSensors() {
+        // Reset state for fresh load
+        this.allSensors = [];
+        this.hasMore = true;
+        this.startIndex = 0;
+        this.endIndex = 0;
+
+        // Reset viewport scroll position
+        const viewport = document.getElementById(`opcua-sensors-viewport-${this.objectName}`);
+        if (viewport) viewport.scrollTop = 0;
+
         try {
-            let url = `/api/objects/${encodeURIComponent(this.objectName)}/opcua/sensors?limit=${this.limit}&offset=${this.offset}`;
+            let url = `/api/objects/${encodeURIComponent(this.objectName)}/opcua/sensors?limit=${this.chunkSize}&offset=0`;
             if (this.filter) {
                 url += `&filter=${encodeURIComponent(this.filter)}`;
             }
             const data = await this.fetchJSON(url);
-            this.sensors = data.sensors || [];
-            this.sensorsTotal = typeof data.total === 'number' ? data.total : this.sensors.length;
-            this.renderSensors();
+            const sensors = data.sensors || [];
+            this.sensorsTotal = typeof data.total === 'number' ? data.total : sensors.length;
+
+            // Apply type filter client-side
+            this.allSensors = this.typeFilter === 'all'
+                ? sensors
+                : sensors.filter(s => s.iotype === this.typeFilter);
+
+            this.hasMore = sensors.length === this.chunkSize;
+            this.updateVisibleRows();
+            this.updateSensorCount();
             this.setNote(`opcua-sensors-note-${this.objectName}`, '');
         } catch (err) {
             this.setNote(`opcua-sensors-note-${this.objectName}`, err.message, true);
         }
     }
 
-    renderSensors() {
+    async loadMoreSensors() {
+        if (this.isLoadingChunk || !this.hasMore) return;
+
+        this.isLoadingChunk = true;
+        this.showLoadingIndicator(true);
+
+        try {
+            const nextOffset = this.allSensors.length;
+            let url = `/api/objects/${encodeURIComponent(this.objectName)}/opcua/sensors?limit=${this.chunkSize}&offset=${nextOffset}`;
+            if (this.filter) {
+                url += `&filter=${encodeURIComponent(this.filter)}`;
+            }
+            const data = await this.fetchJSON(url);
+            const newSensors = data.sensors || [];
+
+            // Apply type filter client-side
+            const filtered = this.typeFilter === 'all'
+                ? newSensors
+                : newSensors.filter(s => s.iotype === this.typeFilter);
+
+            this.allSensors = [...this.allSensors, ...filtered];
+            this.hasMore = newSensors.length === this.chunkSize;
+            this.updateVisibleRows();
+            this.updateSensorCount();
+        } catch (err) {
+            console.error('Failed to load more sensors:', err);
+        } finally {
+            this.isLoadingChunk = false;
+            this.showLoadingIndicator(false);
+        }
+    }
+
+    setupVirtualScroll() {
+        const viewport = document.getElementById(`opcua-sensors-viewport-${this.objectName}`);
+        if (!viewport) return;
+
+        let ticking = false;
+        viewport.addEventListener('scroll', () => {
+            if (!ticking) {
+                requestAnimationFrame(() => {
+                    this.updateVisibleRows();
+                    this.checkInfiniteScroll(viewport);
+                    ticking = false;
+                });
+                ticking = true;
+            }
+        });
+    }
+
+    updateVisibleRows() {
+        const viewport = document.getElementById(`opcua-sensors-viewport-${this.objectName}`);
+        if (!viewport) return;
+
+        const scrollTop = viewport.scrollTop;
+        const viewportHeight = viewport.clientHeight;
+        const totalRows = this.allSensors.length;
+        const visibleRows = Math.ceil(viewportHeight / this.rowHeight);
+
+        this.startIndex = Math.max(0, Math.floor(scrollTop / this.rowHeight) - this.bufferRows);
+        this.endIndex = Math.min(totalRows, this.startIndex + visibleRows + 2 * this.bufferRows);
+
+        this.renderVisibleSensors();
+    }
+
+    renderVisibleSensors() {
         const tbody = document.getElementById(`opcua-sensors-${this.objectName}`);
-        const meta = document.getElementById(`opcua-sensors-meta-${this.objectName}`);
-        if (!tbody || !meta) return;
+        const spacer = document.getElementById(`opcua-sensors-spacer-${this.objectName}`);
+        if (!tbody || !spacer) return;
 
-        meta.textContent = `Всего: ${this.sensorsTotal} · Показано: ${this.offset} - ${this.offset + this.sensors.length}`;
+        // Set spacer height to position visible rows correctly
+        const spacerHeight = this.startIndex * this.rowHeight;
+        spacer.style.height = `${spacerHeight}px`;
 
-        if (!this.sensors || this.sensors.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-muted">Нет сенсоров</td></tr>';
-            this.renderSensorsPagination();
+        // Show empty state if no sensors
+        if (this.allSensors.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="opcua-no-sensors">Нет сенсоров</td></tr>';
             return;
         }
 
-        tbody.innerHTML = this.sensors.map(sensor => `
+        // Get visible slice
+        const visibleSensors = this.allSensors.slice(this.startIndex, this.endIndex);
+
+        // Render visible rows with type badges
+        tbody.innerHTML = visibleSensors.map(sensor => {
+            const iotype = sensor.iotype || sensor.type || '';
+            const typeBadgeClass = iotype ? `opcua-type-badge opcua-type-${iotype}` : '';
+            return `
             <tr data-sensor-id="${sensor.id || ''}">
                 <td>${sensor.id ?? '—'}</td>
                 <td>${escapeHtml(sensor.name || '')}</td>
-                <td>${sensor.iotype || sensor.type || '—'}</td>
+                <td><span class="${typeBadgeClass}">${iotype || '—'}</span></td>
                 <td>${sensor.value ?? '—'}</td>
                 <td>${sensor.tick ?? '—'}</td>
                 <td>${sensor.vtype || '—'}</td>
                 <td>${sensor.precision ?? '—'}</td>
                 <td>${sensor.status || '—'}</td>
             </tr>
-        `).join('');
+        `}).join('');
 
+        // Bind row click events
         tbody.querySelectorAll('tr[data-sensor-id]').forEach(row => {
             row.addEventListener('click', () => {
                 const id = row.dataset.sensorId;
                 if (id) this.loadSensorDetails(parseInt(id, 10));
             });
         });
-
-        this.renderSensorsPagination();
     }
 
-    renderSensorsPagination() {
-        const container = document.getElementById(`opcua-sensors-pagination-${this.objectName}`);
-        if (!container) return;
+    checkInfiniteScroll(viewport) {
+        if (this.isLoadingChunk || !this.hasMore) return;
 
-        if (this.sensorsTotal <= this.limit) {
-            container.innerHTML = '';
-            return;
+        const scrollBottom = viewport.scrollTop + viewport.clientHeight;
+        const totalHeight = this.allSensors.length * this.rowHeight;
+        const threshold = 200; // Load more when 200px from bottom
+
+        if (totalHeight - scrollBottom < threshold) {
+            this.loadMoreSensors();
         }
+    }
 
-        const hasPrev = this.offset > 0;
-        const hasNext = this.offset + this.limit < this.sensorsTotal;
+    updateSensorCount() {
+        const countEl = document.getElementById(`opcua-sensor-count-${this.objectName}`);
+        if (countEl) {
+            const loaded = this.allSensors.length;
+            const total = this.sensorsTotal;
+            countEl.textContent = this.hasMore ? `${loaded}+` : `${loaded}`;
+            countEl.title = `Загружено: ${loaded} из ${total}`;
+        }
+    }
 
-        container.innerHTML = `
-            <button class="btn" ${hasPrev ? '' : 'disabled'} id="opcua-sensors-prev-${this.objectName}">«</button>
-            <span class="opcua-pagination-info">${Math.floor(this.offset / this.limit) + 1} / ${Math.ceil(this.sensorsTotal / this.limit)}</span>
-            <button class="btn" ${hasNext ? '' : 'disabled'} id="opcua-sensors-next-${this.objectName}">»</button>
-        `;
-
-        const prev = document.getElementById(`opcua-sensors-prev-${this.objectName}`);
-        if (prev) prev.addEventListener('click', () => {
-            if (hasPrev) {
-                this.offset = Math.max(0, this.offset - this.limit);
-                this.loadSensors();
-            }
-        });
-
-        const next = document.getElementById(`opcua-sensors-next-${this.objectName}`);
-        if (next) next.addEventListener('click', () => {
-            if (hasNext) {
-                this.offset = this.offset + this.limit;
-                this.loadSensors();
-            }
-        });
+    showLoadingIndicator(show) {
+        const el = document.getElementById(`opcua-loading-more-${this.objectName}`);
+        if (el) {
+            el.style.display = show ? 'block' : 'none';
+        }
     }
 
     async loadSensorDetails(id) {
