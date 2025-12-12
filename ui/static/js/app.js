@@ -868,6 +868,20 @@ class BaseObjectRenderer {
             this.statusTimer = null;
         }
     }
+
+    updateStatusTimestamp() {
+        const prefix = this.statusAutorefreshIdPrefix;
+        if (!prefix) return;
+        // Derive timestamp element ID from autorefresh prefix (e.g., 'mb-status-autorefresh' -> 'mb-status-last')
+        const timestampId = prefix.replace('-autorefresh', '-last') + `-${this.objectName}`;
+        const el = document.getElementById(timestampId);
+        if (!el) return;
+        const now = new Date();
+        const hh = now.getHours().toString().padStart(2, '0');
+        const mm = now.getMinutes().toString().padStart(2, '0');
+        const ss = now.getSeconds().toString().padStart(2, '0');
+        el.textContent = `обновлено ${hh}:${mm}:${ss}`;
+    }
 }
 
 // Рендерер для UniSetManager (полный функционал)
@@ -2856,16 +2870,6 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         }
 
         container.innerHTML = html;
-    }
-
-    updateStatusTimestamp() {
-        const el = document.getElementById(`opcua-status-last-${this.objectName}`);
-        if (!el) return;
-        const now = new Date();
-        const hh = now.getHours().toString().padStart(2, '0');
-        const mm = now.getMinutes().toString().padStart(2, '0');
-        const ss = now.getSeconds().toString().padStart(2, '0');
-        el.textContent = `обновлено ${hh}:${mm}:${ss}`;
     }
 
     loadDiagnosticsHeight() {

@@ -66,7 +66,7 @@ UniSet2 Processes (/api/v2/...)
 
 ```
 --uniset-url     URL UniSet2 API (default: http://localhost:8080)
---port           Порт веб-сервера (default: 9090)
+--port           Порт веб-сервера (default: 8181)
 --poll-interval  Интервал опроса (default: 5s)
 --storage        Тип хранилища: memory | sqlite (default: memory)
 --sqlite-path    Путь к SQLite базе (default: ./history.db)

@@ -85,7 +85,7 @@ func Parse() *Config {
 	var unisetURLs stringSlice
 
 	flag.Var(&unisetURLs, "uniset-url", "UniSet2 HTTP API URL (can be specified multiple times)")
-	flag.StringVar(&cfg.Addr, "addr", ":9090", "Listen address (e.g. :9090 or 127.0.0.1:9090)")
+	flag.StringVar(&cfg.Addr, "addr", ":8181", "Listen address (e.g. :8181 or 127.0.0.1:8181)")
 	flag.DurationVar(&cfg.PollInterval, "poll-interval", 1*time.Second, "UniSet2 polling interval")
 
 	var storageStr string

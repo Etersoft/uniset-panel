@@ -1010,6 +1010,7 @@ header h1 {
 .collapsible-content {
     transition: max-height 0.2s ease;
     overflow: hidden;
+    padding: 0.5rem 0.75rem;
 }
 
 .collapsible-section.collapsed .collapsible-content {
@@ -1591,6 +1592,106 @@ header h1 {
 
 .opcua-note.error {
     color: var(--accent-red);
+}
+
+/* ModbusMaster/Slave actions */
+.mb-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.mb-actions .btn {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    border-radius: 4px;
+    padding: 0.35rem 0.65rem;
+    cursor: pointer;
+}
+
+.mb-actions .btn:hover {
+    background: var(--bg-hover);
+}
+
+.mb-actions .btn.primary {
+    background: var(--accent-blue);
+    color: #fff;
+    border-color: var(--accent-blue);
+}
+
+.mb-actions .btn.primary:hover {
+    background: #2563eb;
+}
+
+.mb-actions .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* ModbusMaster/Slave param inputs */
+.param-field {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    border-radius: 4px;
+    padding: 0.35rem 0.5rem;
+    width: 100%;
+    max-width: 150px;
+}
+
+.param-field:focus {
+    border-color: var(--accent-blue);
+    outline: none;
+}
+
+.param-field::placeholder {
+    color: var(--text-muted);
+}
+
+/* ModbusMaster/Slave autorefresh */
+.mb-autorefresh {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.mb-autorefresh-label {
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.mb-interval-btn,
+.mbs-interval-btn {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.mb-interval-btn:hover,
+.mbs-interval-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.mb-interval-btn.active,
+.mbs-interval-btn.active {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+    color: #fff;
+}
+
+.mb-last-update {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-left: 0.5rem;
 }
 
 .opcua-channels {
