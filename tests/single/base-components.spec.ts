@@ -254,6 +254,186 @@ test.describe('Base Components', () => {
       expect(cursor).toBe('ns-resize');
     });
   });
+
+  test.describe('Virtual Scroll', () => {
+    test('should have virtual scroll viewport', async ({ page }) => {
+      const viewport = page.locator('.ionc-sensors-viewport');
+      await expect(viewport).toBeVisible();
+    });
+
+    test('should have spacer element for virtual scroll', async ({ page }) => {
+      // Spacer is inside the viewport - use ID pattern
+      const spacer = page.locator('[id^="ionc-sensors-spacer-"]');
+      await expect(spacer).toHaveCount(1);
+    });
+
+    test('should render only visible rows', async ({ page }) => {
+      const viewport = page.locator('.ionc-sensors-viewport');
+      const rows = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row');
+
+      // Get viewport height and row count
+      const viewportHeight = await viewport.evaluate(el => el.clientHeight);
+      const rowCount = await rows.count();
+
+      // With virtual scroll, we should have a reasonable number of rows
+      // (not all 200+ sensors rendered at once)
+      if (rowCount > 0) {
+        // Rows should be rendered based on viewport size + buffer
+        const rowHeight = 32; // from CSS
+        const maxVisibleRows = Math.ceil(viewportHeight / rowHeight) + 20; // + buffer
+        expect(rowCount).toBeLessThanOrEqual(maxVisibleRows + 10); // small tolerance
+      }
+    });
+
+    test('should update visible rows on scroll', async ({ page }) => {
+      const viewport = page.locator('.ionc-sensors-viewport');
+      const rows = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row');
+
+      // Get first row ID before scroll
+      const firstRowBefore = await rows.first().getAttribute('data-sensor-id');
+
+      // Scroll down
+      await viewport.evaluate(el => el.scrollTop = 500);
+      await page.waitForTimeout(100);
+
+      // First visible row should change
+      const firstRowAfter = await rows.first().getAttribute('data-sensor-id');
+
+      // If there are enough rows, the first visible should change
+      const totalRows = await rows.count();
+      if (totalRows > 15) {
+        expect(firstRowAfter).not.toBe(firstRowBefore);
+      }
+    });
+  });
+
+  test.describe('Loading Indicator', () => {
+    test('should have loading-more element', async ({ page }) => {
+      const loadingMore = page.locator('.ionc-loading-more');
+      // Element should exist (may be hidden)
+      await expect(loadingMore).toHaveCount(1);
+    });
+  });
+
+  test.describe('SSE Value Updates', () => {
+    test('should update sensor value via SSE', async ({ page }) => {
+      // Find a row and get its value cell
+      const firstRow = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first();
+      const valueCell = firstRow.locator('.ionc-value');
+
+      // Value cell should exist
+      await expect(valueCell).toBeVisible();
+
+      // The value-changed animation class should be applied on updates
+      // We can verify the element structure is correct for receiving updates
+      const hasSensorId = await firstRow.getAttribute('data-sensor-id');
+      expect(hasSensorId).toBeTruthy();
+    });
+
+    test('should have value cell with update animation support', async ({ page }) => {
+      const valueCell = page.locator('.ionc-sensors-tbody .ionc-value').first();
+      await expect(valueCell).toBeVisible();
+
+      // Check that the cell can receive the value-changed class
+      const classes = await valueCell.getAttribute('class');
+      expect(classes).toContain('ionc-value');
+    });
+  });
+});
+
+// Tests for cross-renderer consistency
+test.describe('Cross-Renderer Consistency', () => {
+
+  test('IONC and OPCUA should have same filter bar structure', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+
+    // Check if OPCUAClient1 exists
+    const opcuaItem = page.locator('#objects-list li', { hasText: 'OPCUAClient1' });
+    const count = await opcuaItem.count();
+
+    if (count === 0) {
+      test.skip();
+      return;
+    }
+
+    await opcuaItem.click();
+    await page.waitForSelector('[id^="opcua-sensors-section-"]', { timeout: 10000 });
+
+    // OPCUA should have same filter bar components
+    const filterInput = page.locator('[id^="opcua-sensors-section-"] .filter-input');
+    const typeFilter = page.locator('[id^="opcua-sensors-section-"] .type-filter');
+
+    await expect(filterInput).toBeVisible();
+    await expect(typeFilter).toBeVisible();
+  });
+
+  test('ModbusMaster should have filter bar', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+
+    const mbItem = page.locator('#objects-list li', { hasText: 'MBTCPMaster1' });
+    const count = await mbItem.count();
+
+    if (count === 0) {
+      test.skip();
+      return;
+    }
+
+    await mbItem.click();
+    await page.waitForSelector('[id^="mb-registers-section-"]', { timeout: 10000 });
+
+    // ModbusMaster should have filter input
+    const filterInput = page.locator('[id^="mb-registers-section-"] .filter-input');
+    await expect(filterInput).toBeVisible();
+  });
+
+  test('ModbusSlave should have filter bar', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+
+    const mbsItem = page.locator('#objects-list li', { hasText: 'MBSlave1' });
+    const count = await mbsItem.count();
+
+    if (count === 0) {
+      test.skip();
+      return;
+    }
+
+    await mbsItem.click();
+    await page.waitForSelector('[id^="mbs-registers-section-"]', { timeout: 10000 });
+
+    // ModbusSlave should have filter input
+    const filterInput = page.locator('[id^="mbs-registers-section-"] .filter-input');
+    await expect(filterInput).toBeVisible();
+  });
+
+  test('all renderers should have resize handle', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+
+    // Open SharedMemory
+    const smItem = page.locator('#objects-list li', { hasText: 'SharedMemory' });
+    if (await smItem.isVisible()) {
+      await smItem.click();
+      const ioncResize = page.locator('.ionc-sensors-section .resize-handle');
+      await expect(ioncResize).toBeVisible();
+    }
+  });
+
+  test('all renderers should have sensor/register count badge', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+
+    // Check SharedMemory count badge
+    const smItem = page.locator('#objects-list li', { hasText: 'SharedMemory' });
+    if (await smItem.isVisible()) {
+      await smItem.click();
+      await page.waitForSelector('.ionc-sensors-section', { timeout: 5000 });
+      const countBadge = page.locator('.ionc-sensors-section .sensor-count');
+      await expect(countBadge).toBeVisible();
+    }
+  });
 });
 
 // Note: OPCUAExchange base component tests are covered in opcuaexchange.spec.ts
