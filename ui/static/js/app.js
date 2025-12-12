@@ -724,6 +724,25 @@ class BaseObjectRenderer {
         return path;
     }
 
+    // Выполнить запрос и вернуть JSON
+    async fetchJSON(path, options = {}) {
+        const url = this.buildUrl(path);
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(text || `HTTP ${response.status}`);
+        }
+        return response.json();
+    }
+
+    // Установить текст уведомления
+    setNote(id, text, isError = false) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = text || '';
+        el.classList.toggle('error', !!(text && isError));
+    }
+
     // Базовый resize handler для секций
     setupResize(containerSelector, handleSelector, storageKey, minHeight = 100, maxHeight = 800) {
         const container = document.querySelector(containerSelector);
@@ -756,6 +775,97 @@ class BaseObjectRenderer {
         const savedHeight = localStorage.getItem(storageKey);
         if (savedHeight) {
             container.style.height = savedHeight;
+        }
+    }
+
+    // --- Status auto-refresh (общая логика) ---
+    // Субклассы должны установить:
+    //   this.statusIntervalStorageKey - ключ localStorage
+    //   this.statusIntervalBtnClass - CSS класс кнопок (например 'opcua-interval-btn')
+    //   this.statusAutorefreshIdPrefix - префикс ID wrapper'а (например 'opcua-status-autorefresh')
+
+    loadStatusInterval() {
+        if (!this.statusIntervalStorageKey) return 5000;
+        try {
+            const saved = JSON.parse(localStorage.getItem(this.statusIntervalStorageKey) || '{}');
+            const value = saved[this.objectName];
+            if (typeof value === 'number' && value > 0) {
+                return value;
+            }
+        } catch (err) {
+            console.warn('Failed to load status interval:', err);
+        }
+        return 5000;
+    }
+
+    saveStatusInterval(value) {
+        if (!this.statusIntervalStorageKey) return;
+        try {
+            const saved = JSON.parse(localStorage.getItem(this.statusIntervalStorageKey) || '{}');
+            saved[this.objectName] = value;
+            localStorage.setItem(this.statusIntervalStorageKey, JSON.stringify(saved));
+        } catch (err) {
+            console.warn('Failed to save status interval:', err);
+        }
+    }
+
+    renderStatusIntervalButtons() {
+        const btnClass = this.statusIntervalBtnClass || 'interval-btn';
+        const options = [
+            { label: '5с', ms: 5000 },
+            { label: '10с', ms: 10000 },
+            { label: '15с', ms: 15000 },
+            { label: '1м', ms: 60000 },
+            { label: '5м', ms: 300000 }
+        ];
+        return options.map(opt => {
+            const active = this.statusInterval === opt.ms ? 'active' : '';
+            return `<button type="button" class="${btnClass} time-range-btn ${active}" data-ms="${opt.ms}">${opt.label}</button>`;
+        }).join('');
+    }
+
+    bindStatusIntervalButtons() {
+        const prefix = this.statusAutorefreshIdPrefix;
+        const btnClass = this.statusIntervalBtnClass;
+        if (!prefix || !btnClass) return;
+        const wrapper = document.getElementById(`${prefix}-${this.objectName}`);
+        if (!wrapper) return;
+        wrapper.querySelectorAll(`.${btnClass}`).forEach(btn => {
+            btn.addEventListener('click', () => {
+                const ms = parseInt(btn.dataset.ms, 10);
+                if (!isNaN(ms)) {
+                    this.statusInterval = ms;
+                    this.saveStatusInterval(ms);
+                    this.updateStatusIntervalUI();
+                    this.startStatusAutoRefresh();
+                }
+            });
+        });
+        this.updateStatusIntervalUI();
+    }
+
+    updateStatusIntervalUI() {
+        const prefix = this.statusAutorefreshIdPrefix;
+        const btnClass = this.statusIntervalBtnClass;
+        if (!prefix || !btnClass) return;
+        const wrapper = document.getElementById(`${prefix}-${this.objectName}`);
+        if (!wrapper) return;
+        wrapper.querySelectorAll(`.${btnClass}`).forEach(btn => {
+            const ms = parseInt(btn.dataset.ms, 10);
+            btn.classList.toggle('active', ms === this.statusInterval);
+        });
+    }
+
+    startStatusAutoRefresh() {
+        this.stopStatusAutoRefresh();
+        if (!this.statusInterval || this.statusInterval <= 0) return;
+        this.statusTimer = setInterval(() => this.loadStatus(), this.statusInterval);
+    }
+
+    stopStatusAutoRefresh() {
+        if (this.statusTimer) {
+            clearInterval(this.statusTimer);
+            this.statusTimer = null;
         }
     }
 }
@@ -2025,6 +2135,10 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         this.loadingNote = '';
         this.diagnosticsHeight = this.loadDiagnosticsHeight();
         this.sensorsHeight = this.loadSensorsHeight();
+        // Status auto-refresh config
+        this.statusIntervalStorageKey = 'uniset2-viewer-opcua-status-interval';
+        this.statusIntervalBtnClass = 'opcua-interval-btn';
+        this.statusAutorefreshIdPrefix = 'opcua-status-autorefresh';
         this.statusInterval = this.loadStatusInterval();
         this.statusTimer = null;
 
@@ -2149,16 +2263,6 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         }
     }
 
-    async fetchJSON(path, options = {}) {
-        const url = this.buildUrl(path);
-        const response = await fetch(url, options);
-        if (!response.ok) {
-            const text = await response.text();
-            throw new Error(text || `HTTP ${response.status}`);
-        }
-        return response.json();
-    }
-
     createOPCUAStatusSection() {
         return this.createCollapsibleSection('opcua-status', 'Статус OPC UA', `
             <div class="opcua-actions">
@@ -2261,13 +2365,6 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             </div>
             <div class="opcua-diagnostics-resize-handle" id="opcua-diagnostics-resize-${this.objectName}"></div>
         `, { sectionId: `opcua-diagnostics-section-${this.objectName}` });
-    }
-
-    setNote(id, text, isError = false) {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.textContent = text || '';
-        el.classList.toggle('error', !!(text && isError));
     }
 
     async loadStatus() {
@@ -2761,46 +2858,6 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         container.innerHTML = html;
     }
 
-    renderStatusIntervalButtons() {
-        const options = [
-            { label: '5с', ms: 5000 },
-            { label: '10с', ms: 10000 },
-            { label: '15с', ms: 15000 },
-            { label: '1м', ms: 60000 },
-            { label: '5м', ms: 300000 }
-        ];
-        return options.map(opt => {
-            const active = this.statusInterval === opt.ms ? 'active' : '';
-            return `<button type="button" class="opcua-interval-btn time-range-btn ${active}" data-ms="${opt.ms}">${opt.label}</button>`;
-        }).join('');
-    }
-
-    bindStatusIntervalButtons() {
-        const wrapper = document.getElementById(`opcua-status-autorefresh-${this.objectName}`);
-        if (!wrapper) return;
-        wrapper.querySelectorAll('.opcua-interval-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const ms = parseInt(btn.dataset.ms, 10);
-                if (!isNaN(ms)) {
-                    this.statusInterval = ms;
-                    this.saveStatusInterval(ms);
-                    this.updateStatusIntervalUI();
-                    this.startStatusAutoRefresh();
-                }
-            });
-        });
-        this.updateStatusIntervalUI();
-    }
-
-    updateStatusIntervalUI() {
-        const wrapper = document.getElementById(`opcua-status-autorefresh-${this.objectName}`);
-        if (!wrapper) return;
-        wrapper.querySelectorAll('.opcua-interval-btn').forEach(btn => {
-            const ms = parseInt(btn.dataset.ms, 10);
-            btn.classList.toggle('active', ms === this.statusInterval);
-        });
-    }
-
     updateStatusTimestamp() {
         const el = document.getElementById(`opcua-status-last-${this.objectName}`);
         if (!el) return;
@@ -2809,42 +2866,6 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         const mm = now.getMinutes().toString().padStart(2, '0');
         const ss = now.getSeconds().toString().padStart(2, '0');
         el.textContent = `обновлено ${hh}:${mm}:${ss}`;
-    }
-
-    startStatusAutoRefresh() {
-        this.stopStatusAutoRefresh();
-        if (!this.statusInterval || this.statusInterval <= 0) return;
-        this.statusTimer = setInterval(() => this.loadStatus(), this.statusInterval);
-    }
-
-    stopStatusAutoRefresh() {
-        if (this.statusTimer) {
-            clearInterval(this.statusTimer);
-            this.statusTimer = null;
-        }
-    }
-
-    loadStatusInterval() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-opcua-status-interval') || '{}');
-            const value = saved[this.objectName];
-            if (typeof value === 'number' && value > 0) {
-                return value;
-            }
-        } catch (err) {
-            console.warn('Failed to load status interval:', err);
-        }
-        return 5000;
-    }
-
-    saveStatusInterval(value) {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-opcua-status-interval') || '{}');
-            saved[this.objectName] = value;
-            localStorage.setItem('uniset2-viewer-opcua-status-interval', JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save status interval:', err);
-        }
     }
 
     loadDiagnosticsHeight() {
@@ -3043,6 +3064,10 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         ];
         this.devices = [];
         this.registersHeight = this.loadRegistersHeight();
+        // Status auto-refresh config
+        this.statusIntervalStorageKey = 'uniset2-viewer-modbus-status-interval';
+        this.statusIntervalBtnClass = 'mb-interval-btn';
+        this.statusAutorefreshIdPrefix = 'mb-status-autorefresh';
         this.statusInterval = this.loadStatusInterval();
         this.statusTimer = null;
 
@@ -3091,82 +3116,6 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     destroy() {
         this.destroyLogViewer();
         this.stopStatusAutoRefresh();
-    }
-
-    loadStatusInterval() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-modbus-status-interval') || '{}');
-            const value = saved[this.objectName];
-            if (typeof value === 'number' && value > 0) {
-                return value;
-            }
-        } catch (err) {
-            console.warn('Failed to load status interval:', err);
-        }
-        return 5000;
-    }
-
-    saveStatusInterval(value) {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-modbus-status-interval') || '{}');
-            saved[this.objectName] = value;
-            localStorage.setItem('uniset2-viewer-modbus-status-interval', JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save status interval:', err);
-        }
-    }
-
-    renderStatusIntervalButtons() {
-        const options = [
-            { label: '5с', ms: 5000 },
-            { label: '10с', ms: 10000 },
-            { label: '15с', ms: 15000 },
-            { label: '1м', ms: 60000 },
-            { label: '5м', ms: 300000 }
-        ];
-        return options.map(opt => {
-            const active = this.statusInterval === opt.ms ? 'active' : '';
-            return `<button type="button" class="mb-interval-btn time-range-btn ${active}" data-ms="${opt.ms}">${opt.label}</button>`;
-        }).join('');
-    }
-
-    bindStatusIntervalButtons() {
-        const wrapper = document.getElementById(`mb-status-autorefresh-${this.objectName}`);
-        if (!wrapper) return;
-        wrapper.querySelectorAll('.mb-interval-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const ms = parseInt(btn.dataset.ms, 10);
-                if (!isNaN(ms)) {
-                    this.statusInterval = ms;
-                    this.saveStatusInterval(ms);
-                    this.updateStatusIntervalUI();
-                    this.startStatusAutoRefresh();
-                }
-            });
-        });
-        this.updateStatusIntervalUI();
-    }
-
-    updateStatusIntervalUI() {
-        const wrapper = document.getElementById(`mb-status-autorefresh-${this.objectName}`);
-        if (!wrapper) return;
-        wrapper.querySelectorAll('.mb-interval-btn').forEach(btn => {
-            const ms = parseInt(btn.dataset.ms, 10);
-            btn.classList.toggle('active', ms === this.statusInterval);
-        });
-    }
-
-    startStatusAutoRefresh() {
-        this.stopStatusAutoRefresh();
-        if (!this.statusInterval || this.statusInterval <= 0) return;
-        this.statusTimer = setInterval(() => this.loadStatus(), this.statusInterval);
-    }
-
-    stopStatusAutoRefresh() {
-        if (this.statusTimer) {
-            clearInterval(this.statusTimer);
-            this.statusTimer = null;
-        }
     }
 
     async reloadAll() {
@@ -3230,16 +3179,6 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
                 this.loadRegisters();
             });
         }
-    }
-
-    async fetchJSON(path, options = {}) {
-        const url = this.buildUrl(path);
-        const response = await fetch(url, options);
-        if (!response.ok) {
-            const text = await response.text();
-            throw new Error(text || `HTTP ${response.status}`);
-        }
-        return response.json();
     }
 
     createMBStatusSection() {
@@ -3329,13 +3268,6 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
             </div>
             <div class="resize-handle" id="mb-registers-resize-${this.objectName}"></div>
         `, { sectionId: `mb-registers-section-${this.objectName}` });
-    }
-
-    setNote(id, text, isError = false) {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.textContent = text || '';
-        el.classList.toggle('error', !!(text && isError));
     }
 
     async loadStatus() {
