@@ -80,6 +80,16 @@ func (s *Server) setupRoutes(staticFS fs.FS) {
 	s.mux.HandleFunc("POST /api/objects/{name}/modbus/control/take", s.handlers.TakeMBControl)
 	s.mux.HandleFunc("POST /api/objects/{name}/modbus/control/release", s.handlers.ReleaseMBControl)
 
+	// Modbus SSE subscriptions (for ModbusMaster and ModbusSlave)
+	s.mux.HandleFunc("POST /api/objects/{name}/modbus/subscribe", s.handlers.SubscribeModbusRegisters)
+	s.mux.HandleFunc("POST /api/objects/{name}/modbus/unsubscribe", s.handlers.UnsubscribeModbusRegisters)
+	s.mux.HandleFunc("GET /api/objects/{name}/modbus/subscriptions", s.handlers.GetModbusSubscriptions)
+
+	// OPCUA SSE subscriptions
+	s.mux.HandleFunc("POST /api/objects/{name}/opcua/subscribe", s.handlers.SubscribeOPCUASensors)
+	s.mux.HandleFunc("POST /api/objects/{name}/opcua/unsubscribe", s.handlers.UnsubscribeOPCUASensors)
+	s.mux.HandleFunc("GET /api/objects/{name}/opcua/subscriptions", s.handlers.GetOPCUASubscriptions)
+
 	// LogServer API
 	s.mux.HandleFunc("GET /api/logs/status", s.handlers.GetAllLogServerStatuses)
 	s.mux.HandleFunc("GET /api/logs/{name}/status", s.handlers.GetLogServerStatus)

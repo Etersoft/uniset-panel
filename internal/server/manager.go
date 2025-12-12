@@ -9,6 +9,8 @@ import (
 
 	"github.com/pv/uniset2-viewer-go/internal/config"
 	"github.com/pv/uniset2-viewer-go/internal/ionc"
+	"github.com/pv/uniset2-viewer-go/internal/modbus"
+	"github.com/pv/uniset2-viewer-go/internal/opcua"
 	"github.com/pv/uniset2-viewer-go/internal/storage"
 	"github.com/pv/uniset2-viewer-go/internal/uniset"
 )
@@ -42,6 +44,8 @@ type Manager struct {
 	// Callbacks для SSE
 	objectCallback  ObjectEventCallback
 	ioncCallback    IONCEventCallback
+	modbusCallback  ModbusEventCallback
+	opcuaCallback   OPCUAEventCallback
 	statusCallback  StatusEventCallback
 	objectsCallback ObjectsChangedCallback
 }
@@ -74,6 +78,20 @@ func (m *Manager) SetIONCCallback(cb IONCEventCallback) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.ioncCallback = cb
+}
+
+// SetModbusCallback устанавливает callback для событий Modbus
+func (m *Manager) SetModbusCallback(cb ModbusEventCallback) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.modbusCallback = cb
+}
+
+// SetOPCUACallback устанавливает callback для событий OPCUA
+func (m *Manager) SetOPCUACallback(cb OPCUAEventCallback) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.opcuaCallback = cb
 }
 
 // SetStatusCallback устанавливает callback для изменения статуса серверов
@@ -113,6 +131,8 @@ func (m *Manager) AddServer(cfg config.ServerConfig) error {
 		m.supplier,
 		m.objectCallback,
 		m.ioncCallback,
+		m.modbusCallback,
+		m.opcuaCallback,
 		m.statusCallback,
 		m.objectsCallback,
 	)
@@ -337,6 +357,26 @@ func (m *Manager) GetIONCPoller(serverID string) (*ionc.Poller, bool) {
 	}
 
 	return instance.IONCPoller, true
+}
+
+// GetModbusPoller возвращает Modbus poller для указанного сервера
+func (m *Manager) GetModbusPoller(serverID string) (*modbus.Poller, bool) {
+	instance, exists := m.GetServer(serverID)
+	if !exists {
+		return nil, false
+	}
+
+	return instance.ModbusPoller, true
+}
+
+// GetOPCUAPoller возвращает OPCUA poller для указанного сервера
+func (m *Manager) GetOPCUAPoller(serverID string) (*opcua.Poller, bool) {
+	instance, exists := m.GetServer(serverID)
+	if !exists {
+		return nil, false
+	}
+
+	return instance.OPCUAPoller, true
 }
 
 // GetClient возвращает клиент для указанного сервера

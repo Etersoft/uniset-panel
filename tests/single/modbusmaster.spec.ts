@@ -124,7 +124,7 @@ test.describe('ModbusMaster renderer', () => {
     await expect(typeFilter).toBeVisible({ timeout: 5000 });
   });
 
-  test('should have status auto-refresh buttons', async ({ page }) => {
+  test('should display register values for SSE updates', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('#objects-list li', { timeout: 15000 });
 
@@ -133,16 +133,20 @@ test.describe('ModbusMaster renderer', () => {
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
 
-    // Check auto-refresh buttons exist
-    const autoRefreshWrapper = page.locator(`#mb-status-autorefresh-${MB_OBJECT}`);
-    await expect(autoRefreshWrapper).toBeVisible({ timeout: 5000 });
+    // Wait for registers to load
+    await page.waitForTimeout(1500);
 
-    const intervalButtons = page.locator(`#mb-status-autorefresh-${MB_OBJECT} .mb-interval-btn`);
-    await expect(intervalButtons.first()).toBeVisible({ timeout: 5000 });
+    // Check that register rows exist
+    const rows = page.locator(`#mb-registers-tbody-${MB_OBJECT} tr`);
+    await expect(rows.first()).toBeVisible({ timeout: 5000 });
 
-    // Should have active button (5s by default)
-    const activeBtn = page.locator(`#mb-status-autorefresh-${MB_OBJECT} .mb-interval-btn.active`);
-    await expect(activeBtn).toBeVisible({ timeout: 5000 });
+    // Check value cell exists (7th column for ModbusMaster)
+    const valueCell = rows.first().locator('td:nth-child(7)');
+    await expect(valueCell).toBeVisible();
+
+    // Check MB Val cell exists (8th column)
+    const mbValCell = rows.first().locator('td:nth-child(8)');
+    await expect(mbValCell).toBeVisible();
   });
 
   test('should filter registers by text', async ({ page }) => {

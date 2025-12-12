@@ -3,19 +3,6 @@ import { test, expect } from '@playwright/test';
 const OPCUA_OBJECT = 'OPCUAClient1';
 
 test.describe('OPCUAExchange renderer', () => {
-  test.beforeEach(async ({ page }) => {
-    // Ускоряем автообновление статуса в тестах
-    await page.addInitScript(({ name }) => {
-      try {
-        const saved = JSON.parse(localStorage.getItem('uniset2-viewer-opcua-status-interval') || '{}');
-        saved[name] = 1000;
-        localStorage.setItem('uniset2-viewer-opcua-status-interval', JSON.stringify(saved));
-      } catch (err) {
-        console.warn('failed to init status interval', err);
-      }
-    }, { name: OPCUA_OBJECT });
-  });
-
   test('shows OPCUA sections and disables control when not allowed', async ({ page }) => {
     await page.goto('/');
 
@@ -37,22 +24,12 @@ test.describe('OPCUAExchange renderer', () => {
     await expect(releaseBtn).toBeDisabled();
     await expect(panel.locator('.opcua-flag-row', { hasText: 'Разрешён контроль:' })).toContainText('Нет');
 
-    await expect(panel.locator(`#opcua-status-autorefresh-${OPCUA_OBJECT}`)).toBeVisible();
-    await expect(panel.locator('.opcua-interval-btn[data-ms="5000"]')).toBeVisible();
-
     await expect(panel.locator(`#opcua-params-${OPCUA_OBJECT} tr`)).not.toHaveCount(0);
     await expect(panel.locator(`#opcua-sensors-${OPCUA_OBJECT} tr`)).not.toHaveCount(0);
     await expect(panel.locator(`#opcua-diagnostics-${OPCUA_OBJECT}`)).toBeVisible();
   });
 
-  test('auto-refreshes status with configured interval', async ({ page }) => {
-    let statusHits = 0;
-    page.on('response', (response) => {
-      if (response.url().includes('/opcua/status')) {
-        statusHits += 1;
-      }
-    });
-
+  test('should display sensor values for SSE updates', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('#objects-list li', { timeout: 10000 });
     await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
@@ -60,18 +37,20 @@ test.describe('OPCUAExchange renderer', () => {
     const panel = page.locator('.tab-panel.active');
     await panel.waitFor({ timeout: 10000 });
 
-    // Дождаться первого запроса статуса
-    await page.waitForResponse((resp) => resp.url().includes('/opcua/status'));
-    const startHits = statusHits;
+    // Wait for sensors to load
+    await page.waitForSelector(`#opcua-sensors-${OPCUA_OBJECT} tr`);
 
-    // Ждём, чтобы автообновление сработало хотя бы один раз
-    await page.waitForTimeout(2200);
-    expect(statusHits).toBeGreaterThan(startHits);
+    // Check that sensor rows exist with proper structure
+    const sensorRow = panel.locator(`#opcua-sensors-${OPCUA_OBJECT} tr`).first();
+    await expect(sensorRow).toBeVisible();
 
-    // Переключаем интервал и проверяем, что активность обновляется визуально
-    const btn10s = panel.locator('.opcua-interval-btn', { hasText: '10с' });
-    await btn10s.click();
-    await expect(btn10s).toHaveClass(/active/);
+    // Row should have data-sensor-id attribute for SSE targeting
+    const sensorId = await sensorRow.getAttribute('data-sensor-id');
+    expect(sensorId).toBeTruthy();
+
+    // Value cell should exist and be visible (4th column)
+    const valueCell = sensorRow.locator('td').nth(3);
+    await expect(valueCell).toBeVisible();
   });
 
   test.describe('Sensor Filtering', () => {

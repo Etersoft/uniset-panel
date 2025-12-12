@@ -151,8 +151,8 @@ func TestCaseInsensitiveIOType(t *testing.T) {
 	}
 }
 
-// TestParseWithoutID verifies that XML without id attributes works correctly
-func TestParseWithoutID(t *testing.T) {
+// TestIDFromFileZero verifies that idfromfile="0" generates IDs from names
+func TestIDFromFileZero(t *testing.T) {
 	xmlNoID := `<?xml version="1.0" encoding="utf-8"?>
 <UNISETPLC>
 	<ObjectsMap idfromfile="0">
@@ -174,7 +174,7 @@ func TestParseWithoutID(t *testing.T) {
 		t.Errorf("expected 3 sensors, got %d", cfg.Count())
 	}
 
-	// Check that all sensors are accessible by name
+	// Check that all sensors have generated IDs (hash of name)
 	s1 := cfg.GetByName("Sensor1")
 	if s1 == nil {
 		t.Fatal("expected Sensor1")
@@ -182,28 +182,105 @@ func TestParseWithoutID(t *testing.T) {
 	if s1.IOType != IOTypeDI {
 		t.Errorf("expected IOType DI, got %s", s1.IOType)
 	}
-	if s1.ID != 0 {
-		t.Errorf("expected ID 0 (not set), got %d", s1.ID)
+	expectedID1 := int64(Hash32("Sensor1"))
+	if s1.ID != expectedID1 {
+		t.Errorf("expected ID %d (hash of name), got %d", expectedID1, s1.ID)
 	}
 
 	s2 := cfg.GetByName("Sensor2")
 	if s2 == nil {
 		t.Fatal("expected Sensor2")
 	}
-	if s2.IOType != IOTypeAI {
-		t.Errorf("expected IOType AI, got %s", s2.IOType)
+	expectedID2 := int64(Hash32("Sensor2"))
+	if s2.ID != expectedID2 {
+		t.Errorf("expected ID %d (hash of name), got %d", expectedID2, s2.ID)
 	}
 
 	s3 := cfg.GetByName("Sensor3")
 	if s3 == nil {
 		t.Fatal("expected Sensor3")
 	}
-	if s3.IOType != IOTypeDO {
-		t.Errorf("expected IOType DO, got %s", s3.IOType)
+	expectedID3 := int64(Hash32("Sensor3"))
+	if s3.ID != expectedID3 {
+		t.Errorf("expected ID %d (hash of name), got %d", expectedID3, s3.ID)
 	}
 }
 
-// TestLoadFromFileWithoutID tests loading config/test-noid.xml file
+// TestIDFromFileOne verifies that idfromfile="1" requires IDs and errors if missing
+func TestIDFromFileOne(t *testing.T) {
+	xmlWithID := `<?xml version="1.0" encoding="utf-8"?>
+<UNISETPLC>
+	<ObjectsMap idfromfile="1">
+		<sensors name="Sensors">
+			<item id="100" name="Sensor1" textname="First Sensor" iotype="DI"/>
+			<item id="200" name="Sensor2" textname="Second Sensor" iotype="AI"/>
+		</sensors>
+	</ObjectsMap>
+</UNISETPLC>`
+
+	cfg, err := Parse([]byte(xmlWithID))
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	// Check that IDs from XML are preserved
+	s1 := cfg.GetByName("Sensor1")
+	if s1.ID != 100 {
+		t.Errorf("expected ID 100, got %d", s1.ID)
+	}
+	s2 := cfg.GetByName("Sensor2")
+	if s2.ID != 200 {
+		t.Errorf("expected ID 200, got %d", s2.ID)
+	}
+}
+
+// TestIDFromFileOneMissingID verifies error when idfromfile="1" but id is missing
+func TestIDFromFileOneMissingID(t *testing.T) {
+	xmlMissingID := `<?xml version="1.0" encoding="utf-8"?>
+<UNISETPLC>
+	<ObjectsMap idfromfile="1">
+		<sensors name="Sensors">
+			<item id="100" name="Sensor1" textname="First Sensor" iotype="DI"/>
+			<item name="Sensor2" textname="Second Sensor" iotype="AI"/>
+		</sensors>
+	</ObjectsMap>
+</UNISETPLC>`
+
+	_, err := Parse([]byte(xmlMissingID))
+	if err == nil {
+		t.Fatal("expected error for missing id with idfromfile=\"1\"")
+	}
+	expectedErr := `sensor "Sensor2" has no id attribute but idfromfile="1"`
+	if err.Error() != expectedErr {
+		t.Errorf("expected error %q, got %q", expectedErr, err.Error())
+	}
+}
+
+// TestIDFromFileDefault verifies that missing idfromfile defaults to "0" behavior
+func TestIDFromFileDefault(t *testing.T) {
+	xmlDefault := `<?xml version="1.0" encoding="utf-8"?>
+<UNISETPLC>
+	<ObjectsMap>
+		<sensors name="Sensors">
+			<item name="Sensor1" textname="First Sensor" iotype="DI"/>
+		</sensors>
+	</ObjectsMap>
+</UNISETPLC>`
+
+	cfg, err := Parse([]byte(xmlDefault))
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	// Should generate ID from name (like idfromfile="0")
+	s1 := cfg.GetByName("Sensor1")
+	expectedID := int64(Hash32("Sensor1"))
+	if s1.ID != expectedID {
+		t.Errorf("expected ID %d (hash of name), got %d", expectedID, s1.ID)
+	}
+}
+
+// TestLoadFromFileWithoutID tests loading config/test-noid.xml file with idfromfile="0"
 func TestLoadFromFileWithoutID(t *testing.T) {
 	cfg, err := LoadFromFile("../../config/test-noid.xml")
 	if err != nil {
@@ -241,9 +318,10 @@ func TestLoadFromFileWithoutID(t *testing.T) {
 		if s.TextName != tc.textname {
 			t.Errorf("sensor %s: expected textname %q, got %q", tc.name, tc.textname, s.TextName)
 		}
-		// ID should be 0 (not set in XML)
-		if s.ID != 0 {
-			t.Errorf("sensor %s: expected ID 0, got %d", tc.name, s.ID)
+		// ID should be generated from name (idfromfile="0")
+		expectedID := int64(Hash32(tc.name))
+		if s.ID != expectedID {
+			t.Errorf("sensor %s: expected ID %d (hash), got %d", tc.name, expectedID, s.ID)
 		}
 	}
 

@@ -15,6 +15,8 @@ import (
 	"github.com/pv/uniset2-viewer-go/internal/ionc"
 	"github.com/pv/uniset2-viewer-go/internal/logger"
 	"github.com/pv/uniset2-viewer-go/internal/logserver"
+	"github.com/pv/uniset2-viewer-go/internal/modbus"
+	"github.com/pv/uniset2-viewer-go/internal/opcua"
 	"github.com/pv/uniset2-viewer-go/internal/poller"
 	"github.com/pv/uniset2-viewer-go/internal/sensorconfig"
 	"github.com/pv/uniset2-viewer-go/internal/server"
@@ -84,6 +86,8 @@ func main() {
 	// Set callbacks for SSE broadcasting
 	serverMgr.SetObjectCallback(sseHub.BroadcastObjectDataWithServer)
 	serverMgr.SetIONCCallback(sseHub.BroadcastIONCSensorBatchWithServer)
+	serverMgr.SetModbusCallback(sseHub.BroadcastModbusRegisterBatchWithServer)
+	serverMgr.SetOPCUACallback(sseHub.BroadcastOPCUASensorBatchWithServer)
 	serverMgr.SetStatusCallback(sseHub.BroadcastServerStatus)
 	serverMgr.SetObjectsCallback(sseHub.BroadcastObjectsList)
 
@@ -96,14 +100,18 @@ func main() {
 		}
 	}
 
-	// Get first server's client and poller for API handlers
+	// Get first server's client and pollers for API handlers
 	var client *uniset.Client
 	var pollerInstance *poller.Poller
 	var ioncPollerInstance *ionc.Poller
+	var modbusPollerInstance *modbus.Poller
+	var opcuaPollerInstance *opcua.Poller
 	if instance, ok := serverMgr.GetFirstServer(); ok {
 		client = instance.Client
 		pollerInstance = instance.Poller
 		ioncPollerInstance = instance.IONCPoller
+		modbusPollerInstance = instance.ModbusPoller
+		opcuaPollerInstance = instance.OPCUAPoller
 	}
 
 	// Create API handlers
@@ -114,9 +122,15 @@ func main() {
 	handlers.SetControlsEnabled(cfg.ConFile != "") // Controls visible only if confile specified
 	handlers.SetUIConfig(cfg.UI)
 
-	// Set IONC poller if available
+	// Set pollers if available
 	if ioncPollerInstance != nil {
 		handlers.SetIONCPoller(ioncPollerInstance)
+	}
+	if modbusPollerInstance != nil {
+		handlers.SetModbusPoller(modbusPollerInstance)
+	}
+	if opcuaPollerInstance != nil {
+		handlers.SetOPCUAPoller(opcuaPollerInstance)
 	}
 
 	// Create SM poller if configured

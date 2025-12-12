@@ -52,7 +52,9 @@ type UniSetObject struct {
 }
 
 // SensorConfig holds all sensor configurations
-// Note: Name is the primary key, ID is optional (may be 0 if not present in XML)
+// ID generation depends on idfromfile attribute in ObjectsMap:
+// - idfromfile="1": ID must be present in XML, error if missing
+// - idfromfile="0" (or not set): ID is generated from name using MurmurHash2
 type SensorConfig struct {
 	byName     map[string]*Sensor // by Name (primary)
 	allSensors []*Sensor
@@ -69,9 +71,10 @@ type xmlRoot struct {
 }
 
 type xmlObjectsMap struct {
-	Sensors  xmlSensors  `xml:"sensors"`
-	Objects  xmlObjects  `xml:"objects"`
-	Services xmlServices `xml:"services"`
+	IDFromFile string      `xml:"idfromfile,attr"` // "0" or "1", default "0" means generate from name
+	Sensors    xmlSensors  `xml:"sensors"`
+	Objects    xmlObjects  `xml:"objects"`
+	Services   xmlServices `xml:"services"`
 }
 
 type xmlObjects struct {
@@ -115,34 +118,60 @@ func Parse(data []byte) (*SensorConfig, error) {
 
 	cfg := New()
 
+	// Determine ID generation mode from ObjectsMap
+	// idfromfile="1" means ID must be present in XML
+	// idfromfile="0" (or not set) means generate ID from name using MurmurHash2
+	idFromFile := root.ObjectsMap.IDFromFile == "1"
+
 	// Helper to add sensors from xmlSensors
-	addSensors := func(sensors *xmlSensors) {
+	addSensors := func(sensors *xmlSensors) error {
 		for i := range sensors.Items {
 			sensor := &sensors.Items[i]
 			// Normalize IOType to uppercase
 			sensor.IOType = IOType(strings.ToUpper(string(sensor.IOType)))
 
-			// Use Name as primary key (ID is optional, may be 0)
+			// Handle ID generation based on idfromfile mode
+			if sensor.ID == 0 {
+				if idFromFile {
+					// idfromfile="1" but no ID in XML - this is an error
+					return fmt.Errorf("sensor %q has no id attribute but idfromfile=\"1\"", sensor.Name)
+				}
+				// Generate ID from name using MurmurHash2 (matches uniset::hash32)
+				sensor.ID = int64(Hash32(sensor.Name))
+			}
+
+			// Use Name as primary key
 			cfg.byName[sensor.Name] = sensor
 			cfg.allSensors = append(cfg.allSensors, sensor)
 		}
+		return nil
 	}
 
 	// Collect sensors from direct path (UNISETPLC > sensors)
-	addSensors(&root.Sensors)
+	if err := addSensors(&root.Sensors); err != nil {
+		return nil, err
+	}
 
 	// Collect sensors from ObjectsMap path (UNISETPLC > ObjectsMap > sensors)
-	addSensors(&root.ObjectsMap.Sensors)
+	if err := addSensors(&root.ObjectsMap.Sensors); err != nil {
+		return nil, err
+	}
 
 	// Collect objects from ObjectsMap path (UNISETPLC > ObjectsMap > objects)
 	for i := range root.ObjectsMap.Objects.Items {
 		obj := &root.ObjectsMap.Objects.Items[i]
+		if obj.ID == 0 && !idFromFile {
+			obj.ID = int64(Hash32(obj.Name))
+		}
 		cfg.objects[obj.Name] = obj
 	}
 
 	// Collect services from ObjectsMap path (UNISETPLC > ObjectsMap > services)
 	for i := range root.ObjectsMap.Services.Items {
 		svc := &root.ObjectsMap.Services.Items[i]
+		if svc.ID == 0 && !idFromFile {
+			svc.ID = int64(Hash32(svc.Name))
+		}
 		cfg.services[svc.Name] = svc
 	}
 

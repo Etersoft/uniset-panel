@@ -8,6 +8,8 @@ import (
 
 	"github.com/pv/uniset2-viewer-go/internal/config"
 	"github.com/pv/uniset2-viewer-go/internal/ionc"
+	"github.com/pv/uniset2-viewer-go/internal/modbus"
+	"github.com/pv/uniset2-viewer-go/internal/opcua"
 	"github.com/pv/uniset2-viewer-go/internal/poller"
 	"github.com/pv/uniset2-viewer-go/internal/storage"
 	"github.com/pv/uniset2-viewer-go/internal/uniset"
@@ -19,6 +21,12 @@ type ObjectEventCallback func(serverID, serverName, objectName string, data *uni
 // IONCEventCallback вызывается при обновлении IONC датчиков
 type IONCEventCallback func(serverID, serverName string, updates []ionc.SensorUpdate)
 
+// ModbusEventCallback вызывается при обновлении Modbus регистров
+type ModbusEventCallback func(serverID, serverName string, updates []modbus.RegisterUpdate)
+
+// OPCUAEventCallback вызывается при обновлении OPCUA датчиков
+type OPCUAEventCallback func(serverID, serverName string, updates []opcua.SensorUpdate)
+
 // StatusEventCallback вызывается при изменении статуса подключения
 type StatusEventCallback func(serverID, serverName string, connected bool, lastError string)
 
@@ -27,10 +35,12 @@ type ObjectsChangedCallback func(serverID, serverName string, objects []string)
 
 // Instance представляет подключение к одному UniSet2 серверу
 type Instance struct {
-	Config     config.ServerConfig
-	Client     *uniset.Client
-	Poller     *poller.Poller
-	IONCPoller *ionc.Poller
+	Config       config.ServerConfig
+	Client       *uniset.Client
+	Poller       *poller.Poller
+	IONCPoller   *ionc.Poller
+	ModbusPoller *modbus.Poller
+	OPCUAPoller  *opcua.Poller
 
 	mu               sync.RWMutex
 	connected        bool
@@ -55,6 +65,8 @@ func NewInstance(
 	supplier string,
 	objectCallback ObjectEventCallback,
 	ioncCallback IONCEventCallback,
+	modbusCallback ModbusEventCallback,
+	opcuaCallback OPCUAEventCallback,
 	statusCallback StatusEventCallback,
 	objectsCallback ObjectsChangedCallback,
 ) *Instance {
@@ -84,6 +96,20 @@ func NewInstance(
 		}
 	})
 
+	// Создаём Modbus poller
+	modbusPoller := modbus.NewPoller(client, pollInterval, func(updates []modbus.RegisterUpdate) {
+		if modbusCallback != nil {
+			modbusCallback(serverID, serverName, updates)
+		}
+	})
+
+	// Создаём OPCUA poller
+	opcuaPoller := opcua.NewPoller(client, pollInterval, func(updates []opcua.SensorUpdate) {
+		if opcuaCallback != nil {
+			opcuaCallback(serverID, serverName, updates)
+		}
+	})
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Instance{
@@ -91,6 +117,8 @@ func NewInstance(
 		Client:          client,
 		Poller:          p,
 		IONCPoller:      ioncPoller,
+		ModbusPoller:    modbusPoller,
+		OPCUAPoller:     opcuaPoller,
 		statusCallback:  statusCallback,
 		objectsCallback: objectsCallback,
 		healthInterval:  pollInterval, // используем poll interval для health check
@@ -108,6 +136,8 @@ func (i *Instance) Start() {
 	}()
 
 	i.IONCPoller.Start()
+	i.ModbusPoller.Start()
+	i.OPCUAPoller.Start()
 
 	// Запускаем health check goroutine
 	i.wg.Add(1)
@@ -171,6 +201,8 @@ func (i *Instance) checkHealth(serverName string) {
 func (i *Instance) Stop() {
 	i.cancel()
 	i.IONCPoller.Stop()
+	i.ModbusPoller.Stop()
+	i.OPCUAPoller.Stop()
 	i.wg.Wait()
 
 	slog.Info("Server instance stopped", "id", i.Config.ID)

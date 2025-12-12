@@ -9,6 +9,8 @@ import (
 
 	"github.com/pv/uniset2-viewer-go/internal/ionc"
 	"github.com/pv/uniset2-viewer-go/internal/logger"
+	"github.com/pv/uniset2-viewer-go/internal/modbus"
+	"github.com/pv/uniset2-viewer-go/internal/opcua"
 	"github.com/pv/uniset2-viewer-go/internal/sm"
 	"github.com/pv/uniset2-viewer-go/internal/uniset"
 )
@@ -159,6 +161,62 @@ func (h *SSEHub) BroadcastIONCSensorBatchWithServer(serverID, serverName string,
 	for objectName, sensors := range byObject {
 		h.Broadcast(SSEEvent{
 			Type:       "ionc_sensor_batch",
+			ServerID:   serverID,
+			ServerName: serverName,
+			ObjectName: objectName,
+			Data:       sensors,
+			Timestamp:  timestamp,
+		})
+	}
+}
+
+// BroadcastModbusRegisterBatchWithServer отправляет батч обновлений Modbus регистров с информацией о сервере
+func (h *SSEHub) BroadcastModbusRegisterBatchWithServer(serverID, serverName string, updates []modbus.RegisterUpdate) {
+	if len(updates) == 0 {
+		return
+	}
+
+	// Группируем по objectName
+	byObject := make(map[string][]uniset.MBRegister)
+	var timestamp time.Time
+
+	for _, u := range updates {
+		byObject[u.ObjectName] = append(byObject[u.ObjectName], u.Register)
+		timestamp = u.Timestamp
+	}
+
+	// Отправляем по одному событию на объект
+	for objectName, registers := range byObject {
+		h.Broadcast(SSEEvent{
+			Type:       "modbus_register_batch",
+			ServerID:   serverID,
+			ServerName: serverName,
+			ObjectName: objectName,
+			Data:       registers,
+			Timestamp:  timestamp,
+		})
+	}
+}
+
+// BroadcastOPCUASensorBatchWithServer отправляет батч обновлений OPC UA датчиков с информацией о сервере
+func (h *SSEHub) BroadcastOPCUASensorBatchWithServer(serverID, serverName string, updates []opcua.SensorUpdate) {
+	if len(updates) == 0 {
+		return
+	}
+
+	// Группируем по objectName
+	byObject := make(map[string][]opcua.OPCUASensor)
+	var timestamp time.Time
+
+	for _, u := range updates {
+		byObject[u.ObjectName] = append(byObject[u.ObjectName], u.Sensor)
+		timestamp = u.Timestamp
+	}
+
+	// Отправляем по одному событию на объект
+	for objectName, sensors := range byObject {
+		h.Broadcast(SSEEvent{
+			Type:       "opcua_sensor_batch",
 			ServerID:   serverID,
 			ServerName: serverName,
 			ObjectName: objectName,
