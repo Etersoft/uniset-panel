@@ -3,7 +3,7 @@ const http = require('http');
 const PORT = 9393;
 
 // Mock data
-const objects = ['UniSetActivator', 'TestProc', 'SharedMemory', 'OPCUAClient1'];
+const objects = ['UniSetActivator', 'TestProc', 'SharedMemory', 'OPCUAClient1', 'MBTCPMaster1'];
 
 const testProcData = {
   TestProc: {
@@ -239,6 +239,90 @@ const opcuaDiagnostics = {
   errorHistorySize: 1
 };
 
+// ModbusMaster mock data
+const mbDevices = [
+  { addr: 1, respond: true, dtype: 'rtu', regCount: 25, mode: 0, safeMode: 0 },
+  { addr: 2, respond: true, dtype: 'rtu', regCount: 10, mode: 0, safeMode: 0 },
+  { addr: 3, respond: false, dtype: 'rtu', regCount: 15, mode: 0, safeMode: 1 }
+];
+
+// Generate 100 mock Modbus registers for testing
+const mbRegisters = [];
+const mbTypes = ['AI', 'AO', 'DI', 'DO'];
+const mbVtypes = { AI: 'signed', AO: 'signed', DI: 'unsigned', DO: 'unsigned' };
+const mbFuncs = { AI: 3, AO: 6, DI: 1, DO: 5 };
+
+for (let i = 1; i <= 100; i++) {
+  const iotype = mbTypes[(i - 1) % 4];
+  const devAddr = ((i - 1) % 3) + 1;
+  const isAnalog = iotype.startsWith('A');
+  mbRegisters.push({
+    id: 1000 + i,
+    name: `MB_${iotype}${String(i).padStart(3, '0')}_S`,
+    iotype: iotype,
+    value: isAnalog ? (100 + i * 2) : (i % 2),
+    vtype: mbVtypes[iotype],
+    device: {
+      addr: devAddr,
+      respond: mbDevices[devAddr - 1].respond
+    },
+    register: {
+      mbreg: 100 + i,
+      mbfunc: mbFuncs[iotype],
+      mbval: isAnalog ? (100 + i * 2) : (i % 2)
+    },
+    nbit: -1,
+    mask: 0,
+    precision: isAnalog ? 1 : 0
+  });
+}
+
+let mbHttpControlActive = false;
+const mbParams = {
+  force: 0,
+  force_out: 0,
+  maxHeartBeat: 10,
+  recv_timeout: 2000,
+  sleepPause_msec: 50,
+  polltime: 200,
+  default_timeout: 5000
+};
+
+const mbStatus = {
+  result: 'OK',
+  status: {
+    name: 'MBTCPMaster1',
+    monitor: 'vmon: OK',
+    activated: 1,
+    logserver: { host: '127.0.0.1', port: 5510 },
+    parameters: {
+      reopenTimeout: 5000,
+      config: 'TCP(master): 192.168.0.1:502 (3 devices)'
+    },
+    statistics: {
+      text: 'Packets: 1200 ok, 5 errors',
+      interval: 30000
+    },
+    devices: mbDevices.map(d => ({ id: d.addr, info: `Dev${d.addr} [${d.regCount} regs]` })),
+    mode: { name: 'normal', id: 0, control: 'manual' },
+    maxHeartBeat: 10,
+    force: 0,
+    force_out: 0,
+    activateTimeout: 2000,
+    reopenTimeout: 5000,
+    notUseExchangeTimer: 0,
+    config_params: {
+      recv_timeout: 2000,
+      sleepPause_msec: 50,
+      polltime: 200,
+      default_timeout: 5000
+    },
+    httpControlAllow: 1,
+    httpControlActive: 0,
+    httpEnabledSetParams: 1
+  }
+};
+
 const server = http.createServer((req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -262,15 +346,29 @@ const server = http.createServer((req, res) => {
   } else if (url === '/api/v2/SharedMemory') {
     res.end(JSON.stringify(sharedMemoryData));
   } else if (url === '/api/v2/SharedMemory/sensors' || url.startsWith('/api/v2/SharedMemory/sensors?')) {
-    // Parse offset and limit from query
+    // Parse query parameters
     const urlObj = new URL(url, `http://localhost:${PORT}`);
     const offset = parseInt(urlObj.searchParams.get('offset') || '0');
     const limit = parseInt(urlObj.searchParams.get('limit') || '100');
+    const filter = (urlObj.searchParams.get('filter') || '').toLowerCase();
+    const iotype = (urlObj.searchParams.get('iotype') || '').toUpperCase();
 
-    const paginatedSensors = mockSensors.slice(offset, offset + limit);
+    // Apply filters
+    let filtered = mockSensors;
+    if (filter) {
+      filtered = filtered.filter(s =>
+        s.name.toLowerCase().includes(filter) ||
+        String(s.id).includes(filter)
+      );
+    }
+    if (iotype && iotype !== 'ALL') {
+      filtered = filtered.filter(s => s.type === iotype);
+    }
+
+    const paginatedSensors = filtered.slice(offset, offset + limit);
     res.end(JSON.stringify({
       sensors: paginatedSensors,
-      size: mockSensors.length,
+      size: filtered.length,
       offset: offset,
       limit: limit
     }));
@@ -339,14 +437,18 @@ const server = http.createServer((req, res) => {
     const offset = parseInt(urlObj.searchParams.get('offset') || '0', 10);
     const limit = parseInt(urlObj.searchParams.get('limit') || '50', 10);
     const filter = (urlObj.searchParams.get('filter') || '').toLowerCase();
+    const iotype = (urlObj.searchParams.get('iotype') || '').toUpperCase();
 
-    // Apply filter by name or type
+    // Apply filters
     let filtered = opcuaSensors;
     if (filter) {
-      filtered = opcuaSensors.filter(s =>
+      filtered = filtered.filter(s =>
         s.name.toLowerCase().includes(filter) ||
-        s.iotype.toLowerCase() === filter
+        String(s.id).includes(filter)
       );
+    }
+    if (iotype && iotype !== 'ALL') {
+      filtered = filtered.filter(s => s.iotype === iotype);
     }
 
     // Apply pagination
@@ -370,6 +472,103 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({ result: 'OK', message: 'control taken', previousMode: 0, currentMode: 1 }));
   } else if (url === '/api/v2/OPCUAClient1/releaseControl') {
     res.end(JSON.stringify({ result: 'OK', message: 'control released', previousMode: 1, currentMode: 0 }));
+  // ModbusMaster endpoints
+  } else if (url === '/api/v2/MBTCPMaster1') {
+    res.end(JSON.stringify({
+      MBTCPMaster1: {},
+      object: {
+        id: 3001,
+        isActive: true,
+        name: 'MBTCPMaster1',
+        objectType: 'UniSetObject',
+        extensionType: 'ModbusMaster',
+        transportType: 'tcp'
+      }
+    }));
+  } else if (url === '/api/v2/MBTCPMaster1/status') {
+    mbStatus.status.httpControlActive = mbHttpControlActive ? 1 : 0;
+    res.end(JSON.stringify(mbStatus));
+  } else if (url === '/api/v2/MBTCPMaster1/devices') {
+    res.end(JSON.stringify({
+      result: 'OK',
+      devices: mbDevices,
+      count: mbDevices.length
+    }));
+  } else if (url === '/api/v2/MBTCPMaster1/registers' || url.startsWith('/api/v2/MBTCPMaster1/registers?')) {
+    const urlObj = new URL(url, `http://localhost:${PORT}`);
+    const offset = parseInt(urlObj.searchParams.get('offset') || '0', 10);
+    const limit = parseInt(urlObj.searchParams.get('limit') || '50', 10);
+    const filter = (urlObj.searchParams.get('filter') || '').toLowerCase();
+    const iotype = (urlObj.searchParams.get('iotype') || '').toUpperCase();
+
+    let filtered = mbRegisters;
+    if (filter) {
+      filtered = filtered.filter(r => r.name.toLowerCase().includes(filter));
+    }
+    if (iotype && iotype !== 'ALL') {
+      filtered = filtered.filter(r => r.iotype === iotype);
+    }
+
+    const paginatedRegs = filtered.slice(offset, offset + limit);
+    res.end(JSON.stringify({
+      result: 'OK',
+      registers: paginatedRegs,
+      total: filtered.length,
+      count: paginatedRegs.length,
+      offset: offset,
+      limit: limit
+    }));
+  } else if (url.startsWith('/api/v2/MBTCPMaster1/getparam')) {
+    const urlObj = new URL(url, `http://localhost:${PORT}`);
+    const names = urlObj.searchParams.getAll('name');
+    const params = {};
+    if (names.length === 0) {
+      Object.assign(params, mbParams);
+    } else {
+      names.forEach(name => {
+        if (Object.prototype.hasOwnProperty.call(mbParams, name)) {
+          params[name] = mbParams[name];
+        }
+      });
+    }
+    res.end(JSON.stringify({ result: 'OK', params }));
+  } else if (url.startsWith('/api/v2/MBTCPMaster1/setparam')) {
+    const urlObj = new URL(url, `http://localhost:${PORT}`);
+    const updated = {};
+    urlObj.searchParams.forEach((value, key) => {
+      if (Object.prototype.hasOwnProperty.call(mbParams, key)) {
+        mbParams[key] = Number.isNaN(Number(value)) ? value : Number(value);
+        updated[key] = mbParams[key];
+      }
+    });
+    res.end(JSON.stringify({ result: 'OK', updated }));
+  } else if (url === '/api/v2/MBTCPMaster1/takeControl') {
+    mbHttpControlActive = true;
+    res.end(JSON.stringify({ result: 'OK', httpControlActive: 1, currentMode: 0 }));
+  } else if (url === '/api/v2/MBTCPMaster1/releaseControl') {
+    mbHttpControlActive = false;
+    res.end(JSON.stringify({ result: 'OK', httpControlActive: 0, currentMode: 0 }));
+  } else if (url.startsWith('/api/v2/MBTCPMaster1/mode')) {
+    const urlObj = new URL(url, `http://localhost:${PORT}`);
+    if (urlObj.searchParams.has('get')) {
+      res.end(JSON.stringify({ result: 'OK', mode: mbStatus.status.mode }));
+    } else if (urlObj.searchParams.has('supported')) {
+      res.end(JSON.stringify({
+        result: 'OK',
+        supported: [
+          { id: 0, name: 'normal' },
+          { id: 1, name: 'writeOnly' },
+          { id: 2, name: 'readOnly' },
+          { id: 3, name: 'disabled' }
+        ]
+      }));
+    } else if (urlObj.searchParams.has('set')) {
+      const modeName = urlObj.searchParams.get('set');
+      mbStatus.status.mode.name = modeName;
+      res.end(JSON.stringify({ result: 'OK', mode: mbStatus.status.mode }));
+    } else {
+      res.end(JSON.stringify({ result: 'OK', mode: mbStatus.status.mode }));
+    }
   } else {
     res.statusCode = 404;
     res.end(JSON.stringify({ error: 'Not found' }));

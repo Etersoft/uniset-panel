@@ -64,6 +64,7 @@ type ObjectInfo struct {
 	ObjectType            string `json:"objectType"`
 	ExtensionType         string `json:"extensionType,omitempty"`
 	ExtensionsType        string `json:"extensionsType,omitempty"` // some endpoints return extensionsType
+	TransportType         string `json:"transportType,omitempty"`  // tcp, rtu, multi для ModbusMaster
 }
 
 // ObjectData данные объекта из /api/v2/{ObjectName}

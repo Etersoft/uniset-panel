@@ -236,8 +236,8 @@ type IONCLostConsumersResponse struct {
 }
 
 // GetIONCSensors возвращает список датчиков из IONotifyController объекта
-// GET /{objectName}/sensors?offset=N&limit=M&filter=text
-func (c *Client) GetIONCSensors(objectName string, offset, limit int, filter string) (*IONCSensorsResponse, error) {
+// GET /{objectName}/sensors?offset=N&limit=M&filter=text&iotype=AI
+func (c *Client) GetIONCSensors(objectName string, offset, limit int, filter, iotype string) (*IONCSensorsResponse, error) {
 	values := url.Values{}
 	if offset > 0 {
 		values.Set("offset", strconv.Itoa(offset))
@@ -247,6 +247,9 @@ func (c *Client) GetIONCSensors(objectName string, offset, limit int, filter str
 	}
 	if filter != "" {
 		values.Set("filter", filter)
+	}
+	if iotype != "" && iotype != "all" {
+		values.Set("iotype", iotype)
 	}
 
 	path := fmt.Sprintf("%s/sensors", objectName)

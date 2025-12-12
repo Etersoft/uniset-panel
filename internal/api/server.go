@@ -68,6 +68,18 @@ func (s *Server) setupRoutes(staticFS fs.FS) {
 	s.mux.HandleFunc("POST /api/objects/{name}/opcua/control/take", s.handlers.TakeOPCUAControl)
 	s.mux.HandleFunc("POST /api/objects/{name}/opcua/control/release", s.handlers.ReleaseOPCUAControl)
 
+	// ModbusMaster API
+	s.mux.HandleFunc("GET /api/objects/{name}/modbus/status", s.handlers.GetMBStatus)
+	s.mux.HandleFunc("GET /api/objects/{name}/modbus/params", s.handlers.GetMBParams)
+	s.mux.HandleFunc("POST /api/objects/{name}/modbus/params", s.handlers.SetMBParams)
+	s.mux.HandleFunc("GET /api/objects/{name}/modbus/registers", s.handlers.GetMBRegisters)
+	s.mux.HandleFunc("GET /api/objects/{name}/modbus/devices", s.handlers.GetMBDevices)
+	s.mux.HandleFunc("GET /api/objects/{name}/modbus/mode", s.handlers.GetMBMode)
+	s.mux.HandleFunc("GET /api/objects/{name}/modbus/mode/supported", s.handlers.GetMBModeSupported)
+	s.mux.HandleFunc("POST /api/objects/{name}/modbus/mode", s.handlers.SetMBMode)
+	s.mux.HandleFunc("POST /api/objects/{name}/modbus/control/take", s.handlers.TakeMBControl)
+	s.mux.HandleFunc("POST /api/objects/{name}/modbus/control/release", s.handlers.ReleaseMBControl)
+
 	// LogServer API
 	s.mux.HandleFunc("GET /api/logs/status", s.handlers.GetAllLogServerStatuses)
 	s.mux.HandleFunc("GET /api/logs/{name}/status", s.handlers.GetLogServerStatus)

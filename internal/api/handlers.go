@@ -687,7 +687,7 @@ func (h *Handlers) GetExternalSensors(w http.ResponseWriter, r *http.Request) {
 // === IONotifyController API ===
 
 // GetIONCSensors возвращает список датчиков из IONotifyController объекта
-// GET /api/objects/{name}/ionc/sensors?offset=0&limit=100&filter=text&server=...
+// GET /api/objects/{name}/ionc/sensors?offset=0&limit=100&filter=text&iotype=AI&server=...
 func (h *Handlers) GetIONCSensors(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
@@ -698,6 +698,7 @@ func (h *Handlers) GetIONCSensors(w http.ResponseWriter, r *http.Request) {
 	offset := 0
 	limit := 100
 	filter := r.URL.Query().Get("filter")
+	iotype := r.URL.Query().Get("iotype")
 
 	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
 		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
@@ -718,7 +719,7 @@ func (h *Handlers) GetIONCSensors(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := client.GetIONCSensors(name, offset, limit, filter)
+	result, err := client.GetIONCSensors(name, offset, limit, filter, iotype)
 	if err != nil {
 		h.writeError(w, http.StatusBadGateway, err.Error())
 		return
@@ -1528,4 +1529,313 @@ func generateServerID(url string) string {
 		hash = hash*31 + uint32(c)
 	}
 	return fmt.Sprintf("%08x", hash)
+}
+
+// === ModbusMaster API ===
+
+// GetMBStatus возвращает статус ModbusMaster
+// GET /api/objects/{name}/modbus/status
+func (h *Handlers) GetMBStatus(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	result, err := client.GetMBStatus(name)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, result)
+}
+
+// GetMBParams читает параметры ModbusMaster
+// GET /api/objects/{name}/modbus/params?name=polltime&name=recv_timeout
+func (h *Handlers) GetMBParams(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	params := r.URL.Query()["name"]
+	if len(params) == 0 {
+		h.writeError(w, http.StatusBadRequest, "at least one name parameter required")
+		return
+	}
+
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	result, err := client.GetMBParams(name, params)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, result)
+}
+
+// SetMBParams устанавливает параметры ModbusMaster
+// POST /api/objects/{name}/modbus/params
+func (h *Handlers) SetMBParams(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	var payload map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	var params map[string]interface{}
+	if raw, ok := payload["params"].(map[string]interface{}); ok {
+		params = raw
+	} else {
+		params = payload
+	}
+
+	if len(params) == 0 {
+		h.writeError(w, http.StatusBadRequest, "no params provided")
+		return
+	}
+
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	result, err := client.SetMBParams(name, params)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, result)
+}
+
+// GetMBRegisters возвращает список регистров ModbusMaster
+// GET /api/objects/{name}/modbus/registers?offset=0&limit=100&filter=text&iotype=AI
+func (h *Handlers) GetMBRegisters(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	limit := 0
+	offset := 0
+	filter := r.URL.Query().Get("filter")
+	iotype := r.URL.Query().Get("iotype")
+
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l >= 0 {
+			limit = l
+		}
+	}
+
+	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
+			offset = o
+		}
+	}
+
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	result, err := client.GetMBRegisters(name, filter, iotype, limit, offset)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, result)
+}
+
+// GetMBDevices возвращает список устройств (slaves) ModbusMaster
+// GET /api/objects/{name}/modbus/devices
+func (h *Handlers) GetMBDevices(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	result, err := client.GetMBDevices(name)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, result)
+}
+
+// GetMBMode возвращает текущий режим ModbusMaster
+// GET /api/objects/{name}/modbus/mode
+func (h *Handlers) GetMBMode(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	result, err := client.GetMBMode(name)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, result)
+}
+
+// GetMBModeSupported возвращает список поддерживаемых режимов ModbusMaster
+// GET /api/objects/{name}/modbus/mode/supported
+func (h *Handlers) GetMBModeSupported(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	result, err := client.GetMBModeSupported(name)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, result)
+}
+
+// MBModeSetRequest запрос на установку режима
+type MBModeSetRequest struct {
+	Mode string `json:"mode"`
+}
+
+// SetMBMode устанавливает режим ModbusMaster
+// POST /api/objects/{name}/modbus/mode
+func (h *Handlers) SetMBMode(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	var req MBModeSetRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.Mode == "" {
+		h.writeError(w, http.StatusBadRequest, "mode is required")
+		return
+	}
+
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	result, err := client.SetMBMode(name, req.Mode)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, result)
+}
+
+// TakeMBControl перехватывает управление ModbusMaster через HTTP
+// POST /api/objects/{name}/modbus/control/take
+func (h *Handlers) TakeMBControl(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	result, err := client.TakeMBControl(name)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, result)
+}
+
+// ReleaseMBControl возвращает управление ModbusMaster
+// POST /api/objects/{name}/modbus/control/release
+func (h *Handlers) ReleaseMBControl(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.writeError(w, http.StatusBadRequest, "object name required")
+		return
+	}
+
+	serverID := r.URL.Query().Get("server")
+	client, statusCode, errMsg := h.getUniSetClient(serverID)
+	if client == nil {
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	result, err := client.ReleaseMBControl(name)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, result)
 }

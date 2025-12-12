@@ -3019,11 +3019,658 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 }
 
+// ============================================================================
+// ModbusMasterRenderer - рендерер для ModbusMaster объектов
+// ============================================================================
+
+class ModbusMasterRenderer extends BaseObjectRenderer {
+    static getTypeName() {
+        return 'ModbusMaster';
+    }
+
+    constructor(objectName, tabKey = null) {
+        super(objectName, tabKey);
+        this.status = null;
+        this.params = {};
+        this.paramNames = [
+            'force',
+            'force_out',
+            'recv_timeout',
+            'sleepPause_msec',
+            'polltime',
+            'default_timeout',
+            'maxHeartBeat'
+        ];
+        this.devices = [];
+        this.registersHeight = this.loadRegistersHeight();
+        this.statusInterval = this.loadStatusInterval();
+        this.statusTimer = null;
+
+        // Virtual scroll properties
+        this.allRegisters = [];
+        this.registersTotal = 0;
+        this.rowHeight = 32;
+        this.bufferRows = 10;
+        this.startIndex = 0;
+        this.endIndex = 0;
+
+        // Infinite scroll properties
+        this.chunkSize = 200;
+        this.hasMore = true;
+        this.isLoadingChunk = false;
+
+        // Filter state
+        this.filter = '';
+        this.typeFilter = 'all';
+        this.filterDebounce = null;
+    }
+
+    createPanelHTML() {
+        return `
+            ${this.createChartsSection()}
+            ${this.createMBStatusSection()}
+            ${this.createMBParamsSection()}
+            ${this.createMBDevicesSection()}
+            ${this.createMBRegistersSection()}
+            ${this.createLogViewerSection()}
+            ${this.createLogServerSection()}
+            ${this.createObjectInfoSection()}
+        `;
+    }
+
+    initialize() {
+        this.bindEvents();
+        this.reloadAll();
+        setupChartsResize(this.objectName);
+        this.setupRegistersResize();
+        this.setupVirtualScroll();
+        this.startStatusAutoRefresh();
+    }
+
+    destroy() {
+        this.destroyLogViewer();
+        this.stopStatusAutoRefresh();
+    }
+
+    loadStatusInterval() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-modbus-status-interval') || '{}');
+            const value = saved[this.objectName];
+            if (typeof value === 'number' && value > 0) {
+                return value;
+            }
+        } catch (err) {
+            console.warn('Failed to load status interval:', err);
+        }
+        return 5000;
+    }
+
+    saveStatusInterval(value) {
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-modbus-status-interval') || '{}');
+            saved[this.objectName] = value;
+            localStorage.setItem('uniset2-viewer-modbus-status-interval', JSON.stringify(saved));
+        } catch (err) {
+            console.warn('Failed to save status interval:', err);
+        }
+    }
+
+    renderStatusIntervalButtons() {
+        const options = [
+            { label: '5с', ms: 5000 },
+            { label: '10с', ms: 10000 },
+            { label: '15с', ms: 15000 },
+            { label: '1м', ms: 60000 },
+            { label: '5м', ms: 300000 }
+        ];
+        return options.map(opt => {
+            const active = this.statusInterval === opt.ms ? 'active' : '';
+            return `<button type="button" class="mb-interval-btn time-range-btn ${active}" data-ms="${opt.ms}">${opt.label}</button>`;
+        }).join('');
+    }
+
+    bindStatusIntervalButtons() {
+        const wrapper = document.getElementById(`mb-status-autorefresh-${this.objectName}`);
+        if (!wrapper) return;
+        wrapper.querySelectorAll('.mb-interval-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const ms = parseInt(btn.dataset.ms, 10);
+                if (!isNaN(ms)) {
+                    this.statusInterval = ms;
+                    this.saveStatusInterval(ms);
+                    this.updateStatusIntervalUI();
+                    this.startStatusAutoRefresh();
+                }
+            });
+        });
+        this.updateStatusIntervalUI();
+    }
+
+    updateStatusIntervalUI() {
+        const wrapper = document.getElementById(`mb-status-autorefresh-${this.objectName}`);
+        if (!wrapper) return;
+        wrapper.querySelectorAll('.mb-interval-btn').forEach(btn => {
+            const ms = parseInt(btn.dataset.ms, 10);
+            btn.classList.toggle('active', ms === this.statusInterval);
+        });
+    }
+
+    startStatusAutoRefresh() {
+        this.stopStatusAutoRefresh();
+        if (!this.statusInterval || this.statusInterval <= 0) return;
+        this.statusTimer = setInterval(() => this.loadStatus(), this.statusInterval);
+    }
+
+    stopStatusAutoRefresh() {
+        if (this.statusTimer) {
+            clearInterval(this.statusTimer);
+            this.statusTimer = null;
+        }
+    }
+
+    async reloadAll() {
+        await Promise.allSettled([
+            this.loadStatus(),
+            this.loadParams(),
+            this.loadDevices(),
+            this.loadRegisters()
+        ]);
+    }
+
+    bindEvents() {
+        this.bindStatusIntervalButtons();
+
+        const refreshParams = document.getElementById(`mb-params-refresh-${this.objectName}`);
+        if (refreshParams) {
+            refreshParams.addEventListener('click', () => this.loadParams());
+        }
+
+        const saveParams = document.getElementById(`mb-params-save-${this.objectName}`);
+        if (saveParams) {
+            saveParams.addEventListener('click', () => this.saveParams());
+        }
+
+        const refreshDevices = document.getElementById(`mb-devices-refresh-${this.objectName}`);
+        if (refreshDevices) {
+            refreshDevices.addEventListener('click', () => this.loadDevices());
+        }
+
+        const refreshRegs = document.getElementById(`mb-registers-refresh-${this.objectName}`);
+        if (refreshRegs) {
+            refreshRegs.addEventListener('click', () => this.loadRegisters());
+        }
+
+        const filterInput = document.getElementById(`mb-registers-filter-${this.objectName}`);
+        if (filterInput) {
+            filterInput.addEventListener('input', () => {
+                clearTimeout(this.filterDebounce);
+                this.filterDebounce = setTimeout(() => {
+                    this.filter = filterInput.value.trim();
+                    this.loadRegisters();
+                }, 300);
+            });
+            filterInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    if (filterInput.value) {
+                        filterInput.value = '';
+                        this.filter = '';
+                        this.loadRegisters();
+                    }
+                    filterInput.blur();
+                    e.preventDefault();
+                }
+            });
+        }
+
+        const typeFilter = document.getElementById(`mb-type-filter-${this.objectName}`);
+        if (typeFilter) {
+            typeFilter.addEventListener('change', () => {
+                this.typeFilter = typeFilter.value;
+                this.loadRegisters();
+            });
+        }
+    }
+
+    async fetchJSON(path, options = {}) {
+        const url = this.buildUrl(path);
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(text || `HTTP ${response.status}`);
+        }
+        return response.json();
+    }
+
+    createMBStatusSection() {
+        return this.createCollapsibleSection('mb-status', 'Статус Modbus', `
+            <div class="mb-actions">
+                <div class="mb-autorefresh" id="mb-status-autorefresh-${this.objectName}">
+                    <span class="mb-autorefresh-label">Авто:</span>
+                    ${this.renderStatusIntervalButtons()}
+                    <span class="mb-last-update" id="mb-status-last-${this.objectName}"></span>
+                </div>
+                <span class="mb-note" id="mb-status-note-${this.objectName}"></span>
+            </div>
+            <table class="info-table">
+                <tbody id="mb-status-${this.objectName}"></tbody>
+            </table>
+        `, { sectionId: `mb-status-section-${this.objectName}` });
+    }
+
+    createMBParamsSection() {
+        return this.createCollapsibleSection('mb-params', 'Параметры обмена', `
+            <div class="mb-actions">
+                <button class="btn" id="mb-params-refresh-${this.objectName}">Обновить</button>
+                <button class="btn primary" id="mb-params-save-${this.objectName}">Применить</button>
+                <span class="mb-note" id="mb-params-note-${this.objectName}"></span>
+            </div>
+            <div class="mb-params-table-wrapper">
+                <table class="variables-table mb-params-table">
+                    <thead>
+                        <tr>
+                            <th>Параметр</th>
+                            <th>Текущее</th>
+                            <th>Новое значение</th>
+                        </tr>
+                    </thead>
+                    <tbody id="mb-params-${this.objectName}"></tbody>
+                </table>
+            </div>
+        `, { sectionId: `mb-params-section-${this.objectName}` });
+    }
+
+    createMBDevicesSection() {
+        return this.createCollapsibleSection('mb-devices', 'Устройства (Slaves)', `
+            <div class="mb-actions">
+                <button class="btn" id="mb-devices-refresh-${this.objectName}">Обновить</button>
+                <span class="mb-device-count" id="mb-device-count-${this.objectName}">0</span>
+                <span class="mb-note" id="mb-devices-note-${this.objectName}"></span>
+            </div>
+            <div class="mb-devices-container" id="mb-devices-${this.objectName}"></div>
+        `, { sectionId: `mb-devices-section-${this.objectName}` });
+    }
+
+    createMBRegistersSection() {
+        return this.createCollapsibleSection('mb-registers', 'Регистры', `
+            <div class="filter-bar mb-actions">
+                <input type="text" class="filter-input" id="mb-registers-filter-${this.objectName}" placeholder="Фильтр по имени...">
+                <select class="type-filter" id="mb-type-filter-${this.objectName}">
+                    <option value="all">Все типы</option>
+                    <option value="AI">AI</option>
+                    <option value="AO">AO</option>
+                    <option value="DI">DI</option>
+                    <option value="DO">DO</option>
+                </select>
+                <button class="btn" id="mb-registers-refresh-${this.objectName}">Обновить</button>
+                <span class="sensor-count" id="mb-register-count-${this.objectName}">0</span>
+                <span class="mb-note" id="mb-registers-note-${this.objectName}"></span>
+            </div>
+            <div class="mb-registers-container" id="mb-registers-container-${this.objectName}" style="height: ${this.registersHeight}px">
+                <div class="mb-registers-viewport" id="mb-registers-viewport-${this.objectName}">
+                    <div class="mb-registers-spacer" id="mb-registers-spacer-${this.objectName}"></div>
+                    <table class="sensors-table variables-table mb-registers-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Имя</th>
+                                <th>Тип</th>
+                                <th>Устройство</th>
+                                <th>Регистр</th>
+                                <th>Функция</th>
+                                <th>Значение</th>
+                                <th>MB Val</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mb-registers-tbody-${this.objectName}"></tbody>
+                    </table>
+                    <div class="mb-loading-more" id="mb-loading-more-${this.objectName}" style="display: none;">Загрузка...</div>
+                </div>
+            </div>
+            <div class="resize-handle" id="mb-registers-resize-${this.objectName}"></div>
+        `, { sectionId: `mb-registers-section-${this.objectName}` });
+    }
+
+    setNote(id, text, isError = false) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = text || '';
+        el.classList.toggle('error', !!(text && isError));
+    }
+
+    async loadStatus() {
+        try {
+            const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/status`);
+            this.status = data.status || null;
+            this.renderStatus();
+            this.updateStatusTimestamp();
+            this.setNote(`mb-status-note-${this.objectName}`, '');
+        } catch (err) {
+            this.setNote(`mb-status-note-${this.objectName}`, err.message, true);
+        }
+    }
+
+    renderStatus() {
+        const tbody = document.getElementById(`mb-status-${this.objectName}`);
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+
+        if (!this.status) {
+            tbody.innerHTML = '<tr><td colspan="2" class="text-muted">Нет данных</td></tr>';
+            return;
+        }
+
+        const status = this.status;
+        const rows = [
+            { label: 'Имя', value: status.name },
+            { label: 'Monitor', value: status.monitor },
+            { label: 'Activated', value: status.activated },
+            { label: 'Режим', value: status.mode?.name || status.exchangeMode },
+            { label: 'force', value: status.force },
+            { label: 'force_out', value: status.force_out },
+            { label: 'maxHeartBeat', value: status.maxHeartBeat },
+            { label: 'activateTimeout', value: status.activateTimeout },
+            { label: 'reopenTimeout', value: status.reopenTimeout }
+        ];
+
+        rows.forEach(row => {
+            if (row.value === undefined || row.value === null) return;
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="info-label">${row.label}</td>
+                <td class="info-value">${formatValue(row.value)}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    async loadParams() {
+        try {
+            const query = this.paramNames.map(n => `name=${encodeURIComponent(n)}`).join('&');
+            const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/params?${query}`);
+            this.params = data.params || {};
+            this.renderParams();
+            this.setNote(`mb-params-note-${this.objectName}`, '');
+        } catch (err) {
+            this.setNote(`mb-params-note-${this.objectName}`, err.message, true);
+        }
+    }
+
+    renderParams() {
+        const tbody = document.getElementById(`mb-params-${this.objectName}`);
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+
+        this.paramNames.forEach(name => {
+            const value = this.params[name];
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="param-name">${name}</td>
+                <td class="param-value">${value !== undefined ? value : '—'}</td>
+                <td class="param-input">
+                    <input type="text" class="param-field" data-param="${name}" placeholder="${value !== undefined ? value : ''}" />
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    async saveParams() {
+        const inputs = document.querySelectorAll(`#mb-params-${this.objectName} input.param-field`);
+        const params = {};
+
+        inputs.forEach(input => {
+            const name = input.dataset.param;
+            const val = input.value.trim();
+            if (val !== '') {
+                params[name] = val;
+            }
+        });
+
+        if (Object.keys(params).length === 0) {
+            this.setNote(`mb-params-note-${this.objectName}`, 'Нет изменений');
+            return;
+        }
+
+        try {
+            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/params`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ params })
+            });
+            this.setNote(`mb-params-note-${this.objectName}`, 'Сохранено');
+            this.loadParams();
+        } catch (err) {
+            this.setNote(`mb-params-note-${this.objectName}`, err.message, true);
+        }
+    }
+
+    async loadDevices() {
+        try {
+            const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/devices`);
+            this.devices = data.devices || [];
+            this.renderDevices();
+            this.setNote(`mb-devices-note-${this.objectName}`, '');
+        } catch (err) {
+            this.setNote(`mb-devices-note-${this.objectName}`, err.message, true);
+        }
+    }
+
+    renderDevices() {
+        const container = document.getElementById(`mb-devices-${this.objectName}`);
+        const countEl = document.getElementById(`mb-device-count-${this.objectName}`);
+        if (!container) return;
+
+        if (countEl) {
+            countEl.textContent = `${this.devices.length} устройств`;
+        }
+
+        if (this.devices.length === 0) {
+            container.innerHTML = '<div class="text-muted">Нет устройств</div>';
+            return;
+        }
+
+        container.innerHTML = this.devices.map(dev => {
+            const respondClass = dev.respond ? 'ok' : 'fail';
+            const respondText = dev.respond ? 'Отвечает' : 'Не отвечает';
+            return `
+                <div class="mb-device-card">
+                    <div class="mb-device-header">
+                        <span class="mb-device-addr">Адрес: ${dev.addr}</span>
+                        <span class="mb-device-state ${respondClass}">${respondText}</span>
+                    </div>
+                    <div class="mb-device-body">
+                        <div>Тип: ${dev.dtype || '—'}</div>
+                        <div>Регистров: ${dev.regCount || 0}</div>
+                        <div>Режим: ${dev.mode || 0}</div>
+                        <div>SafeMode: ${dev.safeMode || 0}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    async loadRegisters() {
+        this.allRegisters = [];
+        this.hasMore = true;
+        this.isLoadingChunk = false;
+        await this.loadRegisterChunk(0);
+    }
+
+    async loadRegisterChunk(offset) {
+        if (this.isLoadingChunk || !this.hasMore) return;
+        this.isLoadingChunk = true;
+
+        const loadingEl = document.getElementById(`mb-loading-more-${this.objectName}`);
+        if (loadingEl) loadingEl.style.display = 'block';
+
+        try {
+            let url = `/api/objects/${encodeURIComponent(this.objectName)}/modbus/registers?offset=${offset}&limit=${this.chunkSize}`;
+            if (this.filter) {
+                url += `&filter=${encodeURIComponent(this.filter)}`;
+            }
+            if (this.typeFilter && this.typeFilter !== 'all') {
+                url += `&iotype=${encodeURIComponent(this.typeFilter)}`;
+            }
+
+            const data = await this.fetchJSON(url);
+            const registers = data.registers || [];
+            this.registersTotal = data.total || 0;
+
+            if (offset === 0) {
+                this.allRegisters = registers;
+            } else {
+                this.allRegisters = this.allRegisters.concat(registers);
+            }
+
+            this.hasMore = this.allRegisters.length < this.registersTotal;
+            this.renderRegisters();
+            this.setNote(`mb-registers-note-${this.objectName}`, '');
+
+            const countEl = document.getElementById(`mb-register-count-${this.objectName}`);
+            if (countEl) {
+                countEl.textContent = `${this.registersTotal} регистров`;
+            }
+        } catch (err) {
+            this.setNote(`mb-registers-note-${this.objectName}`, err.message, true);
+        } finally {
+            this.isLoadingChunk = false;
+            if (loadingEl) loadingEl.style.display = 'none';
+        }
+    }
+
+    renderRegisters() {
+        const tbody = document.getElementById(`mb-registers-tbody-${this.objectName}`);
+        if (!tbody) return;
+
+        const html = this.allRegisters.map(reg => {
+            const device = reg.device || {};
+            const regInfo = reg.register || {};
+            const respondClass = device.respond ? 'ok' : 'fail';
+            return `
+                <tr>
+                    <td>${reg.id}</td>
+                    <td>${escapeHtml(reg.name || '')}</td>
+                    <td>${reg.iotype || ''}</td>
+                    <td><span class="mb-respond ${respondClass}">${device.addr || ''}</span></td>
+                    <td>${regInfo.mbreg || ''}</td>
+                    <td>${regInfo.mbfunc || ''}</td>
+                    <td>${reg.value !== undefined ? reg.value : ''}</td>
+                    <td>${regInfo.mbval !== undefined ? regInfo.mbval : ''}</td>
+                </tr>
+            `;
+        }).join('');
+
+        tbody.innerHTML = html;
+    }
+
+    setupVirtualScroll() {
+        const viewport = document.getElementById(`mb-registers-viewport-${this.objectName}`);
+        if (!viewport) return;
+
+        viewport.addEventListener('scroll', () => {
+            const scrollTop = viewport.scrollTop;
+            const viewportHeight = viewport.clientHeight;
+            const scrollHeight = viewport.scrollHeight;
+
+            // Загружаем следующий чанк когда остается 100px до конца
+            if (scrollHeight - scrollTop - viewportHeight < 100) {
+                this.loadRegisterChunk(this.allRegisters.length);
+            }
+        });
+    }
+
+    loadRegistersHeight() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-mb-registers') || '{}');
+            const value = saved[this.objectName];
+            if (typeof value === 'number' && value > 0) {
+                return value;
+            }
+        } catch (err) {
+            console.warn('Failed to load registers height:', err);
+        }
+        return 320;
+    }
+
+    saveRegistersHeight(value) {
+        this.registersHeight = value;
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-mb-registers') || '{}');
+            saved[this.objectName] = value;
+            localStorage.setItem('uniset2-viewer-mb-registers', JSON.stringify(saved));
+        } catch (err) {
+            console.warn('Failed to save registers height:', err);
+        }
+    }
+
+    setupRegistersResize() {
+        const handle = document.getElementById(`mb-registers-resize-${this.objectName}`);
+        const container = document.getElementById(`mb-registers-container-${this.objectName}`);
+        if (!handle || !container) return;
+
+        container.style.height = `${this.registersHeight}px`;
+
+        let startY = 0;
+        let startHeight = 0;
+        let isResizing = false;
+
+        const onMouseMove = (e) => {
+            if (!isResizing) return;
+            const delta = e.clientY - startY;
+            const newHeight = Math.max(200, Math.min(700, startHeight + delta));
+            container.style.height = `${newHeight}px`;
+        };
+
+        const onMouseUp = () => {
+            if (!isResizing) return;
+            isResizing = false;
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            const newHeight = parseInt(container.style.height, 10);
+            if (!Number.isNaN(newHeight)) {
+                this.saveRegistersHeight(newHeight);
+            }
+        };
+
+        handle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            isResizing = true;
+            startY = e.clientY;
+            startHeight = container.offsetHeight;
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+            document.body.style.cursor = 'ns-resize';
+            document.body.style.userSelect = 'none';
+        });
+    }
+
+    update(data) {
+        renderObjectInfo(this.objectName, data.object);
+        renderLogServer(this.objectName, data.LogServer);
+        updateChartLegends(this.objectName, data);
+        this.initLogViewer(data.LogServer);
+    }
+}
+
 // Регистрируем стандартные рендереры
 registerRenderer('UniSetManager', UniSetManagerRenderer);
 registerRenderer('UniSetObject', UniSetObjectRenderer);
 registerRenderer('IONotifyController', IONotifyControllerRenderer);
 registerRenderer('OPCUAExchange', OPCUAExchangeRenderer);
+
+// ModbusMaster рендерер (по extensionType)
+registerRenderer('ModbusMaster', ModbusMasterRenderer);
+
+// Fallback для старых версий (по objectType)
+registerRenderer('MBTCPMaster', ModbusMasterRenderer);
+registerRenderer('MBTCPMultiMaster', ModbusMasterRenderer);
+registerRenderer('MBRTUMaster', ModbusMasterRenderer);
+registerRenderer('ModbusTCPMaster', ModbusMasterRenderer);
+registerRenderer('ModbusRTUMaster', ModbusMasterRenderer);
 
 // ============================================================================
 // Конец системы рендереров
