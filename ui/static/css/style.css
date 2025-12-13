@@ -35,7 +35,13 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+}
+
+.filter-bar .filter-input {
+    flex: 1;
+    min-width: 100px;
+    width: auto;
 }
 
 /* --- Type Filter Dropdown --- */
@@ -48,6 +54,7 @@
     color: var(--text-primary);
     cursor: pointer;
     outline: none;
+    flex-shrink: 0;
 }
 
 .type-filter:focus {
