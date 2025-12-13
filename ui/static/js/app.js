@@ -598,56 +598,56 @@ const VirtualScrollMixin = {
 const SSESubscriptionMixin = {
     // Инициализация свойств SSE
     initSSEProps() {
-        this.subscribedIds = new Set();
+        this.subscribedSensorIds = new Set();
         this.pendingUpdates = [];
         this.renderScheduled = false;
     },
 
     // Подписка на SSE обновления
-    async subscribeToSSEFor(apiPath, ids, idField = 'sensor_ids') {
-        if (ids.length === 0) return;
+    // apiPath - путь API (например '/ionc', '/opcua', '/modbus')
+    // ids - массив ID для подписки
+    // idField - имя поля в теле запроса (например 'sensor_ids', 'register_ids')
+    // logPrefix - префикс для логов
+    async subscribeToSSEFor(apiPath, ids, idField = 'sensor_ids', logPrefix = 'SSE') {
+        if (!ids || ids.length === 0) return;
 
         // Пропускаем если уже подписаны на те же ID
         const newIds = new Set(ids);
-        if (this.subscribedIds.size === newIds.size &&
-            [...newIds].every(id => this.subscribedIds.has(id))) {
+        if (this.subscribedSensorIds.size === newIds.size &&
+            [...newIds].every(id => this.subscribedSensorIds.has(id))) {
             return;
         }
 
         try {
-            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}${apiPath}/subscribe`);
-            const response = await fetch(url, {
+            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}${apiPath}/subscribe`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ [idField]: ids })
             });
 
-            if (response.ok) {
-                this.subscribedIds = newIds;
-                console.log(`SSE: подписка на ${ids.length} элементов для ${this.objectName}`);
-            }
+            this.subscribedSensorIds = newIds;
+            console.log(`${logPrefix}: подписка на ${ids.length} элементов для ${this.objectName}`);
         } catch (err) {
-            console.warn('SSE: ошибка подписки:', err);
+            console.warn(`${logPrefix}: ошибка подписки:`, err);
         }
     },
 
     // Отписка от SSE обновлений
-    async unsubscribeFromSSEFor(apiPath, idField = 'sensor_ids') {
-        if (this.subscribedIds.size === 0) return;
+    async unsubscribeFromSSEFor(apiPath, idField = 'sensor_ids', logPrefix = 'SSE') {
+        if (this.subscribedSensorIds.size === 0) return;
 
         try {
-            const ids = [...this.subscribedIds];
-            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}${apiPath}/unsubscribe`);
-            await fetch(url, {
+            const ids = [...this.subscribedSensorIds];
+            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}${apiPath}/unsubscribe`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ [idField]: ids })
             });
 
-            console.log(`SSE: отписка от ${ids.length} элементов для ${this.objectName}`);
-            this.subscribedIds.clear();
+            console.log(`${logPrefix}: отписка от ${ids.length} элементов для ${this.objectName}`);
+            this.subscribedSensorIds.clear();
         } catch (err) {
-            console.warn('SSE: ошибка отписки:', err);
+            console.warn(`${logPrefix}: ошибка отписки:`, err);
         }
     },
 
@@ -696,10 +696,18 @@ const ResizableSectionMixin = {
     },
 
     // Настройка resize для секции
-    setupSectionResize(handleId, containerId, storageKey, heightProp) {
+    // handleId - ID элемента resize-ручки
+    // containerId - ID контейнера секции
+    // storageKey - ключ для localStorage
+    // heightProp - имя свойства для высоты (например 'sensorsHeight')
+    // options - дополнительные параметры { minHeight, maxHeight }
+    setupSectionResize(handleId, containerId, storageKey, heightProp, options = {}) {
         const handle = document.getElementById(handleId);
         const container = document.getElementById(containerId);
         if (!handle || !container) return;
+
+        const minHeight = options.minHeight || 100;
+        const maxHeight = options.maxHeight || 800;
 
         container.style.height = `${this[heightProp]}px`;
 
@@ -710,7 +718,7 @@ const ResizableSectionMixin = {
         const onMouseMove = (e) => {
             if (!isResizing) return;
             const delta = e.clientY - startY;
-            const newHeight = Math.max(100, Math.min(800, startHeight + delta));
+            const newHeight = Math.max(minHeight, Math.min(maxHeight, startHeight + delta));
             container.style.height = `${newHeight}px`;
         };
 
@@ -719,10 +727,13 @@ const ResizableSectionMixin = {
             isResizing = false;
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
-            handle.classList.remove('resizing');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
             const newHeight = parseInt(container.style.height, 10);
-            this[heightProp] = newHeight;
-            this.saveSectionHeight(storageKey, newHeight);
+            if (!Number.isNaN(newHeight)) {
+                this[heightProp] = newHeight;
+                this.saveSectionHeight(storageKey, newHeight);
+            }
         };
 
         handle.addEventListener('mousedown', (e) => {
@@ -730,9 +741,10 @@ const ResizableSectionMixin = {
             isResizing = true;
             startY = e.clientY;
             startHeight = container.offsetHeight;
-            handle.classList.add('resizing');
             document.addEventListener('mousemove', onMouseMove);
             document.addEventListener('mouseup', onMouseUp);
+            document.body.style.cursor = 'ns-resize';
+            document.body.style.userSelect = 'none';
         });
     }
 };
@@ -779,6 +791,108 @@ const FilterMixin = {
                 onFilter();
             }, delay);
         });
+    },
+
+    // Полная настройка фильтров с ESC и type filter
+    setupFilterListeners(filterInputId, typeFilterId, onFilter, delay = 300) {
+        const filterInput = document.getElementById(filterInputId);
+        const typeFilter = document.getElementById(typeFilterId);
+
+        if (filterInput) {
+            // Debounced input
+            filterInput.addEventListener('input', (e) => {
+                clearTimeout(this.filterDebounce);
+                this.filterDebounce = setTimeout(() => {
+                    this.filter = e.target.value.trim();
+                    onFilter();
+                }, delay);
+            });
+
+            // ESC сбрасывает фильтр
+            filterInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    if (filterInput.value) {
+                        filterInput.value = '';
+                        this.filter = '';
+                        onFilter();
+                    }
+                    filterInput.blur();
+                    e.preventDefault();
+                }
+            });
+        }
+
+        if (typeFilter) {
+            typeFilter.addEventListener('change', () => {
+                this.typeFilter = typeFilter.value;
+                onFilter();
+            });
+        }
+    },
+
+    // Настройка ESC на контейнере для сброса фильтра
+    setupContainerEscHandler(containerId, filterInputId, onFilter) {
+        const container = document.getElementById(containerId);
+        const filterInput = document.getElementById(filterInputId);
+        if (!container || !filterInput) return;
+
+        container.setAttribute('tabindex', '0');
+        container.addEventListener('click', () => container.focus());
+        container.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.filter) {
+                filterInput.value = '';
+                this.filter = '';
+                onFilter();
+                e.preventDefault();
+            }
+        });
+    }
+};
+
+// Миксин для управления доступностью секции параметров на основе httpEnabledSetParams
+const ParamsAccessibilityMixin = {
+    /**
+     * Обновляет доступность секции параметров на основе флага httpEnabledSetParams в статусе.
+     * Если httpEnabledSetParams === false:
+     * - Секция сворачивается
+     * - Кнопка "Применить" блокируется
+     * - Все input/select в таблице параметров блокируются
+     * - Показывается предупреждающее сообщение
+     *
+     * @param {string} prefix - Префикс элементов (например, 'opcua', 'opcuasrv', 'mb', 'mbs')
+     */
+    updateParamsAccessibility(prefix) {
+        const enabled = this.status?.httpEnabledSetParams !== false;
+        const sectionId = `${prefix}-params-section-${this.objectName}`;
+        const section = document.getElementById(sectionId);
+
+        if (!section) return;
+
+        // Свернуть секцию если изменение параметров запрещено
+        if (!enabled && !section.classList.contains('collapsed')) {
+            section.classList.add('collapsed');
+        }
+
+        // Заблокировать кнопку "Применить"
+        const saveBtn = document.getElementById(`${prefix}-params-save-${this.objectName}`);
+        if (saveBtn) {
+            saveBtn.disabled = !enabled;
+            saveBtn.title = enabled ? '' : 'Изменение параметров запрещено';
+        }
+
+        // Заблокировать все input в таблице параметров
+        const paramsTable = document.getElementById(`${prefix}-params-${this.objectName}`);
+        if (paramsTable) {
+            const inputs = paramsTable.querySelectorAll('input, select');
+            inputs.forEach(input => {
+                input.disabled = !enabled;
+            });
+        }
+
+        // Показать предупреждение
+        this.setNote(`${prefix}-params-note-${this.objectName}`,
+            enabled ? '' : 'Изменение параметров запрещено (httpEnabledSetParams=false)',
+            !enabled);
     }
 };
 
@@ -1630,60 +1744,17 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     setupEventListeners() {
-        const filterInput = document.getElementById(`ionc-filter-${this.objectName}`);
-        const typeFilter = document.getElementById(`ionc-type-filter-${this.objectName}`);
-
-        if (filterInput) {
-            let debounceTimer;
-            filterInput.addEventListener('input', (e) => {
-                clearTimeout(debounceTimer);
-                debounceTimer = setTimeout(() => {
-                    this.filter = e.target.value;
-                    this.loadSensors();
-                }, 300);
-            });
-
-            // ESC - сброс фильтра и потеря фокуса
-            filterInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') {
-                    if (filterInput.value) {
-                        filterInput.value = '';
-                        this.filter = '';
-                        this.loadSensors();
-                    }
-                    filterInput.blur();
-                    e.preventDefault();
-                }
-            });
-        }
-
-        if (typeFilter) {
-            typeFilter.addEventListener('change', (e) => {
-                this.typeFilter = e.target.value;
-                this.loadSensors();
-            });
-        }
-
-        // ESC на контейнере датчиков — сброс фильтра
-        const sensorsContainer = document.getElementById(`ionc-sensors-container-${this.objectName}`);
-        if (sensorsContainer) {
-            // Делаем контейнер фокусируемым
-            sensorsContainer.setAttribute('tabindex', '0');
-
-            // При клике на таблицу — фокус на контейнер (для работы ESC)
-            sensorsContainer.addEventListener('click', () => {
-                sensorsContainer.focus();
-            });
-
-            sensorsContainer.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape' && filterInput && this.filter) {
-                    filterInput.value = '';
-                    this.filter = '';
-                    this.loadSensors();
-                    e.preventDefault();
-                }
-            });
-        }
+        // Используем методы из FilterMixin
+        this.setupFilterListeners(
+            `ionc-filter-${this.objectName}`,
+            `ionc-type-filter-${this.objectName}`,
+            () => this.loadSensors()
+        );
+        this.setupContainerEscHandler(
+            `ionc-sensors-container-${this.objectName}`,
+            `ionc-filter-${this.objectName}`,
+            () => this.loadSensors()
+        );
     }
 
     async loadSensors() {
@@ -2470,48 +2541,15 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         }, 500);
     }
 
-    // Подписка на SSE обновления для видимых датчиков
+    // Подписка на SSE обновления для видимых датчиков (использует SSESubscriptionMixin)
     async subscribeToSSE() {
-        // Собираем ID датчиков на текущей странице
         const sensorIds = this.sensors.map(s => s.id);
-        if (sensorIds.length === 0) return;
-
-        // Сначала отписываемся от старых подписок
-        await this.unsubscribeFromSSE();
-
-        try {
-            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/subscribe`);
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sensor_ids: sensorIds })
-            });
-
-            if (response.ok) {
-                sensorIds.forEach(id => this.subscribedSensorIds.add(id));
-                console.log(`IONC: Подписка на ${sensorIds.length} датчиков для ${this.objectName}`);
-            }
-        } catch (err) {
-            console.warn('IONC: Ошибка подписки на SSE:', err);
-        }
+        await this.subscribeToSSEFor('/ionc', sensorIds, 'sensor_ids', 'IONC');
     }
 
-    // Отписка от SSE обновлений
+    // Отписка от SSE обновлений (использует SSESubscriptionMixin)
     async unsubscribeFromSSE() {
-        if (this.subscribedSensorIds.size === 0) return;
-
-        try {
-            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/unsubscribe`);
-            await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sensor_ids: [] }) // пустой массив = отписка от всех
-            });
-            this.subscribedSensorIds.clear();
-            console.log(`IONC: Отписка от датчиков для ${this.objectName}`);
-        } catch (err) {
-            console.warn('IONC: Ошибка отписки от SSE:', err);
-        }
+        await this.unsubscribeFromSSEFor('/ionc', 'sensor_ids', 'IONC');
     }
 
     destroy() {
@@ -2636,35 +2674,12 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             saveParams.addEventListener('click', () => this.saveParams());
         }
 
-        const filterInput = document.getElementById(`opcua-sensors-filter-${this.objectName}`);
-        if (filterInput) {
-            filterInput.addEventListener('input', () => {
-                clearTimeout(this.filterDebounce);
-                this.filterDebounce = setTimeout(() => {
-                    this.filter = filterInput.value.trim();
-                    this.loadSensors();
-                }, 300);
-            });
-            filterInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') {
-                    if (filterInput.value) {
-                        filterInput.value = '';
-                        this.filter = '';
-                        this.loadSensors();
-                    }
-                    filterInput.blur();
-                    e.preventDefault();
-                }
-            });
-        }
-
-        const typeFilter = document.getElementById(`opcua-type-filter-${this.objectName}`);
-        if (typeFilter) {
-            typeFilter.addEventListener('change', () => {
-                this.typeFilter = typeFilter.value;
-                this.loadSensors();
-            });
-        }
+        // Используем методы из FilterMixin
+        this.setupFilterListeners(
+            `opcua-sensors-filter-${this.objectName}`,
+            `opcua-type-filter-${this.objectName}`,
+            () => this.loadSensors()
+        );
 
         const refreshDiag = document.getElementById(`opcua-diagnostics-refresh-${this.objectName}`);
         if (refreshDiag) {
@@ -2786,6 +2801,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             this.status = data.status || null;
             this.renderStatus();
             this.renderControl();
+            this.updateParamsAccessibility('opcua');
             this.updateStatusTimestamp();
             this.setNote(`opcua-status-note-${this.objectName}`, '');
         } catch (err) {
@@ -3321,46 +3337,13 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     setupDiagnosticsResize() {
-        const handle = document.getElementById(`opcua-diagnostics-resize-${this.objectName}`);
-        const container = document.getElementById(`opcua-diagnostics-container-${this.objectName}`);
-        if (!handle || !container) return;
-
-        container.style.height = `${this.diagnosticsHeight}px`;
-
-        let startY = 0;
-        let startHeight = 0;
-        let isResizing = false;
-
-        const onMouseMove = (e) => {
-            if (!isResizing) return;
-            const delta = e.clientY - startY;
-            const newHeight = Math.max(160, Math.min(600, startHeight + delta));
-            container.style.height = `${newHeight}px`;
-        };
-
-        const onMouseUp = () => {
-            if (!isResizing) return;
-            isResizing = false;
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-            const newHeight = parseInt(container.style.height, 10);
-            if (!Number.isNaN(newHeight)) {
-                this.saveDiagnosticsHeight(newHeight);
-            }
-        };
-
-        handle.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            isResizing = true;
-            startY = e.clientY;
-            startHeight = container.offsetHeight;
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = 'ns-resize';
-            document.body.style.userSelect = 'none';
-        });
+        this.setupSectionResize(
+            `opcua-diagnostics-resize-${this.objectName}`,
+            `opcua-diagnostics-container-${this.objectName}`,
+            'uniset2-viewer-opcua-diagnostics',
+            'diagnosticsHeight',
+            { minHeight: 160, maxHeight: 600 }
+        );
     }
 
     loadSensorsHeight() {
@@ -3388,46 +3371,13 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     setupSensorsResize() {
-        const handle = document.getElementById(`opcua-sensors-resize-${this.objectName}`);
-        const container = document.getElementById(`opcua-sensors-container-${this.objectName}`);
-        if (!handle || !container) return;
-
-        container.style.height = `${this.sensorsHeight}px`;
-
-        let startY = 0;
-        let startHeight = 0;
-        let isResizing = false;
-
-        const onMouseMove = (e) => {
-            if (!isResizing) return;
-            const delta = e.clientY - startY;
-            const newHeight = Math.max(200, Math.min(700, startHeight + delta));
-            container.style.height = `${newHeight}px`;
-        };
-
-        const onMouseUp = () => {
-            if (!isResizing) return;
-            isResizing = false;
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-            const newHeight = parseInt(container.style.height, 10);
-            if (!Number.isNaN(newHeight)) {
-                this.saveSensorsHeight(newHeight);
-            }
-        };
-
-        handle.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            isResizing = true;
-            startY = e.clientY;
-            startHeight = container.offsetHeight;
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = 'ns-resize';
-            document.body.style.userSelect = 'none';
-        });
+        this.setupSectionResize(
+            `opcua-sensors-resize-${this.objectName}`,
+            `opcua-sensors-container-${this.objectName}`,
+            'uniset2-viewer-opcua-sensors',
+            'sensorsHeight',
+            { minHeight: 200, maxHeight: 700 }
+        );
     }
 
     async takeControl() {
@@ -3460,51 +3410,15 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         }
     }
 
-    // === SSE подписка на обновления датчиков ===
+    // === SSE подписка на обновления датчиков (использует SSESubscriptionMixin) ===
 
     async subscribeToSSE() {
-        if (this.allSensors.length === 0) return;
-
-        // Собираем ID датчиков
         const sensorIds = this.allSensors.map(s => s.id);
-
-        // Пропускаем, если уже подписаны на те же датчики
-        const newIds = new Set(sensorIds);
-        if (this.subscribedSensorIds.size === newIds.size &&
-            [...newIds].every(id => this.subscribedSensorIds.has(id))) {
-            return;
-        }
-
-        try {
-            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/opcua/subscribe`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sensor_ids: sensorIds })
-            });
-
-            this.subscribedSensorIds = newIds;
-            console.log(`OPCUA SSE: подписка на ${sensorIds.length} датчиков`, this.objectName);
-        } catch (err) {
-            console.warn('OPCUA SSE: ошибка подписки:', err);
-        }
+        await this.subscribeToSSEFor('/opcua', sensorIds, 'sensor_ids', 'OPCUA SSE');
     }
 
     async unsubscribeFromSSE() {
-        if (this.subscribedSensorIds.size === 0) return;
-
-        try {
-            const sensorIds = [...this.subscribedSensorIds];
-            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/opcua/unsubscribe`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sensor_ids: sensorIds })
-            });
-
-            console.log(`OPCUA SSE: отписка от ${sensorIds.length} датчиков`, this.objectName);
-            this.subscribedSensorIds.clear();
-        } catch (err) {
-            console.warn('OPCUA SSE: ошибка отписки:', err);
-        }
+        await this.unsubscribeFromSSEFor('/opcua', 'sensor_ids', 'OPCUA SSE');
     }
 
     handleOPCUASensorUpdates(sensors) {
@@ -3591,6 +3505,7 @@ applyMixin(OPCUAExchangeRenderer, VirtualScrollMixin);
 applyMixin(OPCUAExchangeRenderer, SSESubscriptionMixin);
 applyMixin(OPCUAExchangeRenderer, ResizableSectionMixin);
 applyMixin(OPCUAExchangeRenderer, FilterMixin);
+applyMixin(OPCUAExchangeRenderer, ParamsAccessibilityMixin);
 
 // ============================================================================
 // ModbusMasterRenderer - рендерер для ModbusMaster объектов
@@ -3617,8 +3532,8 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         this.devices = [];
         this.registersHeight = this.loadRegistersHeight();
 
-        // SSE подписки
-        this.subscribedRegisterIds = new Set();
+        // SSE подписки (используется subscribedSensorIds из миксина)
+        this.subscribedSensorIds = new Set();
         this.pendingUpdates = [];
         this.renderScheduled = false;
 
@@ -3691,35 +3606,12 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
             saveParams.addEventListener('click', () => this.saveParams());
         }
 
-        const filterInput = document.getElementById(`mb-registers-filter-${this.objectName}`);
-        if (filterInput) {
-            filterInput.addEventListener('input', () => {
-                clearTimeout(this.filterDebounce);
-                this.filterDebounce = setTimeout(() => {
-                    this.filter = filterInput.value.trim();
-                    this.loadRegisters();
-                }, 300);
-            });
-            filterInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') {
-                    if (filterInput.value) {
-                        filterInput.value = '';
-                        this.filter = '';
-                        this.loadRegisters();
-                    }
-                    filterInput.blur();
-                    e.preventDefault();
-                }
-            });
-        }
-
-        const typeFilter = document.getElementById(`mb-type-filter-${this.objectName}`);
-        if (typeFilter) {
-            typeFilter.addEventListener('change', () => {
-                this.typeFilter = typeFilter.value;
-                this.loadRegisters();
-            });
-        }
+        // Используем методы из FilterMixin
+        this.setupFilterListeners(
+            `mb-registers-filter-${this.objectName}`,
+            `mb-type-filter-${this.objectName}`,
+            () => this.loadRegisters()
+        );
     }
 
     createMBStatusSection() {
@@ -3810,6 +3702,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
             const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/status`);
             this.status = data.status || null;
             this.renderStatus();
+            this.updateParamsAccessibility('mb');
             this.updateStatusTimestamp();
             this.setNote(`mb-status-note-${this.objectName}`, '');
         } catch (err) {
@@ -3858,6 +3751,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
             const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/params?${query}`);
             this.params = data.params || {};
             this.renderParams();
+            this.updateParamsAccessibility('mb');
             this.setNote(`mb-params-note-${this.objectName}`, '');
         } catch (err) {
             this.setNote(`mb-params-note-${this.objectName}`, err.message, true);
@@ -4057,8 +3951,8 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     // Override to use Modbus SSE subscription
     subscribeToChartSensor(sensorId) {
         // ModbusMaster registers are already subscribed through main SSE
-        if (!this.subscribedRegisterIds.has(sensorId)) {
-            this.subscribedRegisterIds.add(sensorId);
+        if (!this.subscribedSensorIds.has(sensorId)) {
+            this.subscribedSensorIds.add(sensorId);
         }
     }
 
@@ -4103,93 +3997,24 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     }
 
     setupRegistersResize() {
-        const handle = document.getElementById(`mb-registers-resize-${this.objectName}`);
-        const container = document.getElementById(`mb-registers-container-${this.objectName}`);
-        if (!handle || !container) return;
-
-        container.style.height = `${this.registersHeight}px`;
-
-        let startY = 0;
-        let startHeight = 0;
-        let isResizing = false;
-
-        const onMouseMove = (e) => {
-            if (!isResizing) return;
-            const delta = e.clientY - startY;
-            const newHeight = Math.max(200, Math.min(700, startHeight + delta));
-            container.style.height = `${newHeight}px`;
-        };
-
-        const onMouseUp = () => {
-            if (!isResizing) return;
-            isResizing = false;
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-            const newHeight = parseInt(container.style.height, 10);
-            if (!Number.isNaN(newHeight)) {
-                this.saveRegistersHeight(newHeight);
-            }
-        };
-
-        handle.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            isResizing = true;
-            startY = e.clientY;
-            startHeight = container.offsetHeight;
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = 'ns-resize';
-            document.body.style.userSelect = 'none';
-        });
+        this.setupSectionResize(
+            `mb-registers-resize-${this.objectName}`,
+            `mb-registers-container-${this.objectName}`,
+            'uniset2-viewer-mb-registers',
+            'registersHeight',
+            { minHeight: 200, maxHeight: 700 }
+        );
     }
 
-    // === SSE подписка на обновления регистров ===
+    // === SSE подписка на обновления регистров (использует SSESubscriptionMixin) ===
 
     async subscribeToSSE() {
-        if (this.allRegisters.length === 0) return;
-
-        // Собираем ID видимых регистров
         const registerIds = this.allRegisters.map(r => r.id);
-
-        // Пропускаем, если уже подписаны на те же регистры
-        const newIds = new Set(registerIds);
-        if (this.subscribedRegisterIds.size === newIds.size &&
-            [...newIds].every(id => this.subscribedRegisterIds.has(id))) {
-            return;
-        }
-
-        try {
-            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/subscribe`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ register_ids: registerIds })
-            });
-
-            this.subscribedRegisterIds = newIds;
-            console.log(`ModbusMaster SSE: подписка на ${registerIds.length} регистров`, this.objectName);
-        } catch (err) {
-            console.warn('ModbusMaster SSE: ошибка подписки:', err);
-        }
+        await this.subscribeToSSEFor('/modbus', registerIds, 'register_ids', 'ModbusMaster SSE');
     }
 
     async unsubscribeFromSSE() {
-        if (this.subscribedRegisterIds.size === 0) return;
-
-        try {
-            const registerIds = [...this.subscribedRegisterIds];
-            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/unsubscribe`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ register_ids: registerIds })
-            });
-
-            console.log(`ModbusMaster SSE: отписка от ${registerIds.length} регистров`, this.objectName);
-            this.subscribedRegisterIds.clear();
-        } catch (err) {
-            console.warn('ModbusMaster SSE: ошибка отписки:', err);
-        }
+        await this.unsubscribeFromSSEFor('/modbus', 'register_ids', 'ModbusMaster SSE');
     }
 
     handleModbusRegisterUpdates(registers) {
@@ -4271,6 +4096,7 @@ applyMixin(ModbusMasterRenderer, VirtualScrollMixin);
 applyMixin(ModbusMasterRenderer, SSESubscriptionMixin);
 applyMixin(ModbusMasterRenderer, ResizableSectionMixin);
 applyMixin(ModbusMasterRenderer, FilterMixin);
+applyMixin(ModbusMasterRenderer, ParamsAccessibilityMixin);
 
 // Регистрируем стандартные рендереры
 registerRenderer('UniSetManager', UniSetManagerRenderer);
@@ -4310,8 +4136,8 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         ];
         this.registersHeight = this.loadRegistersHeight();
 
-        // SSE подписки
-        this.subscribedRegisterIds = new Set();
+        // SSE подписки (используется subscribedSensorIds из миксина)
+        this.subscribedSensorIds = new Set();
         this.pendingUpdates = [];
         this.renderScheduled = false;
 
@@ -4382,35 +4208,12 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             saveParams.addEventListener('click', () => this.saveParams());
         }
 
-        const filterInput = document.getElementById(`mbs-registers-filter-${this.objectName}`);
-        if (filterInput) {
-            filterInput.addEventListener('input', () => {
-                clearTimeout(this.filterDebounce);
-                this.filterDebounce = setTimeout(() => {
-                    this.filter = filterInput.value.trim();
-                    this.loadRegisters();
-                }, 300);
-            });
-            filterInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') {
-                    if (filterInput.value) {
-                        filterInput.value = '';
-                        this.filter = '';
-                        this.loadRegisters();
-                    }
-                    filterInput.blur();
-                    e.preventDefault();
-                }
-            });
-        }
-
-        const typeFilter = document.getElementById(`mbs-type-filter-${this.objectName}`);
-        if (typeFilter) {
-            typeFilter.addEventListener('change', () => {
-                this.typeFilter = typeFilter.value;
-                this.loadRegisters();
-            });
-        }
+        // Используем методы из FilterMixin
+        this.setupFilterListeners(
+            `mbs-registers-filter-${this.objectName}`,
+            `mbs-type-filter-${this.objectName}`,
+            () => this.loadRegisters()
+        );
     }
 
     createMBSStatusSection() {
@@ -4490,6 +4293,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/status`);
             this.status = data.status || null;
             this.renderStatus();
+            this.updateParamsAccessibility('mbs');
             this.updateStatusTimestamp();
             this.setNote(`mbs-status-note-${this.objectName}`, '');
         } catch (err) {
@@ -4553,6 +4357,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/params?${query}`);
             this.params = data.params || {};
             this.renderParams();
+            this.updateParamsAccessibility('mbs');
             this.setNote(`mbs-params-note-${this.objectName}`, '');
         } catch (err) {
             this.setNote(`mbs-params-note-${this.objectName}`, err.message, true);
@@ -4704,8 +4509,8 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     // Override to use ModbusSlave SSE subscription
     subscribeToChartSensor(sensorId) {
         // ModbusSlave registers are already subscribed through main SSE
-        if (!this.subscribedRegisterIds.has(sensorId)) {
-            this.subscribedRegisterIds.add(sensorId);
+        if (!this.subscribedSensorIds.has(sensorId)) {
+            this.subscribedSensorIds.add(sensorId);
         }
     }
 
@@ -4750,93 +4555,24 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     }
 
     setupRegistersResize() {
-        const handle = document.getElementById(`mbs-registers-resize-${this.objectName}`);
-        const container = document.getElementById(`mbs-registers-container-${this.objectName}`);
-        if (!handle || !container) return;
-
-        container.style.height = `${this.registersHeight}px`;
-
-        let startY = 0;
-        let startHeight = 0;
-        let isResizing = false;
-
-        const onMouseMove = (e) => {
-            if (!isResizing) return;
-            const delta = e.clientY - startY;
-            const newHeight = Math.max(200, Math.min(700, startHeight + delta));
-            container.style.height = `${newHeight}px`;
-        };
-
-        const onMouseUp = () => {
-            if (!isResizing) return;
-            isResizing = false;
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-            const newHeight = parseInt(container.style.height, 10);
-            if (!Number.isNaN(newHeight)) {
-                this.saveRegistersHeight(newHeight);
-            }
-        };
-
-        handle.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            isResizing = true;
-            startY = e.clientY;
-            startHeight = container.offsetHeight;
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = 'ns-resize';
-            document.body.style.userSelect = 'none';
-        });
+        this.setupSectionResize(
+            `mbs-registers-resize-${this.objectName}`,
+            `mbs-registers-container-${this.objectName}`,
+            'uniset2-viewer-mbs-registers',
+            'registersHeight',
+            { minHeight: 200, maxHeight: 700 }
+        );
     }
 
-    // === SSE подписка на обновления регистров ===
+    // === SSE подписка на обновления регистров (использует SSESubscriptionMixin) ===
 
     async subscribeToSSE() {
-        if (this.allRegisters.length === 0) return;
-
-        // Собираем ID видимых регистров
         const registerIds = this.allRegisters.map(r => r.id);
-
-        // Пропускаем, если уже подписаны на те же регистры
-        const newIds = new Set(registerIds);
-        if (this.subscribedRegisterIds.size === newIds.size &&
-            [...newIds].every(id => this.subscribedRegisterIds.has(id))) {
-            return;
-        }
-
-        try {
-            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/subscribe`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ register_ids: registerIds })
-            });
-
-            this.subscribedRegisterIds = newIds;
-            console.log(`ModbusSlave SSE: подписка на ${registerIds.length} регистров`, this.objectName);
-        } catch (err) {
-            console.warn('ModbusSlave SSE: ошибка подписки:', err);
-        }
+        await this.subscribeToSSEFor('/modbus', registerIds, 'register_ids', 'ModbusSlave SSE');
     }
 
     async unsubscribeFromSSE() {
-        if (this.subscribedRegisterIds.size === 0) return;
-
-        try {
-            const registerIds = [...this.subscribedRegisterIds];
-            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/unsubscribe`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ register_ids: registerIds })
-            });
-
-            console.log(`ModbusSlave SSE: отписка от ${registerIds.length} регистров`, this.objectName);
-            this.subscribedRegisterIds.clear();
-        } catch (err) {
-            console.warn('ModbusSlave SSE: ошибка отписки:', err);
-        }
+        await this.unsubscribeFromSSEFor('/modbus', 'register_ids', 'ModbusSlave SSE');
     }
 
     handleModbusRegisterUpdates(registers) {
@@ -4917,6 +4653,7 @@ applyMixin(ModbusSlaveRenderer, VirtualScrollMixin);
 applyMixin(ModbusSlaveRenderer, SSESubscriptionMixin);
 applyMixin(ModbusSlaveRenderer, ResizableSectionMixin);
 applyMixin(ModbusSlaveRenderer, FilterMixin);
+applyMixin(ModbusSlaveRenderer, ParamsAccessibilityMixin);
 
 // ModbusSlave рендерер (по extensionType)
 registerRenderer('ModbusSlave', ModbusSlaveRenderer);
@@ -5015,35 +4752,12 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
             saveParams.addEventListener('click', () => this.saveParams());
         }
 
-        const filterInput = document.getElementById(`opcuasrv-sensors-filter-${this.objectName}`);
-        if (filterInput) {
-            filterInput.addEventListener('input', () => {
-                clearTimeout(this.filterDebounce);
-                this.filterDebounce = setTimeout(() => {
-                    this.filter = filterInput.value.trim();
-                    this.loadSensors();
-                }, 300);
-            });
-            filterInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') {
-                    if (filterInput.value) {
-                        filterInput.value = '';
-                        this.filter = '';
-                        this.loadSensors();
-                    }
-                    filterInput.blur();
-                    e.preventDefault();
-                }
-            });
-        }
-
-        const typeFilter = document.getElementById(`opcuasrv-type-filter-${this.objectName}`);
-        if (typeFilter) {
-            typeFilter.addEventListener('change', () => {
-                this.typeFilter = typeFilter.value;
-                this.loadSensors();
-            });
-        }
+        // Используем методы из FilterMixin
+        this.setupFilterListeners(
+            `opcuasrv-sensors-filter-${this.objectName}`,
+            `opcuasrv-type-filter-${this.objectName}`,
+            () => this.loadSensors()
+        );
     }
 
     createOPCUAServerStatusSection() {
@@ -5124,6 +4838,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
             const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/opcua/status`);
             this.status = data.status || null;
             this.renderStatus();
+            this.updateParamsAccessibility('opcuasrv');
             this.updateStatusTimestamp();
             this.setNote(`opcuasrv-status-note-${this.objectName}`, '');
         } catch (err) {
@@ -5229,6 +4944,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
             const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/opcua/params?${query}`);
             this.params = data.params || {};
             this.renderParams();
+            this.updateParamsAccessibility('opcuasrv');
             this.setNote(`opcuasrv-params-note-${this.objectName}`, '');
         } catch (err) {
             this.setNote(`opcuasrv-params-note-${this.objectName}`, err.message, true);
@@ -5480,91 +5196,32 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     loadSensorsHeight() {
-        const saved = localStorage.getItem(`opcuasrv-sensors-height-${this.objectName}`);
-        return saved ? parseInt(saved, 10) : 300;
+        // Используем формат JSON как другие рендереры
+        return this.loadSectionHeight('uniset2-viewer-opcuasrv-sensors', 300);
     }
 
     saveSensorsHeight(height) {
-        localStorage.setItem(`opcuasrv-sensors-height-${this.objectName}`, height);
+        this.saveSectionHeight('uniset2-viewer-opcuasrv-sensors', height);
     }
 
     setupSensorsResize() {
-        const handle = document.getElementById(`opcuasrv-sensors-resize-${this.objectName}`);
-        const container = document.getElementById(`opcuasrv-sensors-container-${this.objectName}`);
-        if (!handle || !container) return;
-
-        let startY = 0;
-        let startHeight = 0;
-
-        const onMouseMove = (e) => {
-            const delta = e.clientY - startY;
-            const newHeight = Math.max(100, startHeight + delta);
-            container.style.height = `${newHeight}px`;
-            this.sensorsHeight = newHeight;
-            this.updateVisibleRows();
-        };
-
-        const onMouseUp = () => {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            this.saveSensorsHeight(this.sensorsHeight);
-        };
-
-        handle.addEventListener('mousedown', (e) => {
-            startY = e.clientY;
-            startHeight = container.clientHeight;
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-            e.preventDefault();
-        });
+        this.setupSectionResize(
+            `opcuasrv-sensors-resize-${this.objectName}`,
+            `opcuasrv-sensors-container-${this.objectName}`,
+            'uniset2-viewer-opcuasrv-sensors',
+            'sensorsHeight',
+            { minHeight: 200, maxHeight: 700 }
+        );
     }
 
-    // SSE subscription methods
+    // SSE subscription methods (использует SSESubscriptionMixin)
     async subscribeToSSE() {
-        // Get sensor IDs to subscribe
         const sensorIds = this.allSensors.map(s => s.id).filter(id => id != null);
-        if (sensorIds.length === 0) return;
-
-        // Only subscribe to new IDs
-        const newIds = sensorIds.filter(id => !this.subscribedSensorIds.has(id));
-        if (newIds.length === 0) return;
-
-        try {
-            await this.fetchJSON(
-                `/api/objects/${encodeURIComponent(this.objectName)}/opcua/subscribe`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sensorIds: newIds })
-                }
-            );
-            newIds.forEach(id => this.subscribedSensorIds.add(id));
-            console.log(`OPCUAServer SSE: подписка на ${newIds.length} переменных`, this.objectName);
-        } catch (err) {
-            console.warn('OPCUAServer SSE: ошибка подписки:', err);
-        }
+        await this.subscribeToSSEFor('/opcua', sensorIds, 'sensorIds', 'OPCUAServer SSE');
     }
 
     async unsubscribeFromSSE() {
-        if (this.subscribedSensorIds.size === 0) return;
-
-        const sensorIds = Array.from(this.subscribedSensorIds);
-
-        try {
-            await this.fetchJSON(
-                `/api/objects/${encodeURIComponent(this.objectName)}/opcua/unsubscribe`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sensorIds })
-                }
-            );
-            console.log(`OPCUAServer SSE: отписка от ${sensorIds.length} переменных`, this.objectName);
-        } catch (err) {
-            console.warn('OPCUAServer SSE: ошибка отписки:', err);
-        }
-
-        this.subscribedSensorIds.clear();
+        await this.unsubscribeFromSSEFor('/opcua', 'sensorIds', 'OPCUAServer SSE');
     }
 
     handleSSEUpdate(updates) {
@@ -5621,6 +5278,7 @@ applyMixin(OPCUAServerRenderer, VirtualScrollMixin);
 applyMixin(OPCUAServerRenderer, SSESubscriptionMixin);
 applyMixin(OPCUAServerRenderer, ResizableSectionMixin);
 applyMixin(OPCUAServerRenderer, FilterMixin);
+applyMixin(OPCUAServerRenderer, ParamsAccessibilityMixin);
 
 // OPCUAServer рендерер (по extensionType)
 registerRenderer('OPCUAServer', OPCUAServerRenderer);

@@ -127,11 +127,21 @@ make coverage   # отчёт покрытия
 
 ### E2E-тесты (Playwright)
 ```bash
-make js-tests   # запуск в Docker
+make js-tests   # запуск в Docker (single + multi-server)
 ```
 
 Файлы:
-- `tests/ui.spec.ts` — ~100 тестов UI
+- `tests/single/` — тесты одного сервера (197 тестов)
+  - `ui.spec.ts` — базовый UI
+  - `ionotifycontroller.spec.ts` — IONotifyController рендерер
+  - `opcuaexchange.spec.ts` — OPCUAExchange рендерер
+  - `modbusmaster.spec.ts` — ModbusMaster рендерер
+  - `modbusslave.spec.ts` — ModbusSlave рендерер
+  - `opcuaserver.spec.ts` — OPCUAServer рендерер
+  - `base-components.spec.ts` — общие компоненты (filter, resize, chart toggle)
+  - `external-sensors.spec.ts` — внешние датчики
+- `tests/multi/` — тесты мульти-сервера (15 тестов)
+  - `server.spec.ts` — multi-server поддержка
 - `tests/mock-server/server.js` — mock UniSet2 API
 - `tests/playwright.config.ts` — конфигурация Playwright
 
@@ -189,8 +199,8 @@ uniset2-viewer-go/
 ├── ui/
 │   ├── embed.go             # go:embed директива
 │   ├── static/
-│   │   ├── css/style.css    # стили (~533 строк)
-│   │   └── js/app.js        # фронтенд (~745 строк)
+│   │   ├── css/style.css    # стили (~1400 строк)
+│   │   └── js/app.js        # фронтенд (~9150 строк, 5 рендереров + миксины)
 │   └── templates/
 │       └── index.html       # главная страница
 ├── tests/
@@ -216,19 +226,35 @@ uniset2-viewer-go/
 
 ```javascript
 objectRenderers (Map)
-  ├── 'UniSetManager' → UniSetManagerRenderer
-  ├── 'UniSetObject' → UniSetObjectRenderer
+  ├── 'IONotifyController' → IONotifyControllerRenderer
+  ├── 'OPCUAExchange' → OPCUAExchangeRenderer
+  ├── 'ModbusMaster' → ModbusMasterRenderer
+  ├── 'ModbusSlave' → ModbusSlaveRenderer
+  ├── 'OPCUAServer' → OPCUAServerRenderer
   └── default → DefaultObjectRenderer
 ```
+
+### Миксины (переиспользуемый код)
+
+| Миксин | Методы | Назначение |
+|--------|--------|------------|
+| **VirtualScrollMixin** | `initVirtualScrollProps()`, `setupVirtualScrollFor()`, `updateVisibleRowsFor()` | Виртуальный скролл для больших списков |
+| **SSESubscriptionMixin** | `subscribeToSSEFor()`, `unsubscribeFromSSEFor()`, `scheduleBatchRender()` | SSE подписки на обновления значений |
+| **ResizableSectionMixin** | `loadSectionHeight()`, `saveSectionHeight()`, `setupSectionResize()` | Изменяемые по высоте секции с сохранением в localStorage |
+| **FilterMixin** | `setupFilterListeners()`, `setupContainerEscHandler()`, `applyFilters()` | Фильтрация списков по имени и типу |
+| **ParamsAccessibilityMixin** | `updateParamsAccessibility(prefix)` | Управление доступностью секции параметров на основе `httpEnabledSetParams` |
 
 ### Классы рендереров
 
 | Класс | Секции |
 |-------|--------|
-| **BaseObjectRenderer** | Базовый класс с методами создания секций |
-| **UniSetManagerRenderer** | Графики, Входы/Выходы/Таймеры, Переменные, LogServer, Статистика, Информация об объекте |
-| **UniSetObjectRenderer** | Графики, Переменные, LogServer, Статистика, Информация об объекте (без IO/Timers) |
-| **DefaultObjectRenderer** | Fallback (как UniSetManager) |
+| **BaseObjectRenderer** | Базовый класс с методами создания секций, collapsible sections |
+| **IONotifyControllerRenderer** | Датчики (виртуальный скролл), Графики, LogServer, Потерянные подписчики |
+| **OPCUAExchangeRenderer** | Статус OPC UA, Каналы, Датчики, Параметры, Диагностика, Графики |
+| **ModbusMasterRenderer** | Статус Modbus, Устройства, Регистры (виртуальный скролл), Параметры, Графики |
+| **ModbusSlaveRenderer** | Статус ModbusSlave, Регистры (виртуальный скролл), Параметры, Графики |
+| **OPCUAServerRenderer** | Статус OPC UA Server, Endpoints, Config, Переменные, Параметры, Графики |
+| **DefaultObjectRenderer** | Fallback для неизвестных типов |
 
 ### Добавление нового типа
 
@@ -245,14 +271,20 @@ registerRenderer('MyType', MyRenderer);
 ## История изменений
 
 ### Текущая версия
-- Расширяемая система рендереров по objectType
-- Badge с типом объекта на вкладке
-- Подсветка состояния LogServer (RUNNING/STOPPED)
-- Таблица сенсоров в статистике (ID, имя, срабатывания) с фильтром
-- Шкала времени с динамическим смещением (90%)
-- Временные интервалы: 1m, 3m, 5m, 15m, 1h, 3h
-- Техно-шрифт Orbitron для заголовка
-- Сохранение состояния спойлеров в localStorage
+- **Миксины для переиспользования кода** (~450 строк экономии)
+  - FilterMixin: `setupFilterListeners()` для унификации фильтров
+  - SSESubscriptionMixin: `subscribeToSSEFor()` для SSE подписок
+  - ResizableSectionMixin: `setupSectionResize()` для resize секций
+  - ParamsAccessibilityMixin: `updateParamsAccessibility(prefix)` для блокировки параметров
+- **httpEnabledSetParams**: автоматическая блокировка секции параметров когда флаг = false
+  - Применяется к: OPCUAExchange, OPCUAServer, ModbusMaster, ModbusSlave
+  - Сворачивает секцию, блокирует inputs и кнопку "Применить"
+- **5 типов рендереров**: IONotifyController, OPCUAExchange, ModbusMaster, ModbusSlave, OPCUAServer
+- **212 E2E тестов** (197 single + 15 multi-server)
+- Chart toggle для всех рендереров (графики по клику на строку)
+- Virtual scroll для списков датчиков/регистров
+- SSE обновления значений в реальном времени
+- Multi-server поддержка с server badges
 
 ### Коммит c5d1cdf
 - Тёмная тема UI в стиле Grafana
