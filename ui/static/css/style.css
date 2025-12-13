@@ -113,6 +113,7 @@
 /* --- Virtual Scroll Common Styles --- */
 .virtual-scroll-viewport,
 .opcua-sensors-viewport,
+.opcuasrv-sensors-viewport,
 .ionc-sensors-viewport,
 .mb-registers-viewport {
     height: 100%;
@@ -122,6 +123,7 @@
 
 .virtual-scroll-spacer,
 .opcua-sensors-spacer,
+.opcuasrv-sensors-spacer,
 .ionc-sensors-spacer,
 .mb-registers-spacer {
     width: 100%;
@@ -130,6 +132,7 @@
 
 .loading-more,
 .opcua-loading-more,
+.opcuasrv-loading-more,
 .ionc-loading-more,
 .mb-loading-more {
     text-align: center;
@@ -139,7 +142,8 @@
 }
 
 .no-data-message,
-.opcua-no-sensors {
+.opcua-no-sensors,
+.opcuasrv-no-sensors {
     text-align: center;
     padding: 2rem;
     color: var(--text-muted);
@@ -1949,6 +1953,44 @@ header h1 {
 }
 
 /* Note: .opcua-loading-more and .opcua-no-sensors styles moved to common Virtual Scroll section */
+
+/* OPCUAServer renderer */
+.opcuasrv-section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0.75rem 0 0.5rem 0;
+    padding: 0;
+}
+
+.opcuasrv-endpoints {
+    margin-top: 0.75rem;
+}
+
+.opcuasrv-endpoint-card {
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background: var(--bg-secondary);
+}
+
+.opcuasrv-endpoint-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.opcuasrv-endpoint-url {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-family: monospace;
+    word-break: break-all;
+}
+
+.opcuasrv-config {
+    margin-top: 0.75rem;
+}
 
 /* State badges for LogServer */
 .state-badge {

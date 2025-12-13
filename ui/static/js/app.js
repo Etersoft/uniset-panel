@@ -381,7 +381,7 @@ function initSSE() {
         }
     });
 
-    // Обработка батча обновлений OPCUA датчиков (OPCUAExchange)
+    // Обработка батча обновлений OPCUA датчиков (OPCUAExchange, OPCUAServer)
     eventSource.addEventListener('opcua_sensor_batch', (e) => {
         try {
             const event = JSON.parse(e.data);
@@ -395,9 +395,12 @@ function initSSE() {
             const tabState = state.tabs.get(tabKey);
             if (!tabState) return;
 
-            // Проверяем, что это OPCUAExchange рендерер
+            // Проверяем, что это OPCUAExchange или OPCUAServer рендерер
             const renderer = tabState.renderer;
-            if (!renderer || renderer.constructor.name !== 'OPCUAExchangeRenderer') return;
+            const isOPCUARenderer = renderer &&
+                (renderer.constructor.name === 'OPCUAExchangeRenderer' ||
+                 renderer.constructor.name === 'OPCUAServerRenderer');
+            if (!isOPCUARenderer) return;
 
             // Вызываем обработчик обновления датчиков
             if (typeof renderer.handleOPCUASensorUpdates === 'function') {
@@ -4796,6 +4799,680 @@ registerRenderer('ModbusSlave', ModbusSlaveRenderer);
 // Fallback для старых версий (по objectType)
 registerRenderer('MBSlave', ModbusSlaveRenderer);
 registerRenderer('MBSlave1', ModbusSlaveRenderer);
+
+// OPCUAServerRenderer - рендерер для OPCUAServer extensionType
+// OPCUAServer - это OPC UA сервер, который предоставляет доступ к переменным через OPC UA протокол
+
+class OPCUAServerRenderer extends BaseObjectRenderer {
+    static getTypeName() {
+        return 'OPCUAServer';
+    }
+
+    constructor(objectName, tabKey = null) {
+        super(objectName, tabKey);
+        this.status = null;
+        this.params = {};
+        this.paramNames = [
+            'updateTime_msec',
+            'httpEnabledSetParams'
+        ];
+        this.loadingNote = '';
+        this.sensorsHeight = this.loadSensorsHeight();
+
+        // SSE подписки
+        this.subscribedSensorIds = new Set();
+        this.pendingUpdates = [];
+        this.renderScheduled = false;
+
+        // Virtual scroll properties
+        this.allSensors = [];
+        this.sensorsTotal = 0;
+        this.rowHeight = 32;
+        this.bufferRows = 10;
+        this.startIndex = 0;
+        this.endIndex = 0;
+
+        // Infinite scroll properties
+        this.chunkSize = 200;
+        this.hasMore = true;
+        this.isLoadingChunk = false;
+
+        // Filter state
+        this.filter = '';
+        this.typeFilter = 'all';
+        this.filterDebounce = null;
+    }
+
+    createPanelHTML() {
+        return `
+            ${this.createChartsSection()}
+            ${this.createOPCUAServerStatusSection()}
+            ${this.createOPCUAServerParamsSection()}
+            ${this.createOPCUAServerSensorsSection()}
+            ${this.createLogViewerSection()}
+            ${this.createLogServerSection()}
+            ${this.createObjectInfoSection()}
+        `;
+    }
+
+    initialize() {
+        this.bindEvents();
+        this.reloadAll();
+        setupChartsResize(this.objectName);
+        this.setupSensorsResize();
+        this.setupVirtualScroll();
+    }
+
+    destroy() {
+        this.destroyLogViewer();
+        this.unsubscribeFromSSE();
+    }
+
+    async reloadAll() {
+        await Promise.allSettled([
+            this.loadStatus(),
+            this.loadParams(),
+            this.loadSensors()
+        ]);
+    }
+
+    bindEvents() {
+        const refreshParams = document.getElementById(`opcuasrv-params-refresh-${this.objectName}`);
+        if (refreshParams) {
+            refreshParams.addEventListener('click', () => this.loadParams());
+        }
+
+        const saveParams = document.getElementById(`opcuasrv-params-save-${this.objectName}`);
+        if (saveParams) {
+            saveParams.addEventListener('click', () => this.saveParams());
+        }
+
+        const filterInput = document.getElementById(`opcuasrv-sensors-filter-${this.objectName}`);
+        if (filterInput) {
+            filterInput.addEventListener('input', () => {
+                clearTimeout(this.filterDebounce);
+                this.filterDebounce = setTimeout(() => {
+                    this.filter = filterInput.value.trim();
+                    this.loadSensors();
+                }, 300);
+            });
+            filterInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    if (filterInput.value) {
+                        filterInput.value = '';
+                        this.filter = '';
+                        this.loadSensors();
+                    }
+                    filterInput.blur();
+                    e.preventDefault();
+                }
+            });
+        }
+
+        const typeFilter = document.getElementById(`opcuasrv-type-filter-${this.objectName}`);
+        if (typeFilter) {
+            typeFilter.addEventListener('change', () => {
+                this.typeFilter = typeFilter.value;
+                this.loadSensors();
+            });
+        }
+    }
+
+    createOPCUAServerStatusSection() {
+        return this.createCollapsibleSection('opcuasrv-status', 'Статус OPC UA Server', `
+            <div class="opcua-actions">
+                <span class="opcua-note" id="opcuasrv-status-note-${this.objectName}"></span>
+            </div>
+            <table class="info-table">
+                <tbody id="opcuasrv-status-${this.objectName}"></tbody>
+            </table>
+            <div class="opcuasrv-endpoints" id="opcuasrv-endpoints-${this.objectName}"></div>
+            <div class="opcuasrv-config" id="opcuasrv-config-${this.objectName}"></div>
+        `, { sectionId: `opcuasrv-status-section-${this.objectName}` });
+    }
+
+    createOPCUAServerParamsSection() {
+        return this.createCollapsibleSection('opcuasrv-params', 'Параметры сервера', `
+            <div class="opcua-actions">
+                <button class="btn" id="opcuasrv-params-refresh-${this.objectName}">Обновить</button>
+                <button class="btn primary" id="opcuasrv-params-save-${this.objectName}">Применить</button>
+                <span class="opcua-note" id="opcuasrv-params-note-${this.objectName}"></span>
+            </div>
+            <div class="opcua-params-table-wrapper">
+                <table class="variables-table opcua-params-table">
+                    <thead>
+                        <tr>
+                            <th>Параметр</th>
+                            <th>Текущее</th>
+                            <th>Новое значение</th>
+                        </tr>
+                    </thead>
+                    <tbody id="opcuasrv-params-${this.objectName}"></tbody>
+                </table>
+            </div>
+        `, { sectionId: `opcuasrv-params-section-${this.objectName}` });
+    }
+
+    createOPCUAServerSensorsSection() {
+        return this.createCollapsibleSection('opcuasrv-sensors', 'OPC UA переменные', `
+            <div class="filter-bar opcua-actions">
+                <input type="text" class="filter-input" id="opcuasrv-sensors-filter-${this.objectName}" placeholder="Фильтр по имени...">
+                <select class="type-filter" id="opcuasrv-type-filter-${this.objectName}">
+                    <option value="all">Все типы</option>
+                    <option value="AI">AI</option>
+                    <option value="AO">AO</option>
+                    <option value="DI">DI</option>
+                    <option value="DO">DO</option>
+                </select>
+                <span class="sensor-count" id="opcuasrv-sensor-count-${this.objectName}">0</span>
+                <span class="opcua-note" id="opcuasrv-sensors-note-${this.objectName}"></span>
+            </div>
+            <div class="opcua-sensors-container" id="opcuasrv-sensors-container-${this.objectName}" style="height: ${this.sensorsHeight}px">
+                <div class="opcua-sensors-viewport" id="opcuasrv-sensors-viewport-${this.objectName}">
+                    <div class="opcua-sensors-spacer" id="opcuasrv-sensors-spacer-${this.objectName}"></div>
+                    <table class="sensors-table variables-table opcua-sensors-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Имя</th>
+                                <th>Тип</th>
+                                <th>Значение</th>
+                                <th>VType</th>
+                                <th>Precision</th>
+                            </tr>
+                        </thead>
+                        <tbody id="opcuasrv-sensors-${this.objectName}"></tbody>
+                    </table>
+                    <div class="opcua-loading-more" id="opcuasrv-loading-more-${this.objectName}" style="display: none;">Загрузка...</div>
+                </div>
+            </div>
+            <div class="resize-handle" id="opcuasrv-sensors-resize-${this.objectName}"></div>
+        `, { sectionId: `opcuasrv-sensors-section-${this.objectName}` });
+    }
+
+    async loadStatus() {
+        try {
+            const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/opcua/status`);
+            this.status = data.status || null;
+            this.renderStatus();
+            this.updateStatusTimestamp();
+            this.setNote(`opcuasrv-status-note-${this.objectName}`, '');
+        } catch (err) {
+            this.setNote(`opcuasrv-status-note-${this.objectName}`, err.message, true);
+        }
+    }
+
+    renderStatus() {
+        const tbody = document.getElementById(`opcuasrv-status-${this.objectName}`);
+        const endpointsContainer = document.getElementById(`opcuasrv-endpoints-${this.objectName}`);
+        const configContainer = document.getElementById(`opcuasrv-config-${this.objectName}`);
+        if (!tbody || !endpointsContainer || !configContainer) return;
+
+        tbody.innerHTML = '';
+        endpointsContainer.innerHTML = '';
+        configContainer.innerHTML = '';
+
+        if (!this.status) {
+            tbody.innerHTML = '<tr><td colspan="2" class="text-muted">Нет данных</td></tr>';
+            return;
+        }
+
+        const status = this.status;
+
+        // Main status rows
+        const rows = [
+            { label: 'Имя', value: status.name },
+            { label: 'httpEnabledSetParams', value: status.httpEnabledSetParams }
+        ];
+
+        // Variables info
+        if (status.variables) {
+            rows.push({ label: 'Всего переменных', value: status.variables.total });
+            rows.push({ label: 'Чтение', value: status.variables.read });
+            rows.push({ label: 'Запись', value: status.variables.write });
+            rows.push({ label: 'Методы', value: status.variables.methods });
+        }
+
+        // Params
+        if (status.params) {
+            rows.push({ label: 'updateTime_msec', value: status.params.updateTime_msec });
+        }
+
+        rows.forEach(row => {
+            if (row.value === undefined || row.value === null) return;
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="info-label">${row.label}</td>
+                <td class="info-value">${formatValue(row.value)}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        // Endpoints
+        if (Array.isArray(status.endpoints) && status.endpoints.length > 0) {
+            endpointsContainer.innerHTML = '<h4 class="opcuasrv-section-title">Endpoints</h4>';
+            status.endpoints.forEach(ep => {
+                const div = document.createElement('div');
+                div.className = 'opcuasrv-endpoint-card';
+                div.innerHTML = `
+                    <div class="opcuasrv-endpoint-name">${ep.name || 'Endpoint'}</div>
+                    <div class="opcuasrv-endpoint-url">${ep.url || '—'}</div>
+                `;
+                endpointsContainer.appendChild(div);
+            });
+        }
+
+        // Config
+        if (status.config) {
+            configContainer.innerHTML = '<h4 class="opcuasrv-section-title">Конфигурация</h4>';
+            const configTable = document.createElement('table');
+            configTable.className = 'info-table';
+            const configTbody = document.createElement('tbody');
+
+            const configRows = [
+                { label: 'maxSubscriptions', value: status.config.maxSubscriptions },
+                { label: 'maxSessions', value: status.config.maxSessions },
+                { label: 'maxSecureChannels', value: status.config.maxSecureChannels },
+                { label: 'maxSessionTimeout', value: status.config.maxSessionTimeout }
+            ];
+
+            configRows.forEach(row => {
+                if (row.value === undefined || row.value === null) return;
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="info-label">${row.label}</td>
+                    <td class="info-value">${formatValue(row.value)}</td>
+                `;
+                configTbody.appendChild(tr);
+            });
+
+            configTable.appendChild(configTbody);
+            configContainer.appendChild(configTable);
+        }
+    }
+
+    async loadParams() {
+        try {
+            const query = this.paramNames.map(n => `name=${encodeURIComponent(n)}`).join('&');
+            const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/opcua/params?${query}`);
+            this.params = data.params || {};
+            this.renderParams();
+            this.setNote(`opcuasrv-params-note-${this.objectName}`, '');
+        } catch (err) {
+            this.setNote(`opcuasrv-params-note-${this.objectName}`, err.message, true);
+        }
+    }
+
+    renderParams() {
+        const tbody = document.getElementById(`opcuasrv-params-${this.objectName}`);
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+        if (!this.params || Object.keys(this.params).length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-muted">Нет данных</td></tr>';
+            return;
+        }
+
+        this.paramNames.forEach(name => {
+            const current = this.params[name];
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="variable-name">${name}</td>
+                <td class="variable-value">${current !== undefined ? formatValue(current) : '—'}</td>
+                <td><input class="opcua-param-input" data-name="${name}" value="${current !== undefined ? current : ''}"></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    async saveParams() {
+        const tbody = document.getElementById(`opcuasrv-params-${this.objectName}`);
+        if (!tbody) return;
+
+        const inputs = tbody.querySelectorAll('.opcua-param-input');
+        const changed = {};
+        inputs.forEach(input => {
+            const name = input.dataset.name;
+            const current = this.params[name];
+            const newValue = input.value;
+            if (newValue === '' || newValue === null) return;
+            if (String(current) !== newValue) {
+                changed[name] = newValue;
+            }
+        });
+
+        if (Object.keys(changed).length === 0) {
+            this.setNote(`opcuasrv-params-note-${this.objectName}`, 'Нет изменений');
+            return;
+        }
+
+        try {
+            const data = await this.fetchJSON(
+                `/api/objects/${encodeURIComponent(this.objectName)}/opcua/params`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ params: changed })
+                }
+            );
+            this.params = { ...this.params, ...(data.updated || {}) };
+            this.renderParams();
+            this.setNote(`opcuasrv-params-note-${this.objectName}`, 'Параметры применены');
+            this.loadStatus();
+        } catch (err) {
+            this.setNote(`opcuasrv-params-note-${this.objectName}`, err.message, true);
+        }
+    }
+
+    async loadSensors() {
+        // Reset state for fresh load
+        this.allSensors = [];
+        this.hasMore = true;
+        this.startIndex = 0;
+        this.endIndex = 0;
+
+        // Reset viewport scroll position
+        const viewport = document.getElementById(`opcuasrv-sensors-viewport-${this.objectName}`);
+        if (viewport) viewport.scrollTop = 0;
+
+        try {
+            let url = `/api/objects/${encodeURIComponent(this.objectName)}/opcua/sensors?limit=${this.chunkSize}&offset=0`;
+
+            if (this.filter) {
+                url += `&search=${encodeURIComponent(this.filter)}`;
+            }
+            if (this.typeFilter && this.typeFilter !== 'all') {
+                url += `&iotype=${this.typeFilter}`;
+            }
+
+            const data = await this.fetchJSON(url);
+            let sensors = data.sensors || [];
+            this.sensorsTotal = typeof data.total === 'number' ? data.total : sensors.length;
+
+            this.allSensors = sensors;
+            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
+            this.updateVisibleRows();
+            this.updateSensorCount();
+            this.setNote(`opcuasrv-sensors-note-${this.objectName}`, '');
+
+            // Подписываемся на SSE обновления после загрузки
+            this.subscribeToSSE();
+        } catch (err) {
+            this.setNote(`opcuasrv-sensors-note-${this.objectName}`, err.message, true);
+        }
+    }
+
+    async loadMoreSensors() {
+        if (this.isLoadingChunk || !this.hasMore) return;
+
+        this.isLoadingChunk = true;
+        this.showLoadingIndicator(true);
+
+        try {
+            const nextOffset = this.allSensors.length;
+            let url = `/api/objects/${encodeURIComponent(this.objectName)}/opcua/sensors?limit=${this.chunkSize}&offset=${nextOffset}`;
+
+            if (this.filter) {
+                url += `&search=${encodeURIComponent(this.filter)}`;
+            }
+            if (this.typeFilter && this.typeFilter !== 'all') {
+                url += `&iotype=${this.typeFilter}`;
+            }
+
+            const data = await this.fetchJSON(url);
+            let newSensors = data.sensors || [];
+
+            this.allSensors = [...this.allSensors, ...newSensors];
+            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
+            this.updateVisibleRows();
+            this.updateSensorCount();
+        } catch (err) {
+            console.error('Failed to load more sensors:', err);
+        } finally {
+            this.isLoadingChunk = false;
+            this.showLoadingIndicator(false);
+        }
+    }
+
+    setupVirtualScroll() {
+        const viewport = document.getElementById(`opcuasrv-sensors-viewport-${this.objectName}`);
+        if (!viewport) return;
+
+        let ticking = false;
+        viewport.addEventListener('scroll', () => {
+            if (!ticking) {
+                requestAnimationFrame(() => {
+                    this.updateVisibleRows();
+                    this.checkInfiniteScroll(viewport);
+                    ticking = false;
+                });
+                ticking = true;
+            }
+        });
+    }
+
+    updateVisibleRows() {
+        const viewport = document.getElementById(`opcuasrv-sensors-viewport-${this.objectName}`);
+        if (!viewport) return;
+
+        const scrollTop = viewport.scrollTop;
+        const viewportHeight = viewport.clientHeight;
+        const totalRows = this.allSensors.length;
+        const visibleRows = Math.ceil(viewportHeight / this.rowHeight);
+
+        this.startIndex = Math.max(0, Math.floor(scrollTop / this.rowHeight) - this.bufferRows);
+        this.endIndex = Math.min(totalRows, this.startIndex + visibleRows + 2 * this.bufferRows);
+
+        this.renderVisibleSensors();
+    }
+
+    renderVisibleSensors() {
+        const tbody = document.getElementById(`opcuasrv-sensors-${this.objectName}`);
+        const spacer = document.getElementById(`opcuasrv-sensors-spacer-${this.objectName}`);
+        if (!tbody || !spacer) return;
+
+        // Set spacer height to position visible rows correctly
+        const spacerHeight = this.startIndex * this.rowHeight;
+        spacer.style.height = `${spacerHeight}px`;
+
+        // Show empty state if no sensors
+        if (this.allSensors.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="opcua-no-sensors">Нет переменных</td></tr>';
+            return;
+        }
+
+        // Get visible slice
+        const visibleSensors = this.allSensors.slice(this.startIndex, this.endIndex);
+
+        // Render visible rows with type badges
+        tbody.innerHTML = visibleSensors.map(sensor => {
+            const iotype = sensor.iotype || sensor.type || '';
+            const typeBadgeClass = iotype ? `type-badge type-${iotype}` : '';
+            return `
+            <tr data-sensor-id="${sensor.id || ''}">
+                <td>${sensor.id || ''}</td>
+                <td class="sensor-name">${sensor.name || ''}</td>
+                <td><span class="${typeBadgeClass}">${iotype}</span></td>
+                <td class="sensor-value">${sensor.value !== undefined ? formatValue(sensor.value) : '—'}</td>
+                <td>${sensor.vtype || ''}</td>
+                <td>${sensor.precision !== undefined ? sensor.precision : ''}</td>
+            </tr>
+            `;
+        }).join('');
+    }
+
+    checkInfiniteScroll(viewport) {
+        const scrollTop = viewport.scrollTop;
+        const scrollHeight = viewport.scrollHeight;
+        const clientHeight = viewport.clientHeight;
+
+        // Load more when scrolled to 80% of content
+        if (scrollTop + clientHeight >= scrollHeight * 0.8) {
+            this.loadMoreSensors();
+        }
+    }
+
+    showLoadingIndicator(show) {
+        const indicator = document.getElementById(`opcuasrv-loading-more-${this.objectName}`);
+        if (indicator) {
+            indicator.style.display = show ? 'block' : 'none';
+        }
+    }
+
+    updateSensorCount() {
+        const countEl = document.getElementById(`opcuasrv-sensor-count-${this.objectName}`);
+        if (countEl) {
+            const loaded = this.allSensors.length;
+            const total = this.sensorsTotal;
+            countEl.textContent = loaded === total ? `${total}` : `${loaded} / ${total}`;
+        }
+    }
+
+    loadSensorsHeight() {
+        const saved = localStorage.getItem(`opcuasrv-sensors-height-${this.objectName}`);
+        return saved ? parseInt(saved, 10) : 300;
+    }
+
+    saveSensorsHeight(height) {
+        localStorage.setItem(`opcuasrv-sensors-height-${this.objectName}`, height);
+    }
+
+    setupSensorsResize() {
+        const handle = document.getElementById(`opcuasrv-sensors-resize-${this.objectName}`);
+        const container = document.getElementById(`opcuasrv-sensors-container-${this.objectName}`);
+        if (!handle || !container) return;
+
+        let startY = 0;
+        let startHeight = 0;
+
+        const onMouseMove = (e) => {
+            const delta = e.clientY - startY;
+            const newHeight = Math.max(100, startHeight + delta);
+            container.style.height = `${newHeight}px`;
+            this.sensorsHeight = newHeight;
+            this.updateVisibleRows();
+        };
+
+        const onMouseUp = () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            this.saveSensorsHeight(this.sensorsHeight);
+        };
+
+        handle.addEventListener('mousedown', (e) => {
+            startY = e.clientY;
+            startHeight = container.clientHeight;
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+            e.preventDefault();
+        });
+    }
+
+    // SSE subscription methods
+    async subscribeToSSE() {
+        // Get sensor IDs to subscribe
+        const sensorIds = this.allSensors.map(s => s.id).filter(id => id != null);
+        if (sensorIds.length === 0) return;
+
+        // Only subscribe to new IDs
+        const newIds = sensorIds.filter(id => !this.subscribedSensorIds.has(id));
+        if (newIds.length === 0) return;
+
+        try {
+            await this.fetchJSON(
+                `/api/objects/${encodeURIComponent(this.objectName)}/opcua/subscribe`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sensorIds: newIds })
+                }
+            );
+            newIds.forEach(id => this.subscribedSensorIds.add(id));
+            console.log(`OPCUAServer SSE: подписка на ${newIds.length} переменных`, this.objectName);
+        } catch (err) {
+            console.warn('OPCUAServer SSE: ошибка подписки:', err);
+        }
+    }
+
+    async unsubscribeFromSSE() {
+        if (this.subscribedSensorIds.size === 0) return;
+
+        const sensorIds = Array.from(this.subscribedSensorIds);
+
+        try {
+            await this.fetchJSON(
+                `/api/objects/${encodeURIComponent(this.objectName)}/opcua/unsubscribe`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sensorIds })
+                }
+            );
+            console.log(`OPCUAServer SSE: отписка от ${sensorIds.length} переменных`, this.objectName);
+        } catch (err) {
+            console.warn('OPCUAServer SSE: ошибка отписки:', err);
+        }
+
+        this.subscribedSensorIds.clear();
+    }
+
+    handleSSEUpdate(updates) {
+        if (!updates || !Array.isArray(updates)) return;
+
+        // Queue updates for batch rendering
+        this.pendingUpdates.push(...updates);
+
+        if (!this.renderScheduled) {
+            this.renderScheduled = true;
+            requestAnimationFrame(() => {
+                this.applyPendingUpdates();
+                this.renderScheduled = false;
+            });
+        }
+    }
+
+    applyPendingUpdates() {
+        if (this.pendingUpdates.length === 0) return;
+
+        const updateMap = new Map();
+        this.pendingUpdates.forEach(u => updateMap.set(u.id, u));
+        this.pendingUpdates = [];
+
+        // Update allSensors array
+        this.allSensors.forEach(sensor => {
+            const update = updateMap.get(sensor.id);
+            if (update) {
+                sensor.value = update.value;
+            }
+        });
+
+        // Update visible rows in DOM
+        const tbody = document.getElementById(`opcuasrv-sensors-${this.objectName}`);
+        if (!tbody) return;
+
+        tbody.querySelectorAll('tr[data-sensor-id]').forEach(row => {
+            const sensorId = parseInt(row.dataset.sensorId, 10);
+            const update = updateMap.get(sensorId);
+            if (update) {
+                const valueCell = row.querySelector('.sensor-value');
+                if (valueCell) {
+                    valueCell.textContent = formatValue(update.value);
+                    valueCell.classList.add('value-updated');
+                    setTimeout(() => valueCell.classList.remove('value-updated'), 300);
+                }
+            }
+        });
+    }
+}
+
+// Apply mixins to OPCUAServerRenderer
+applyMixin(OPCUAServerRenderer, VirtualScrollMixin);
+applyMixin(OPCUAServerRenderer, SSESubscriptionMixin);
+applyMixin(OPCUAServerRenderer, ResizableSectionMixin);
+applyMixin(OPCUAServerRenderer, FilterMixin);
+
+// OPCUAServer рендерер (по extensionType)
+registerRenderer('OPCUAServer', OPCUAServerRenderer);
 
 // ============================================================================
 // Конец системы рендереров

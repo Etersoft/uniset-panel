@@ -3,7 +3,7 @@ const http = require('http');
 const PORT = 9393;
 
 // Mock data
-const objects = ['UniSetActivator', 'TestProc', 'SharedMemory', 'OPCUAClient1', 'MBTCPMaster1'];
+const objects = ['UniSetActivator', 'TestProc', 'SharedMemory', 'OPCUAClient1', 'MBTCPMaster1', 'OPCUAServer1'];
 
 const testProcData = {
   TestProc: {
@@ -275,6 +275,68 @@ for (let i = 1; i <= 100; i++) {
 }
 
 let mbHttpControlActive = false;
+
+// OPCUAServer mock data
+const opcuaServerParams = {
+  updateTime_msec: 100,
+  httpEnabledSetParams: 1
+};
+
+const opcuaServerStatus = {
+  result: 'OK',
+  status: {
+    name: 'OPCUAServer1',
+    extensionType: 'OPCUAServer',
+    httpEnabledSetParams: 1,
+    LogServer: {
+      host: '',
+      port: 0,
+      state: 'STOPPED',
+      info: {
+        host: '',
+        name: 'LogServer',
+        port: 0,
+        sessMaxCount: 10,
+        sessions: []
+      }
+    },
+    endpoints: [
+      { name: 'uniset2 OPC UA gate', url: 'urn:uniset2.server' },
+      { name: 'opc.tcp', url: 'opc.tcp://localhost:4840' }
+    ],
+    config: {
+      maxSubscriptions: 10,
+      maxSessions: 10,
+      maxSecureChannels: 10,
+      maxSessionTimeout: 5000
+    },
+    params: {
+      updateTime_msec: 100
+    },
+    variables: {
+      total: 50,
+      read: 20,
+      write: 28,
+      methods: 2
+    }
+  }
+};
+
+// Generate mock OPCUAServer sensors (variables)
+const opcuaServerSensors = [];
+for (let i = 1; i <= 50; i++) {
+  const iotype = sensorTypes[(i - 1) % 4];
+  const isAnalog = iotype.startsWith('A');
+  opcuaServerSensors.push({
+    id: 5000 + i,
+    name: `OPC_${iotype}${String(i).padStart(3, '0')}_Var`,
+    iotype: iotype,
+    value: isAnalog ? (10.5 + i * 0.5) : (i % 2),
+    vtype: vtypes[iotype],
+    precision: isAnalog ? 2 : 0
+  });
+}
+
 const mbParams = {
   force: 0,
   force_out: 0,
@@ -583,6 +645,89 @@ const server = http.createServer((req, res) => {
     } else {
       res.end(JSON.stringify({ result: 'OK', mode: mbStatus.status.mode }));
     }
+  // OPCUAServer endpoints
+  } else if (url === '/api/v2/OPCUAServer1') {
+    res.end(JSON.stringify({
+      OPCUAServer1: {},
+      object: {
+        id: 4001,
+        isActive: true,
+        name: 'OPCUAServer1',
+        objectType: 'UniSetObject',
+        extensionType: 'OPCUAServer'
+      }
+    }));
+  } else if (url === '/api/v2/OPCUAServer1/status') {
+    res.end(JSON.stringify(opcuaServerStatus));
+  } else if (url.startsWith('/api/v2/OPCUAServer1/getparam')) {
+    const urlObj = new URL(url, `http://localhost:${PORT}`);
+    const names = urlObj.searchParams.getAll('name');
+    const params = {};
+    if (names.length === 0) {
+      Object.assign(params, opcuaServerParams);
+    } else {
+      names.forEach(name => {
+        if (Object.prototype.hasOwnProperty.call(opcuaServerParams, name)) {
+          params[name] = opcuaServerParams[name];
+        }
+      });
+    }
+    res.end(JSON.stringify({ result: 'OK', params }));
+  } else if (url.startsWith('/api/v2/OPCUAServer1/setparam')) {
+    const urlObj = new URL(url, `http://localhost:${PORT}`);
+    const updated = {};
+    urlObj.searchParams.forEach((value, key) => {
+      if (Object.prototype.hasOwnProperty.call(opcuaServerParams, key)) {
+        opcuaServerParams[key] = Number.isNaN(Number(value)) ? value : Number(value);
+        updated[key] = opcuaServerParams[key];
+      }
+    });
+    res.end(JSON.stringify({ result: 'OK', updated }));
+  } else if (url === '/api/v2/OPCUAServer1/sensors' || url.startsWith('/api/v2/OPCUAServer1/sensors?')) {
+    const urlObj = new URL(url, `http://localhost:${PORT}`);
+    const offset = parseInt(urlObj.searchParams.get('offset') || '0', 10);
+    const limit = parseInt(urlObj.searchParams.get('limit') || '50', 10);
+    const search = (urlObj.searchParams.get('search') || '').toLowerCase();
+    const iotype = (urlObj.searchParams.get('iotype') || '').toUpperCase();
+
+    // Apply filters
+    let filtered = opcuaServerSensors;
+    if (search) {
+      filtered = filtered.filter(s =>
+        s.name.toLowerCase().includes(search) ||
+        String(s.id).includes(search)
+      );
+    }
+    if (iotype && iotype !== 'ALL') {
+      filtered = filtered.filter(s => s.iotype === iotype);
+    }
+
+    // Apply pagination
+    const paginatedSensors = filtered.slice(offset, offset + limit);
+
+    res.end(JSON.stringify({
+      result: 'OK',
+      sensors: paginatedSensors,
+      total: filtered.length,
+      limit: limit,
+      offset: offset
+    }));
+  } else if (url.startsWith('/api/v2/OPCUAServer1/get')) {
+    const urlObj = new URL(url, `http://localhost:${PORT}`);
+    const names = urlObj.searchParams.getAll('name');
+    const ids = urlObj.searchParams.getAll('id');
+    const sensors = [];
+
+    names.forEach(name => {
+      const sensor = opcuaServerSensors.find(s => s.name === name);
+      if (sensor) sensors.push(sensor);
+    });
+    ids.forEach(id => {
+      const sensor = opcuaServerSensors.find(s => s.id === parseInt(id, 10));
+      if (sensor && !sensors.find(s => s.id === sensor.id)) sensors.push(sensor);
+    });
+
+    res.end(JSON.stringify({ result: 'OK', sensors }));
   } else {
     res.statusCode = 404;
     res.end(JSON.stringify({ error: 'Not found' }));
