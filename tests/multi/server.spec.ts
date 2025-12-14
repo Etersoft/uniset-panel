@@ -34,15 +34,21 @@ test.describe('Multi-Server Support', () => {
     await expect(page.locator('#objects-list li', { hasText: 'BackupProcess' })).toBeVisible();
   });
 
-  test('should display server badges for each object', async ({ page }) => {
+  test('should display server groups with status indicators', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('#objects-list li', { timeout: 10000 });
 
-    // Each object should have a server badge
-    const badges = page.locator('#objects-list li .server-badge');
-    const count = await badges.count();
+    // Objects are now grouped by server with status indicators in group headers
+    const serverGroups = page.locator('.server-group');
+    const groupCount = await serverGroups.count();
 
-    expect(count).toBeGreaterThanOrEqual(5);
+    // Should have at least 2 server groups (one for each server)
+    expect(groupCount).toBeGreaterThanOrEqual(2);
+
+    // Each group should have a status dot
+    const statusDots = page.locator('.server-group-header .server-status-dot');
+    const dotCount = await statusDots.count();
+    expect(dotCount).toBeGreaterThanOrEqual(2);
   });
 
   test('should have different server IDs for objects from different servers', async ({ page }) => {

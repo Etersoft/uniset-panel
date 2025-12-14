@@ -22,9 +22,18 @@ test.describe('OPCUAExchange renderer', () => {
     const releaseBtn = panel.locator(`#opcua-control-release-${OPCUA_OBJECT}`);
     await expect(takeBtn).toBeDisabled();
     await expect(releaseBtn).toBeDisabled();
-    await expect(panel.locator('.opcua-flag-row', { hasText: 'Разрешён контроль:' })).toContainText('Нет');
 
-    await expect(panel.locator(`#opcua-params-${OPCUA_OBJECT} tr`)).not.toHaveCount(0);
+    // Проверяем индикатор "Разрешён" - должен быть красным (fail) когда контроль не разрешён
+    const allowIndicator = panel.locator(`#opcua-ind-allow-${OPCUA_OBJECT}`);
+    await expect(allowIndicator).toBeVisible();
+    await expect(allowIndicator).toHaveClass(/fail/);
+
+    // Проверяем что параметры загружены (readonly или writable)
+    const paramsReadonly = panel.locator(`#opcua-params-readonly-${OPCUA_OBJECT} tr`);
+    const paramsWritable = panel.locator(`#opcua-params-writable-${OPCUA_OBJECT} tr`);
+    const paramsCount = await paramsReadonly.count() + await paramsWritable.count();
+    expect(paramsCount).toBeGreaterThan(0);
+
     await expect(panel.locator(`#opcua-sensors-${OPCUA_OBJECT} tr`)).not.toHaveCount(0);
     await expect(panel.locator(`#opcua-diagnostics-${OPCUA_OBJECT}`)).toBeVisible();
   });

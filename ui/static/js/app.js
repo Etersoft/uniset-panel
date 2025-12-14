@@ -1226,7 +1226,8 @@ class BaseObjectRenderer {
 
     // Проверить, добавлен ли датчик на график
     isSensorOnChart(sensorName) {
-        const addedSensors = getExternalSensorsFromStorage(this.tabKey);
+        // Используем objectName (displayName) для localStorage - это имя объекта без serverId
+        const addedSensors = getExternalSensorsFromStorage(this.objectName);
         return addedSensors.has(sensorName);
     }
 
@@ -1235,7 +1236,8 @@ class BaseObjectRenderer {
     toggleSensorChart(sensor) {
         if (!sensor || !sensor.name) return;
 
-        const addedSensors = getExternalSensorsFromStorage(this.tabKey);
+        // Используем objectName (displayName) для localStorage
+        const addedSensors = getExternalSensorsFromStorage(this.objectName);
 
         if (addedSensors.has(sensor.name)) {
             // Удаляем с графика
@@ -1250,9 +1252,9 @@ class BaseObjectRenderer {
                 value: sensor.value
             };
 
-            // Добавляем в список внешних датчиков
-            addedSensors.add(sensor.name);
-            saveExternalSensorsToStorage(this.tabKey, addedSensors);
+            // Добавляем в список внешних датчиков (сохраняем полные данные)
+            addedSensors.set(sensor.name, sensorForChart);
+            saveExternalSensorsToStorage(this.objectName, addedSensors);
 
             // Добавляем в state.sensorsByName если его там нет
             if (!state.sensorsByName.has(sensor.name)) {
@@ -6919,8 +6921,14 @@ function addExternalSensor(objectName, sensorName) {
         return;
     }
 
-    // Добавляем в список добавленных
-    sensorDialogState.addedSensors.add(sensorName);
+    // Добавляем в список добавленных (сохраняем полные данные)
+    sensorDialogState.addedSensors.set(sensorName, {
+        id: sensor.id,
+        name: sensor.name,
+        textname: sensor.textname || sensor.name,
+        iotype: sensor.iotype || sensor.type,
+        value: sensor.value
+    });
 
     // Сохраняем в localStorage
     saveExternalSensorsToStorage(objectName, sensorDialogState.addedSensors);
@@ -7150,10 +7158,10 @@ function removeExternalSensor(tabKey, sensorName) {
         chartPanel.remove();
     }
 
-    // Удаляем из localStorage (используем tabKey как ключ)
-    const addedSensors = getExternalSensorsFromStorage(tabKey);
+    // Удаляем из localStorage (используем objectName/displayName как ключ)
+    const addedSensors = getExternalSensorsFromStorage(objectName);
     addedSensors.delete(sensorName);
-    saveExternalSensorsToStorage(tabKey, addedSensors);
+    saveExternalSensorsToStorage(objectName, addedSensors);
 
     // Находим сенсор для получения ID
     let sensor;
@@ -7191,93 +7199,117 @@ function removeExternalSensor(tabKey, sensorName) {
 }
 
 // Загрузить внешние датчики из localStorage
+// Возвращает Map<sensorName, sensorData> для обратной совместимости с Set API (.has, .add, .delete)
 function getExternalSensorsFromStorage(objectName) {
     try {
         const key = `uniset2-viewer-external-sensors-${objectName}`;
         const data = localStorage.getItem(key);
         if (data) {
-            return new Set(JSON.parse(data));
+            const parsed = JSON.parse(data);
+            // Обратная совместимость: если это массив строк (старый формат), конвертируем
+            if (Array.isArray(parsed)) {
+                const map = new Map();
+                parsed.forEach(item => {
+                    if (typeof item === 'string') {
+                        // Старый формат: только имя
+                        map.set(item, { name: item });
+                    } else if (item && item.name) {
+                        // Новый формат: объект с данными
+                        map.set(item.name, item);
+                    }
+                });
+                return map;
+            }
         }
     } catch (err) {
         console.warn('Ошибка загрузки внешних датчиков:', err);
     }
-    return new Set();
+    return new Map();
 }
 
 // Сохранить внешние датчики в localStorage
 function saveExternalSensorsToStorage(objectName, sensors) {
     try {
         const key = `uniset2-viewer-external-sensors-${objectName}`;
-        localStorage.setItem(key, JSON.stringify([...sensors]));
+        // sensors - это Map<name, sensorData>
+        const arr = [...sensors.values()];
+        localStorage.setItem(key, JSON.stringify(arr));
     } catch (err) {
         console.warn('Ошибка сохранения внешних датчиков:', err);
     }
 }
 
 // Восстановить внешние датчики при открытии вкладки
-function restoreExternalSensors(objectName) {
-    const sensors = getExternalSensorsFromStorage(objectName);
+// tabKey - ключ для state.tabs (формат: serverId:objectName)
+// displayName - имя объекта для отображения и localStorage
+function restoreExternalSensors(tabKey, displayName) {
+    const sensors = getExternalSensorsFromStorage(displayName);
     if (sensors.size === 0) return;
 
-    if (state.capabilities.smEnabled) {
-        // SM включен - ждём загрузки конфига сенсоров
-        const tryRestore = () => {
-            if (state.sensors.size === 0) {
-                setTimeout(tryRestore, 100);
-                return;
-            }
+    // Теперь sensors - это Map<name, sensorData>
+    // Используем сохранённые данные напрямую, без необходимости искать в state
 
-            const restoredSensors = [];
-            sensors.forEach(sensorName => {
-                const sensor = state.sensorsByName.get(sensorName);
-                if (sensor) {
-                    createExternalSensorChart(objectName, sensor);
-                    restoredSensors.push(sensorName);
-                } else {
-                    console.warn(`Внешний датчик ${sensorName} не найден в конфиге`);
+    const restoreSensors = () => {
+        const tabState = state.tabs.get(tabKey);
+        if (!tabState) {
+            setTimeout(restoreSensors, 100);
+            return;
+        }
+
+        const restoredSensorIds = [];
+        const restoredSensorNames = [];
+
+        sensors.forEach((sensorData, sensorName) => {
+            // Если у нас есть полные данные (новый формат), используем их напрямую
+            if (sensorData.id) {
+                const sensor = {
+                    id: sensorData.id,
+                    name: sensorData.name,
+                    textname: sensorData.textname || sensorData.name,
+                    iotype: sensorData.iotype || sensorData.type,
+                    value: sensorData.value
+                };
+                createExternalSensorChart(tabKey, sensor);
+                restoredSensorIds.push(sensorData.id);
+                restoredSensorNames.push(sensorName);
+
+                // Добавляем в state.sensorsByName если его там нет
+                if (!state.sensorsByName.has(sensorName)) {
+                    state.sensorsByName.set(sensorName, sensor);
+                    state.sensors.set(sensor.id, sensor);
                 }
-            });
-
-            // Подписываемся на все восстановленные датчики одним запросом
-            if (restoredSensors.length > 0) {
-                subscribeToExternalSensors(objectName, restoredSensors);
-            }
-
-            console.log(`Восстановлено ${restoredSensors.length} внешних датчиков для ${objectName}`);
-        };
-
-        tryRestore();
-    } else {
-        // SM выключен - ждём загрузки сенсоров рендерера (IONC)
-        const tryRestoreIONC = () => {
-            const tabState = state.tabs.get(objectName);
-            if (!tabState || !tabState.renderer || !tabState.renderer.sensors || tabState.renderer.sensors.length === 0) {
-                setTimeout(tryRestoreIONC, 100);
-                return;
-            }
-
-            const restoredSensorIds = [];
-            sensors.forEach(sensorName => {
-                const sensor = tabState.renderer.sensors.find(s => s.name === sensorName);
+            } else {
+                // Старый формат: только имя - пробуем найти в state или renderer
+                let sensor = state.sensorsByName.get(sensorName);
+                if (!sensor && tabState.renderer && tabState.renderer.sensors) {
+                    sensor = tabState.renderer.sensors.find(s => s.name === sensorName);
+                    if (sensor) {
+                        sensor = {
+                            id: sensor.id,
+                            name: sensor.name,
+                            textname: '',
+                            iotype: sensor.type || sensor.iotype,
+                            value: sensor.value
+                        };
+                    }
+                }
                 if (sensor) {
-                    // Адаптируем формат датчика для createExternalSensorChart
-                    const adaptedSensor = {
-                        id: sensor.id,
-                        name: sensor.name,
-                        textname: '', // IONC датчики не имеют текстового описания
-                        iotype: sensor.type,
-                        value: sensor.value
-                    };
-                    createExternalSensorChart(objectName, adaptedSensor);
+                    createExternalSensorChart(tabKey, sensor);
                     restoredSensorIds.push(sensor.id);
+                    restoredSensorNames.push(sensorName);
                 } else {
-                    console.warn(`IONC датчик ${sensorName} не найден`);
+                    console.warn(`Датчик ${sensorName} не найден (старый формат)`);
                 }
-            });
+            }
+        });
 
-            // Подписываемся на все восстановленные датчики через IONC
-            if (restoredSensorIds.length > 0) {
-                fetch(`/api/objects/${encodeURIComponent(objectName)}/ionc/subscribe`, {
+        // Подписываемся на все восстановленные датчики
+        if (restoredSensorIds.length > 0) {
+            if (state.capabilities.smEnabled) {
+                subscribeToExternalSensors(displayName, restoredSensorNames);
+            } else if (tabState.renderer && tabState.renderer.subscribedSensorIds) {
+                // IONC подписка
+                fetch(`/api/objects/${encodeURIComponent(displayName)}/ionc/subscribe`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ sensor_ids: restoredSensorIds })
@@ -7286,18 +7318,18 @@ function restoreExternalSensors(objectName) {
                         restoredSensorIds.forEach(id => {
                             tabState.renderer.subscribedSensorIds.add(id);
                         });
-                        console.log(`IONC: Восстановлена подписка на ${restoredSensorIds.length} датчиков`);
                     }
                 }).catch(err => {
-                    console.warn('Ошибка восстановления подписок IONC:', err);
+                    console.warn('Ошибка восстановления подписок:', err);
                 });
             }
+        }
 
-            console.log(`Восстановлено ${restoredSensorIds.length} внешних датчиков для ${objectName}`);
-        };
+        console.log(`Восстановлено ${restoredSensorIds.length} датчиков на графике для ${displayName}`);
+    };
 
-        tryRestoreIONC();
-    }
+    // Даём время на инициализацию вкладки
+    setTimeout(restoreSensors, 200);
 }
 
 // UI функции
@@ -7580,7 +7612,7 @@ function createTab(tabKey, displayName, rendererInfo, initialData, serverId, ser
     renderer.initialize();
 
     // Восстанавливаем внешние датчики из localStorage
-    restoreExternalSensors(displayName);
+    restoreExternalSensors(tabKey, displayName);
 
     // Обновляем состояние кнопок перемещения секций
     updateReorderButtons(tabKey);

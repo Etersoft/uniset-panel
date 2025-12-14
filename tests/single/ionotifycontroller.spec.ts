@@ -942,4 +942,209 @@ test.describe('IONotifyController (SharedMemory)', () => {
     expect(diagnostics.dataPoints).toBeGreaterThan(0);
   });
 
+  // ==================== CHART RESTORATION TESTS ====================
+
+  test('should restore chart after page reload', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    // Очищаем localStorage перед тестом
+    await page.evaluate(() => {
+      // Удаляем все ключи связанные с графиками
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && key.includes('uniset2-viewer-external-sensors')) {
+          localStorage.removeItem(key);
+        }
+      }
+    });
+
+    // Добавляем датчик на график
+    const firstRow = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first();
+    const chartCheckbox = firstRow.locator('.chart-toggle input[type="checkbox"]');
+    const chartLabel = firstRow.locator('.chart-toggle-label');
+    const sensorName = await firstRow.locator('.ionc-col-name').textContent();
+
+    await chartLabel.click();
+    await expect(chartCheckbox).toBeChecked();
+
+    // Ждём появления графика
+    const chartsSection = page.locator('[data-section-id="charts"]');
+    await expect(chartsSection.locator('.chart-panel')).toBeVisible({ timeout: 5000 });
+
+    // Перезагружаем страницу
+    await page.reload();
+
+    // Ждём загрузки объектов
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+
+    // Открываем SharedMemory заново
+    const sharedMemory = page.locator('#objects-list li', { hasText: 'SharedMemory' });
+    await sharedMemory.click();
+    await expect(page.locator('.tab-btn', { hasText: 'SharedMemory' })).toBeVisible();
+
+    // Ждём загрузки секции графиков
+    await page.waitForSelector('[data-section-id="charts"]', { timeout: 10000 });
+
+    // ГЛАВНАЯ ПРОВЕРКА: График должен быть восстановлен
+    const restoredChart = page.locator('[data-section-id="charts"] .chart-panel');
+    await expect(restoredChart).toBeVisible({ timeout: 10000 });
+
+    // Проверяем что график содержит имя датчика
+    if (sensorName) {
+      await expect(restoredChart).toContainText(sensorName.trim());
+    }
+
+    // Проверяем что checkbox в таблице тоже восстановлен
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+    const restoredRow = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first();
+    const restoredCheckbox = restoredRow.locator('.chart-toggle input[type="checkbox"]');
+    await expect(restoredCheckbox).toBeChecked({ timeout: 5000 });
+  });
+
+  test('should restore multiple charts after page reload', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    const rowCount = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count();
+    if (rowCount < 2) {
+      // Недостаточно датчиков для теста
+      return;
+    }
+
+    // Очищаем localStorage перед тестом
+    await page.evaluate(() => {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && key.includes('uniset2-viewer-external-sensors')) {
+          localStorage.removeItem(key);
+        }
+      }
+    });
+
+    // Добавляем 2 датчика на график
+    const firstRow = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').nth(0);
+    const secondRow = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').nth(1);
+
+    await firstRow.locator('.chart-toggle-label').click();
+    await expect(firstRow.locator('.chart-toggle input[type="checkbox"]')).toBeChecked();
+    await page.waitForTimeout(300);
+
+    await secondRow.locator('.chart-toggle-label').click();
+    await expect(secondRow.locator('.chart-toggle input[type="checkbox"]')).toBeChecked();
+
+    // Ждём появления обоих графиков
+    const chartsSection = page.locator('[data-section-id="charts"]');
+    await expect(chartsSection.locator('.chart-panel')).toHaveCount(2, { timeout: 5000 });
+
+    // Перезагружаем страницу
+    await page.reload();
+
+    // Заново открываем SharedMemory
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.locator('#objects-list li', { hasText: 'SharedMemory' }).click();
+    await expect(page.locator('.tab-btn', { hasText: 'SharedMemory' })).toBeVisible();
+
+    // Ждём загрузки
+    await page.waitForSelector('[data-section-id="charts"]', { timeout: 10000 });
+
+    // ГЛАВНАЯ ПРОВЕРКА: Оба графика должны быть восстановлены
+    const restoredCharts = page.locator('[data-section-id="charts"] .chart-panel');
+    await expect(restoredCharts).toHaveCount(2, { timeout: 10000 });
+
+    // Проверяем что checkboxes тоже восстановлены
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+    const restoredFirstRow = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').nth(0);
+    const restoredSecondRow = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').nth(1);
+    await expect(restoredFirstRow.locator('.chart-toggle input[type="checkbox"]')).toBeChecked({ timeout: 5000 });
+    await expect(restoredSecondRow.locator('.chart-toggle input[type="checkbox"]')).toBeChecked({ timeout: 5000 });
+  });
+
+  test('should save full sensor data in localStorage (not just name)', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    // Очищаем localStorage перед тестом
+    await page.evaluate(() => {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && key.includes('uniset2-viewer-external-sensors')) {
+          localStorage.removeItem(key);
+        }
+      }
+    });
+
+    // Добавляем датчик на график
+    const firstRow = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first();
+    await firstRow.locator('.chart-toggle-label').click();
+    await expect(firstRow.locator('.chart-toggle input[type="checkbox"]')).toBeChecked();
+
+    // Ждём сохранения в localStorage
+    await page.waitForTimeout(500);
+
+    // Проверяем формат данных в localStorage
+    const savedData = await page.evaluate(() => {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.includes('uniset2-viewer-external-sensors')) {
+          const data = localStorage.getItem(key);
+          return data ? JSON.parse(data) : null;
+        }
+      }
+      return null;
+    });
+
+    expect(savedData).toBeTruthy();
+    expect(Array.isArray(savedData)).toBe(true);
+    expect(savedData.length).toBeGreaterThan(0);
+
+    // Проверяем что сохранён объект с полными данными, а не просто строка имени
+    const firstSensor = savedData[0];
+    expect(typeof firstSensor).toBe('object');
+    expect(firstSensor).toHaveProperty('id');
+    expect(firstSensor).toHaveProperty('name');
+    expect(firstSensor).toHaveProperty('iotype');
+  });
+
+  test('should not restore chart when checkbox is unchecked before reload', async ({ page }) => {
+    await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
+
+    // Очищаем localStorage перед тестом
+    await page.evaluate(() => {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && key.includes('uniset2-viewer-external-sensors')) {
+          localStorage.removeItem(key);
+        }
+      }
+    });
+
+    // Добавляем датчик на график
+    const firstRow = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first();
+    const chartCheckbox = firstRow.locator('.chart-toggle input[type="checkbox"]');
+    const chartLabel = firstRow.locator('.chart-toggle-label');
+
+    await chartLabel.click();
+    await expect(chartCheckbox).toBeChecked();
+
+    // Ждём появления графика
+    const chartsSection = page.locator('[data-section-id="charts"]');
+    await expect(chartsSection.locator('.chart-panel')).toBeVisible({ timeout: 5000 });
+
+    // Снимаем галочку (удаляем график)
+    await chartLabel.click();
+    await expect(chartCheckbox).not.toBeChecked();
+    await expect(chartsSection.locator('.chart-panel')).not.toBeVisible();
+
+    // Перезагружаем страницу
+    await page.reload();
+
+    // Заново открываем SharedMemory
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.locator('#objects-list li', { hasText: 'SharedMemory' }).click();
+
+    await page.waitForSelector('[data-section-id="charts"]', { timeout: 10000 });
+
+    // График НЕ должен быть восстановлен
+    const restoredCharts = page.locator('[data-section-id="charts"] .chart-panel');
+    await expect(restoredCharts).toHaveCount(0, { timeout: 5000 });
+  });
+
 });

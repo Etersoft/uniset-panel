@@ -291,6 +291,156 @@ test.describe('External Sensors (SM Integration)', () => {
     }
   });
 
+  test('should restore chart panels after page reload', async ({ page }) => {
+    await page.waitForSelector('[data-section^="charts-"]', { timeout: 10000 });
+
+    // Очистим localStorage перед тестом
+    await page.evaluate((objName) => {
+      localStorage.removeItem(`uniset2-viewer-external-sensors-${objName}`);
+    }, 'TestProc');
+
+    // Добавляем датчик
+    await page.locator('.add-sensor-btn').click();
+    await page.waitForSelector('.sensor-dialog-content table tbody tr, .sensor-dialog-empty', { timeout: 10000 });
+
+    const rows = page.locator('.sensor-dialog-content table tbody tr');
+    if (await rows.count() === 0) {
+      // SM не настроен, пропускаем
+      await page.keyboard.press('Escape');
+      return;
+    }
+
+    const firstRow = rows.first();
+    const sensorName = (await firstRow.locator('td').nth(3).textContent())?.trim();
+    await firstRow.locator('.sensor-add-btn').click();
+
+    // Закрываем диалог
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.sensor-dialog-overlay')).not.toHaveClass(/visible/, { timeout: 5000 });
+
+    // Проверяем что график создан
+    const chartPanels = page.locator('.chart-panel.external-sensor-chart');
+    await expect(chartPanels).toHaveCount(1, { timeout: 5000 });
+
+    // Запоминаем количество графиков до перезагрузки
+    const chartCountBefore = await chartPanels.count();
+    expect(chartCountBefore).toBe(1);
+
+    // Перезагружаем страницу
+    await page.reload();
+
+    // Заново открываем вкладку TestProc
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+
+    // Ждём загрузки секции графиков
+    await page.waitForSelector('[data-section^="charts-"]', { timeout: 10000 });
+
+    // Ждём восстановления графиков (restoreExternalSensors вызывается с задержкой)
+    await page.waitForTimeout(500);
+
+    // ГЛАВНАЯ ПРОВЕРКА: График должен быть восстановлен
+    const restoredCharts = page.locator('.chart-panel.external-sensor-chart');
+    await expect(restoredCharts).toHaveCount(1, { timeout: 10000 });
+
+    // Проверяем что график содержит имя датчика
+    if (sensorName) {
+      const chartWithName = page.locator('.chart-panel.external-sensor-chart', { hasText: sensorName });
+      await expect(chartWithName).toBeVisible({ timeout: 5000 });
+    }
+
+    // Проверяем что checkbox в таблице датчиков отмечен (если таблица есть)
+    // Это проверяет синхронизацию состояния
+  });
+
+  test('should restore multiple charts after page reload', async ({ page }) => {
+    await page.waitForSelector('[data-section^="charts-"]', { timeout: 10000 });
+
+    // Очистим localStorage перед тестом
+    await page.evaluate((objName) => {
+      localStorage.removeItem(`uniset2-viewer-external-sensors-${objName}`);
+    }, 'TestProc');
+
+    // Добавляем несколько датчиков
+    await page.locator('.add-sensor-btn').click();
+    await page.waitForSelector('.sensor-dialog-content table tbody tr, .sensor-dialog-empty', { timeout: 10000 });
+
+    const rows = page.locator('.sensor-dialog-content table tbody tr');
+    const rowCount = await rows.count();
+
+    if (rowCount < 2) {
+      // Недостаточно датчиков для теста
+      await page.keyboard.press('Escape');
+      return;
+    }
+
+    // Добавляем 2 датчика
+    await rows.nth(0).locator('.sensor-add-btn').click();
+    await page.waitForTimeout(300);
+    await rows.nth(1).locator('.sensor-add-btn').click();
+    await page.waitForTimeout(300);
+
+    // Закрываем диалог
+    await page.keyboard.press('Escape');
+
+    // Проверяем что создано 2 графика
+    const chartPanels = page.locator('.chart-panel.external-sensor-chart');
+    await expect(chartPanels).toHaveCount(2, { timeout: 5000 });
+
+    // Перезагружаем страницу
+    await page.reload();
+
+    // Заново открываем вкладку TestProc
+    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+
+    await page.waitForSelector('[data-section^="charts-"]', { timeout: 10000 });
+    await page.waitForTimeout(500);
+
+    // ГЛАВНАЯ ПРОВЕРКА: Оба графика должны быть восстановлены
+    const restoredCharts = page.locator('.chart-panel.external-sensor-chart');
+    await expect(restoredCharts).toHaveCount(2, { timeout: 10000 });
+  });
+
+  test('should save full sensor data in localStorage (not just name)', async ({ page }) => {
+    await page.waitForSelector('[data-section^="charts-"]', { timeout: 10000 });
+
+    // Очистим localStorage перед тестом
+    await page.evaluate((objName) => {
+      localStorage.removeItem(`uniset2-viewer-external-sensors-${objName}`);
+    }, 'TestProc');
+
+    // Добавляем датчик
+    await page.locator('.add-sensor-btn').click();
+    await page.waitForSelector('.sensor-dialog-content table tbody tr, .sensor-dialog-empty', { timeout: 10000 });
+
+    const rows = page.locator('.sensor-dialog-content table tbody tr');
+    if (await rows.count() === 0) {
+      await page.keyboard.press('Escape');
+      return;
+    }
+
+    await rows.first().locator('.sensor-add-btn').click();
+    await page.keyboard.press('Escape');
+
+    // Проверяем формат данных в localStorage
+    const savedData = await page.evaluate((objName) => {
+      const data = localStorage.getItem(`uniset2-viewer-external-sensors-${objName}`);
+      return data ? JSON.parse(data) : null;
+    }, 'TestProc');
+
+    expect(savedData).toBeTruthy();
+    expect(Array.isArray(savedData)).toBe(true);
+    expect(savedData.length).toBeGreaterThan(0);
+
+    // Проверяем что сохранён объект с полными данными, а не просто строка имени
+    const firstSensor = savedData[0];
+    expect(typeof firstSensor).toBe('object');
+    expect(firstSensor).toHaveProperty('id');
+    expect(firstSensor).toHaveProperty('name');
+    expect(firstSensor).toHaveProperty('iotype');
+  });
+
   test('should show sensor count in dialog footer', async ({ page }) => {
     await page.waitForSelector('[data-section^="charts-"]', { timeout: 10000 });
     await page.locator('.add-sensor-btn').click();
