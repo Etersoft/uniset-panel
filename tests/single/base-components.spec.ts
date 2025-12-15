@@ -344,7 +344,7 @@ test.describe('Base Components', () => {
 // Tests for cross-renderer consistency
 test.describe('Cross-Renderer Consistency', () => {
 
-  test('IONC and OPCUA should have same filter bar structure', async ({ page }) => {
+  test('OPCUA should have filter bar with name, type and status filters', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('#objects-list li', { timeout: 10000 });
 
@@ -360,12 +360,14 @@ test.describe('Cross-Renderer Consistency', () => {
     await opcuaItem.click();
     await page.waitForSelector('[id^="opcua-sensors-section-"]', { timeout: 10000 });
 
-    // OPCUA should have same filter bar components
-    const filterInput = page.locator('[id^="opcua-sensors-section-"] .filter-input');
-    const typeFilter = page.locator('[id^="opcua-sensors-section-"] .type-filter');
+    // OPCUA should have filter bar with name filter, type filter, and status filter
+    const filterInput = page.locator('[id^="opcua-sensors-filter-"]');
+    const typeFilter = page.locator('[id^="opcua-type-filter-"]');
+    const statusFilter = page.locator('[id^="opcua-status-filter-"]');
 
     await expect(filterInput).toBeVisible();
     await expect(typeFilter).toBeVisible();
+    await expect(statusFilter).toBeVisible();
   });
 
   test('ModbusMaster should have filter bar', async ({ page }) => {

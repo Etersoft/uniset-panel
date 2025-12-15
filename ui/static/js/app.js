@@ -740,11 +740,12 @@ const FilterMixin = {
     initFilterProps() {
         this.filter = '';
         this.typeFilter = 'all';
+        this.statusFilter = 'all';
         this.filterDebounce = null;
     },
 
     // Применение локальных фильтров к списку
-    applyFilters(items, nameField = 'name', typeField = 'type') {
+    applyFilters(items, nameField = 'name', typeField = 'type', statusField = null) {
         let result = items;
 
         if (this.filter) {
@@ -757,6 +758,12 @@ const FilterMixin = {
 
         if (this.typeFilter && this.typeFilter !== 'all') {
             result = result.filter(item => item[typeField] === this.typeFilter);
+        }
+
+        if (statusField && this.statusFilter && this.statusFilter !== 'all') {
+            result = result.filter(item =>
+                (item[statusField] || '').toLowerCase() === this.statusFilter.toLowerCase()
+            );
         }
 
         return result;
@@ -776,10 +783,11 @@ const FilterMixin = {
         });
     },
 
-    // Полная настройка фильтров с ESC и type filter
-    setupFilterListeners(filterInputId, typeFilterId, onFilter, delay = 300) {
+    // Полная настройка фильтров с ESC, type filter и опциональным status filter
+    setupFilterListeners(filterInputId, typeFilterId, onFilter, delay = 300, statusFilterId = null) {
         const filterInput = document.getElementById(filterInputId);
         const typeFilter = document.getElementById(typeFilterId);
+        const statusFilter = statusFilterId ? document.getElementById(statusFilterId) : null;
 
         if (filterInput) {
             // Debounced input
@@ -808,6 +816,13 @@ const FilterMixin = {
         if (typeFilter) {
             typeFilter.addEventListener('change', () => {
                 this.typeFilter = typeFilter.value;
+                onFilter();
+            });
+        }
+
+        if (statusFilter) {
+            statusFilter.addEventListener('change', () => {
+                this.statusFilter = statusFilter.value;
                 onFilter();
             });
         }
@@ -2719,7 +2734,9 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         this.setupFilterListeners(
             `opcua-sensors-filter-${this.objectName}`,
             `opcua-type-filter-${this.objectName}`,
-            () => this.loadSensors()
+            () => this.loadSensors(),
+            300,
+            `opcua-status-filter-${this.objectName}`
         );
 
         const refreshDiag = document.getElementById(`opcua-diagnostics-refresh-${this.objectName}`);
@@ -2815,6 +2832,11 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
                     <option value="AO">AO</option>
                     <option value="DI">DI</option>
                     <option value="DO">DO</option>
+                </select>
+                <select class="type-filter" id="opcua-status-filter-${this.objectName}">
+                    <option value="all">Все статусы</option>
+                    <option value="ok">Ok</option>
+                    <option value="bad">Bad</option>
                 </select>
                 <span class="sensor-count" id="opcua-sensor-count-${this.objectName}">0</span>
                 <span class="opcua-note" id="opcua-sensors-note-${this.objectName}"></span>
@@ -3200,6 +3222,11 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             // UI фильтрация (если включена)
             if (useUIFilter) {
                 sensors = this.applyLocalFilters(sensors);
+            } else if (this.statusFilter && this.statusFilter !== 'all') {
+                // Status filter применяем локально (сервер не поддерживает)
+                sensors = sensors.filter(s =>
+                    (s.status || '').toLowerCase() === this.statusFilter.toLowerCase()
+                );
             }
 
             this.allSensors = sensors;
@@ -3226,6 +3253,11 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         }
         if (this.typeFilter && this.typeFilter !== 'all') {
             result = result.filter(s => s.iotype === this.typeFilter);
+        }
+        if (this.statusFilter && this.statusFilter !== 'all') {
+            result = result.filter(s =>
+                (s.status || '').toLowerCase() === this.statusFilter.toLowerCase()
+            );
         }
         return result;
     }
@@ -3259,6 +3291,11 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             // UI фильтрация (если включена)
             if (useUIFilter) {
                 newSensors = this.applyLocalFilters(newSensors);
+            } else if (this.statusFilter && this.statusFilter !== 'all') {
+                // Status filter применяем локально (сервер не поддерживает)
+                newSensors = newSensors.filter(s =>
+                    (s.status || '').toLowerCase() === this.statusFilter.toLowerCase()
+                );
             }
 
             this.allSensors = [...this.allSensors, ...newSensors];

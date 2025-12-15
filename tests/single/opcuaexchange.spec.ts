@@ -157,6 +157,79 @@ test.describe('OPCUAExchange renderer', () => {
       // Should show "no sensors" message
       await expect(panel.locator(`#opcua-sensors-${OPCUA_OBJECT}`)).toContainText(/Нет сенсоров/);
     });
+
+    test('should have status filter dropdown with correct options', async ({ page }) => {
+      await page.goto('/');
+      await page.waitForSelector('#objects-list li', { timeout: 10000 });
+      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+
+      const panel = page.locator('.tab-panel.active');
+      await panel.waitFor({ timeout: 10000 });
+
+      // Status filter dropdown should exist
+      const statusFilter = panel.locator(`#opcua-status-filter-${OPCUA_OBJECT}`);
+      await expect(statusFilter).toBeVisible();
+
+      // Should have all status options
+      await expect(statusFilter.locator('option[value="all"]')).toHaveCount(1);
+      await expect(statusFilter.locator('option[value="ok"]')).toHaveCount(1);
+      await expect(statusFilter.locator('option[value="bad"]')).toHaveCount(1);
+    });
+
+    test('should filter sensors by status using dropdown', async ({ page }) => {
+      await page.goto('/');
+      await page.waitForSelector('#objects-list li', { timeout: 10000 });
+      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+
+      const panel = page.locator('.tab-panel.active');
+      await panel.waitFor({ timeout: 10000 });
+      await page.waitForSelector(`#opcua-sensors-${OPCUA_OBJECT} tr`);
+
+      // Get initial row count
+      const initialCount = await panel.locator(`#opcua-sensors-${OPCUA_OBJECT} tr`).count();
+      expect(initialCount).toBeGreaterThan(0);
+
+      // Select "Ok" status filter
+      const statusFilter = panel.locator(`#opcua-status-filter-${OPCUA_OBJECT}`);
+      await statusFilter.selectOption('ok');
+
+      await page.waitForTimeout(400);
+
+      // All visible sensors should have OK status
+      const rows = panel.locator(`#opcua-sensors-${OPCUA_OBJECT} tr`);
+      const rowCount = await rows.count();
+
+      // Should have at least one row with OK status
+      if (rowCount > 0) {
+        // Check first row status cell (last column)
+        const firstRow = rows.first();
+        const statusCell = firstRow.locator('td').last();
+        const statusText = await statusCell.textContent();
+        expect(statusText?.toLowerCase()).toContain('ok');
+      }
+
+      // Select "Bad" status filter
+      await statusFilter.selectOption('bad');
+      await page.waitForTimeout(400);
+
+      const badRows = panel.locator(`#opcua-sensors-${OPCUA_OBJECT} tr`);
+      const badRowCount = await badRows.count();
+
+      // If there are bad sensors, verify they have Bad status
+      if (badRowCount > 0) {
+        const firstBadRow = badRows.first();
+        const badStatusCell = firstBadRow.locator('td').last();
+        await expect(badStatusCell).toHaveClass(/status-bad/);
+      }
+
+      // Reset to all
+      await statusFilter.selectOption('all');
+      await page.waitForTimeout(400);
+
+      // Should show all sensors again
+      const allCount = await panel.locator(`#opcua-sensors-${OPCUA_OBJECT} tr`).count();
+      expect(allCount).toBe(initialCount);
+    });
   });
 
   test.describe('UI Consistency', () => {

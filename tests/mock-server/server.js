@@ -214,7 +214,7 @@ for (let i = 1; i <= 100; i++) {
     tick: 10 + i,
     vtype: vtypes[iotype],
     precision: isAnalog ? 2 : 0,
-    status: i % 10 === 0 ? 'ERROR' : 'OK',
+    status: i % 10 === 0 ? 'Bad' : 'OK',
     nodeid: `ns=2;s=Demo.Dynamic.${iotype}.Item${i}`
   });
 }
