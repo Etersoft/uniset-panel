@@ -127,7 +127,7 @@ func (m *Manager) NewLogStream(ctx context.Context, objectName string, host stri
 	// Отправляем команду фильтра если указан
 	if filter != "" {
 		if err := client.SetFilter(filter); err != nil {
-			m.logger.Warn("не удалось установить фильтр", "error", err)
+			m.logger.Warn("Failed to set filter", "error", err)
 		}
 	}
 
@@ -158,7 +158,7 @@ func (m *Manager) NewLogStream(ctx context.Context, objectName string, host stri
 				return
 			default:
 				// Канал полон - пропускаем строку
-				m.logger.Warn("буфер логов переполнен, пропуск строки", "object", objectName)
+				m.logger.Warn("Log buffer full, dropping line", "object", objectName)
 			}
 		})
 	}()

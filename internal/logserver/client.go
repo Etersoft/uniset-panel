@@ -201,7 +201,7 @@ func (c *Client) ReadLogs(ctx context.Context, callback LogCallback) error {
 			c.connected = false
 			c.mu.Unlock()
 
-			c.logger.Error("ошибка чтения логов", "error", err)
+			c.logger.Error("Log reading error", "error", err)
 			return fmt.Errorf("read logs: %w", err)
 		}
 

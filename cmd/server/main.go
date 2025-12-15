@@ -95,8 +95,6 @@ func main() {
 	for _, srvCfg := range cfg.Servers {
 		if err := serverMgr.AddServer(srvCfg); err != nil {
 			logger.Error("Failed to add server", "url", srvCfg.URL, "error", err)
-		} else {
-			logger.Info("Added server", "id", srvCfg.ID, "url", srvCfg.URL, "name", srvCfg.Name)
 		}
 	}
 

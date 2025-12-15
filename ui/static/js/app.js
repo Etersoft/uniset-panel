@@ -4017,24 +4017,36 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
             return;
         }
 
-        container.innerHTML = this.devices.map(dev => {
-            const respondClass = dev.respond ? 'ok' : 'fail';
-            const respondText = dev.respond ? 'Отвечает' : 'Не отвечает';
-            return `
-                <div class="mb-device-card">
-                    <div class="mb-device-header">
-                        <span class="mb-device-addr">Адрес: ${dev.addr}</span>
-                        <span class="mb-device-state ${respondClass}">${respondText}</span>
-                    </div>
-                    <div class="mb-device-body">
-                        <div>Тип: ${dev.dtype || '—'}</div>
-                        <div>Регистров: ${dev.regCount || 0}</div>
-                        <div>Режим: ${dev.mode || 0}</div>
-                        <div>SafeMode: ${dev.safeMode || 0}</div>
-                    </div>
-                </div>
-            `;
-        }).join('');
+        container.innerHTML = `
+            <table class="variables-table mb-devices-table">
+                <thead>
+                    <tr>
+                        <th>Адрес</th>
+                        <th>Статус</th>
+                        <th>Тип</th>
+                        <th>Регистров</th>
+                        <th>Режим</th>
+                        <th>SafeMode</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${this.devices.map(dev => {
+                        const respondClass = dev.respond ? '' : 'status-bad';
+                        const respondText = dev.respond ? 'Ok' : 'Нет ответа';
+                        return `
+                            <tr>
+                                <td>${dev.addr}</td>
+                                <td class="${respondClass}">${respondText}</td>
+                                <td>${dev.dtype || '—'}</td>
+                                <td>${dev.regCount ?? 0}</td>
+                                <td>${dev.mode ?? 0}</td>
+                                <td>${dev.safeMode ?? 0}</td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        `;
     }
 
     async loadRegisters() {

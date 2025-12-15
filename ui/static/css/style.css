@@ -281,7 +281,7 @@
 .sensors-table .col-value { width: 140px; font-family: 'JetBrains Mono', monospace; }  /* 15 chars */
 .sensors-table .col-device { width: 100px; }
 .sensors-table .col-register { width: 80px; }
-.sensors-table .col-func { width: 70px; }
+.sensors-table .col-func { width: 120px; }  /* Modbus function codes */
 .sensors-table .col-mbval { width: 140px; font-family: 'JetBrains Mono', monospace; }  /* 15 chars */
 .sensors-table .col-mbaddr { width: 80px; }
 .sensors-table .col-access { width: 75px; }  /* "Доступ" */
