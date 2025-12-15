@@ -238,6 +238,11 @@
     white-space: nowrap;
 }
 
+.tcp-sessions-info {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+}
+
 /* --- Type Badges --- */
 .type-badge {
     display: inline-block;
@@ -258,7 +263,26 @@
     width: 100%;
     border-collapse: collapse;
     font-size: 0.85rem;
+    table-layout: fixed;
 }
+
+/* Common column widths for sensors/registers tables */
+/* Minimum widths based on character count: ~8px per char (mono) or ~7px (regular) + padding */
+.sensors-table .col-chart { width: 30px; }
+.sensors-table .col-id { width: 100px; }  /* 10 chars */
+.sensors-table .col-name { /* auto - takes remaining space, truncated with ellipsis */ }
+.sensors-table .col-type { width: 45px; }
+.sensors-table .col-value { width: 140px; font-family: 'JetBrains Mono', monospace; }  /* 15 chars */
+.sensors-table .col-device { width: 100px; }
+.sensors-table .col-register { width: 80px; }
+.sensors-table .col-func { width: 70px; }
+.sensors-table .col-mbval { width: 140px; font-family: 'JetBrains Mono', monospace; }  /* 15 chars */
+.sensors-table .col-mbaddr { width: 80px; }
+.sensors-table .col-access { width: 75px; }  /* "Доступ" */
+.sensors-table .col-tick { width: 60px; }
+.sensors-table .col-vtype { width: 90px; }  /* 10 chars */
+.sensors-table .col-precision { width: 85px; }  /* "Precision" */
+.sensors-table .col-status { width: 90px; }  /* 10 chars */
 
 .sensors-table th {
     position: sticky;
@@ -277,6 +301,9 @@
     padding: 0.4rem 0.75rem;
     border-bottom: 1px solid var(--border-color);
     vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .sensors-table tbody tr:hover {
@@ -3499,15 +3526,15 @@ header h1 {
     background: var(--bg-hover);
 }
 
-.ionc-col-pin { width: 24px; text-align: center; }
-.ionc-col-chart { width: 24px; text-align: center; }
-.ionc-col-id { width: 70px; }
-.ionc-col-name { min-width: 200px; }
-.ionc-col-type { width: 60px; }
-.ionc-col-value { width: 100px; font-family: 'JetBrains Mono', monospace; }
-.ionc-col-flags { width: 80px; text-align: center; }
-.ionc-col-consumers { width: 50px; text-align: center; }
-.ionc-col-actions { width: 80px; text-align: center; white-space: nowrap; }
+.ionc-col-pin { width: 55px; text-align: center; }  /* 5 chars */
+.ionc-col-chart { width: 30px; text-align: center; }
+.ionc-col-id { width: 100px; }  /* 10 chars */
+.ionc-col-name { /* auto - takes remaining space, truncated with ellipsis */ }
+.ionc-col-type { width: 45px; }
+.ionc-col-value { width: 140px; font-family: 'JetBrains Mono', monospace; }  /* 15 chars */
+.ionc-col-flags { width: 100px; text-align: center; }  /* 10 chars */
+.ionc-col-consumers { width: 100px; text-align: center; }  /* "Подписчики" */
+.ionc-col-actions { width: 130px; text-align: center; white-space: nowrap; }  /* 15 chars */
 
 .ionc-unpin-all {
     cursor: pointer;

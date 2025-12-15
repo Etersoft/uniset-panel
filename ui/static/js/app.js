@@ -2825,15 +2825,15 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
                     <table class="sensors-table variables-table opcua-sensors-table">
                         <thead>
                             <tr>
-                                <th class="chart-col-header"></th>
-                                <th>ID</th>
-                                <th>Имя</th>
-                                <th>Тип</th>
-                                <th>Значение</th>
-                                <th>Tick</th>
-                                <th>VType</th>
-                                <th>Precision</th>
-                                <th>Status</th>
+                                <th class="col-chart"></th>
+                                <th class="col-id">ID</th>
+                                <th class="col-name">Имя</th>
+                                <th class="col-type">Тип</th>
+                                <th class="col-value">Значение</th>
+                                <th class="col-tick">Tick</th>
+                                <th class="col-vtype">VType</th>
+                                <th class="col-precision">Precision</th>
+                                <th class="col-status">Status</th>
                             </tr>
                         </thead>
                         <tbody id="opcua-sensors-${this.objectName}"></tbody>
@@ -3822,15 +3822,15 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
                     <table class="sensors-table variables-table mb-registers-table">
                         <thead>
                             <tr>
-                                <th class="chart-col-header"></th>
-                                <th>ID</th>
-                                <th>Имя</th>
-                                <th>Тип</th>
-                                <th>Устройство</th>
-                                <th>Регистр</th>
-                                <th>Функция</th>
-                                <th>Значение</th>
-                                <th>MB Val</th>
+                                <th class="col-chart"></th>
+                                <th class="col-id">ID</th>
+                                <th class="col-name">Имя</th>
+                                <th class="col-type">Тип</th>
+                                <th class="col-device">Устройство</th>
+                                <th class="col-register">Регистр</th>
+                                <th class="col-func">Функция</th>
+                                <th class="col-value">Значение</th>
+                                <th class="col-mbval">MB Val</th>
                             </tr>
                         </thead>
                         <tbody id="mb-registers-tbody-${this.objectName}"></tbody>
@@ -4297,6 +4297,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         return `
             ${this.createChartsSection()}
             ${this.createMBSStatusSection()}
+            ${this.createMBSTcpSessionsSection()}
             ${this.createMBSParamsSection()}
             ${this.createMBSRegistersSection()}
             ${this.createLogViewerSection()}
@@ -4358,6 +4359,21 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         `, { sectionId: `mbs-status-section-${this.objectName}`, headerExtra: this.createStatusHeaderExtra() });
     }
 
+    createMBSTcpSessionsSection() {
+        return this.createCollapsibleSection('mbs-tcp-sessions', 'TCP Sessions', `
+            <table class="sensors-table">
+                <thead>
+                    <tr>
+                        <th>IP</th>
+                        <th>Ask Count</th>
+                    </tr>
+                </thead>
+                <tbody id="mbs-tcp-sessions-${this.objectName}"></tbody>
+            </table>
+            <div class="tcp-sessions-info" id="mbs-tcp-sessions-info-${this.objectName}"></div>
+        `, { sectionId: `mbs-tcp-sessions-section-${this.objectName}` });
+    }
+
     createMBSParamsSection() {
         return this.createCollapsibleSection('mbs-params', 'Параметры', `
             <div class="mb-actions">
@@ -4400,14 +4416,14 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
                     <table class="sensors-table variables-table mb-registers-table">
                         <thead>
                             <tr>
-                                <th class="chart-col-header"></th>
-                                <th>ID</th>
-                                <th>Имя</th>
-                                <th>Тип</th>
-                                <th>MB Addr</th>
-                                <th>Регистр</th>
-                                <th>Доступ</th>
-                                <th>Значение</th>
+                                <th class="col-chart"></th>
+                                <th class="col-id">ID</th>
+                                <th class="col-name">Имя</th>
+                                <th class="col-type">Тип</th>
+                                <th class="col-mbaddr">MB Addr</th>
+                                <th class="col-register">Регистр</th>
+                                <th class="col-access">Доступ</th>
+                                <th class="col-value">Значение</th>
                             </tr>
                         </thead>
                         <tbody id="mbs-registers-tbody-${this.objectName}"></tbody>
@@ -4440,6 +4456,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
 
         if (!this.status) {
             tbody.innerHTML = '<tr><td colspan="2" class="text-muted">Нет данных</td></tr>';
+            this.renderTcpSessions();
             return;
         }
 
@@ -4447,7 +4464,6 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         const rows = [
             { label: 'Имя', value: status.name },
             { label: 'TCP', value: status.tcp ? `${status.tcp.ip}:${status.tcp.port}` : null },
-            { label: 'Monitor', value: status.monitor },
             { label: 'force', value: status.force },
             { label: 'sockTimeout', value: status.sockTimeout },
             { label: 'sessTimeout', value: status.sessTimeout },
@@ -4459,11 +4475,6 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             rows.push({ label: 'connectionCount', value: status.stat.connectionCount });
             rows.push({ label: 'smPingOK', value: status.stat.smPingOK });
             rows.push({ label: 'restartTCPServerCount', value: status.stat.restartTCPServerCount });
-        }
-
-        // TCP сессии
-        if (status.tcp_sessions) {
-            rows.push({ label: 'Сессий', value: `${status.tcp_sessions.count} / ${status.tcp_sessions.max_sessions}` });
         }
 
         // Обслуживаемые адреса
@@ -4480,6 +4491,36 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             `;
             tbody.appendChild(tr);
         });
+
+        this.renderTcpSessions();
+    }
+
+    renderTcpSessions() {
+        const tbody = document.getElementById(`mbs-tcp-sessions-${this.objectName}`);
+        const info = document.getElementById(`mbs-tcp-sessions-info-${this.objectName}`);
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+
+        const sessions = this.status?.tcp_sessions;
+        if (!sessions || !sessions.items || sessions.items.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="2" class="text-muted">Нет активных сессий</td></tr>';
+            if (info) info.innerHTML = '';
+            return;
+        }
+
+        sessions.items.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${item.ip}</td>
+                <td>${item.askCount}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        if (info) {
+            info.innerHTML = `<span class="text-muted">Сессий: ${sessions.count} / ${sessions.max_sessions}</span>`;
+        }
     }
 
     async loadParams() {
@@ -4935,13 +4976,13 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
                     <table class="sensors-table variables-table opcua-sensors-table">
                         <thead>
                             <tr>
-                                <th class="chart-col-header"></th>
-                                <th>ID</th>
-                                <th>Имя</th>
-                                <th>Тип</th>
-                                <th>Значение</th>
-                                <th>VType</th>
-                                <th>Precision</th>
+                                <th class="col-chart"></th>
+                                <th class="col-id">ID</th>
+                                <th class="col-name">Имя</th>
+                                <th class="col-type">Тип</th>
+                                <th class="col-value">Значение</th>
+                                <th class="col-vtype">VType</th>
+                                <th class="col-precision">Precision</th>
                             </tr>
                         </thead>
                         <tbody id="opcuasrv-sensors-${this.objectName}"></tbody>
