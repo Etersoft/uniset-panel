@@ -969,13 +969,13 @@ class BaseObjectRenderer {
         this.objectName = objectName;
         this.tabKey = tabKey || objectName; // tabKey для доступа к state.tabs
 
-        // Автоматическая настройка параметров автообновления статуса
-        // на основе типа рендерера
+        // Префикс для ID элементов статуса (для updateStatusTimestamp)
         const typeName = this.constructor.getTypeName().toLowerCase();
-        this.statusIntervalStorageKey = `${typeName}-status-interval`;
-        this.statusIntervalBtnClass = `${typeName}-interval-btn`;
-        this.statusAutorefreshIdPrefix = `${typeName}-status-autorefresh`;
-        this.statusInterval = this.loadStatusInterval();
+        this.statusLastIdPrefix = `${typeName}-status-last`;
+
+        // Timestamp последнего обновления статуса (для относительного времени)
+        this.statusLastUpdate = null;
+        this.statusDisplayTimer = null;
     }
 
     // Получить тип объекта (для отображения)
@@ -1003,33 +1003,57 @@ class BaseObjectRenderer {
     // Очистка при закрытии
     destroy() {
         this.stopStatusAutoRefresh();
+        this.stopStatusDisplayTimer();
+    }
+
+    // Форматирование относительного времени
+    formatTimeAgo(timestamp) {
+        if (!timestamp) return '';
+        const seconds = Math.floor((Date.now() - timestamp) / 1000);
+        if (seconds < 5) return '';
+        if (seconds < 60) return `Updated ${seconds}s ago`;
+        const minutes = Math.floor(seconds / 60);
+        if (minutes < 60) return `Updated ${minutes}m ago`;
+        const hours = Math.floor(minutes / 60);
+        return `Updated ${hours}h ago`;
+    }
+
+    // Запуск таймера обновления отображения относительного времени
+    startStatusDisplayTimer() {
+        this.stopStatusDisplayTimer();
+        this.statusDisplayTimer = setInterval(() => this.updateStatusDisplay(), 1000);
+    }
+
+    // Остановка таймера обновления отображения
+    stopStatusDisplayTimer() {
+        if (this.statusDisplayTimer) {
+            clearInterval(this.statusDisplayTimer);
+            this.statusDisplayTimer = null;
+        }
+    }
+
+    // Обновить отображение относительного времени
+    updateStatusDisplay() {
+        const el = document.getElementById(`${this.statusLastIdPrefix}-${this.objectName}`);
+        if (!el) return;
+        el.textContent = this.formatTimeAgo(this.statusLastUpdate);
     }
 
     // --- Методы для автообновления статуса ---
 
-    // Создать HTML для контролов автообновления статуса
-    // Используется в секциях статуса рендереров
-    createStatusAutoRefreshControls() {
-        const prefix = this.statusAutorefreshIdPrefix;
-        const btnClass = this.statusIntervalBtnClass;
-        return `
-            <div class="status-autorefresh" id="${prefix}-${this.objectName}">
-                <span class="status-last" id="${prefix.replace('-autorefresh', '-last')}-${this.objectName}"></span>
-                <div class="status-interval-buttons">
-                    ${this.renderStatusIntervalButtons()}
-                </div>
-            </div>
-        `;
+    // Создать HTML для отображения времени последнего обновления статуса
+    // Используется в headerExtra секций статуса
+    createStatusHeaderExtra() {
+        return `<span class="status-last" id="${this.statusLastIdPrefix}-${this.objectName}"></span>`;
     }
 
     // Инициализация автообновления статуса
-    // Вызывать в initialize() рендерера после создания DOM
+    // Использует глобальный интервал state.sse.pollInterval
     initStatusAutoRefresh() {
         // Проверяем есть ли метод loadStatus у рендерера
         if (typeof this.loadStatus !== 'function') return;
-
-        this.bindStatusIntervalButtons();
         this.startStatusAutoRefresh();
+        this.startStatusDisplayTimer();
     }
 
     // Вспомогательные методы для создания секций
@@ -1430,88 +1454,13 @@ class BaseObjectRenderer {
         }
     }
 
-    // --- Status auto-refresh (общая логика) ---
-    // Субклассы должны установить:
-    //   this.statusIntervalStorageKey - ключ localStorage
-    //   this.statusIntervalBtnClass - CSS класс кнопок (например 'opcua-interval-btn')
-    //   this.statusAutorefreshIdPrefix - префикс ID wrapper'а (например 'opcua-status-autorefresh')
-
-    loadStatusInterval() {
-        if (!this.statusIntervalStorageKey) return 5000;
-        try {
-            const saved = JSON.parse(localStorage.getItem(this.statusIntervalStorageKey) || '{}');
-            const value = saved[this.objectName];
-            if (typeof value === 'number' && value > 0) {
-                return value;
-            }
-        } catch (err) {
-            console.warn('Failed to load status interval:', err);
-        }
-        return 5000;
-    }
-
-    saveStatusInterval(value) {
-        if (!this.statusIntervalStorageKey) return;
-        try {
-            const saved = JSON.parse(localStorage.getItem(this.statusIntervalStorageKey) || '{}');
-            saved[this.objectName] = value;
-            localStorage.setItem(this.statusIntervalStorageKey, JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save status interval:', err);
-        }
-    }
-
-    renderStatusIntervalButtons() {
-        const btnClass = this.statusIntervalBtnClass || 'interval-btn';
-        const options = [
-            { label: '5s', ms: 5000 },
-            { label: '10s', ms: 10000 },
-            { label: '15s', ms: 15000 },
-            { label: '1m', ms: 60000 },
-            { label: '5m', ms: 300000 }
-        ];
-        return options.map(opt => {
-            const active = this.statusInterval === opt.ms ? 'active' : '';
-            return `<button type="button" class="${btnClass} time-range-btn ${active}" data-ms="${opt.ms}">${opt.label}</button>`;
-        }).join('');
-    }
-
-    bindStatusIntervalButtons() {
-        const prefix = this.statusAutorefreshIdPrefix;
-        const btnClass = this.statusIntervalBtnClass;
-        if (!prefix || !btnClass) return;
-        const wrapper = document.getElementById(`${prefix}-${this.objectName}`);
-        if (!wrapper) return;
-        wrapper.querySelectorAll(`.${btnClass}`).forEach(btn => {
-            btn.addEventListener('click', () => {
-                const ms = parseInt(btn.dataset.ms, 10);
-                if (!isNaN(ms)) {
-                    this.statusInterval = ms;
-                    this.saveStatusInterval(ms);
-                    this.updateStatusIntervalUI();
-                    this.startStatusAutoRefresh();
-                }
-            });
-        });
-        this.updateStatusIntervalUI();
-    }
-
-    updateStatusIntervalUI() {
-        const prefix = this.statusAutorefreshIdPrefix;
-        const btnClass = this.statusIntervalBtnClass;
-        if (!prefix || !btnClass) return;
-        const wrapper = document.getElementById(`${prefix}-${this.objectName}`);
-        if (!wrapper) return;
-        wrapper.querySelectorAll(`.${btnClass}`).forEach(btn => {
-            const ms = parseInt(btn.dataset.ms, 10);
-            btn.classList.toggle('active', ms === this.statusInterval);
-        });
-    }
+    // --- Status auto-refresh (использует глобальный state.sse.pollInterval) ---
 
     startStatusAutoRefresh() {
         this.stopStatusAutoRefresh();
-        if (!this.statusInterval || this.statusInterval <= 0) return;
-        this.statusTimer = setInterval(() => this.loadStatus(), this.statusInterval);
+        const interval = state.sse.pollInterval || 5000;
+        if (interval <= 0) return;
+        this.statusTimer = setInterval(() => this.loadStatus(), interval);
     }
 
     stopStatusAutoRefresh() {
@@ -1522,17 +1471,8 @@ class BaseObjectRenderer {
     }
 
     updateStatusTimestamp() {
-        const prefix = this.statusAutorefreshIdPrefix;
-        if (!prefix) return;
-        // Derive timestamp element ID from autorefresh prefix (e.g., 'mb-status-autorefresh' -> 'mb-status-last')
-        const timestampId = prefix.replace('-autorefresh', '-last') + `-${this.objectName}`;
-        const el = document.getElementById(timestampId);
-        if (!el) return;
-        const now = new Date();
-        const hh = now.getHours().toString().padStart(2, '0');
-        const mm = now.getMinutes().toString().padStart(2, '0');
-        const ss = now.getSeconds().toString().padStart(2, '0');
-        el.textContent = `обновлено ${hh}:${mm}:${ss}`;
+        this.statusLastUpdate = Date.now();
+        this.updateStatusDisplay();
     }
 }
 
@@ -2799,17 +2739,17 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     createOPCUAStatusSection() {
-        const headerChannels = `
+        const headerExtra = `
+            ${this.createStatusHeaderExtra()}
             <div class="header-channels" id="opcua-header-channels-${this.objectName}" onclick="event.stopPropagation()"></div>
         `;
         return this.createCollapsibleSection('opcua-status', 'Статус OPC UA', `
             <div class="opcua-actions">
                 <span class="opcua-note" id="opcua-status-note-${this.objectName}"></span>
-                ${this.createStatusAutoRefreshControls()}
             </div>
             <div class="opcua-stats-row" id="opcua-stats-${this.objectName}"></div>
             <div class="opcua-monitor-grid" id="opcua-monitor-${this.objectName}"></div>
-        `, { sectionId: `opcua-status-section-${this.objectName}`, headerExtra: headerChannels });
+        `, { sectionId: `opcua-status-section-${this.objectName}`, headerExtra });
     }
 
     createOPCUAControlSection() {
@@ -3823,12 +3763,11 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         return this.createCollapsibleSection('mb-status', 'Статус Modbus', `
             <div class="mb-actions">
                 <span class="mb-note" id="mb-status-note-${this.objectName}"></span>
-                ${this.createStatusAutoRefreshControls()}
             </div>
             <table class="info-table">
                 <tbody id="mb-status-${this.objectName}"></tbody>
             </table>
-        `, { sectionId: `mb-status-section-${this.objectName}` });
+        `, { sectionId: `mb-status-section-${this.objectName}`, headerExtra: this.createStatusHeaderExtra() });
     }
 
     createMBParamsSection() {
@@ -4412,12 +4351,11 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         return this.createCollapsibleSection('mbs-status', 'Статус ModbusSlave', `
             <div class="mb-actions">
                 <span class="mb-note" id="mbs-status-note-${this.objectName}"></span>
-                ${this.createStatusAutoRefreshControls()}
             </div>
             <table class="info-table">
                 <tbody id="mbs-status-${this.objectName}"></tbody>
             </table>
-        `, { sectionId: `mbs-status-section-${this.objectName}` });
+        `, { sectionId: `mbs-status-section-${this.objectName}`, headerExtra: this.createStatusHeaderExtra() });
     }
 
     createMBSParamsSection() {
@@ -4943,14 +4881,13 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         return this.createCollapsibleSection('opcuasrv-status', 'Статус OPC UA Server', `
             <div class="opcua-actions">
                 <span class="opcua-note" id="opcuasrv-status-note-${this.objectName}"></span>
-                ${this.createStatusAutoRefreshControls()}
             </div>
             <table class="info-table">
                 <tbody id="opcuasrv-status-${this.objectName}"></tbody>
             </table>
             <div class="opcuasrv-endpoints" id="opcuasrv-endpoints-${this.objectName}"></div>
             <div class="opcuasrv-config" id="opcuasrv-config-${this.objectName}"></div>
-        `, { sectionId: `opcuasrv-status-section-${this.objectName}` });
+        `, { sectionId: `opcuasrv-status-section-${this.objectName}`, headerExtra: this.createStatusHeaderExtra() });
     }
 
     createOPCUAServerParamsSection() {
@@ -9591,6 +9528,10 @@ function initPollIntervalSelector() {
             setActive(interval);
             localStorage.setItem('pollInterval', interval);
 
+            // Обновляем глобальный интервал и перезапускаем автообновление статуса
+            state.sse.pollInterval = interval;
+            restartAllStatusAutoRefresh();
+
             // Отправляем на сервер
             try {
                 const response = await fetch('/api/settings/poll-interval', {
@@ -9608,4 +9549,14 @@ function initPollIntervalSelector() {
             }
         });
     });
+}
+
+// Перезапуск автообновления статуса для всех активных табов
+function restartAllStatusAutoRefresh() {
+    for (const tabKey of Object.keys(state.tabs)) {
+        const tab = state.tabs[tabKey];
+        if (tab && tab.renderer && typeof tab.renderer.startStatusAutoRefresh === 'function') {
+            tab.renderer.startStatusAutoRefresh();
+        }
+    }
 }
