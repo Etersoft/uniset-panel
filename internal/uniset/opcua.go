@@ -143,7 +143,8 @@ func (c *Client) SetOPCUAParams(objectName string, params map[string]interface{}
 
 // GetOPCUASensors возвращает список сенсоров
 // search - текстовый поиск по имени
-func (c *Client) GetOPCUASensors(objectName, search string, limit, offset int) (*OPCUASensorsResponse, error) {
+// iotype - фильтр по типу (AI, AO, DI, DO)
+func (c *Client) GetOPCUASensors(objectName, search, iotype string, limit, offset int) (*OPCUASensorsResponse, error) {
 	values := url.Values{}
 	if limit > 0 {
 		values.Set("limit", strconv.Itoa(limit))
@@ -153,6 +154,9 @@ func (c *Client) GetOPCUASensors(objectName, search string, limit, offset int) (
 	}
 	if search != "" {
 		values.Set("search", search)
+	}
+	if iotype != "" {
+		values.Set("iotype", iotype)
 	}
 
 	path := fmt.Sprintf("%s/sensors", objectName)
@@ -238,6 +242,26 @@ func (c *Client) ReleaseOPCUAControl(objectName string) (*OPCUAControlResponse, 
 	}
 
 	var resp OPCUAControlResponse
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, fmt.Errorf("unmarshal failed: %w", err)
+	}
+	if err := ensureOPCUAResult(resp.Result, resp.Error); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// GetOPCUASensorValues получает значения конкретных датчиков по ID
+// GET /{objectName}/get?filter=id1,id2,id3
+func (c *Client) GetOPCUASensorValues(objectName string, sensorIDs string) (*OPCUASensorsResponse, error) {
+	path := fmt.Sprintf("%s/get?filter=%s", objectName, sensorIDs)
+
+	data, err := c.doGet(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp OPCUASensorsResponse
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}

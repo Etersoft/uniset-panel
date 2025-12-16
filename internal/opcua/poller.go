@@ -2,6 +2,7 @@ package opcua
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -240,23 +241,32 @@ func (p *Poller) poll() {
 }
 
 func (p *Poller) pollObject(objectName string, sensorIDs []int64) ([]OPCUASensor, error) {
-	sensors := make([]OPCUASensor, 0, len(sensorIDs))
+	// Если батчинг включен и датчиков больше чем batchSize, разбиваем на батчи
+	if p.batchSize > 0 && len(sensorIDs) > p.batchSize {
+		return p.pollObjectBatched(objectName, sensorIDs)
+	}
 
-	// Запрашиваем каждый датчик отдельно
-	// TODO: оптимизировать - добавить batch API в uniset если возможно
-	for _, id := range sensorIDs {
-		resp, err := p.client.GetOPCUASensor(objectName, id)
-		if err != nil {
-			slog.Debug("OPCUA sensor poll failed", "object", objectName, "id", id, "error", err)
-			continue
+	return p.pollObjectSingle(objectName, sensorIDs)
+}
+
+func (p *Poller) pollObjectSingle(objectName string, sensorIDs []int64) ([]OPCUASensor, error) {
+	// Формируем строку запроса: id1,id2,id3
+	query := ""
+	for i, id := range sensorIDs {
+		if i > 0 {
+			query += ","
 		}
+		query += fmt.Sprintf("%d", id)
+	}
 
-		if resp.Sensor == nil {
-			continue
-		}
+	resp, err := p.client.GetOPCUASensorValues(objectName, query)
+	if err != nil {
+		return nil, err
+	}
 
+	sensors := make([]OPCUASensor, 0, len(resp.Sensors))
+	for _, sensorMap := range resp.Sensors {
 		sensor := OPCUASensor{}
-		sensorMap := resp.Sensor
 
 		if v, ok := sensorMap["id"].(float64); ok {
 			sensor.ID = int64(v)
@@ -282,6 +292,36 @@ func (p *Poller) pollObject(objectName string, sensorIDs []int64) ([]OPCUASensor
 	}
 
 	return sensors, nil
+}
+
+func (p *Poller) pollObjectBatched(objectName string, sensorIDs []int64) ([]OPCUASensor, error) {
+	var allSensors []OPCUASensor
+	var lastErr error
+
+	// Разбиваем на батчи
+	for i := 0; i < len(sensorIDs); i += p.batchSize {
+		end := i + p.batchSize
+		if end > len(sensorIDs) {
+			end = len(sensorIDs)
+		}
+		batch := sensorIDs[i:end]
+
+		sensors, err := p.pollObjectSingle(objectName, batch)
+		if err != nil {
+			lastErr = err
+			slog.Debug("OPCUA batch poll failed", "object", objectName, "batch", i/p.batchSize, "error", err)
+			continue
+		}
+
+		allSensors = append(allSensors, sensors...)
+	}
+
+	// Возвращаем ошибку только если не получили ни одного датчика
+	if len(allSensors) == 0 && lastErr != nil {
+		return nil, lastErr
+	}
+
+	return allSensors, nil
 }
 
 func (p *Poller) hasValueChanged(objectName string, sensor OPCUASensor) bool {

@@ -102,14 +102,17 @@ func TestPoller_Poll(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&requestCount, 1)
 
-		response := uniset.OPCUASensorResponse{
+		// Новый формат: /get?filter= возвращает массив sensors
+		response := uniset.OPCUASensorsResponse{
 			Result: "OK",
-			Sensor: map[string]interface{}{
-				"id":     float64(100),
-				"name":   "AI100",
-				"iotype": "AI",
-				"value":  float64(42),
-				"tick":   float64(12345),
+			Sensors: []map[string]interface{}{
+				{
+					"id":     float64(100),
+					"name":   "AI100",
+					"iotype": "AI",
+					"value":  float64(42),
+					"tick":   float64(12345),
+				},
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -187,14 +190,16 @@ func TestPoller_OnlyChangedValuesEmitted(t *testing.T) {
 		atomic.AddInt32(&requestCount, 1)
 
 		// Always return the same value and tick
-		response := uniset.OPCUASensorResponse{
+		response := uniset.OPCUASensorsResponse{
 			Result: "OK",
-			Sensor: map[string]interface{}{
-				"id":     float64(100),
-				"name":   "AI100",
-				"iotype": "AI",
-				"value":  float64(42),
-				"tick":   float64(12345),
+			Sensors: []map[string]interface{}{
+				{
+					"id":     float64(100),
+					"name":   "AI100",
+					"iotype": "AI",
+					"value":  float64(42),
+					"tick":   float64(12345),
+				},
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")

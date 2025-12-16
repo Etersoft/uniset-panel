@@ -1547,8 +1547,8 @@ func (h *Handlers) SetOPCUAParams(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, result)
 }
 
-// GetOPCUASensors возвращает список сенсоров OPCUAExchange
-// GET /api/objects/{name}/opcua/sensors?search=text&limit=N&offset=N
+// GetOPCUASensors возвращает список сенсоров OPCUAExchange/OPCUAServer
+// GET /api/objects/{name}/opcua/sensors?search=text&iotype=AI&limit=N&offset=N
 func (h *Handlers) GetOPCUASensors(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
@@ -1559,6 +1559,7 @@ func (h *Handlers) GetOPCUASensors(w http.ResponseWriter, r *http.Request) {
 	limit := 0
 	offset := 0
 	search := r.URL.Query().Get("search")
+	iotype := r.URL.Query().Get("iotype")
 
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l >= 0 {
@@ -1579,7 +1580,7 @@ func (h *Handlers) GetOPCUASensors(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := client.GetOPCUASensors(name, search, limit, offset)
+	result, err := client.GetOPCUASensors(name, search, iotype, limit, offset)
 	if err != nil {
 		h.writeError(w, http.StatusBadGateway, err.Error())
 		return
