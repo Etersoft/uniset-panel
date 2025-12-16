@@ -308,9 +308,9 @@ func (c *Client) ReleaseMBControl(objectName string) (*MBControlResponse, error)
 }
 
 // GetMBRegisterValues получает значения конкретных регистров по ID
-// GET /{objectName}/registers?ids=id1,id2,id3
+// GET /{objectName}/get?filter=id1,id2,id3
 func (c *Client) GetMBRegisterValues(objectName string, registerIDs string) (*MBRegistersResponse, error) {
-	path := fmt.Sprintf("%s/registers?ids=%s", objectName, registerIDs)
+	path := fmt.Sprintf("%s/get?filter=%s", objectName, registerIDs)
 
 	data, err := c.doGet(path)
 	if err != nil {
