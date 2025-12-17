@@ -3060,6 +3060,9 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
                     <table class="sensors-table variables-table opcua-sensors-table">
                         <thead>
                             <tr>
+                                <th class="col-pin">
+                                    <span class="opcua-unpin-all" id="opcua-unpin-${this.objectName}" title="Unpin all" style="display:none">✕</span>
+                                </th>
                                 <th class="col-chart"></th>
                                 <th class="col-id">ID</th>
                                 <th class="col-name">Name</th>
@@ -3564,18 +3567,34 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         const spacer = document.getElementById(`opcua-sensors-spacer-${this.objectName}`);
         if (!tbody || !spacer) return;
 
+        // Получаем закрепленные датчики
+        const pinnedSensors = this.getPinnedSensors();
+        const hasPinned = pinnedSensors.size > 0;
+
+        // Показываем/скрываем кнопку "снять все"
+        const unpinBtn = document.getElementById(`opcua-unpin-${this.objectName}`);
+        if (unpinBtn) {
+            unpinBtn.style.display = hasPinned ? 'inline' : 'none';
+        }
+
+        // Фильтруем датчики: если есть закрепленные — показываем только их (если нет фильтра)
+        let sensorsToShow = this.allSensors;
+        if (hasPinned && !this.filter) {
+            sensorsToShow = this.allSensors.filter(s => pinnedSensors.has(String(s.id)));
+        }
+
         // Set spacer height to position visible rows correctly
         const spacerHeight = this.startIndex * this.rowHeight;
         spacer.style.height = `${spacerHeight}px`;
 
         // Show empty state if no sensors
-        if (this.allSensors.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" class="opcua-no-sensors">No sensors</td></tr>';
+        if (sensorsToShow.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="10" class="opcua-no-sensors">No sensors</td></tr>';
             return;
         }
 
         // Get visible slice
-        const visibleSensors = this.allSensors.slice(this.startIndex, this.endIndex);
+        const visibleSensors = sensorsToShow.slice(this.startIndex, this.endIndex);
 
         // Update sensorMap for chart support
         visibleSensors.forEach(sensor => {
@@ -3586,10 +3605,20 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
         // Render visible rows with type badges and chart toggle
         tbody.innerHTML = visibleSensors.map(sensor => {
+            const isPinned = pinnedSensors.has(String(sensor.id));
+            const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
+            const pinIcon = isPinned ? '📌' : '○';
+            const pinTitle = isPinned ? 'Unpin' : 'Pin';
+
             const iotype = sensor.iotype || sensor.type || '';
             const typeBadgeClass = iotype ? `type-badge type-${iotype}` : '';
             return `
             <tr data-sensor-id="${sensor.id || ''}">
+                <td class="col-pin">
+                    <span class="${pinToggleClass}" data-id="${sensor.id}" title="${pinTitle}">
+                        ${pinIcon}
+                    </span>
+                </td>
                 ${this.renderChartToggleCell(sensor.id, sensor.name, 'opcua')}
                 <td>${sensor.id ?? '—'}</td>
                 <td title="${escapeHtml(sensor.textname || sensor.comment || '')}">${escapeHtml(sensor.name || '')}</td>
@@ -3604,6 +3633,16 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
         // Bind chart toggle events
         this.attachChartToggleListeners(tbody, this.sensorMap);
+
+        // Bind pin toggle events
+        tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
+            toggle.addEventListener('click', () => this.toggleSensorPin(parseInt(toggle.dataset.id)));
+        });
+
+        // Обработчик кнопки "снять все"
+        if (unpinBtn) {
+            unpinBtn.onclick = () => this.unpinAllSensors();
+        }
 
         // Bind row click events (prevent on chart checkbox)
         tbody.querySelectorAll('tr[data-sensor-id]').forEach(row => {
@@ -3881,8 +3920,8 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
                         valueCell.classList.add('value-changed');
                     }
                 }
-                // Tick ячейка (5-я колонка)
-                const tickCell = row.querySelector('td:nth-child(5)');
+                // Tick ячейка (6-я колонка, т.к. добавлен Pin)
+                const tickCell = row.querySelector('td:nth-child(8)');
                 if (tickCell && update.tick !== undefined) {
                     tickCell.textContent = String(update.tick);
                 }
@@ -3894,6 +3933,45 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         renderObjectInfo(this.tabKey, data.object);
         updateChartLegends(this.tabKey, data);
         this.handleLogServer(data.LogServer);
+    }
+
+    // Pin management для датчиков
+    getPinnedSensors() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-opcua-pinned') || '{}');
+            return new Set(saved[this.objectName] || []);
+        } catch (err) {
+            return new Set();
+        }
+    }
+
+    savePinnedSensors(pinnedSet) {
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-opcua-pinned') || '{}');
+            saved[this.objectName] = Array.from(pinnedSet);
+            localStorage.setItem('uniset2-viewer-opcua-pinned', JSON.stringify(saved));
+        } catch (err) {
+            console.warn('Failed to save pinned sensors:', err);
+        }
+    }
+
+    toggleSensorPin(sensorId) {
+        const pinned = this.getPinnedSensors();
+        const idStr = String(sensorId);
+
+        if (pinned.has(idStr)) {
+            pinned.delete(idStr);
+        } else {
+            pinned.add(idStr);
+        }
+
+        this.savePinnedSensors(pinned);
+        this.renderVisibleSensors();
+    }
+
+    unpinAllSensors() {
+        this.savePinnedSensors(new Set());
+        this.renderVisibleSensors();
     }
 }
 
@@ -4083,14 +4161,17 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
                     <table class="sensors-table variables-table mb-registers-table">
                         <thead>
                             <tr>
+                                <th class="col-pin">
+                                    <span class="mb-unpin-all" id="mb-unpin-${this.objectName}" title="Unpin all" style="display:none">✕</span>
+                                </th>
                                 <th class="col-chart"></th>
                                 <th class="col-id">ID</th>
                                 <th class="col-name">Name</th>
                                 <th class="col-type">Type</th>
+                                <th class="col-value">Value</th>
                                 <th class="col-device">Устройство</th>
                                 <th class="col-register">Регистр</th>
                                 <th class="col-func">Функция</th>
-                                <th class="col-value">Value</th>
                                 <th class="col-mbval">MB Val</th>
                             </tr>
                         </thead>
@@ -4330,28 +4411,54 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         const tbody = document.getElementById(`mb-registers-tbody-${this.objectName}`);
         if (!tbody) return;
 
+        // Получаем закрепленные регистры
+        const pinnedRegisters = this.getPinnedRegisters();
+        const hasPinned = pinnedRegisters.size > 0;
+
+        // Показываем/скрываем кнопку "снять все"
+        const unpinBtn = document.getElementById(`mb-unpin-${this.objectName}`);
+        if (unpinBtn) {
+            unpinBtn.style.display = hasPinned ? 'inline' : 'none';
+        }
+
+        // Фильтруем регистры: если есть закрепленные — показываем только их
+        let registersToShow = this.allRegisters;
+        if (hasPinned && !this.filter) {
+            registersToShow = this.allRegisters.filter(r => pinnedRegisters.has(String(r.id)));
+        }
+
         // Update registerMap for chart support
-        this.allRegisters.forEach(reg => {
+        registersToShow.forEach(reg => {
             if (reg.id) {
                 this.registerMap.set(reg.id, reg);
             }
         });
 
-        const html = this.allRegisters.map(reg => {
+        const html = registersToShow.map(reg => {
+            const isPinned = pinnedRegisters.has(String(reg.id));
+            const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
+            const pinIcon = isPinned ? '📌' : '○';
+            const pinTitle = isPinned ? 'Unpin' : 'Pin';
+
             const deviceAddr = reg.device;
             const deviceInfo = this.devicesDict[deviceAddr] || {};
             const regInfo = reg.register || {};
             const respondClass = deviceInfo.respond ? 'ok' : 'fail';
             return `
                 <tr data-sensor-id="${reg.id}">
+                    <td class="col-pin">
+                        <span class="${pinToggleClass}" data-id="${reg.id}" title="${pinTitle}">
+                            ${pinIcon}
+                        </span>
+                    </td>
                     ${this.renderChartToggleCell(reg.id, reg.name, 'mbreg')}
                     <td>${reg.id}</td>
                     <td title="${escapeHtml(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
                     <td>${reg.iotype ? `<span class="type-badge type-${reg.iotype}">${reg.iotype}</span>` : ''}</td>
+                    <td>${reg.value !== undefined ? reg.value : ''}</td>
                     <td><span class="mb-respond ${respondClass}">${deviceAddr || ''}</span></td>
                     <td>${regInfo.mbreg || ''}</td>
                     <td>${regInfo.mbfunc || ''}</td>
-                    <td>${reg.value !== undefined ? reg.value : ''}</td>
                     <td>${regInfo.mbval !== undefined ? regInfo.mbval : ''}</td>
                 </tr>
             `;
@@ -4361,6 +4468,16 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
 
         // Bind chart toggle events
         this.attachChartToggleListeners(tbody, this.registerMap);
+
+        // Bind pin toggle events
+        tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
+            toggle.addEventListener('click', () => this.toggleRegisterPin(parseInt(toggle.dataset.id)));
+        });
+
+        // Обработчик кнопки "снять все"
+        if (unpinBtn) {
+            unpinBtn.onclick = () => this.unpinAllRegisters();
+        }
     }
 
     // Override to use Modbus SSE subscription
@@ -4488,6 +4605,45 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         renderObjectInfo(this.tabKey, data.object);
         updateChartLegends(this.tabKey, data);
         this.handleLogServer(data.LogServer);
+    }
+
+    // Pin management для регистров
+    getPinnedRegisters() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-mb-pinned') || '{}');
+            return new Set(saved[this.objectName] || []);
+        } catch (err) {
+            return new Set();
+        }
+    }
+
+    savePinnedRegisters(pinnedSet) {
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-mb-pinned') || '{}');
+            saved[this.objectName] = Array.from(pinnedSet);
+            localStorage.setItem('uniset2-viewer-mb-pinned', JSON.stringify(saved));
+        } catch (err) {
+            console.warn('Failed to save pinned registers:', err);
+        }
+    }
+
+    toggleRegisterPin(registerId) {
+        const pinned = this.getPinnedRegisters();
+        const idStr = String(registerId);
+
+        if (pinned.has(idStr)) {
+            pinned.delete(idStr);
+        } else {
+            pinned.add(idStr);
+        }
+
+        this.savePinnedRegisters(pinned);
+        this.renderRegisters();
+    }
+
+    unpinAllRegisters() {
+        this.savePinnedRegisters(new Set());
+        this.renderRegisters();
     }
 }
 
@@ -4694,15 +4850,18 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
                     <table class="sensors-table variables-table mb-registers-table">
                         <thead>
                             <tr>
+                                <th class="col-pin">
+                                    <span class="mbs-unpin-all" id="mbs-unpin-${this.objectName}" title="Unpin all" style="display:none">✕</span>
+                                </th>
                                 <th class="col-chart"></th>
                                 <th class="col-id">ID</th>
                                 <th class="col-name">Name</th>
                                 <th class="col-type">Type</th>
+                                <th class="col-value">Value</th>
                                 <th class="col-mbaddr">MB Addr</th>
                                 <th class="col-register">Register</th>
                                 <th class="col-func">Function</th>
                                 <th class="col-access">Access</th>
-                                <th class="col-value">Value</th>
                             </tr>
                         </thead>
                         <tbody id="mbs-registers-tbody-${this.objectName}"></tbody>
@@ -4924,30 +5083,56 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         const tbody = document.getElementById(`mbs-registers-tbody-${this.objectName}`);
         if (!tbody) return;
 
+        // Получаем закрепленные регистры
+        const pinnedRegisters = this.getPinnedRegisters();
+        const hasPinned = pinnedRegisters.size > 0;
+
+        // Показываем/скрываем кнопку "снять все"
+        const unpinBtn = document.getElementById(`mbs-unpin-${this.objectName}`);
+        if (unpinBtn) {
+            unpinBtn.style.display = hasPinned ? 'inline' : 'none';
+        }
+
+        // Фильтруем регистры: если есть закрепленные — показываем только их
+        let registersToShow = this.allRegisters;
+        if (hasPinned && !this.filter) {
+            registersToShow = this.allRegisters.filter(r => pinnedRegisters.has(String(r.id)));
+        }
+
         // Update registerMap for chart support
-        this.allRegisters.forEach(reg => {
+        registersToShow.forEach(reg => {
             if (reg.id) {
                 this.registerMap.set(reg.id, reg);
             }
         });
 
         // ModbusSlave формат: device - это mbaddr, register содержит mbreg/mbfunc, есть amode
-        const html = this.allRegisters.map(reg => {
+        const html = registersToShow.map(reg => {
+            const isPinned = pinnedRegisters.has(String(reg.id));
+            const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
+            const pinIcon = isPinned ? '📌' : '○';
+            const pinTitle = isPinned ? 'Unpin' : 'Pin';
+
             const mbAddr = reg.device;
             const regInfo = reg.register || {};
             const mbreg = regInfo.mbreg !== undefined ? regInfo.mbreg : reg.mbreg;
             const mbfunc = regInfo.mbfunc;
             return `
                 <tr data-sensor-id="${reg.id}">
+                    <td class="col-pin">
+                        <span class="${pinToggleClass}" data-id="${reg.id}" title="${pinTitle}">
+                            ${pinIcon}
+                        </span>
+                    </td>
                     ${this.renderChartToggleCell(reg.id, reg.name, 'mbsreg')}
                     <td>${reg.id}</td>
                     <td title="${escapeHtml(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
                     <td>${reg.iotype ? `<span class="type-badge type-${reg.iotype}">${reg.iotype}</span>` : ''}</td>
+                    <td>${reg.value !== undefined ? reg.value : ''}</td>
                     <td>${mbAddr || ''}</td>
                     <td>${mbreg !== undefined ? mbreg : ''}</td>
                     <td>${mbfunc !== undefined ? mbfunc : ''}</td>
                     <td>${reg.amode || ''}</td>
-                    <td>${reg.value !== undefined ? reg.value : ''}</td>
                 </tr>
             `;
         }).join('');
@@ -4956,6 +5141,16 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
 
         // Bind chart toggle events
         this.attachChartToggleListeners(tbody, this.registerMap);
+
+        // Bind pin toggle events
+        tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
+            toggle.addEventListener('click', () => this.toggleRegisterPin(parseInt(toggle.dataset.id)));
+        });
+
+        // Обработчик кнопки "снять все"
+        if (unpinBtn) {
+            unpinBtn.onclick = () => this.unpinAllRegisters();
+        }
     }
 
     // Override to use ModbusSlave SSE subscription
@@ -5082,6 +5277,45 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         renderObjectInfo(this.tabKey, data.object);
         updateChartLegends(this.tabKey, data);
         this.handleLogServer(data.LogServer);
+    }
+
+    // Pin management для регистров
+    getPinnedRegisters() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-mbs-pinned') || '{}');
+            return new Set(saved[this.objectName] || []);
+        } catch (err) {
+            return new Set();
+        }
+    }
+
+    savePinnedRegisters(pinnedSet) {
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-mbs-pinned') || '{}');
+            saved[this.objectName] = Array.from(pinnedSet);
+            localStorage.setItem('uniset2-viewer-mbs-pinned', JSON.stringify(saved));
+        } catch (err) {
+            console.warn('Failed to save pinned registers:', err);
+        }
+    }
+
+    toggleRegisterPin(registerId) {
+        const pinned = this.getPinnedRegisters();
+        const idStr = String(registerId);
+
+        if (pinned.has(idStr)) {
+            pinned.delete(idStr);
+        } else {
+            pinned.add(idStr);
+        }
+
+        this.savePinnedRegisters(pinned);
+        this.renderRegisters();
+    }
+
+    unpinAllRegisters() {
+        this.savePinnedRegisters(new Set());
+        this.renderRegisters();
     }
 }
 
@@ -5259,6 +5493,9 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
                     <table class="sensors-table variables-table opcua-sensors-table">
                         <thead>
                             <tr>
+                                <th class="col-pin">
+                                    <span class="opcuasrv-unpin-all" id="opcuasrv-unpin-${this.objectName}" title="Unpin all" style="display:none">✕</span>
+                                </th>
                                 <th class="col-chart"></th>
                                 <th class="col-id">ID</th>
                                 <th class="col-name">Name</th>
@@ -5567,18 +5804,34 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         const spacer = document.getElementById(`opcuasrv-sensors-spacer-${this.objectName}`);
         if (!tbody || !spacer) return;
 
+        // Получаем закрепленные датчики
+        const pinnedSensors = this.getPinnedSensors();
+        const hasPinned = pinnedSensors.size > 0;
+
+        // Показываем/скрываем кнопку "снять все"
+        const unpinBtn = document.getElementById(`opcuasrv-unpin-${this.objectName}`);
+        if (unpinBtn) {
+            unpinBtn.style.display = hasPinned ? 'inline' : 'none';
+        }
+
+        // Фильтруем датчики: если есть закрепленные — показываем только их (если нет фильтра)
+        let sensorsToShow = this.allSensors;
+        if (hasPinned && !this.filter) {
+            sensorsToShow = this.allSensors.filter(s => pinnedSensors.has(String(s.id)));
+        }
+
         // Set spacer height to position visible rows correctly
         const spacerHeight = this.startIndex * this.rowHeight;
         spacer.style.height = `${spacerHeight}px`;
 
         // Show empty state if no sensors
-        if (this.allSensors.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="opcua-no-sensors">No variables</td></tr>';
+        if (sensorsToShow.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="opcua-no-sensors">No variables</td></tr>';
             return;
         }
 
         // Get visible slice
-        const visibleSensors = this.allSensors.slice(this.startIndex, this.endIndex);
+        const visibleSensors = sensorsToShow.slice(this.startIndex, this.endIndex);
 
         // Update sensorMap for chart support
         visibleSensors.forEach(sensor => {
@@ -5589,10 +5842,20 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
         // Render visible rows with type badges and chart toggle
         tbody.innerHTML = visibleSensors.map(sensor => {
+            const isPinned = pinnedSensors.has(String(sensor.id));
+            const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
+            const pinIcon = isPinned ? '📌' : '○';
+            const pinTitle = isPinned ? 'Unpin' : 'Pin';
+
             const iotype = sensor.iotype || sensor.type || '';
             const typeBadgeClass = iotype ? `type-badge type-${iotype}` : '';
             return `
             <tr data-sensor-id="${sensor.id || ''}">
+                <td class="col-pin">
+                    <span class="${pinToggleClass}" data-id="${sensor.id}" title="${pinTitle}">
+                        ${pinIcon}
+                    </span>
+                </td>
                 ${this.renderChartToggleCell(sensor.id, sensor.name, 'opcuasrv')}
                 <td>${sensor.id || ''}</td>
                 <td class="sensor-name" title="${escapeHtml(sensor.textname || sensor.comment || '')}">${sensor.name || ''}</td>
@@ -5606,6 +5869,16 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
         // Bind chart toggle events
         this.attachChartToggleListeners(tbody, this.sensorMap);
+
+        // Bind pin toggle events
+        tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
+            toggle.addEventListener('click', () => this.toggleSensorPin(parseInt(toggle.dataset.id)));
+        });
+
+        // Обработчик кнопки "снять все"
+        if (unpinBtn) {
+            unpinBtn.onclick = () => this.unpinAllSensors();
+        }
     }
 
     // Override to use OPCUAServer SSE subscription
@@ -5713,6 +5986,45 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
                 }
             }
         });
+    }
+
+    // Pin management для датчиков
+    getPinnedSensors() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-opcuasrv-pinned') || '{}');
+            return new Set(saved[this.objectName] || []);
+        } catch (err) {
+            return new Set();
+        }
+    }
+
+    savePinnedSensors(pinnedSet) {
+        try {
+            const saved = JSON.parse(localStorage.getItem('uniset2-viewer-opcuasrv-pinned') || '{}');
+            saved[this.objectName] = Array.from(pinnedSet);
+            localStorage.setItem('uniset2-viewer-opcuasrv-pinned', JSON.stringify(saved));
+        } catch (err) {
+            console.warn('Failed to save pinned sensors:', err);
+        }
+    }
+
+    toggleSensorPin(sensorId) {
+        const pinned = this.getPinnedSensors();
+        const idStr = String(sensorId);
+
+        if (pinned.has(idStr)) {
+            pinned.delete(idStr);
+        } else {
+            pinned.add(idStr);
+        }
+
+        this.savePinnedSensors(pinned);
+        this.renderVisibleSensors();
+    }
+
+    unpinAllSensors() {
+        this.savePinnedSensors(new Set());
+        this.renderVisibleSensors();
     }
 }
 
