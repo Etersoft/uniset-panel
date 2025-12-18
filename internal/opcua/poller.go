@@ -1,12 +1,10 @@
 package opcua
 
 import (
-	"context"
-	"fmt"
-	"log/slog"
 	"sync"
 	"time"
 
+	"github.com/pv/uniset2-viewer-go/internal/poller"
 	"github.com/pv/uniset2-viewer-go/internal/uniset"
 )
 
@@ -33,261 +31,36 @@ type BatchUpdateCallback func(updates []SensorUpdate)
 
 // Poller опрашивает OPC UA датчики для подписанных клиентов
 type Poller struct {
-	client    *uniset.Client
-	interval  time.Duration
-	callback  BatchUpdateCallback
-	batchSize int // макс. датчиков в одном цикле опроса (0 = без ограничения)
+	*poller.BasePoller[OPCUASensor, SensorUpdate]
 
-	mu sync.RWMutex
-	// subscriptions: objectName -> set of sensorIDs
-	subscriptions map[string]map[int64]struct{}
-	// lastValues: objectName -> sensorID -> value hash (для отправки только изменений)
-	lastValues map[string]map[int64]string
-	// objectTypes: objectName -> extensionType (OPCUAExchange или OPCUAServer)
+	// Дополнительные поля для OPCUA
 	objectTypes map[string]string
-
-	ctx    context.Context
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
+	typesMu     sync.RWMutex
 }
 
-// NewPoller создает новый OPC UA poller
-// batchSize - макс. количество датчиков в одном цикле опроса (0 = без ограничения)
-func NewPoller(client *uniset.Client, interval time.Duration, batchSize int, callback BatchUpdateCallback) *Poller {
-	ctx, cancel := context.WithCancel(context.Background())
-
-	return &Poller{
-		client:        client,
-		interval:      interval,
-		callback:      callback,
-		batchSize:     batchSize,
-		subscriptions: make(map[string]map[int64]struct{}),
-		lastValues:    make(map[string]map[int64]string),
-		objectTypes:   make(map[string]string),
-		ctx:           ctx,
-		cancel:        cancel,
-	}
+// opcuaFetcher реализует poller.ItemFetcher для OPC UA датчиков
+type opcuaFetcher struct {
+	client      *uniset.Client
+	objectTypes map[string]string
+	typesMu     *sync.RWMutex
 }
 
-// Start запускает polling
-func (p *Poller) Start() {
-	p.wg.Add(1)
-	go p.pollLoop()
-	slog.Info("OPCUA Poller started", "interval", p.interval)
-}
-
-// Stop останавливает polling
-func (p *Poller) Stop() {
-	p.cancel()
-	p.wg.Wait()
-	slog.Info("OPCUA Poller stopped")
-}
-
-// Subscribe подписывает на датчики объекта (использует OPCUAExchange по умолчанию)
-func (p *Poller) Subscribe(objectName string, sensorIDs []int64) {
-	p.SubscribeWithType(objectName, sensorIDs, "")
-}
-
-// SubscribeWithType подписывает на датчики объекта с указанием типа
-// extensionType: "OPCUAExchange" или "OPCUAServer" (пустая строка = OPCUAExchange по умолчанию)
-func (p *Poller) SubscribeWithType(objectName string, sensorIDs []int64, extensionType string) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if p.subscriptions[objectName] == nil {
-		p.subscriptions[objectName] = make(map[int64]struct{})
-	}
-	if p.lastValues[objectName] == nil {
-		p.lastValues[objectName] = make(map[int64]string)
-	}
-
-	for _, id := range sensorIDs {
-		p.subscriptions[objectName][id] = struct{}{}
-	}
-
-	// Сохраняем тип объекта (если указан)
-	if extensionType != "" {
-		p.objectTypes[objectName] = extensionType
-	}
-
-	slog.Debug("OPCUA sensors subscribed", "object", objectName, "count", len(sensorIDs), "type", extensionType)
-}
-
-// Unsubscribe отписывает от датчиков объекта
-func (p *Poller) Unsubscribe(objectName string, sensorIDs []int64) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if sensors, ok := p.subscriptions[objectName]; ok {
-		for _, id := range sensorIDs {
-			delete(sensors, id)
-			delete(p.lastValues[objectName], id)
-		}
-		if len(sensors) == 0 {
-			delete(p.subscriptions, objectName)
-			delete(p.lastValues, objectName)
-			delete(p.objectTypes, objectName)
-		}
-	}
-
-	slog.Debug("OPCUA sensors unsubscribed", "object", objectName, "count", len(sensorIDs))
-}
-
-// UnsubscribeAll отписывает объект от всех датчиков
-func (p *Poller) UnsubscribeAll(objectName string) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	delete(p.subscriptions, objectName)
-	delete(p.lastValues, objectName)
-	delete(p.objectTypes, objectName)
-	slog.Debug("OPCUA all sensors unsubscribed", "object", objectName)
-}
-
-// GetSubscriptions возвращает список подписок для объекта
-func (p *Poller) GetSubscriptions(objectName string) []int64 {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	sensors, ok := p.subscriptions[objectName]
-	if !ok {
-		return nil
-	}
-
-	result := make([]int64, 0, len(sensors))
-	for id := range sensors {
-		result = append(result, id)
-	}
-	return result
-}
-
-// GetAllSubscriptions возвращает все подписки
-func (p *Poller) GetAllSubscriptions() map[string][]int64 {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	result := make(map[string][]int64)
-	for obj, sensors := range p.subscriptions {
-		ids := make([]int64, 0, len(sensors))
-		for id := range sensors {
-			ids = append(ids, id)
-		}
-		result[obj] = ids
-	}
-	return result
-}
-
-// SubscriptionCount возвращает количество подписок
-func (p *Poller) SubscriptionCount() int {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	count := 0
-	for _, sensors := range p.subscriptions {
-		count += len(sensors)
-	}
-	return count
-}
-
-func (p *Poller) pollLoop() {
-	defer p.wg.Done()
-
-	ticker := time.NewTicker(p.interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-p.ctx.Done():
-			return
-		case <-ticker.C:
-			p.poll()
-		}
-	}
-}
-
-func (p *Poller) poll() {
-	// Копируем подписки под блокировкой
-	p.mu.RLock()
-	subsSnapshot := make(map[string][]int64)
-	for obj, sensors := range p.subscriptions {
-		ids := make([]int64, 0, len(sensors))
-		for id := range sensors {
-			ids = append(ids, id)
-		}
-		subsSnapshot[obj] = ids
-	}
-	p.mu.RUnlock()
-
-	if len(subsSnapshot) == 0 {
-		return
-	}
-
-	// Собираем все изменения в batch
-	var batch []SensorUpdate
-	now := time.Now()
-
-	// Опрашиваем каждый объект
-	for objectName, sensorIDs := range subsSnapshot {
-		if len(sensorIDs) == 0 {
-			continue
-		}
-
-		sensors, err := p.pollObject(objectName, sensorIDs)
-		if err != nil {
-			slog.Error("OPCUA poll failed", "object", objectName, "error", err)
-			continue
-		}
-
-		// Добавляем изменившиеся значения в batch
-		for _, sensor := range sensors {
-			if p.hasValueChanged(objectName, sensor) {
-				batch = append(batch, SensorUpdate{
-					ObjectName: objectName,
-					Sensor:     sensor,
-					Timestamp:  now,
-				})
-			}
-		}
-	}
-
-	// Отправляем batch целиком
-	if len(batch) > 0 && p.callback != nil {
-		p.callback(batch)
-	}
-}
-
-func (p *Poller) pollObject(objectName string, sensorIDs []int64) ([]OPCUASensor, error) {
-	// Если батчинг включен и датчиков больше чем batchSize, разбиваем на батчи
-	if p.batchSize > 0 && len(sensorIDs) > p.batchSize {
-		return p.pollObjectBatched(objectName, sensorIDs)
-	}
-
-	return p.pollObjectSingle(objectName, sensorIDs)
-}
-
-func (p *Poller) pollObjectSingle(objectName string, sensorIDs []int64) ([]OPCUASensor, error) {
-	// Формируем строку запроса: id1,id2,id3
-	query := ""
-	for i, id := range sensorIDs {
-		if i > 0 {
-			query += ","
-		}
-		query += fmt.Sprintf("%d", id)
-	}
+func (f *opcuaFetcher) FetchItems(objectName string, ids []int64) ([]OPCUASensor, error) {
+	query := poller.BuildIDQuery(ids)
 
 	// Определяем тип объекта для выбора правильного API метода
-	p.mu.RLock()
-	objectType := p.objectTypes[objectName]
-	p.mu.RUnlock()
+	f.typesMu.RLock()
+	objectType := f.objectTypes[objectName]
+	f.typesMu.RUnlock()
 
 	var resp *uniset.OPCUASensorsResponse
 	var err error
 
 	// OPCUAServer использует параметр id=, OPCUAExchange использует filter=
 	if objectType == "OPCUAServer" {
-		resp, err = p.client.GetOPCUAServerSensorValues(objectName, query)
+		resp, err = f.client.GetOPCUAServerSensorValues(objectName, query)
 	} else {
-		resp, err = p.client.GetOPCUASensorValues(objectName, query)
+		resp, err = f.client.GetOPCUASensorValues(objectName, query)
 	}
 	if err != nil {
 		return nil, err
@@ -323,54 +96,100 @@ func (p *Poller) pollObjectSingle(objectName string, sensorIDs []int64) ([]OPCUA
 	return sensors, nil
 }
 
-func (p *Poller) pollObjectBatched(objectName string, sensorIDs []int64) ([]OPCUASensor, error) {
-	var allSensors []OPCUASensor
-	var lastErr error
-
-	// Разбиваем на батчи
-	for i := 0; i < len(sensorIDs); i += p.batchSize {
-		end := i + p.batchSize
-		if end > len(sensorIDs) {
-			end = len(sensorIDs)
-		}
-		batch := sensorIDs[i:end]
-
-		sensors, err := p.pollObjectSingle(objectName, batch)
-		if err != nil {
-			lastErr = err
-			slog.Debug("OPCUA batch poll failed", "object", objectName, "batch", i/p.batchSize, "error", err)
-			continue
-		}
-
-		allSensors = append(allSensors, sensors...)
-	}
-
-	// Возвращаем ошибку только если не получили ни одного датчика
-	if len(allSensors) == 0 && lastErr != nil {
-		return nil, lastErr
-	}
-
-	return allSensors, nil
+func (f *opcuaFetcher) GetItemID(sensor OPCUASensor) int64 {
+	return sensor.ID
 }
 
-func (p *Poller) hasValueChanged(objectName string, sensor OPCUASensor) bool {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if p.lastValues[objectName] == nil {
-		p.lastValues[objectName] = make(map[int64]string)
-	}
-
+func (f *opcuaFetcher) GetValueHash(sensor OPCUASensor) string {
 	// Создаём хеш из value + tick для определения изменений
-	currentHash := formatValueHash(sensor.Value, sensor.Tick)
-
-	lastHash, exists := p.lastValues[objectName][sensor.ID]
-	if !exists || lastHash != currentHash {
-		p.lastValues[objectName][sensor.ID] = currentHash
-		return true
-	}
-	return false
+	return formatValueHash(sensor.Value, sensor.Tick)
 }
+
+// NewPoller создает новый OPC UA poller
+// batchSize - макс. количество датчиков в одном цикле опроса (0 = без ограничения)
+func NewPoller(client *uniset.Client, interval time.Duration, batchSize int, callback BatchUpdateCallback) *Poller {
+	objectTypes := make(map[string]string)
+	typesMu := &sync.RWMutex{}
+
+	fetcher := &opcuaFetcher{
+		client:      client,
+		objectTypes: objectTypes,
+		typesMu:     typesMu,
+	}
+
+	makeUpdate := func(objectName string, sensor OPCUASensor, ts time.Time) SensorUpdate {
+		return SensorUpdate{
+			ObjectName: objectName,
+			Sensor:     sensor,
+			Timestamp:  ts,
+		}
+	}
+
+	// Адаптер для callback
+	var baseCallback poller.BatchUpdateCallback[SensorUpdate]
+	if callback != nil {
+		baseCallback = func(updates []SensorUpdate) {
+			callback(updates)
+		}
+	}
+
+	base := poller.NewBasePoller(
+		interval,
+		batchSize,
+		fetcher,
+		makeUpdate,
+		baseCallback,
+		"OPCUA",
+	)
+
+	return &Poller{
+		BasePoller:  base,
+		objectTypes: objectTypes,
+		typesMu:     *typesMu,
+	}
+}
+
+// Subscribe подписывает на датчики объекта (использует OPCUAExchange по умолчанию)
+func (p *Poller) Subscribe(objectName string, sensorIDs []int64) {
+	p.SubscribeWithType(objectName, sensorIDs, "")
+}
+
+// SubscribeWithType подписывает на датчики объекта с указанием типа
+// extensionType: "OPCUAExchange" или "OPCUAServer" (пустая строка = OPCUAExchange по умолчанию)
+func (p *Poller) SubscribeWithType(objectName string, sensorIDs []int64, extensionType string) {
+	// Сначала вызываем базовую подписку
+	p.BasePoller.Subscribe(objectName, sensorIDs)
+
+	// Сохраняем тип объекта (если указан)
+	if extensionType != "" {
+		p.typesMu.Lock()
+		p.objectTypes[objectName] = extensionType
+		p.typesMu.Unlock()
+	}
+}
+
+// Unsubscribe отписывает от датчиков объекта
+func (p *Poller) Unsubscribe(objectName string, sensorIDs []int64) {
+	p.BasePoller.Unsubscribe(objectName, sensorIDs)
+
+	// Проверяем, остались ли подписки для объекта
+	if len(p.BasePoller.GetSubscriptions(objectName)) == 0 {
+		p.typesMu.Lock()
+		delete(p.objectTypes, objectName)
+		p.typesMu.Unlock()
+	}
+}
+
+// UnsubscribeAll отписывает объект от всех датчиков
+func (p *Poller) UnsubscribeAll(objectName string) {
+	p.BasePoller.UnsubscribeAll(objectName)
+
+	p.typesMu.Lock()
+	delete(p.objectTypes, objectName)
+	p.typesMu.Unlock()
+}
+
+// Helper functions for value hashing
 
 func formatValueHash(value interface{}, tick int64) string {
 	// Простой хеш: value|tick

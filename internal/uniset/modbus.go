@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
-	"strings"
 )
 
 // MBStatusResponse содержит данные из /status
@@ -77,15 +76,6 @@ type MBModeResponse struct {
 	Supported []string `json:"supported,omitempty"`
 }
 
-func ensureMBResult(result, errMsg string) error {
-	if result == "" || strings.EqualFold(result, "OK") {
-		return nil
-	}
-	if errMsg != "" {
-		return fmt.Errorf("%s", errMsg)
-	}
-	return fmt.Errorf("request failed: %s", result)
-}
 
 // GetMBStatus возвращает статус ModbusMaster
 func (c *Client) GetMBStatus(objectName string) (*MBStatusResponse, error) {
@@ -98,7 +88,7 @@ func (c *Client) GetMBStatus(objectName string) (*MBStatusResponse, error) {
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
-	if err := ensureMBResult(resp.Result, resp.Error); err != nil {
+	if err := ensureResult(resp.Result, resp.Error); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -125,7 +115,7 @@ func (c *Client) GetMBParams(objectName string, params []string) (*MBParamsRespo
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
-	if err := ensureMBResult(resp.Result, resp.Error); err != nil {
+	if err := ensureResult(resp.Result, resp.Error); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -152,7 +142,7 @@ func (c *Client) SetMBParams(objectName string, params map[string]interface{}) (
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
-	if err := ensureMBResult(resp.Result, resp.Error); err != nil {
+	if err := ensureResult(resp.Result, resp.Error); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -189,7 +179,7 @@ func (c *Client) GetMBRegisters(objectName, search, iotype string, limit, offset
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
-	if err := ensureMBResult(resp.Result, resp.Error); err != nil {
+	if err := ensureResult(resp.Result, resp.Error); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -207,7 +197,7 @@ func (c *Client) GetMBDevices(objectName string) (*MBDevicesResponse, error) {
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
-	if err := ensureMBResult(resp.Result, resp.Error); err != nil {
+	if err := ensureResult(resp.Result, resp.Error); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -225,7 +215,7 @@ func (c *Client) GetMBMode(objectName string) (*MBModeResponse, error) {
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
-	if err := ensureMBResult(resp.Result, resp.Error); err != nil {
+	if err := ensureResult(resp.Result, resp.Error); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -243,7 +233,7 @@ func (c *Client) GetMBModeSupported(objectName string) (*MBModeResponse, error) 
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
-	if err := ensureMBResult(resp.Result, resp.Error); err != nil {
+	if err := ensureResult(resp.Result, resp.Error); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -261,7 +251,7 @@ func (c *Client) SetMBMode(objectName, mode string) (*MBModeResponse, error) {
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
-	if err := ensureMBResult(resp.Result, resp.Error); err != nil {
+	if err := ensureResult(resp.Result, resp.Error); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -286,7 +276,7 @@ func (c *Client) TakeMBControl(objectName string) (*MBControlResponse, error) {
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
-	// Не проверяем ensureMBResult, т.к. result может быть ERROR если httpControlAllow=0
+	// Не проверяем ensureResult, т.к. result может быть ERROR если httpControlAllow=0
 	return &resp, nil
 }
 
@@ -302,7 +292,7 @@ func (c *Client) ReleaseMBControl(objectName string) (*MBControlResponse, error)
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
-	if err := ensureMBResult(resp.Result, resp.Error); err != nil {
+	if err := ensureResult(resp.Result, resp.Error); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -322,7 +312,7 @@ func (c *Client) GetMBRegisterValues(objectName string, registerIDs string) (*MB
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
-	if err := ensureMBResult(resp.Result, resp.Error); err != nil {
+	if err := ensureResult(resp.Result, resp.Error); err != nil {
 		return nil, err
 	}
 	return &resp, nil

@@ -61,6 +61,18 @@ func (c *Client) doGet(path string) ([]byte, error) {
 	return body, nil
 }
 
+// ensureResult validates API response result field.
+// Returns nil if result is empty or "OK", otherwise returns error.
+func ensureResult(result, errMsg string) error {
+	if result == "" || strings.EqualFold(result, "OK") {
+		return nil
+	}
+	if errMsg != "" {
+		return fmt.Errorf("%s", errMsg)
+	}
+	return fmt.Errorf("request failed: %s", result)
+}
+
 // GetObjectList возвращает список доступных объектов
 func (c *Client) GetObjectList() (ObjectList, error) {
 	data, err := c.doGet("list")

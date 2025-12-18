@@ -10,7 +10,6 @@ import (
 
 	"github.com/pv/uniset2-viewer-go/internal/config"
 	"github.com/pv/uniset2-viewer-go/internal/ionc"
-	"github.com/pv/uniset2-viewer-go/internal/logger"
 	"github.com/pv/uniset2-viewer-go/internal/logserver"
 	"github.com/pv/uniset2-viewer-go/internal/modbus"
 	"github.com/pv/uniset2-viewer-go/internal/opcua"
@@ -739,33 +738,17 @@ func (h *Handlers) GetExternalSensors(w http.ResponseWriter, r *http.Request) {
 // GetIONCSensors возвращает список датчиков из IONotifyController объекта
 // GET /api/objects/{name}/ionc/sensors?offset=0&limit=100&search=text&iotype=AI&server=...
 func (h *Handlers) GetIONCSensors(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
-	offset := 0
-	limit := 100
+	offset, limit := getPagination(r, 100)
 	search := r.URL.Query().Get("search")
 	iotype := r.URL.Query().Get("iotype")
 
-	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
-			offset = o
-		}
-	}
-
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
-		}
-	}
-
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -781,9 +764,8 @@ func (h *Handlers) GetIONCSensors(w http.ResponseWriter, r *http.Request) {
 // GetIONCSensorValues получает значения конкретных датчиков
 // GET /api/objects/{name}/ionc/get?filter=id1,name2,id3&server=...
 func (h *Handlers) GetIONCSensorValues(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
@@ -793,10 +775,8 @@ func (h *Handlers) GetIONCSensorValues(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -818,22 +798,18 @@ type IONCSetRequest struct {
 // SetIONCSensorValue устанавливает значение датчика
 // POST /api/objects/{name}/ionc/set?server=...
 func (h *Handlers) SetIONCSensorValue(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
 	var req IONCSetRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, http.StatusBadRequest, "invalid request body")
+	if !h.decodeJSONBody(w, r, &req) {
 		return
 	}
 
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -858,22 +834,18 @@ type IONCFreezeRequest struct {
 // FreezeIONCSensor замораживает датчик
 // POST /api/objects/{name}/ionc/freeze?server=...
 func (h *Handlers) FreezeIONCSensor(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
 	var req IONCFreezeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, http.StatusBadRequest, "invalid request body")
+	if !h.decodeJSONBody(w, r, &req) {
 		return
 	}
 
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -897,22 +869,18 @@ type IONCUnfreezeRequest struct {
 // UnfreezeIONCSensor размораживает датчик
 // POST /api/objects/{name}/ionc/unfreeze?server=...
 func (h *Handlers) UnfreezeIONCSensor(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
 	var req IONCUnfreezeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, http.StatusBadRequest, "invalid request body")
+	if !h.decodeJSONBody(w, r, &req) {
 		return
 	}
 
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -930,9 +898,8 @@ func (h *Handlers) UnfreezeIONCSensor(w http.ResponseWriter, r *http.Request) {
 // GetIONCConsumers возвращает список подписчиков на датчики
 // GET /api/objects/{name}/ionc/consumers?sensors=id1,id2&server=...
 func (h *Handlers) GetIONCConsumers(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
@@ -942,10 +909,8 @@ func (h *Handlers) GetIONCConsumers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -961,16 +926,12 @@ func (h *Handlers) GetIONCConsumers(w http.ResponseWriter, r *http.Request) {
 // GetIONCLostConsumers возвращает список потерянных подписчиков
 // GET /api/objects/{name}/ionc/lost?server=...
 func (h *Handlers) GetIONCLostConsumers(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
-
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -993,15 +954,13 @@ type IONCSubscribeRequest struct {
 // SubscribeIONCSensors подписывает на SSE обновления для датчиков объекта
 // POST /api/objects/{name}/ionc/subscribe
 func (h *Handlers) SubscribeIONCSensors(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
 	var req IONCSubscribeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, http.StatusBadRequest, "invalid request body")
+	if !h.decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -1010,20 +969,8 @@ func (h *Handlers) SubscribeIONCSensors(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Получаем poller из serverManager для multi-server режима
-	var ioncPoller *ionc.Poller
-	serverID := r.URL.Query().Get("server")
-	if h.serverManager != nil && serverID != "" {
-		if p, ok := h.serverManager.GetIONCPoller(serverID); ok {
-			ioncPoller = p
-		}
-	}
-	if ioncPoller == nil {
-		ioncPoller = h.ioncPoller
-	}
-
-	if ioncPoller == nil {
-		h.writeError(w, http.StatusServiceUnavailable, "IONC poller not available")
+	ioncPoller, ok := h.requireIONCPoller(w, r)
+	if !ok {
 		return
 	}
 
@@ -1039,32 +986,18 @@ func (h *Handlers) SubscribeIONCSensors(w http.ResponseWriter, r *http.Request) 
 // UnsubscribeIONCSensors отписывает от SSE обновлений для датчиков объекта
 // POST /api/objects/{name}/ionc/unsubscribe
 func (h *Handlers) UnsubscribeIONCSensors(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
-	// Получаем poller из serverManager для multi-server режима
-	var ioncPoller *ionc.Poller
-	serverID := r.URL.Query().Get("server")
-	if h.serverManager != nil && serverID != "" {
-		if p, ok := h.serverManager.GetIONCPoller(serverID); ok {
-			ioncPoller = p
-		}
-	}
-	if ioncPoller == nil {
-		ioncPoller = h.ioncPoller
-	}
-
-	if ioncPoller == nil {
-		h.writeError(w, http.StatusServiceUnavailable, "IONC poller not available")
+	ioncPoller, ok := h.requireIONCPoller(w, r)
+	if !ok {
 		return
 	}
 
 	var req IONCSubscribeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, http.StatusBadRequest, "invalid request body")
+	if !h.decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -1084,24 +1017,12 @@ func (h *Handlers) UnsubscribeIONCSensors(w http.ResponseWriter, r *http.Request
 // GetIONCSubscriptions возвращает список подписок на IONC датчики объекта
 // GET /api/objects/{name}/ionc/subscriptions
 func (h *Handlers) GetIONCSubscriptions(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
-	// Получаем poller из serverManager для multi-server режима
-	var ioncPoller *ionc.Poller
-	serverID := r.URL.Query().Get("server")
-	if h.serverManager != nil && serverID != "" {
-		if p, ok := h.serverManager.GetIONCPoller(serverID); ok {
-			ioncPoller = p
-		}
-	}
-	if ioncPoller == nil {
-		ioncPoller = h.ioncPoller
-	}
-
+	ioncPoller := h.getIONCPoller(r)
 	if ioncPoller == nil {
 		h.writeJSON(w, map[string]interface{}{
 			"sensor_ids": []int64{},
@@ -1124,26 +1045,13 @@ func (h *Handlers) GetIONCSubscriptions(w http.ResponseWriter, r *http.Request) 
 // SubscribeIONCSensorsQuery подписывает на SSE обновления из query string
 // GET /api/objects/{name}/ionc/subscribe?sensors=id1,id2,id3
 func (h *Handlers) SubscribeIONCSensorsQuery(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
-	// Получаем poller из serverManager для multi-server режима
-	var ioncPoller *ionc.Poller
-	serverID := r.URL.Query().Get("server")
-	if h.serverManager != nil && serverID != "" {
-		if p, ok := h.serverManager.GetIONCPoller(serverID); ok {
-			ioncPoller = p
-		}
-	}
-	if ioncPoller == nil {
-		ioncPoller = h.ioncPoller
-	}
-
-	if ioncPoller == nil {
-		h.writeError(w, http.StatusServiceUnavailable, "IONC poller not available")
+	ioncPoller, ok := h.requireIONCPoller(w, r)
+	if !ok {
 		return
 	}
 
@@ -1186,15 +1094,13 @@ type ModbusSubscribeRequest struct {
 // SubscribeModbusRegisters подписывает на SSE обновления для регистров объекта
 // POST /api/objects/{name}/modbus/subscribe
 func (h *Handlers) SubscribeModbusRegisters(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
 	var req ModbusSubscribeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, http.StatusBadRequest, "invalid request body")
+	if !h.decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -1203,20 +1109,8 @@ func (h *Handlers) SubscribeModbusRegisters(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Пробуем получить poller из serverManager
-	var mbPoller *modbus.Poller
-	serverID := r.URL.Query().Get("server")
-	if h.serverManager != nil && serverID != "" {
-		if p, ok := h.serverManager.GetModbusPoller(serverID); ok {
-			mbPoller = p
-		}
-	}
-	if mbPoller == nil {
-		mbPoller = h.modbusPoller
-	}
-
-	if mbPoller == nil {
-		h.writeError(w, http.StatusServiceUnavailable, "Modbus poller not available")
+	mbPoller, ok := h.requireModbusPoller(w, r)
+	if !ok {
 		return
 	}
 
@@ -1232,31 +1126,18 @@ func (h *Handlers) SubscribeModbusRegisters(w http.ResponseWriter, r *http.Reque
 // UnsubscribeModbusRegisters отписывает от SSE обновлений для регистров объекта
 // POST /api/objects/{name}/modbus/unsubscribe
 func (h *Handlers) UnsubscribeModbusRegisters(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
-	var mbPoller *modbus.Poller
-	serverID := r.URL.Query().Get("server")
-	if h.serverManager != nil && serverID != "" {
-		if p, ok := h.serverManager.GetModbusPoller(serverID); ok {
-			mbPoller = p
-		}
-	}
-	if mbPoller == nil {
-		mbPoller = h.modbusPoller
-	}
-
-	if mbPoller == nil {
-		h.writeError(w, http.StatusServiceUnavailable, "Modbus poller not available")
+	mbPoller, ok := h.requireModbusPoller(w, r)
+	if !ok {
 		return
 	}
 
 	var req ModbusSubscribeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, http.StatusBadRequest, "invalid request body")
+	if !h.decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -1276,23 +1157,12 @@ func (h *Handlers) UnsubscribeModbusRegisters(w http.ResponseWriter, r *http.Req
 // GetModbusSubscriptions возвращает список подписок на Modbus регистры объекта
 // GET /api/objects/{name}/modbus/subscriptions
 func (h *Handlers) GetModbusSubscriptions(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
-	var mbPoller *modbus.Poller
-	serverID := r.URL.Query().Get("server")
-	if h.serverManager != nil && serverID != "" {
-		if p, ok := h.serverManager.GetModbusPoller(serverID); ok {
-			mbPoller = p
-		}
-	}
-	if mbPoller == nil {
-		mbPoller = h.modbusPoller
-	}
-
+	mbPoller := h.getModbusPoller(r)
 	if mbPoller == nil {
 		h.writeJSON(w, map[string]interface{}{
 			"register_ids": []int64{},
@@ -1323,15 +1193,13 @@ type OPCUASubscribeRequest struct {
 // SubscribeOPCUASensors подписывает на SSE обновления для датчиков объекта
 // POST /api/objects/{name}/opcua/subscribe
 func (h *Handlers) SubscribeOPCUASensors(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
 	var req OPCUASubscribeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, http.StatusBadRequest, "invalid request body")
+	if !h.decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -1340,19 +1208,8 @@ func (h *Handlers) SubscribeOPCUASensors(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var opPoller *opcua.Poller
-	serverID := r.URL.Query().Get("server")
-	if h.serverManager != nil && serverID != "" {
-		if p, ok := h.serverManager.GetOPCUAPoller(serverID); ok {
-			opPoller = p
-		}
-	}
-	if opPoller == nil {
-		opPoller = h.opcuaPoller
-	}
-
-	if opPoller == nil {
-		h.writeError(w, http.StatusServiceUnavailable, "OPCUA poller not available")
+	opPoller, ok := h.requireOPCUAPoller(w, r)
+	if !ok {
 		return
 	}
 
@@ -1369,31 +1226,18 @@ func (h *Handlers) SubscribeOPCUASensors(w http.ResponseWriter, r *http.Request)
 // UnsubscribeOPCUASensors отписывает от SSE обновлений для датчиков объекта
 // POST /api/objects/{name}/opcua/unsubscribe
 func (h *Handlers) UnsubscribeOPCUASensors(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
-	var opPoller *opcua.Poller
-	serverID := r.URL.Query().Get("server")
-	if h.serverManager != nil && serverID != "" {
-		if p, ok := h.serverManager.GetOPCUAPoller(serverID); ok {
-			opPoller = p
-		}
-	}
-	if opPoller == nil {
-		opPoller = h.opcuaPoller
-	}
-
-	if opPoller == nil {
-		h.writeError(w, http.StatusServiceUnavailable, "OPCUA poller not available")
+	opPoller, ok := h.requireOPCUAPoller(w, r)
+	if !ok {
 		return
 	}
 
 	var req OPCUASubscribeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, http.StatusBadRequest, "invalid request body")
+	if !h.decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -1413,23 +1257,12 @@ func (h *Handlers) UnsubscribeOPCUASensors(w http.ResponseWriter, r *http.Reques
 // GetOPCUASubscriptions возвращает список подписок на OPCUA датчики объекта
 // GET /api/objects/{name}/opcua/subscriptions
 func (h *Handlers) GetOPCUASubscriptions(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
-	var opPoller *opcua.Poller
-	serverID := r.URL.Query().Get("server")
-	if h.serverManager != nil && serverID != "" {
-		if p, ok := h.serverManager.GetOPCUAPoller(serverID); ok {
-			opPoller = p
-		}
-	}
-	if opPoller == nil {
-		opPoller = h.opcuaPoller
-	}
-
+	opPoller := h.getOPCUAPoller(r)
 	if opPoller == nil {
 		h.writeJSON(w, map[string]interface{}{
 			"sensor_ids": []int64{},
@@ -1454,16 +1287,12 @@ func (h *Handlers) GetOPCUASubscriptions(w http.ResponseWriter, r *http.Request)
 // GetOPCUAStatus возвращает статус OPCUAExchange
 // GET /api/objects/{name}/opcua/status
 func (h *Handlers) GetOPCUAStatus(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
-
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -1479,9 +1308,8 @@ func (h *Handlers) GetOPCUAStatus(w http.ResponseWriter, r *http.Request) {
 // GetOPCUAParams читает параметры OPCUAExchange
 // GET /api/objects/{name}/opcua/params?name=polltime&name=updatetime
 func (h *Handlers) GetOPCUAParams(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
@@ -1491,10 +1319,8 @@ func (h *Handlers) GetOPCUAParams(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -1510,15 +1336,13 @@ func (h *Handlers) GetOPCUAParams(w http.ResponseWriter, r *http.Request) {
 // SetOPCUAParams устанавливает параметры OPCUAExchange
 // POST /api/objects/{name}/opcua/params
 func (h *Handlers) SetOPCUAParams(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
 	var payload map[string]interface{}
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		h.writeError(w, http.StatusBadRequest, "invalid request body")
+	if !h.decodeJSONBody(w, r, &payload) {
 		return
 	}
 
@@ -1534,10 +1358,8 @@ func (h *Handlers) SetOPCUAParams(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -1553,33 +1375,17 @@ func (h *Handlers) SetOPCUAParams(w http.ResponseWriter, r *http.Request) {
 // GetOPCUASensors возвращает список сенсоров OPCUAExchange/OPCUAServer
 // GET /api/objects/{name}/opcua/sensors?search=text&iotype=AI&limit=N&offset=N
 func (h *Handlers) GetOPCUASensors(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
-	limit := 0
-	offset := 0
+	offset, limit := getPagination(r, 0)
 	search := r.URL.Query().Get("search")
 	iotype := r.URL.Query().Get("iotype")
 
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l >= 0 {
-			limit = l
-		}
-	}
-
-	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
-			offset = o
-		}
-	}
-
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -1595,9 +1401,8 @@ func (h *Handlers) GetOPCUASensors(w http.ResponseWriter, r *http.Request) {
 // GetOPCUASensor возвращает детали сенсора
 // GET /api/objects/{name}/opcua/sensors/{id}
 func (h *Handlers) GetOPCUASensor(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
@@ -1613,10 +1418,8 @@ func (h *Handlers) GetOPCUASensor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -1632,16 +1435,12 @@ func (h *Handlers) GetOPCUASensor(w http.ResponseWriter, r *http.Request) {
 // GetOPCUADiagnostics возвращает диагностику
 // GET /api/objects/{name}/opcua/diagnostics
 func (h *Handlers) GetOPCUADiagnostics(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
-
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -1657,16 +1456,12 @@ func (h *Handlers) GetOPCUADiagnostics(w http.ResponseWriter, r *http.Request) {
 // TakeOPCUAControl включает HTTP-контроль
 // POST /api/objects/{name}/opcua/control/take
 func (h *Handlers) TakeOPCUAControl(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
-
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -1682,16 +1477,12 @@ func (h *Handlers) TakeOPCUAControl(w http.ResponseWriter, r *http.Request) {
 // ReleaseOPCUAControl отключает HTTP-контроль
 // POST /api/objects/{name}/opcua/control/release
 func (h *Handlers) ReleaseOPCUAControl(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
-
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -1908,16 +1699,12 @@ func generateServerID(url string) string {
 // GetMBStatus возвращает статус ModbusMaster
 // GET /api/objects/{name}/modbus/status
 func (h *Handlers) GetMBStatus(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
-
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -1933,9 +1720,8 @@ func (h *Handlers) GetMBStatus(w http.ResponseWriter, r *http.Request) {
 // GetMBParams читает параметры ModbusMaster
 // GET /api/objects/{name}/modbus/params?name=polltime&name=recv_timeout
 func (h *Handlers) GetMBParams(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
@@ -1945,10 +1731,8 @@ func (h *Handlers) GetMBParams(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -1964,15 +1748,13 @@ func (h *Handlers) GetMBParams(w http.ResponseWriter, r *http.Request) {
 // SetMBParams устанавливает параметры ModbusMaster
 // POST /api/objects/{name}/modbus/params
 func (h *Handlers) SetMBParams(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
 	var payload map[string]interface{}
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		h.writeError(w, http.StatusBadRequest, "invalid request body")
+	if !h.decodeJSONBody(w, r, &payload) {
 		return
 	}
 
@@ -1988,10 +1770,8 @@ func (h *Handlers) SetMBParams(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -2007,33 +1787,17 @@ func (h *Handlers) SetMBParams(w http.ResponseWriter, r *http.Request) {
 // GetMBRegisters возвращает список регистров ModbusMaster
 // GET /api/objects/{name}/modbus/registers?offset=0&limit=100&search=text&iotype=AI
 func (h *Handlers) GetMBRegisters(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
-	limit := 0
-	offset := 0
+	offset, limit := getPagination(r, 0)
 	search := r.URL.Query().Get("search")
 	iotype := r.URL.Query().Get("iotype")
 
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l >= 0 {
-			limit = l
-		}
-	}
-
-	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
-			offset = o
-		}
-	}
-
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -2049,16 +1813,12 @@ func (h *Handlers) GetMBRegisters(w http.ResponseWriter, r *http.Request) {
 // GetMBDevices возвращает список устройств (slaves) ModbusMaster
 // GET /api/objects/{name}/modbus/devices
 func (h *Handlers) GetMBDevices(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
-
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -2074,16 +1834,12 @@ func (h *Handlers) GetMBDevices(w http.ResponseWriter, r *http.Request) {
 // GetMBMode возвращает текущий режим ModbusMaster
 // GET /api/objects/{name}/modbus/mode
 func (h *Handlers) GetMBMode(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
-
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -2099,16 +1855,12 @@ func (h *Handlers) GetMBMode(w http.ResponseWriter, r *http.Request) {
 // GetMBModeSupported возвращает список поддерживаемых режимов ModbusMaster
 // GET /api/objects/{name}/modbus/mode/supported
 func (h *Handlers) GetMBModeSupported(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
-
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -2129,15 +1881,13 @@ type MBModeSetRequest struct {
 // SetMBMode устанавливает режим ModbusMaster
 // POST /api/objects/{name}/modbus/mode
 func (h *Handlers) SetMBMode(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
 	var req MBModeSetRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, http.StatusBadRequest, "invalid request body")
+	if !h.decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -2146,10 +1896,8 @@ func (h *Handlers) SetMBMode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -2165,16 +1913,12 @@ func (h *Handlers) SetMBMode(w http.ResponseWriter, r *http.Request) {
 // TakeMBControl перехватывает управление ModbusMaster через HTTP
 // POST /api/objects/{name}/modbus/control/take
 func (h *Handlers) TakeMBControl(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
-
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -2190,16 +1934,12 @@ func (h *Handlers) TakeMBControl(w http.ResponseWriter, r *http.Request) {
 // ReleaseMBControl возвращает управление ModbusMaster
 // POST /api/objects/{name}/modbus/control/release
 func (h *Handlers) ReleaseMBControl(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
-
-	serverID := r.URL.Query().Get("server")
-	client, statusCode, errMsg := h.getUniSetClient(serverID)
-	if client == nil {
-		h.writeError(w, statusCode, errMsg)
+	client, ok := h.requireClient(w, r)
+	if !ok {
 		return
 	}
 

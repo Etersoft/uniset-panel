@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
-	"strings"
 )
 
 // OPCUAStatusResponse содержит данные из /status
@@ -60,15 +59,6 @@ type OPCUAControlResponse struct {
 	CurrentMode  int    `json:"currentMode,omitempty"`
 }
 
-func ensureOPCUAResult(result, errMsg string) error {
-	if result == "" || strings.EqualFold(result, "OK") {
-		return nil
-	}
-	if errMsg != "" {
-		return fmt.Errorf("%s", errMsg)
-	}
-	return fmt.Errorf("request failed: %s", result)
-}
 
 // GetOPCUAStatus возвращает статус OPCUAExchange
 func (c *Client) GetOPCUAStatus(objectName string) (*OPCUAStatusResponse, error) {
@@ -81,7 +71,7 @@ func (c *Client) GetOPCUAStatus(objectName string) (*OPCUAStatusResponse, error)
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
-	if err := ensureOPCUAResult(resp.Result, resp.Error); err != nil {
+	if err := ensureResult(resp.Result, resp.Error); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -108,7 +98,7 @@ func (c *Client) GetOPCUAParams(objectName string, params []string) (*OPCUAParam
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
-	if err := ensureOPCUAResult(resp.Result, resp.Error); err != nil {
+	if err := ensureResult(resp.Result, resp.Error); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -135,7 +125,7 @@ func (c *Client) SetOPCUAParams(objectName string, params map[string]interface{}
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
-	if err := ensureOPCUAResult(resp.Result, resp.Error); err != nil {
+	if err := ensureResult(resp.Result, resp.Error); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -173,7 +163,7 @@ func (c *Client) GetOPCUASensors(objectName, search, iotype string, limit, offse
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
-	if err := ensureOPCUAResult(resp.Result, resp.Error); err != nil {
+	if err := ensureResult(resp.Result, resp.Error); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -191,7 +181,7 @@ func (c *Client) GetOPCUASensor(objectName string, sensorID int64) (*OPCUASensor
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
-	if err := ensureOPCUAResult(resp.Result, resp.Error); err != nil {
+	if err := ensureResult(resp.Result, resp.Error); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -209,7 +199,7 @@ func (c *Client) GetOPCUADiagnostics(objectName string) (*OPCUADiagnosticsRespon
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
-	if err := ensureOPCUAResult(resp.Result, resp.Error); err != nil {
+	if err := ensureResult(resp.Result, resp.Error); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -227,7 +217,7 @@ func (c *Client) TakeOPCUAControl(objectName string) (*OPCUAControlResponse, err
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
-	if err := ensureOPCUAResult(resp.Result, resp.Error); err != nil {
+	if err := ensureResult(resp.Result, resp.Error); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -245,7 +235,7 @@ func (c *Client) ReleaseOPCUAControl(objectName string) (*OPCUAControlResponse, 
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
-	if err := ensureOPCUAResult(resp.Result, resp.Error); err != nil {
+	if err := ensureResult(resp.Result, resp.Error); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -266,7 +256,7 @@ func (c *Client) GetOPCUASensorValues(objectName string, sensorIDs string) (*OPC
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
-	if err := ensureOPCUAResult(resp.Result, resp.Error); err != nil {
+	if err := ensureResult(resp.Result, resp.Error); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -287,7 +277,7 @@ func (c *Client) GetOPCUAServerSensorValues(objectName string, sensorIDs string)
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
-	if err := ensureOPCUAResult(resp.Result, resp.Error); err != nil {
+	if err := ensureResult(resp.Result, resp.Error); err != nil {
 		return nil, err
 	}
 	return &resp, nil
