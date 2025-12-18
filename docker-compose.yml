@@ -11,6 +11,7 @@ services:
       - UNISET_URL=http://localhost:9090,http://localhost:9191,http://localhost:9292,http://localhost:9393,http://localhost:9494,http://localhost:9595
     command: >
       ./uniset2-viewer --addr :8000
+      --log-level debug
       --uniset-url http://localhost:9090
       --uniset-url http://localhost:9191
       --uniset-url http://localhost:9292

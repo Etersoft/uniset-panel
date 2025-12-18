@@ -1,3 +1,7 @@
+// Идентификатор сервера для SharedMemory (SM) событий
+// Соответствует SharedMemoryServerID в backend (internal/api/sse.go)
+const SM_SERVER_ID = 'sm';
+
 // Status приложения
 // Экспортируем на window для тестов
 const state = window.state = {
@@ -28,6 +32,14 @@ const state = window.state = {
         maxReconnectAttempts: 10,
         baseReconnectDelay: 1000,   // начальная задержка (1s)
         maxReconnectDelay: 30000    // максимальная задержка (30s)
+    },
+    control: {
+        enabled: false,       // включён ли контроль на сервере
+        token: null,          // текущий токен (из localStorage или URL)
+        isController: false,  // я контроллер?
+        hasController: false, // есть активный контроллер (кто-то другой)
+        timeoutSec: 60,       // таймаут неактивности
+        pingIntervalId: null  // ID интервала ping
     }
 };
 
@@ -171,12 +183,299 @@ function updateServerStatus(serverId, connected) {
     });
 }
 
+// ============================================================================
+// Session Control - управление сессиями записи
+// ============================================================================
+
+// Инициализация токена контроля
+function initControlToken() {
+    // 1. Проверяем URL параметр
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlToken = urlParams.get('token');
+
+    if (urlToken) {
+        state.control.token = urlToken;
+        localStorage.setItem('control-token', urlToken);
+        // Убираем токен из URL (безопасность)
+        urlParams.delete('token');
+        const newUrl = urlParams.toString()
+            ? `${window.location.pathname}?${urlParams.toString()}`
+            : window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+        console.log('Control: Token loaded from URL');
+    } else {
+        // 2. Проверяем localStorage
+        state.control.token = localStorage.getItem('control-token');
+        if (state.control.token) {
+            console.log('Control: Token loaded from localStorage');
+        }
+    }
+}
+
+// Проверка возможности управления
+function canControl() {
+    // Если контроль отключён - разрешено всем
+    if (!state.control.enabled) return true;
+    // Иначе только контроллеру
+    return state.control.isController;
+}
+
+// Обновление статуса контроля из данных сервера
+function updateControlStatus(status) {
+    state.control.enabled = status.enabled;
+    state.control.hasController = status.hasController;
+    state.control.isController = status.isController;
+    state.control.timeoutSec = status.timeoutSec || 60;
+
+    updateControlUI();
+    updateAllControlButtons();
+}
+
+// Обновление UI контроля (компактный индикатор в шапке)
+function updateControlUI() {
+    const statusEl = document.getElementById('control-status');
+    if (!statusEl) return;
+
+    // Скрываем если контроль отключён
+    if (!state.control.enabled) {
+        statusEl.classList.add('hidden');
+        return;
+    }
+
+    statusEl.classList.remove('hidden');
+    statusEl.classList.remove('control-status-readonly', 'control-status-active');
+
+    if (state.control.isController) {
+        statusEl.classList.add('control-status-active');
+        statusEl.innerHTML = `
+            <span class="control-status-icon">✓</span>
+            <span class="control-status-text">Control</span>
+            <button class="control-status-btn" onclick="releaseControl()">Release</button>
+        `;
+    } else {
+        statusEl.classList.add('control-status-readonly');
+        statusEl.innerHTML = `
+            <span class="control-status-icon">🔒</span>
+            <span class="control-status-text">Read-only</span>
+            <button class="control-status-btn" onclick="showControlDialog()">Take</button>
+        `;
+    }
+}
+
+// Обновление всех кнопок управления (disabled состояние)
+function updateAllControlButtons() {
+    const canCtrl = canControl();
+
+    // IONC кнопки
+    document.querySelectorAll('.ionc-btn-set, .ionc-btn-freeze, .ionc-btn-unfreeze, .ionc-btn-gen, .ionc-btn-gen-stop').forEach(btn => {
+        // Не трогаем readonly сенсоры - они всегда disabled
+        if (btn.closest('tr')?.classList.contains('readonly')) return;
+        btn.disabled = !canCtrl;
+        if (!canCtrl) {
+            btn.title = 'Read-only mode - take control first';
+        } else {
+            btn.title = '';
+        }
+    });
+
+    // Modbus/OPCUA control кнопки
+    document.querySelectorAll('.btn-take-control, .btn-release-control').forEach(btn => {
+        btn.disabled = !canCtrl;
+    });
+
+    // Кнопки сохранения параметров (Modbus, OPCUA)
+    document.querySelectorAll('[id^="mb-params-save-"], [id^="mbs-params-save-"], [id^="opcua-params-save-"], [id^="opcuasrv-params-save-"]').forEach(btn => {
+        btn.disabled = !canCtrl;
+        if (!canCtrl) {
+            btn.title = 'Read-only mode - take control first';
+        } else {
+            btn.title = '';
+        }
+    });
+
+    // Кнопки команд логера
+    document.querySelectorAll('.log-command-btn').forEach(btn => {
+        btn.disabled = !canCtrl;
+        if (!canCtrl) {
+            btn.title = 'Read-only mode - take control first';
+        } else {
+            btn.title = '';
+        }
+    });
+}
+
+// Показать диалог ввода токена
+function showControlDialog() {
+    const overlay = document.getElementById('control-dialog-overlay');
+    if (overlay) {
+        overlay.classList.add('visible');
+        const input = document.getElementById('control-token-input');
+        if (input) {
+            input.value = state.control.token || '';
+            input.focus();
+        }
+    }
+}
+
+// Закрыть диалог
+function closeControlDialog() {
+    const overlay = document.getElementById('control-dialog-overlay');
+    if (overlay) {
+        overlay.classList.remove('visible');
+    }
+    const error = document.getElementById('control-error');
+    if (error) {
+        error.textContent = '';
+    }
+}
+
+// Попытка захвата управления
+async function tryTakeControl(token) {
+    if (!token) {
+        token = document.getElementById('control-token-input')?.value?.trim();
+    }
+    if (!token) {
+        showControlError('Token is required');
+        return;
+    }
+
+    try {
+        const resp = await fetch('/api/control/take', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token })
+        });
+
+        const data = await resp.json();
+
+        if (!resp.ok) {
+            showControlError(data.error || 'Failed to take control');
+            return;
+        }
+
+        // Успешно
+        state.control.token = token;
+        localStorage.setItem('control-token', token);
+        updateControlStatus(data);
+        closeControlDialog();
+        startControlPing();
+
+        // Переподключаем SSE с токеном
+        reconnectSSEWithToken();
+
+    } catch (e) {
+        showControlError('Network error: ' + e.message);
+    }
+}
+
+// Освобождение управления
+async function releaseControl() {
+    if (!state.control.token) return;
+
+    try {
+        const resp = await fetch('/api/control/release', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: state.control.token })
+        });
+
+        const data = await resp.json();
+
+        if (resp.ok) {
+            stopControlPing();
+            updateControlStatus(data);
+        }
+    } catch (e) {
+        console.error('Failed to release control:', e);
+    }
+}
+
+// Показать ошибку в диалоге
+function showControlError(message) {
+    const error = document.getElementById('control-error');
+    if (error) {
+        error.textContent = message;
+    }
+}
+
+// Запуск периодического ping
+function startControlPing() {
+    stopControlPing();
+    if (!state.control.isController || !state.control.token) return;
+
+    // Ping каждые 30 секунд
+    state.control.pingIntervalId = setInterval(async () => {
+        try {
+            await fetch('/api/control/ping', {
+                method: 'POST',
+                headers: { 'X-Control-Token': state.control.token }
+            });
+        } catch (e) {
+            console.warn('Control ping failed:', e);
+        }
+    }, 30000);
+}
+
+// Остановка ping
+function stopControlPing() {
+    if (state.control.pingIntervalId) {
+        clearInterval(state.control.pingIntervalId);
+        state.control.pingIntervalId = null;
+    }
+}
+
+// Переподключение SSE с токеном
+function reconnectSSEWithToken() {
+    if (state.sse.eventSource) {
+        state.sse.eventSource.close();
+    }
+    initSSE();
+}
+
+// Fetch wrapper с автоматическим добавлением токена контроля
+async function controlledFetch(url, options = {}) {
+    // Добавляем токен для не-GET запросов
+    if (options.method && options.method !== 'GET' && state.control.token) {
+        options.headers = {
+            ...options.headers,
+            'X-Control-Token': state.control.token
+        };
+    }
+
+    const response = await fetch(url, options);
+
+    // Обработка ошибки контроля
+    if (response.status === 403) {
+        try {
+            const data = await response.clone().json();
+            if (data.code === 'CONTROL_REQUIRED') {
+                showControlRequiredNotification();
+                throw new Error('Control required');
+            }
+        } catch (e) {
+            // Игнорируем ошибку парсинга
+        }
+    }
+
+    return response;
+}
+
+// Показать уведомление о необходимости контроля
+function showControlRequiredNotification() {
+    // Показываем диалог контроля
+    showControlDialog();
+}
+
 function initSSE() {
     if (state.sse.eventSource) {
         state.sse.eventSource.close();
     }
 
-    const url = '/api/events';
+    // Формируем URL с токеном если есть
+    let url = '/api/events';
+    if (state.control.token) {
+        url += `?token=${encodeURIComponent(state.control.token)}`;
+    }
     console.log('SSE: Подключение к', url);
 
     const eventSource = new EventSource(url);
@@ -192,6 +491,15 @@ function initSSE() {
             // Сохраняем capabilities сервера
             state.capabilities.smEnabled = data.data?.smEnabled || false;
             console.log('SSE: Подключено, poll interval:', state.sse.pollInterval, 'ms, smEnabled:', state.capabilities.smEnabled);
+
+            // Обновляем статус контроля
+            if (data.data?.control) {
+                updateControlStatus(data.data.control);
+                // Если мы контроллер, запускаем ping
+                if (state.control.isController) {
+                    startControlPing();
+                }
+            }
 
             // Обновляем индикатор статуса
             updateSSEStatus('connected', new Date());
@@ -286,16 +594,25 @@ function initSSE() {
         }
     });
 
-    // Обработка обновлений внешних датчиков из SM
+    // Обработка обновлений внешних датчиков из SM (SharedMemory)
+    // Backend отправляет serverId="sm" для SM событий
     eventSource.addEventListener('sensor_data', (e) => {
         try {
             const event = JSON.parse(e.data);
-            const objectName = event.objectName;
+            const { objectName, serverId } = event;
             const sensor = event.data;
 
+            // Формируем tabKey из serverId и objectName
+            // serverId="sm" для SharedMemory событий
+            const tabKey = serverId
+                ? `${serverId}:${objectName}`
+                : findTabKeyByDisplayName(objectName); // fallback для legacy
+            if (!tabKey) return;
+
             // Находим вкладку и график для этого датчика
-            const tabState = state.tabs.get(objectName);
+            const tabState = state.tabs.get(tabKey);
             if (tabState) {
+                const displayName = tabState.displayName || objectName;
                 const varName = `ext:${sensor.name}`;
                 const chartData = tabState.charts.get(varName);
 
@@ -314,11 +631,11 @@ function initSSE() {
                     }
 
                     // Синхронизируем временную шкалу для всех графиков объекта
-                    syncAllChartsTimeRange(objectName);
+                    syncAllChartsTimeRange(tabKey);
 
                     // Обновляем значение в легенде
                     const safeVarName = varName.replace(/:/g, '-');
-                    const legendEl = document.getElementById(`legend-value-${objectName}-${safeVarName}`);
+                    const legendEl = document.getElementById(`legend-value-${displayName}-${safeVarName}`);
                     if (legendEl) {
                         legendEl.textContent = formatValue(value);
                     }
@@ -353,8 +670,8 @@ function initSSE() {
                     tabState.renderer.handleIONCSensorUpdate(sensor);
                 }
 
-                // Обновляем график если есть
-                const varName = `ext:${sensor.name}`;
+                // Обновляем график если есть (IONC использует prefix 'io')
+                const varName = `io:${sensor.name}`;
                 const chartData = tabState.charts.get(varName);
                 if (chartData) {
                     const value = sensor.value;
@@ -372,7 +689,7 @@ function initSSE() {
 
             // Один раз синхронизируем временную шкалу
             if (chartsToUpdate.size > 0) {
-                syncAllChartsTimeRange(tabState.displayName);
+                syncAllChartsTimeRange(tabKey);
             }
 
             // Batch update для всех графиков
@@ -409,13 +726,52 @@ function initSSE() {
             const renderer = tabState.renderer;
             if (!renderer) return;
 
-            const isModbusRenderer = renderer.constructor.name === 'ModbusMasterRenderer' ||
-                                     renderer.constructor.name === 'ModbusSlaveRenderer';
-            if (!isModbusRenderer) return;
+            const isMaster = renderer.constructor.name === 'ModbusMasterRenderer';
+            const isSlave = renderer.constructor.name === 'ModbusSlaveRenderer';
+            if (!isMaster && !isSlave) return;
 
-            // Вызываем обработчик обновления регистров
+            // Вызываем обработчик обновления регистров (для таблицы)
             if (typeof renderer.handleModbusRegisterUpdates === 'function') {
                 renderer.handleModbusRegisterUpdates(registers);
+            }
+
+            // Обновляем графики
+            // ModbusMaster и ModbusSlave используют одинаковый prefix 'mb' в getChartOptions()
+            const timestamp = event.timestamp ? new Date(event.timestamp) : new Date();
+            const chartsToUpdate = new Set();
+
+            for (const reg of registers) {
+                // varName формируется как prefix:sensor.name в createExternalSensorChart
+                const varName = `mb:${reg.name}`;
+                const chartData = tabState.charts.get(varName);
+                if (chartData) {
+                    const value = reg.value;
+                    chartData.chart.data.datasets[0].data.push({ x: timestamp, y: value });
+                    chartsToUpdate.add(varName);
+
+                    // Обновляем значение в легенде
+                    const safeVarName = varName.replace(/:/g, '-');
+                    const legendEl = document.getElementById(`legend-value-${tabState.displayName}-${safeVarName}`);
+                    if (legendEl) {
+                        legendEl.textContent = formatValue(value);
+                    }
+                }
+            }
+
+            // Синхронизируем временную шкалу и обновляем графики
+            if (chartsToUpdate.size > 0) {
+                syncAllChartsTimeRange(tabKey);
+
+                // Batch update для графиков с изменениями
+                tabState.charts.forEach((chartData, varName) => {
+                    // Ограничиваем количество точек
+                    const data = chartData.chart.data.datasets[0].data;
+                    const maxPoints = 1000;
+                    while (data.length > maxPoints) {
+                        data.shift();
+                    }
+                    chartData.chart.update('none');
+                });
             }
         } catch (err) {
             console.warn('SSE: Error обработки modbus_register_batch:', err);
@@ -438,14 +794,52 @@ function initSSE() {
 
             // Проверяем, что это OPCUAExchange или OPCUAServer рендерер
             const renderer = tabState.renderer;
-            const isOPCUARenderer = renderer &&
-                (renderer.constructor.name === 'OPCUAExchangeRenderer' ||
-                 renderer.constructor.name === 'OPCUAServerRenderer');
-            if (!isOPCUARenderer) return;
+            const isExchange = renderer && renderer.constructor.name === 'OPCUAExchangeRenderer';
+            const isServer = renderer && renderer.constructor.name === 'OPCUAServerRenderer';
+            if (!isExchange && !isServer) return;
 
-            // Вызываем обработчик обновления датчиков
+            // Вызываем обработчик обновления датчиков (для таблицы)
             if (typeof renderer.handleOPCUASensorUpdates === 'function') {
                 renderer.handleOPCUASensorUpdates(sensors);
+            }
+
+            // Обновляем графики
+            // OPCUAExchange и OPCUAServer не переопределяют getChartOptions(), используют default prefix 'ext'
+            const timestamp = event.timestamp ? new Date(event.timestamp) : new Date();
+            const chartsToUpdate = new Set();
+
+            for (const sensor of sensors) {
+                // varName формируется как prefix:sensor.name в createExternalSensorChart
+                const varName = `ext:${sensor.name}`;
+                const chartData = tabState.charts.get(varName);
+                if (chartData) {
+                    const value = sensor.value;
+                    chartData.chart.data.datasets[0].data.push({ x: timestamp, y: value });
+                    chartsToUpdate.add(varName);
+
+                    // Обновляем значение в легенде
+                    const safeVarName = varName.replace(/:/g, '-');
+                    const legendEl = document.getElementById(`legend-value-${tabState.displayName}-${safeVarName}`);
+                    if (legendEl) {
+                        legendEl.textContent = formatValue(value);
+                    }
+                }
+            }
+
+            // Синхронизируем временную шкалу и обновляем графики
+            if (chartsToUpdate.size > 0) {
+                syncAllChartsTimeRange(tabKey);
+
+                // Batch update для графиков с изменениями
+                tabState.charts.forEach((chartData, varName) => {
+                    // Ограничиваем количество точек
+                    const data = chartData.chart.data.datasets[0].data;
+                    const maxPoints = 1000;
+                    while (data.length > maxPoints) {
+                        data.shift();
+                    }
+                    chartData.chart.update('none');
+                });
             }
         } catch (err) {
             console.warn('SSE: Error обработки opcua_sensor_batch:', err);
@@ -481,6 +875,35 @@ function initSSE() {
             refreshObjectsList();
         } catch (err) {
             console.warn('SSE: Error обработки objects_list:', err);
+        }
+    });
+
+    // Обработка изменения статуса контроля
+    eventSource.addEventListener('control_status', (e) => {
+        try {
+            const event = JSON.parse(e.data);
+            console.log('SSE: Control status changed:', event.data);
+            // Обновляем isController на основе нашего токена
+            const status = event.data;
+            status.isController = state.control.token &&
+                status.hasController &&
+                state.control.isController; // сохраняем если мы были контроллером
+
+            // Сервер не знает чей это токен, нужно запросить статус
+            fetch('/api/control/status', {
+                headers: { 'X-Control-Token': state.control.token || '' }
+            })
+                .then(r => r.json())
+                .then(data => {
+                    updateControlStatus(data);
+                })
+                .catch(err => {
+                    console.warn('Failed to refresh control status:', err);
+                    // Fallback: используем данные из события
+                    updateControlStatus(status);
+                });
+        } catch (err) {
+            console.warn('SSE: Error обработки control_status:', err);
         }
     });
 
@@ -649,7 +1072,8 @@ const SSESubscriptionMixin = {
     // ids - массив ID для подписки
     // idField - имя поля в теле запроса (например 'sensor_ids', 'register_ids')
     // logPrefix - префикс для логов
-    async subscribeToSSEFor(apiPath, ids, idField = 'sensor_ids', logPrefix = 'SSE') {
+    // extraBody - дополнительные поля для тела запроса (опционально)
+    async subscribeToSSEFor(apiPath, ids, idField = 'sensor_ids', logPrefix = 'SSE', extraBody = {}) {
         if (!ids || ids.length === 0) return;
 
         // Пропускаем если уже подписаны на те же ID
@@ -663,7 +1087,7 @@ const SSESubscriptionMixin = {
             await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}${apiPath}/subscribe`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ [idField]: ids })
+                body: JSON.stringify({ [idField]: ids, ...extraBody })
             });
 
             this.subscribedSensorIds = newIds;
@@ -1643,7 +2067,7 @@ class UniSetManagerRenderer extends BaseObjectRenderer {
         setupFilterHandlers(this.tabKey);
         setupChartsResize(this.tabKey);
         loadIOLayoutState(this.objectName);
-        setupIOSections(this.objectName);
+        setupIOSections(this.tabKey);
     }
 
     update(data) {
@@ -1828,6 +2252,14 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         this.chunkSize = 200;           // Сенсоров за запрос
         this.hasMore = true;            // Есть ли ещё данные
         this.isLoadingChunk = false;    // Идёт загрузка
+
+        // Генераторы значений: Map<sensorId, GeneratorState>
+        this.activeGenerators = new Map();
+    }
+
+    // IONotifyController датчики - показываем badge "IO" и prefix "io"
+    getChartOptions() {
+        return { badge: 'IO', prefix: 'io' };
     }
 
     createPanelHTML() {
@@ -2205,6 +2637,13 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         tbody.querySelectorAll('.ionc-btn-consumers').forEach(btn => {
             btn.addEventListener('click', () => this.showConsumersDialog(parseInt(btn.dataset.id)));
         });
+        // Кнопки генератора
+        tbody.querySelectorAll('.ionc-btn-gen').forEach(btn => {
+            btn.addEventListener('click', () => this.showGeneratorDialog(parseInt(btn.dataset.id)));
+        });
+        tbody.querySelectorAll('.ionc-btn-gen-stop').forEach(btn => {
+            btn.addEventListener('click', () => this.stopGenerator(parseInt(btn.dataset.id)));
+        });
         tbody.querySelectorAll('.pin-toggle').forEach(btn => {
             btn.addEventListener('click', () => this.togglePin(parseInt(btn.dataset.id)));
         });
@@ -2219,19 +2658,39 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     renderSensorRow(sensor, isPinned) {
+        // Получаем textname из справочника сенсоров (конфигурации)
+        const sensorInfo = state.sensorsByName.get(sensor.name);
+        const textname = sensorInfo?.textname || sensor.textname || '';
+
         const frozenClass = sensor.frozen ? 'ionc-sensor-frozen' : '';
         const blockedClass = sensor.blocked ? 'ionc-sensor-blocked' : '';
         const readonlyClass = sensor.readonly ? 'ionc-sensor-readonly' : '';
 
+        // Проверяем активный генератор
+        const hasGenerator = this.activeGenerators.has(sensor.id);
+        const generatorClass = hasGenerator ? 'ionc-sensor-generating' : '';
+        const genState = hasGenerator ? this.activeGenerators.get(sensor.id) : null;
+
         const flags = [];
+        if (hasGenerator) flags.push(`<span class="ionc-flag ionc-flag-generator" title="Генератор: ${genState.type} (${genState.min}-${genState.max})">⟳</span>`);
         if (sensor.frozen) flags.push('<span class="ionc-flag ionc-flag-frozen" title="Frozen">❄</span>');
         if (sensor.blocked) flags.push('<span class="ionc-flag ionc-flag-blocked" title="Blocked">🔒</span>');
         if (sensor.readonly) flags.push('<span class="ionc-flag ionc-flag-readonly" title="Read only">👁</span>');
         if (sensor.undefined) flags.push('<span class="ionc-flag ionc-flag-undefined" title="Undefined">?</span>');
 
+        // Проверка возможности управления
+        const canCtrl = canControl();
+        const ctrlDisabled = !canCtrl ? 'disabled' : '';
+        const ctrlTitle = !canCtrl ? 'Read-only mode' : '';
+
         const freezeBtn = sensor.frozen
-            ? `<button class="ionc-btn ionc-btn-unfreeze" data-id="${sensor.id}" title="Frozen at: ${sensor.value}. Click to unfreeze">🔥</button>`
-            : `<button class="ionc-btn ionc-btn-freeze" data-id="${sensor.id}" title="Freeze">❄</button>`;
+            ? `<button class="ionc-btn ionc-btn-unfreeze" data-id="${sensor.id}" title="${ctrlTitle || 'Frozen at: ' + sensor.value + '. Click to unfreeze'}" ${ctrlDisabled}>🔥</button>`
+            : `<button class="ionc-btn ionc-btn-freeze" data-id="${sensor.id}" title="${ctrlTitle || 'Freeze'}" ${ctrlDisabled}>❄</button>`;
+
+        // Кнопка генератора
+        const genBtn = hasGenerator
+            ? `<button class="ionc-btn ionc-btn-gen-stop" data-id="${sensor.id}" title="${ctrlTitle || 'Остановить генератор'}" ${ctrlDisabled}>⏹</button>`
+            : `<button class="ionc-btn ionc-btn-gen" data-id="${sensor.id}" title="${ctrlTitle || 'Генератор значений'}" ${sensor.readonly || !canCtrl ? 'disabled' : ''}>⟳</button>`;
 
         // Кнопка закрепления (pin)
         const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
@@ -2243,7 +2702,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         const varName = `ionc-${sensor.id}`;
 
         return `
-            <tr class="ionc-sensor-row ${frozenClass} ${blockedClass} ${readonlyClass}" data-sensor-id="${sensor.id}">
+            <tr class="ionc-sensor-row ${frozenClass} ${blockedClass} ${readonlyClass} ${generatorClass}" data-sensor-id="${sensor.id}">
                 <td class="ionc-col-pin">
                     <span class="${pinToggleClass}" data-id="${sensor.id}" title="${pinTitle}">
                         ${pinIcon}
@@ -2266,7 +2725,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                     </span>
                 </td>
                 <td class="ionc-col-id">${sensor.id}</td>
-                <td class="ionc-col-name" title="${escapeHtml(sensor.textname || '')}">${escapeHtml(sensor.name)}</td>
+                <td class="ionc-col-name" title="${escapeHtml(textname)}">${escapeHtml(sensor.name)}</td>
                 <td class="ionc-col-type"><span class="type-badge type-${sensor.type}">${sensor.type}</span></td>
                 <td class="ionc-col-value">
                     ${sensor.frozen && sensor.real_value !== undefined && sensor.real_value !== sensor.value
@@ -2283,7 +2742,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                     <button class="ionc-btn ionc-btn-consumers" data-id="${sensor.id}" title="Show consumers">👥</button>
                 </td>
                 <td class="ionc-col-actions">
-                    <button class="ionc-btn ionc-btn-set" data-id="${sensor.id}" title="Set value" ${sensor.readonly ? 'disabled' : ''}>✎</button>
+                    <button class="ionc-btn ionc-btn-set" data-id="${sensor.id}" title="${ctrlTitle || 'Set value'}" ${sensor.readonly || !canCtrl ? 'disabled' : ''}>✎</button>
+                    ${genBtn}
                     ${freezeBtn}
                 </td>
             </tr>
@@ -2384,7 +2844,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
             try {
                 const url = self.buildUrl(`/api/objects/${encodeURIComponent(objectName)}/ionc/set`);
-                const response = await fetch(url, {
+                const response = await controlledFetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ sensor_id: sensorId, value: value })
@@ -2460,7 +2920,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
             try {
                 const url = self.buildUrl(`/api/objects/${encodeURIComponent(objectName)}/ionc/freeze`);
-                const response = await fetch(url, {
+                const response = await controlledFetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ sensor_id: sensorId, value: value })
@@ -2501,7 +2961,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         try {
             const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/freeze`);
-            const response = await fetch(url, {
+            const response = await controlledFetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sensor_id: sensorId, value: sensor.value })
@@ -2557,7 +3017,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         const doUnfreeze = async () => {
             try {
                 const url = self.buildUrl(`/api/objects/${encodeURIComponent(objectName)}/ionc/unfreeze`);
-                const response = await fetch(url, {
+                const response = await controlledFetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ sensor_id: sensorId })
@@ -2598,7 +3058,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         try {
             const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/unfreeze`);
-            const response = await fetch(url, {
+            const response = await controlledFetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sensor_id: sensorId })
@@ -2618,6 +3078,566 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         } catch (err) {
             showIoncDialogError(`Error: ${err.message}`);
         }
+    }
+
+    // ===== Генератор значений =====
+
+    // Значения по умолчанию для параметров генератора
+    getDefaultGeneratorParams() {
+        return {
+            sin: { min: -50, max: 50, pause: 100, step: 100 },
+            cos: { min: -50, max: 50, pause: 100, step: 100 },
+            linear: { min: 0, max: 100, pause: 100, step: 1 },
+            random: { min: 0, max: 100, period: 5000 },
+            square: { min: 0, max: 100, pulseWidth: 2000, pause: 2000 }
+        };
+    }
+
+    // Загрузка preferences из localStorage с миграцией
+    loadGeneratorPreferences() {
+        const newPrefs = localStorage.getItem('ionc-gen-preferences');
+
+        if (newPrefs) {
+            try {
+                return JSON.parse(newPrefs);
+            } catch (e) {
+                console.error('Failed to parse generator preferences:', e);
+            }
+        }
+
+        // Миграция со старого формата
+        const oldType = localStorage.getItem('ionc-gen-last-type');
+        if (oldType) {
+            const prefs = {
+                lastType: oldType,
+                params: this.getDefaultGeneratorParams()
+            };
+            localStorage.setItem('ionc-gen-preferences', JSON.stringify(prefs));
+            localStorage.removeItem('ionc-gen-last-type');
+            return prefs;
+        }
+
+        // Первый запуск - используем defaults
+        return {
+            lastType: 'sin',
+            params: this.getDefaultGeneratorParams()
+        };
+    }
+
+    // Сохранение preferences в localStorage
+    saveGeneratorPreferences(type, params) {
+        const prefs = this.loadGeneratorPreferences();
+        prefs.lastType = type;
+        prefs.params[type] = params;
+        localStorage.setItem('ionc-gen-preferences', JSON.stringify(prefs));
+    }
+
+    // Обновление расчётного периода для sin/cos
+    updateCalculatedPeriod() {
+        const calcPeriodValue = document.getElementById('ionc-gen-calc-period-value');
+        const pauseInput = document.getElementById('ionc-gen-period');
+        const pointsInput = document.getElementById('ionc-gen-step');
+
+        if (!calcPeriodValue || !pauseInput || !pointsInput) return;
+
+        const pause = parseInt(pauseInput.value, 10) || 0;
+        const points = parseInt(pointsInput.value, 10) || 0;
+        const totalPeriod = pause * points;
+
+        if (totalPeriod > 0) {
+            const seconds = (totalPeriod / 1000).toFixed(1);
+            calcPeriodValue.textContent = `${totalPeriod} мс (${seconds} сек)`;
+        } else {
+            calcPeriodValue.textContent = '-';
+        }
+    }
+
+    // Управление видимостью полей формы в зависимости от типа функции
+    updateFormFieldsVisibility(type) {
+        const periodField = document.getElementById('ionc-gen-period-field');
+        const stepField = document.getElementById('ionc-gen-step-field');
+        const pulseFields = document.getElementById('ionc-gen-pulse-fields');
+        const calcPeriodField = document.getElementById('ionc-gen-calc-period');
+        const periodLabel = document.getElementById('ionc-gen-period-label');
+        const periodHint = document.getElementById('ionc-gen-period-hint');
+        const stepLabel = document.getElementById('ionc-gen-step-label');
+        const stepHint = document.getElementById('ionc-gen-step-hint');
+
+        if (!periodField || !stepField || !pulseFields) return;
+
+        // Скрываем все условные поля
+        periodField.style.display = 'none';
+        stepField.style.display = 'none';
+        pulseFields.style.display = 'none';
+        if (calcPeriodField) calcPeriodField.style.display = 'none';
+
+        // Показываем нужные поля в зависимости от типа
+        if (type === 'linear') {
+            // linear: пилообразный с шагом-инкрементом
+            periodField.style.display = 'block';
+            stepField.style.display = 'block';
+            if (periodLabel) periodLabel.textContent = 'Пауза между шагами (мс)';
+            if (periodHint) periodHint.textContent = 'Задержка перед следующим шагом. Мин: 10мс';
+            if (stepLabel) stepLabel.textContent = 'Шаг';
+            if (stepHint) stepHint.textContent = 'Размер одного шага изменения значения';
+        } else if (type === 'sin' || type === 'cos') {
+            // sin/cos: синусоида с заданным количеством точек
+            periodField.style.display = 'block';
+            stepField.style.display = 'block';
+            if (calcPeriodField) calcPeriodField.style.display = 'block';
+            if (periodLabel) periodLabel.textContent = 'Шаг обновления (мс)';
+            if (periodHint) periodHint.textContent = 'Время между обновлениями значения. Мин: 10мс';
+            if (stepLabel) stepLabel.textContent = 'Количество точек на период';
+            if (stepHint) stepHint.textContent = 'Сколько точек отрисует синусоида за один полный период';
+            // Обновляем расчётный период
+            this.updateCalculatedPeriod();
+        } else if (type === 'square') {
+            pulseFields.style.display = 'block';
+        } else {
+            // random
+            periodField.style.display = 'block';
+            // Восстанавливаем подпись для периода
+            if (periodLabel) periodLabel.textContent = 'Период (мс)';
+            if (periodHint) periodHint.textContent = 'Длительность полного цикла. Мин: 100мс';
+        }
+    }
+
+    showGeneratorDialog(sensorId) {
+        const sensor = this.sensorMap.get(sensorId);
+        if (!sensor) return;
+
+        const self = this;
+        const existingGen = this.activeGenerators.get(sensorId);
+
+        // Предупреждение если датчик заморожен
+        const frozenWarning = sensor.frozen
+            ? `<div class="ionc-dialog-warning">Датчик заморожен. Значения будут записываться в SM, но не отобразятся до разморозки.</div>`
+            : '';
+
+        const body = `
+            <div class="ionc-dialog-info">
+                Датчик: <strong>${escapeHtml(sensor.name)}</strong> (ID: ${sensorId})<br>
+                Текущее значение: <strong>${sensor.value}</strong>
+            </div>
+            ${frozenWarning}
+            ${existingGen ? (() => {
+                const genInfo = `${existingGen.type} (min: ${existingGen.min}, max: ${existingGen.max}`;
+                const timing = existingGen.type === 'square'
+                    ? `, импульс: ${existingGen.pulseWidth}мс, пауза: ${existingGen.pause}мс)`
+                    : (existingGen.type === 'linear' || existingGen.type === 'sin' || existingGen.type === 'cos')
+                    ? `, пауза: ${existingGen.pause}мс, шаг: ${existingGen.step})`
+                    : `, период: ${existingGen.period}мс)`;
+
+                return `
+                <div class="ionc-dialog-warning ionc-dialog-warning-active">
+                    <strong>Генератор активен:</strong> ${genInfo}${timing}
+                </div>
+            `;
+            })() : (() => {
+                // Загружаем preferences из localStorage
+                const prefs = this.loadGeneratorPreferences();
+                const lastType = prefs.lastType;
+                const params = prefs.params[lastType] || this.getDefaultGeneratorParams()[lastType];
+
+                const options = [
+                    { value: 'sin', label: 'sin(t) - Синусоида' },
+                    { value: 'cos', label: 'cos(t) - Косинусоида' },
+                    { value: 'linear', label: 'linear - Пилообразный' },
+                    { value: 'random', label: 'random - Случайные значения' },
+                    { value: 'square', label: 'square - Прямоугольный' }
+                ];
+                const optionsHtml = options.map(o =>
+                    `<option value="${o.value}"${o.value === lastType ? ' selected' : ''}>${o.label}</option>`
+                ).join('');
+                return `
+                <div class="ionc-dialog-field">
+                    <label for="ionc-gen-type">Тип функции:</label>
+                    <select id="ionc-gen-type" class="ionc-dialog-select">
+                        ${optionsHtml}
+                    </select>
+                </div>
+                <div class="ionc-dialog-field-row">
+                    <div class="ionc-dialog-field ionc-dialog-field-half">
+                        <label for="ionc-gen-min">Min:</label>
+                        <input type="number" id="ionc-gen-min" value="${params.min}">
+                    </div>
+                    <div class="ionc-dialog-field ionc-dialog-field-half">
+                        <label for="ionc-gen-max">Max:</label>
+                        <input type="number" id="ionc-gen-max" value="${params.max}">
+                    </div>
+                </div>
+                <div class="ionc-dialog-field" id="ionc-gen-period-field">
+                    <label for="ionc-gen-period"><span id="ionc-gen-period-label">Период (мс)</span>:</label>
+                    <input type="number" id="ionc-gen-period" value="${params.period || params.pause || 5000}" step="100">
+                    <div class="ionc-dialog-hint" id="ionc-gen-period-hint">Длительность полного цикла. Мин: 100мс</div>
+                </div>
+                <div class="ionc-dialog-field" id="ionc-gen-step-field" style="display: none;">
+                    <label for="ionc-gen-step"><span id="ionc-gen-step-label">Шаг</span>:</label>
+                    <input type="number" id="ionc-gen-step" value="${params.step || 20}" step="1" min="1">
+                    <div class="ionc-dialog-hint" id="ionc-gen-step-hint">Размер одного шага изменения значения</div>
+                </div>
+                <div class="ionc-dialog-field" id="ionc-gen-calc-period" style="display: none;">
+                    <div class="ionc-dialog-hint" style="color: #4a9eff; font-weight: 500;">
+                        💡 Полный период: <span id="ionc-gen-calc-period-value">-</span>
+                    </div>
+                </div>
+                <div id="ionc-gen-pulse-fields" style="display: none;">
+                    <div class="ionc-dialog-field-row">
+                        <div class="ionc-dialog-field ionc-dialog-field-half">
+                            <label for="ionc-gen-pulse-width">Ширина импульса (мс):</label>
+                            <input type="number" id="ionc-gen-pulse-width" value="${params.pulseWidth || 2500}" step="100" min="1">
+                        </div>
+                        <div class="ionc-dialog-field ionc-dialog-field-half">
+                            <label for="ionc-gen-pause">Пауза (мс):</label>
+                            <input type="number" id="ionc-gen-pause" value="${params.pause || 2500}" step="100" min="1">
+                        </div>
+                    </div>
+                    <div class="ionc-dialog-hint">Период = Ширина импульса + Пауза</div>
+                </div>
+            `;
+            })()}
+        `;
+
+        const footer = existingGen ? `
+            <button class="ionc-dialog-btn ionc-dialog-btn-cancel" onclick="closeIoncDialog()">Закрыть</button>
+            <button class="ionc-dialog-btn ionc-dialog-btn-danger" id="ionc-gen-stop">Остановить</button>
+        ` : `
+            <button class="ionc-dialog-btn ionc-dialog-btn-cancel" onclick="closeIoncDialog()">Отмена</button>
+            <button class="ionc-dialog-btn ionc-dialog-btn-primary" id="ionc-gen-start">Запустить</button>
+        `;
+
+        openIoncDialog({
+            title: existingGen ? 'Генератор активен' : 'Генератор значений',
+            body,
+            footer,
+            focusInput: !existingGen
+        });
+
+        // Обработчики кнопок
+        if (existingGen) {
+            document.getElementById('ionc-gen-stop')?.addEventListener('click', () => {
+                this.stopGenerator(sensorId);
+                closeIoncDialog();
+            });
+        } else {
+            document.getElementById('ionc-gen-start')?.addEventListener('click', () => {
+                this.startGenerator(sensorId);
+            });
+
+            // Обработчик смены типа функции
+            const typeSelect = document.getElementById('ionc-gen-type');
+            if (typeSelect) {
+                typeSelect.addEventListener('change', (e) => {
+                    this.updateFormFieldsVisibility(e.target.value);
+                });
+
+                // Устанавливаем начальную видимость полей
+                this.updateFormFieldsVisibility(typeSelect.value);
+            }
+
+            // Обработчики для автоматического расчёта периода (sin/cos)
+            const pauseInput = document.getElementById('ionc-gen-period');
+            const pointsInput = document.getElementById('ionc-gen-step');
+            if (pauseInput && pointsInput) {
+                const updateCalc = () => this.updateCalculatedPeriod();
+                pauseInput.addEventListener('input', updateCalc);
+                pointsInput.addEventListener('input', updateCalc);
+            }
+        }
+    }
+
+    startGenerator(sensorId) {
+        const sensor = this.sensorMap.get(sensorId);
+        if (!sensor) return;
+
+        // Парсим значения формы
+        const type = document.getElementById('ionc-gen-type').value;
+        const min = parseInt(document.getElementById('ionc-gen-min').value, 10);
+        const max = parseInt(document.getElementById('ionc-gen-max').value, 10);
+
+        // Парсим специфичные для типа параметры
+        let period, step, pulseWidth, pause;
+        if (type === 'linear' || type === 'sin' || type === 'cos') {
+            pause = parseInt(document.getElementById('ionc-gen-period').value, 10);
+            step = parseInt(document.getElementById('ionc-gen-step').value, 10);
+        } else if (type === 'square') {
+            pulseWidth = parseInt(document.getElementById('ionc-gen-pulse-width').value, 10);
+            pause = parseInt(document.getElementById('ionc-gen-pause').value, 10);
+        } else {
+            // random
+            period = parseInt(document.getElementById('ionc-gen-period').value, 10);
+        }
+
+        // Валидация общих параметров
+        if (isNaN(min) || isNaN(max)) {
+            showIoncDialogError('Min и Max должны быть числами');
+            return;
+        }
+        if (min >= max) {
+            showIoncDialogError('Min должен быть меньше Max');
+            return;
+        }
+
+        // Валидация специфичных для типа параметров
+        if (type === 'linear') {
+            if (isNaN(pause) || isNaN(step)) {
+                showIoncDialogError('Пауза и Шаг должны быть числами');
+                return;
+            }
+            if (pause < 10) {
+                showIoncDialogError('Пауза должна быть не менее 10мс');
+                return;
+            }
+            if (step <= 0) {
+                showIoncDialogError('Шаг должен быть больше 0');
+                return;
+            }
+            if (step > (max - min)) {
+                showIoncDialogError('Шаг должен быть меньше или равен разности Max - Min');
+                return;
+            }
+        } else if (type === 'sin' || type === 'cos') {
+            if (isNaN(pause) || isNaN(step)) {
+                showIoncDialogError('Шаг обновления и Количество точек должны быть числами');
+                return;
+            }
+            if (pause < 10) {
+                showIoncDialogError('Шаг обновления должен быть не менее 10мс');
+                return;
+            }
+            if (step < 4) {
+                showIoncDialogError('Количество точек должно быть не менее 4');
+                return;
+            }
+        } else if (type === 'square') {
+            if (isNaN(pulseWidth) || isNaN(pause)) {
+                showIoncDialogError('Ширина импульса и Пауза должны быть числами');
+                return;
+            }
+            if (pulseWidth <= 0) {
+                showIoncDialogError('Ширина импульса должна быть больше 0');
+                return;
+            }
+            if (pause <= 0) {
+                showIoncDialogError('Пауза должна быть больше 0');
+                return;
+            }
+        } else {
+            // sin, cos, random
+            if (isNaN(period)) {
+                showIoncDialogError('Период должен быть числом');
+                return;
+            }
+            if (period < 100) {
+                showIoncDialogError('Период должен быть не менее 100мс');
+                return;
+            }
+        }
+
+        // Останавливаем существующий генератор если есть
+        this.stopGenerator(sensorId);
+
+        const startTime = Date.now();
+        const self = this;
+        const objectName = this.objectName;
+
+        // Интервал обновления: ~20 обновлений за период для плавности
+        let updateInterval;
+        if (type === 'square') {
+            updateInterval = Math.max(50, Math.floor((pulseWidth + pause) / 20));
+        } else if (type === 'linear' || type === 'sin' || type === 'cos') {
+            // Для linear/sin/cos: обновляем с частотой паузы (или чаще для плавности)
+            updateInterval = Math.min(pause, 50);
+        } else {
+            // random
+            updateInterval = Math.max(50, Math.floor(period / 20));
+        }
+
+        // Состояние генератора (разные поля для разных типов)
+        const genState = {
+            sensorId,
+            type,
+            min,
+            max,
+            startTime,
+            intervalId: null
+        };
+
+        // Добавляем специфичные для типа параметры
+        if (type === 'linear' || type === 'sin' || type === 'cos') {
+            genState.pause = pause;
+            genState.step = step;
+        } else if (type === 'square') {
+            genState.pulseWidth = pulseWidth;
+            genState.pause = pause;
+        } else {
+            // random
+            genState.period = period;
+        }
+
+        // Функция генерации значения
+        const generateValue = () => {
+            const elapsed = Date.now() - genState.startTime;
+            let value;
+            const range = max - min;
+
+            switch (type) {
+                case 'sin':
+                case 'cos': {
+                    // Синусоида/косинусоида с заданным количеством точек
+                    // genState.step = количество точек на период
+                    // genState.pause = шаг обновления (мс)
+                    const numPoints = genState.step;
+                    const fullCycle = numPoints * genState.pause;
+                    const positionInCycle = elapsed % fullCycle;
+                    const pointIndex = Math.floor(positionInCycle / genState.pause);
+
+                    // Фаза от 0 до 2π
+                    const phase = (pointIndex / numPoints) * 2 * Math.PI;
+
+                    // Синус/косинус от -1 до 1
+                    const wave = type === 'sin' ? Math.sin(phase) : Math.cos(phase);
+
+                    // Масштабируем к диапазону min..max
+                    value = Math.round(min + (wave + 1) / 2 * range);
+                    break;
+                }
+                case 'linear': {
+                    // Пилообразный с шагом-инкрементом и паузой (как в SImitator)
+                    // Вверх: min, min+step, min+2*step, ..., max (numStepsUp значений)
+                    // Вниз: max-step, max-2*step, ..., min+step (numStepsDown значений, БЕЗ min)
+                    // После нисходящей фазы цикл начинается снова с min
+                    const numStepsUp = Math.floor(range / genState.step) + 1;
+                    const numStepsDown = Math.floor(range / genState.step) - 1;
+                    const totalSteps = numStepsUp + numStepsDown;
+                    const fullCycle = totalSteps * genState.pause;
+                    const positionInCycle = elapsed % fullCycle;
+                    const stepNumber = Math.floor(positionInCycle / genState.pause);
+
+                    if (stepNumber < numStepsUp) {
+                        // Вверх: min -> max
+                        value = min + stepNumber * genState.step;
+                    } else {
+                        // Вниз: max-step -> min+step (НЕ включая min)
+                        const downStepNumber = stepNumber - numStepsUp;
+                        value = max - (downStepNumber + 1) * genState.step;
+                    }
+                    break;
+                }
+                case 'random': {
+                    value = Math.round(min + Math.random() * range);
+                    break;
+                }
+                case 'square': {
+                    // Прямоугольный с настраиваемой скважностью
+                    const totalPeriod = genState.pulseWidth + genState.pause;
+                    const positionInCycle = elapsed % totalPeriod;
+                    value = positionInCycle < genState.pulseWidth ? max : min;
+                    break;
+                }
+                default:
+                    value = min;
+            }
+
+            // Ограничиваем значение
+            value = Math.max(min, Math.min(max, value));
+
+            // Отправляем в API
+            self.setValueForGenerator(sensorId, value);
+        };
+
+        // Запускаем интервал
+        genState.intervalId = setInterval(generateValue, updateInterval);
+
+        // Сохраняем состояние генератора
+        this.activeGenerators.set(sensorId, genState);
+
+        // Для square генератора включаем stepped режим на графике (меандр)
+        if (type === 'square') {
+            this.setChartStepped(sensorId, true);
+        }
+
+        // Перерисовываем строку для отображения индикатора
+        this.reRenderSensorRow(sensorId);
+
+        // Запускаем сразу
+        generateValue();
+
+        // Сохраняем preferences (разные параметры для разных типов)
+        let params = { min, max };
+        if (type === 'linear' || type === 'sin' || type === 'cos') {
+            params.pause = pause;
+            params.step = step;
+        } else if (type === 'square') {
+            params.pulseWidth = pulseWidth;
+            params.pause = pause;
+        } else {
+            // random
+            params.period = period;
+        }
+        this.saveGeneratorPreferences(type, params);
+
+        closeIoncDialog();
+    }
+
+    async setValueForGenerator(sensorId, value) {
+        try {
+            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/set`);
+            await controlledFetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sensor_id: sensorId, value: value })
+            });
+        } catch (err) {
+            console.error('Generator: ошибка установки значения', err);
+        }
+    }
+
+    stopGenerator(sensorId) {
+        const genState = this.activeGenerators.get(sensorId);
+        if (genState) {
+            clearInterval(genState.intervalId);
+
+            // Возвращаем stepped режим к значению по умолчанию (isDiscrete)
+            if (genState.type === 'square') {
+                this.setChartStepped(sensorId, null); // null = вернуть к isDiscrete
+            }
+
+            this.activeGenerators.delete(sensorId);
+            this.reRenderSensorRow(sensorId);
+        }
+    }
+
+    stopAllGenerators() {
+        this.activeGenerators.forEach((genState, sensorId) => {
+            clearInterval(genState.intervalId);
+        });
+        this.activeGenerators.clear();
+    }
+
+    // Установка stepped режима для графика сенсора
+    // stepped: true = включить, false = выключить, null = вернуть к isDiscrete
+    setChartStepped(sensorId, stepped) {
+        const sensor = this.sensorMap.get(sensorId);
+        if (!sensor) return;
+
+        const tabState = state.tabs.get(this.tabKey);
+        if (!tabState) return;
+
+        const varName = `io:${sensor.name}`;
+        const chartData = tabState.charts.get(varName);
+        if (!chartData) return;
+
+        let newStepped;
+        if (stepped === null) {
+            // Вернуть к значению по умолчанию (isDiscrete)
+            newStepped = chartData.isDiscrete ? 'before' : false;
+        } else {
+            newStepped = stepped ? 'before' : false;
+        }
+
+        chartData.chart.data.datasets[0].stepped = newStepped;
+        chartData.chart.update('none');
     }
 
     // Перерисовка строки датчика и переподключение обработчиков
@@ -2679,6 +3699,13 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                 }
             });
         }
+
+        // Кнопки генератора
+        row.querySelector('.ionc-btn-gen')?.addEventListener('click', () => this.showGeneratorDialog(sensorId));
+        row.querySelector('.ionc-btn-gen-stop')?.addEventListener('click', () => this.stopGenerator(sensorId));
+
+        // Чекбокс графика
+        row.querySelector('.ionc-chart-checkbox')?.addEventListener('change', () => this.toggleSensorChartById(sensorId));
     }
 
     async showConsumersDialog(sensorId) {
@@ -2870,6 +3897,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     destroy() {
+        // Останавливаем все генераторы значений
+        this.stopAllGenerators();
         // Отписываемся от SSE обновлений при закрытии
         this.unsubscribeFromSSE();
         // Уничтожаем LogViewer
@@ -3066,8 +4095,8 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         `;
         return this.createCollapsibleSection('opcua-control', 'HTTP Control', `
             <div class="opcua-actions">
-                <button class="btn" id="opcua-control-take-${this.objectName}">Take control</button>
-                <button class="btn" id="opcua-control-release-${this.objectName}">Release</button>
+                <button class="btn btn-take-control" id="opcua-control-take-${this.objectName}">Take control</button>
+                <button class="btn btn-release-control" id="opcua-control-release-${this.objectName}">Release</button>
                 <span class="opcua-note" id="opcua-control-note-${this.objectName}"></span>
             </div>
         `, { sectionId: `opcua-control-section-${this.objectName}`, headerExtra: headerIndicators });
@@ -3685,14 +4714,14 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
                     </span>
                 </td>
                 ${this.renderChartToggleCell(sensor.id, sensor.name, 'opcua')}
-                <td>${sensor.id ?? '—'}</td>
-                <td title="${escapeHtml(sensor.textname || sensor.comment || '')}">${escapeHtml(sensor.name || '')}</td>
-                <td><span class="${typeBadgeClass}">${iotype || '—'}</span></td>
-                <td>${sensor.value ?? '—'}</td>
-                <td>${sensor.tick ?? '—'}</td>
-                <td>${sensor.vtype || '—'}</td>
-                <td>${sensor.precision ?? '—'}</td>
-                <td class="${sensor.status && sensor.status.toLowerCase() !== 'ok' ? 'status-bad' : ''}">${sensor.status || '—'}</td>
+                <td class="col-id">${sensor.id ?? '—'}</td>
+                <td class="col-name" title="${escapeHtml(sensor.textname || sensor.comment || '')}">${escapeHtml(sensor.name || '')}</td>
+                <td class="col-type"><span class="${typeBadgeClass}">${iotype || '—'}</span></td>
+                <td class="col-value">${sensor.value ?? '—'}</td>
+                <td class="col-tick">${sensor.tick ?? '—'}</td>
+                <td class="col-vtype">${sensor.vtype || '—'}</td>
+                <td class="col-precision">${sensor.precision ?? '—'}</td>
+                <td class="col-status ${sensor.status && sensor.status.toLowerCase() !== 'ok' ? 'status-bad' : ''}">${sensor.status || '—'}</td>
             </tr>
         `}).join('');
 
@@ -3972,8 +5001,8 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
             const update = updateMap.get(sensorId);
             if (update && update.value !== undefined) {
-                // Value ячейка (6-я колонка)
-                const valueCell = row.querySelector('td:nth-child(6)');
+                // Value ячейка (class-based selector)
+                const valueCell = row.querySelector('.col-value');
                 if (valueCell) {
                     const oldValue = valueCell.textContent;
                     const newValue = String(update.value);
@@ -3985,8 +5014,8 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
                         valueCell.classList.add('value-changed');
                     }
                 }
-                // Tick ячейка (7-я колонка)
-                const tickCell = row.querySelector('td:nth-child(7)');
+                // Tick ячейка (class-based selector)
+                const tickCell = row.querySelector('.col-tick');
                 if (tickCell && update.tick !== undefined) {
                     tickCell.textContent = String(update.tick);
                 }
@@ -4134,12 +5163,68 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
             saveParams.addEventListener('click', () => this.saveParams());
         }
 
-        // Используем методы из FilterMixin
-        this.setupFilterListeners(
+        // Checkbox для переключения режима поиска
+        const searchSensorCheckbox = document.getElementById(`mb-search-sensor-${this.objectName}`);
+        const filterInput = document.getElementById(`mb-registers-filter-${this.objectName}`);
+        if (searchSensorCheckbox && filterInput) {
+            searchSensorCheckbox.addEventListener('change', (e) => {
+                this.searchBySensor = e.target.checked;
+                filterInput.placeholder = this.searchBySensor ? 'Filter by sensor...' : 'Filter by mbreg...';
+                // При переключении режима и наличии фильтра - перезагружаем или перерисовываем
+                if (this.filter) {
+                    if (this.searchBySensor) {
+                        this.loadRegisters(); // Перезагрузка с серверным поиском
+                    } else {
+                        this.loadRegisters(); // Перезагрузка для получения всех регистров, затем локальная фильтрация
+                    }
+                }
+            });
+        }
+
+        // Используем методы из FilterMixin (переопределяем поведение)
+        this.setupMBFilterListeners(
             `mb-registers-filter-${this.objectName}`,
-            `mb-type-filter-${this.objectName}`,
-            () => this.loadRegisters()
+            `mb-type-filter-${this.objectName}`
         );
+    }
+
+    // Специальная настройка фильтров для Modbus с учётом режима поиска
+    setupMBFilterListeners(filterInputId, typeFilterId) {
+        const filterInput = document.getElementById(filterInputId);
+        const typeFilter = document.getElementById(typeFilterId);
+
+        if (filterInput) {
+            filterInput.addEventListener('input', (e) => {
+                clearTimeout(this.filterDebounce);
+                this.filterDebounce = setTimeout(() => {
+                    this.filter = e.target.value.trim();
+                    if (this.searchBySensor) {
+                        this.loadRegisters(); // Серверный поиск по датчику
+                    } else {
+                        this.renderRegisters(); // Локальная фильтрация по mbreg
+                    }
+                }, 300);
+            });
+
+            filterInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    if (filterInput.value) {
+                        filterInput.value = '';
+                        this.filter = '';
+                        this.renderRegisters();
+                    }
+                    filterInput.blur();
+                    e.preventDefault();
+                }
+            });
+        }
+
+        if (typeFilter) {
+            typeFilter.addEventListener('change', (e) => {
+                this.typeFilter = e.target.value;
+                this.loadRegisters(); // Тип фильтруется на сервере
+            });
+        }
     }
 
     createMBStatusSection() {
@@ -4188,7 +5273,11 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     createMBRegistersSection() {
         return this.createCollapsibleSection('mb-registers', 'Registers', `
             <div class="filter-bar mb-actions">
-                <input type="text" class="filter-input" id="mb-registers-filter-${this.objectName}" placeholder="Filter by name...">
+                <input type="text" class="filter-input" id="mb-registers-filter-${this.objectName}" placeholder="Filter by mbreg...">
+                <label class="mb-search-mode" title="Search by sensor name instead of register number">
+                    <input type="checkbox" id="mb-search-sensor-${this.objectName}">
+                    <span>by sensor</span>
+                </label>
                 <select class="type-filter" id="mb-type-filter-${this.objectName}">
                     <option value="all">All types</option>
                     <option value="AI">AI</option>
@@ -4413,7 +5502,8 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
 
         try {
             let url = `/api/objects/${encodeURIComponent(this.objectName)}/modbus/registers?offset=${offset}&limit=${this.chunkSize}`;
-            if (this.filter) {
+            // search передаём только если поиск по датчикам (searchBySensor = true)
+            if (this.filter && this.searchBySensor) {
                 url += `&search=${encodeURIComponent(this.filter)}`;
             }
             if (this.typeFilter && this.typeFilter !== 'all') {
@@ -4465,11 +5555,26 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
             unpinBtn.style.display = hasPinned ? 'inline' : 'none';
         }
 
-        // Фильтруем регистры: если есть закрепленные — показываем только их
+        // Фильтруем регистры
         let registersToShow = this.allRegisters;
-        if (hasPinned && !this.filter) {
-            registersToShow = this.allRegisters.filter(r => pinnedRegisters.has(String(r.id)));
+
+        // Локальная фильтрация по mbreg (если не поиск по датчику)
+        if (this.filter && !this.searchBySensor) {
+            const filterLower = this.filter.toLowerCase();
+            registersToShow = this.allRegisters.filter(r => {
+                const regInfo = r.register || {};
+                const mbreg = String(regInfo.mbreg || '');
+                return mbreg.includes(filterLower);
+            });
         }
+
+        // Если есть закрепленные и нет фильтра — показываем только их
+        if (hasPinned && !this.filter) {
+            registersToShow = registersToShow.filter(r => pinnedRegisters.has(String(r.id)));
+        }
+
+        // Обновляем счётчик с учётом фильтрации
+        this.updateItemCount(`mb-register-count-${this.objectName}`, registersToShow.length, this.registersTotal);
 
         // Update registerMap for chart support
         registersToShow.forEach(reg => {
@@ -4496,14 +5601,14 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
                         </span>
                     </td>
                     ${this.renderChartToggleCell(reg.id, reg.name, 'mbreg')}
-                    <td>${reg.id}</td>
-                    <td title="${escapeHtml(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
-                    <td>${reg.iotype ? `<span class="type-badge type-${reg.iotype}">${reg.iotype}</span>` : ''}</td>
-                    <td>${reg.value !== undefined ? reg.value : ''}</td>
-                    <td><span class="mb-respond ${respondClass}">${deviceAddr || ''}</span></td>
-                    <td>${regInfo.mbreg || ''}</td>
-                    <td>${regInfo.mbfunc || ''}</td>
-                    <td>${regInfo.mbval !== undefined ? regInfo.mbval : ''}</td>
+                    <td class="col-id">${reg.id}</td>
+                    <td class="col-name" title="${escapeHtml(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
+                    <td class="col-type">${reg.iotype ? `<span class="type-badge type-${reg.iotype}">${reg.iotype}</span>` : ''}</td>
+                    <td class="col-value">${reg.value !== undefined ? reg.value : ''}</td>
+                    <td class="col-device"><span class="mb-respond ${respondClass}">${deviceAddr || ''}</span></td>
+                    <td class="col-register">${regInfo.mbreg || ''}</td>
+                    <td class="col-func">${regInfo.mbfunc || ''}</td>
+                    <td class="col-mbval">${regInfo.mbval !== undefined ? regInfo.mbval : ''}</td>
                 </tr>
             `;
         }).join('');
@@ -4628,8 +5733,8 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
 
             const update = updateMap.get(regId);
             if (update && update.value !== undefined) {
-                // В ModbusMaster значение в 6-й ячейке (Value), MB Val в 10-й
-                const valueCell = row.querySelector('td:nth-child(6)');
+                // Value ячейка (class-based selector)
+                const valueCell = row.querySelector('.col-value');
                 if (valueCell) {
                     const oldValue = valueCell.textContent;
                     const newValue = String(update.value);
@@ -4797,12 +5902,67 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             saveParams.addEventListener('click', () => this.saveParams());
         }
 
-        // Используем методы из FilterMixin
-        this.setupFilterListeners(
+        // Checkbox для переключения режима поиска
+        const searchSensorCheckbox = document.getElementById(`mbs-search-sensor-${this.objectName}`);
+        const filterInput = document.getElementById(`mbs-registers-filter-${this.objectName}`);
+        if (searchSensorCheckbox && filterInput) {
+            searchSensorCheckbox.addEventListener('change', (e) => {
+                this.searchBySensor = e.target.checked;
+                filterInput.placeholder = this.searchBySensor ? 'Filter by sensor...' : 'Filter by mbreg...';
+                if (this.filter) {
+                    if (this.searchBySensor) {
+                        this.loadRegisters();
+                    } else {
+                        this.loadRegisters();
+                    }
+                }
+            });
+        }
+
+        // Используем методы из FilterMixin (переопределяем поведение)
+        this.setupMBSFilterListeners(
             `mbs-registers-filter-${this.objectName}`,
-            `mbs-type-filter-${this.objectName}`,
-            () => this.loadRegisters()
+            `mbs-type-filter-${this.objectName}`
         );
+    }
+
+    // Специальная настройка фильтров для ModbusSlave с учётом режима поиска
+    setupMBSFilterListeners(filterInputId, typeFilterId) {
+        const filterInput = document.getElementById(filterInputId);
+        const typeFilter = document.getElementById(typeFilterId);
+
+        if (filterInput) {
+            filterInput.addEventListener('input', (e) => {
+                clearTimeout(this.filterDebounce);
+                this.filterDebounce = setTimeout(() => {
+                    this.filter = e.target.value.trim();
+                    if (this.searchBySensor) {
+                        this.loadRegisters();
+                    } else {
+                        this.renderRegisters();
+                    }
+                }, 300);
+            });
+
+            filterInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    if (filterInput.value) {
+                        filterInput.value = '';
+                        this.filter = '';
+                        this.renderRegisters();
+                    }
+                    filterInput.blur();
+                    e.preventDefault();
+                }
+            });
+        }
+
+        if (typeFilter) {
+            typeFilter.addEventListener('change', (e) => {
+                this.typeFilter = e.target.value;
+                this.loadRegisters();
+            });
+        }
     }
 
     createMBSStatusSection() {
@@ -4856,7 +6016,11 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     createMBSRegistersSection() {
         return this.createCollapsibleSection('mbs-registers', 'Registers', `
             <div class="filter-bar mb-actions">
-                <input type="text" class="filter-input" id="mbs-registers-filter-${this.objectName}" placeholder="Filter by name...">
+                <input type="text" class="filter-input" id="mbs-registers-filter-${this.objectName}" placeholder="Filter by mbreg...">
+                <label class="mb-search-mode" title="Search by sensor name instead of register number">
+                    <input type="checkbox" id="mbs-search-sensor-${this.objectName}">
+                    <span>by sensor</span>
+                </label>
                 <select class="type-filter" id="mbs-type-filter-${this.objectName}">
                     <option value="all">All types</option>
                     <option value="AI">AI</option>
@@ -5064,7 +6228,8 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
 
         try {
             let url = `/api/objects/${encodeURIComponent(this.objectName)}/modbus/registers?offset=${offset}&limit=${this.chunkSize}`;
-            if (this.filter) {
+            // search передаём только если поиск по датчикам (searchBySensor = true)
+            if (this.filter && this.searchBySensor) {
                 url += `&search=${encodeURIComponent(this.filter)}`;
             }
             if (this.typeFilter && this.typeFilter !== 'all') {
@@ -5116,11 +6281,26 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             unpinBtn.style.display = hasPinned ? 'inline' : 'none';
         }
 
-        // Фильтруем регистры: если есть закрепленные — показываем только их
+        // Фильтруем регистры
         let registersToShow = this.allRegisters;
-        if (hasPinned && !this.filter) {
-            registersToShow = this.allRegisters.filter(r => pinnedRegisters.has(String(r.id)));
+
+        // Локальная фильтрация по mbreg (если не поиск по датчику)
+        if (this.filter && !this.searchBySensor) {
+            const filterLower = this.filter.toLowerCase();
+            registersToShow = this.allRegisters.filter(r => {
+                const regInfo = r.register || {};
+                const mbreg = String(regInfo.mbreg !== undefined ? regInfo.mbreg : (r.mbreg || ''));
+                return mbreg.includes(filterLower);
+            });
         }
+
+        // Если есть закрепленные и нет фильтра — показываем только их
+        if (hasPinned && !this.filter) {
+            registersToShow = registersToShow.filter(r => pinnedRegisters.has(String(r.id)));
+        }
+
+        // Обновляем счётчик с учётом фильтрации
+        this.updateItemCount(`mbs-register-count-${this.objectName}`, registersToShow.length, this.registersTotal);
 
         // Update registerMap for chart support
         registersToShow.forEach(reg => {
@@ -5148,14 +6328,14 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
                         </span>
                     </td>
                     ${this.renderChartToggleCell(reg.id, reg.name, 'mbsreg')}
-                    <td>${reg.id}</td>
-                    <td title="${escapeHtml(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
-                    <td>${reg.iotype ? `<span class="type-badge type-${reg.iotype}">${reg.iotype}</span>` : ''}</td>
-                    <td>${reg.value !== undefined ? reg.value : ''}</td>
-                    <td>${mbAddr || ''}</td>
-                    <td>${mbreg !== undefined ? mbreg : ''}</td>
-                    <td>${mbfunc !== undefined ? mbfunc : ''}</td>
-                    <td>${reg.amode || ''}</td>
+                    <td class="col-id">${reg.id}</td>
+                    <td class="col-name" title="${escapeHtml(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
+                    <td class="col-type">${reg.iotype ? `<span class="type-badge type-${reg.iotype}">${reg.iotype}</span>` : ''}</td>
+                    <td class="col-value">${reg.value !== undefined ? reg.value : ''}</td>
+                    <td class="col-mbaddr">${mbAddr || ''}</td>
+                    <td class="col-register">${mbreg !== undefined ? mbreg : ''}</td>
+                    <td class="col-func">${mbfunc !== undefined ? mbfunc : ''}</td>
+                    <td class="col-access">${reg.amode || ''}</td>
                 </tr>
             `;
         }).join('');
@@ -5280,8 +6460,8 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
 
             const update = updateMap.get(regId);
             if (update && update.value !== undefined) {
-                // В ModbusSlave значение в 6-й ячейке (Value)
-                const valueCell = row.querySelector('td:nth-child(6)');
+                // Value ячейка (class-based selector)
+                const valueCell = row.querySelector('.col-value');
                 if (valueCell) {
                     const oldValue = valueCell.textContent;
                     const newValue = String(update.value);
@@ -5291,8 +6471,6 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
                         valueCell.classList.remove('value-changed');
                         void valueCell.offsetWidth; // force reflow
                         valueCell.classList.add('value-changed');
-                    } else {
-                        console.log('[ModbusSlave] Values are equal, skipping');
                     }
                 }
             }
@@ -5938,29 +7116,29 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     // SSE subscription methods (использует SSESubscriptionMixin)
     async subscribeToSSE() {
         const sensorIds = this.allSensors.map(s => s.id).filter(id => id != null);
-        await this.subscribeToSSEFor('/opcua', sensorIds, 'sensor_ids', 'OPCUAServer SSE');
+        // OPCUAServer использует другой API параметр (id= вместо filter=), указываем extension_type
+        await this.subscribeToSSEFor('/opcua', sensorIds, 'sensor_ids', 'OPCUAServer SSE', { extension_type: 'OPCUAServer' });
     }
 
     async unsubscribeFromSSE() {
         await this.unsubscribeFromSSEFor('/opcua', 'sensor_ids', 'OPCUAServer SSE');
     }
 
-    handleSSEUpdate(updates) {
-        if (!updates || !Array.isArray(updates)) return;
+    handleOPCUASensorUpdates(sensors) {
+        if (!sensors || !Array.isArray(sensors)) return;
 
         // Queue updates for batch rendering
-        this.pendingUpdates.push(...updates);
+        this.pendingUpdates.push(...sensors);
 
         if (!this.renderScheduled) {
             this.renderScheduled = true;
-            requestAnimationFrame(() => {
-                this.applyPendingUpdates();
-                this.renderScheduled = false;
-            });
+            requestAnimationFrame(() => this.batchRenderUpdates());
         }
     }
 
-    applyPendingUpdates() {
+    batchRenderUpdates() {
+        this.renderScheduled = false;
+
         if (this.pendingUpdates.length === 0) return;
 
         const updateMap = new Map();
@@ -6126,7 +7304,7 @@ class LogViewer {
                                     <button class="log-preset-btn" data-preset="all">All</button>
                                     <button class="log-preset-btn" data-preset="reset">Reset</button>
                                 </div>
-                                <button class="log-level-apply" id="log-level-apply-${this.objectName}">Apply</button>
+                                <button class="log-level-apply log-command-btn" id="log-level-apply-${this.objectName}">Apply</button>
                             </div>
                         </div>
                         <div class="log-filter-wrapper">
@@ -6668,7 +7846,7 @@ class LogViewer {
             if (this.serverId) {
                 url += `?server=${encodeURIComponent(this.serverId)}`;
             }
-            await fetch(url, {
+            await controlledFetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ command, level, filter })
@@ -7399,9 +8577,9 @@ function openSensorDialog(tabKey) {
         }
     } else {
         // SM не настроен - показываем датчики из IONC таблицы
-        const tabState = state.tabs.get(objectName);
-        if (tabState && tabState.renderer && tabState.renderer.sensors) {
-            prepareSensorListFromIONC(tabState.renderer.sensors);
+        const ioncTabState = state.tabs.get(tabKey);
+        if (ioncTabState && ioncTabState.renderer && ioncTabState.renderer.sensors) {
+            prepareSensorListFromIONC(ioncTabState.renderer.sensors);
             renderSensorTable();
         } else {
             renderSensorDialogContent('<div class="sensor-dialog-empty">No sensors in IONC table</div>');
@@ -7746,7 +8924,7 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
     chartDiv.innerHTML = `
         <div class="chart-panel-header">
             <div class="chart-panel-info">
-                <span class="legend-color-picker" data-object="${objectName}" data-variable="${varName}" style="background:${color}" title="Click to choose color"></span>
+                <span class="legend-color-picker" data-object="${tabKey}" data-variable="${varName}" style="background:${color}" title="Click to choose color"></span>
                 <span class="chart-panel-title">${escapeHtml(displayName)}</span>
                 <span class="chart-panel-value" id="legend-value-${objectName}-${safeVarName}">--</span>
                 <span class="chart-panel-textname">${escapeHtml(sensor.name)}</span>
@@ -7754,8 +8932,14 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
                 ${badgeHtml}
             </div>
             <div class="chart-panel-right">
+                ${!isDiscrete ? `
+                <label class="fill-toggle" title="Smooth line (bezier curves)">
+                    <input type="checkbox" id="smooth-${objectName}-${safeVarName}" checked>
+                    <span class="fill-toggle-label">smooth</span>
+                </label>
+                ` : ''}
                 <label class="fill-toggle" title="Fill background">
-                    <input type="checkbox" id="fill-${objectName}-${safeVarName}" ${!isDiscrete ? 'checked' : ''}>
+                    <input type="checkbox" id="fill-${objectName}-${safeVarName}" checked>
                     <span class="fill-toggle-label">fill</span>
                 </label>
                 <button class="chart-remove-btn" title="Remove from chart">✕</button>
@@ -7770,7 +8954,8 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
 
     // Получаем диапазон времени
     const timeRange = getTimeRangeForObject(objectName);
-    const fillEnabled = !isDiscrete;
+    const fillEnabled = true;
+    const steppedEnabled = isDiscrete;
 
     // Создаём Chart.js график
     const ctx = document.getElementById(`canvas-${objectName}-${safeVarName}`).getContext('2d');
@@ -7783,7 +8968,7 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
                 borderColor: color,
                 backgroundColor: `${color}20`,
                 fill: fillEnabled,
-                tension: 0,
+                tension: isDiscrete ? 0 : 0.3,
                 stepped: isDiscrete ? 'before' : false,
                 pointRadius: 0,
                 borderWidth: isDiscrete ? 2 : 1.5
@@ -7854,7 +9039,7 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
     const chart = new Chart(ctx, chartConfig);
 
     // Синхронизируем все графики после добавления нового
-    syncAllChartsTimeRange(objectName);
+    syncAllChartsTimeRange(tabKey);
 
     // Сохраняем в состояние (используем оригинальный varName для ключа)
     tabState.charts.set(varName, {
@@ -7893,6 +9078,15 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
     if (fillCheckbox) {
         fillCheckbox.addEventListener('change', (e) => {
             chart.data.datasets[0].fill = e.target.checked;
+            chart.update('none');
+        });
+    }
+
+    // Обработчик чекбокса сглаживания (только для аналоговых)
+    const smoothCheckbox = document.getElementById(`smooth-${objectName}-${safeVarName}`);
+    if (smoothCheckbox) {
+        smoothCheckbox.addEventListener('change', (e) => {
+            chart.data.datasets[0].tension = e.target.checked ? 0.3 : 0;
             chart.update('none');
         });
     }
@@ -8403,7 +9597,7 @@ function createTab(tabKey, displayName, rendererInfo, initialData, serverId, ser
     tabsContent.appendChild(panel);
 
     // Восстановить состояние спойлеров
-    restoreCollapsedSections(tabKey);
+    restoreCollapsedSections(displayName);
 
     // Восстановить порядок секций
     loadSectionOrder(tabKey);
@@ -8728,8 +9922,14 @@ async function addChart(tabKey, varName, sensorId, passedTextname) {
                 ${sensor?.iotype ? `<span class="type-badge type-${sensor.iotype}">${sensor.iotype}</span>` : ''}
             </div>
             <div class="chart-panel-right">
+                ${!isDiscrete ? `
+                <label class="fill-toggle" title="Smooth line (bezier curves)">
+                    <input type="checkbox" id="smooth-${displayName}-${varName}" checked>
+                    <span class="fill-toggle-label">smooth</span>
+                </label>
+                ` : ''}
                 <label class="fill-toggle" title="Fill background">
-                    <input type="checkbox" id="fill-${displayName}-${varName}" ${!isDiscrete ? 'checked' : ''}>
+                    <input type="checkbox" id="fill-${displayName}-${varName}" checked>
                     <span class="fill-toggle-label">fill</span>
                 </label>
                 <button class="btn-icon" title="Close" onclick="removeChartByButton('${tabKey}', '${varName}')">
@@ -8747,9 +9947,19 @@ async function addChart(tabKey, varName, sensorId, passedTextname) {
 
     // Обработчик для чекбокса заливки
     const fillCheckbox = getElementInTab(tabKey, `fill-${displayName}-${varName}`);
-    fillCheckbox.addEventListener('change', (e) => {
-        toggleChartFill(tabKey, varName, e.target.checked);
-    });
+    if (fillCheckbox) {
+        fillCheckbox.addEventListener('change', (e) => {
+            toggleChartFill(tabKey, varName, e.target.checked);
+        });
+    }
+
+    // Обработчик для чекбокса сглаживания (только для аналоговых)
+    const smoothCheckbox = getElementInTab(tabKey, `smooth-${displayName}-${varName}`);
+    if (smoothCheckbox) {
+        smoothCheckbox.addEventListener('change', (e) => {
+            toggleChartSmooth(tabKey, varName, e.target.checked);
+        });
+    }
 
     // Загружаем историю
     try {
@@ -8767,7 +9977,7 @@ async function addChart(tabKey, varName, sensorId, passedTextname) {
         const timeRange = getTimeRangeForObject(tabKey);
 
         // Заливка по умолчанию только для аналоговых
-        const fillEnabled = !isDiscrete;
+        const fillEnabled = true;
 
         // Конфигурация графика в зависимости от типа сигнала
         const chartConfig = {
@@ -8779,7 +9989,7 @@ async function addChart(tabKey, varName, sensorId, passedTextname) {
                     borderColor: color,
                     backgroundColor: `${color}20`,
                     fill: fillEnabled,
-                    tension: 0,
+                    tension: isDiscrete ? 0 : 0.3,
                     stepped: isDiscrete ? 'before' : false,
                     pointRadius: 0,
                     borderWidth: isDiscrete ? 2 : 1.5
@@ -8925,8 +10135,9 @@ async function updateChart(objectName, varName, chart) {
 }
 
 // Получить диапазон времени для графиков объекта
-function getTimeRangeForObject(objectName) {
-    const tabState = state.tabs.get(objectName);
+// tabKey - ключ вкладки (serverId:objectName)
+function getTimeRangeForObject(tabKey) {
+    const tabState = state.tabs.get(tabKey);
     if (!tabState) {
         const now = Date.now();
         return { min: now, max: now + state.timeRange * 1000 };
@@ -8954,12 +10165,12 @@ function getTimeRangeForObject(objectName) {
 }
 
 // Синхронизировать диапазон времени для всех графиков
-// objectName может быть tabKey (serverId:objectName) или displayName
-function syncAllChartsTimeRange(objectName) {
-    const tabState = state.tabs.get(objectName);
+// tabKey - ключ вкладки (serverId:objectName)
+function syncAllChartsTimeRange(tabKey) {
+    const tabState = state.tabs.get(tabKey);
     if (!tabState) return;
 
-    const timeRange = getTimeRangeForObject(objectName);
+    const timeRange = getTimeRangeForObject(tabKey);
 
     tabState.charts.forEach((chartData, varName) => {
         const chart = chartData.chart;
@@ -8969,22 +10180,21 @@ function syncAllChartsTimeRange(objectName) {
     });
 
     // Обновить отображение оси X (показывать только на последнем графике)
-    // Используем displayName для DOM операций
-    updateXAxisVisibility(objectName);
+    updateXAxisVisibility(tabKey);
 }
 
 // Показывать ось X только на последнем графике
-// objectName может быть tabKey (serverId:objectName) или displayName
-function updateXAxisVisibility(objectName) {
-    const tabState = state.tabs.get(objectName);
+// tabKey - ключ вкладки (serverId:objectName)
+function updateXAxisVisibility(tabKey) {
+    const tabState = state.tabs.get(tabKey);
     if (!tabState) return;
 
     // Используем displayName для DOM селекторов (без serverId)
-    const displayName = tabState.displayName || objectName;
+    const displayName = tabState.displayName || tabKey;
 
     // ВАЖНО: Ограничиваем поиск панелью конкретной вкладки
     // для избежания конфликтов ID при multi-server (когда displayName одинаковый)
-    const tabPanel = document.querySelector(`.tab-panel[data-name="${objectName}"]`);
+    const tabPanel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
     if (!tabPanel) return;
 
     const chartPanels = tabPanel.querySelectorAll(`#charts-${displayName} .chart-panel`);
@@ -9561,11 +10771,11 @@ function saveCollapsedSections() {
 // Color picker для изменения цвета графика
 let activeColorPicker = null;
 
-function showColorPicker(element, objectName, varName) {
+function showColorPicker(element, tabKey, varName) {
     // Close предыдущий picker если открыт
     hideColorPicker();
 
-    const tabState = state.tabs.get(objectName);
+    const tabState = state.tabs.get(tabKey);
     if (!tabState) return;
 
     const chartData = tabState.charts.get(varName);
@@ -9585,7 +10795,7 @@ function showColorPicker(element, objectName, varName) {
         if (color === currentColor) option.classList.add('selected');
         option.style.background = color;
         option.addEventListener('click', () => {
-            changeChartColor(objectName, varName, color);
+            changeChartColor(tabKey, varName, color);
             hideColorPicker();
         });
         popup.appendChild(option);
@@ -9614,8 +10824,8 @@ function handleColorPickerOutsideClick(e) {
     }
 }
 
-function changeChartColor(objectName, varName, newColor) {
-    const tabState = state.tabs.get(objectName);
+function changeChartColor(tabKey, varName, newColor) {
+    const tabState = state.tabs.get(tabKey);
     if (!tabState) return;
 
     const chartData = tabState.charts.get(varName);
@@ -9631,15 +10841,19 @@ function changeChartColor(objectName, varName, newColor) {
     chart.update('none');
 
     // Обновить цвет квадратика в шапке
-    const colorPicker = document.querySelector(`#chart-panel-${objectName}-${varName} .legend-color-picker`);
+    // Используем displayName для ID элемента (objectName)
+    const displayName = tabState.displayName || tabKey;
+    const safeVarName = varName.replace(/:/g, '-');
+    const colorPicker = document.querySelector(`#chart-panel-${displayName}-${safeVarName} .legend-color-picker`);
     if (colorPicker) {
         colorPicker.style.background = newColor;
     }
 }
 
 // Переключение заливки графика
-function toggleChartFill(objectName, varName, fillEnabled) {
-    const tabState = state.tabs.get(objectName);
+// tabKey - ключ вкладки (serverId:objectName)
+function toggleChartFill(tabKey, varName, fillEnabled) {
+    const tabState = state.tabs.get(tabKey);
     if (!tabState) return;
 
     const chartData = tabState.charts.get(varName);
@@ -9649,12 +10863,38 @@ function toggleChartFill(objectName, varName, fillEnabled) {
     chartData.chart.update('none');
 }
 
+// Переключение сглаживания линии графика
+// tabKey - ключ вкладки (serverId:objectName)
+function toggleChartSmooth(tabKey, varName, smoothEnabled) {
+    const tabState = state.tabs.get(tabKey);
+    if (!tabState) return;
+
+    const chartData = tabState.charts.get(varName);
+    if (!chartData) return;
+
+    chartData.chart.data.datasets[0].tension = smoothEnabled ? 0.3 : 0;
+    chartData.chart.update('none');
+}
+
+// Переключение stepped режима графика (меандр)
+// tabKey - ключ вкладки (serverId:objectName)
+function toggleChartStepped(tabKey, varName, steppedEnabled) {
+    const tabState = state.tabs.get(tabKey);
+    if (!tabState) return;
+
+    const chartData = tabState.charts.get(varName);
+    if (!chartData) return;
+
+    chartData.chart.data.datasets[0].stepped = steppedEnabled ? 'before' : false;
+    chartData.chart.update('none');
+}
+
 // Делегирование события для color picker
 document.addEventListener('click', (e) => {
     if (e.target.classList.contains('legend-color-picker')) {
-        const objectName = e.target.dataset.object;
+        const tabKey = e.target.dataset.object; // data-object содержит tabKey
         const varName = e.target.dataset.variable;
-        showColorPicker(e.target, objectName, varName);
+        showColorPicker(e.target, tabKey, varName);
     }
 });
 
@@ -9884,37 +11124,35 @@ function loadIOLayoutState(objectName) {
 
 // === Section Reordering ===
 
-function moveSectionUp(objectName, sectionId) {
-    const section = getSectionElement(objectName, sectionId);
+// tabKey - ключ вкладки (serverId:objectName)
+function moveSectionUp(tabKey, sectionId) {
+    const section = getSectionElement(tabKey, sectionId);
     if (!section) return;
 
     const prev = getPreviousReorderableSection(section);
     if (prev) {
         section.parentNode.insertBefore(section, prev);
-        saveSectionOrder(objectName);
-        updateReorderButtons(objectName);
+        saveSectionOrder(tabKey);
+        updateReorderButtons(tabKey);
     }
 }
 
-function moveSectionDown(objectName, sectionId) {
-    const section = getSectionElement(objectName, sectionId);
+// tabKey - ключ вкладки (serverId:objectName)
+function moveSectionDown(tabKey, sectionId) {
+    const section = getSectionElement(tabKey, sectionId);
     if (!section) return;
 
     const next = getNextReorderableSection(section);
     if (next) {
         section.parentNode.insertBefore(next, section);
-        saveSectionOrder(objectName);
-        updateReorderButtons(objectName);
+        saveSectionOrder(tabKey);
+        updateReorderButtons(tabKey);
     }
 }
 
-function getSectionElement(objectName, sectionId) {
-    // Для logviewer ищем wrapper
-    if (sectionId === 'logviewer') {
-        return document.getElementById(`logviewer-wrapper-${objectName}`);
-    }
-    // Для остальных секций ищем по data-section-id
-    const panel = document.querySelector(`.tab-panel[data-name="${objectName}"]`);
+function getSectionElement(tabKey, sectionId) {
+    // Ищем секцию по data-section-id внутри панели вкладки
+    const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
     if (!panel) return null;
     return panel.querySelector(`.reorderable-section[data-section-id="${sectionId}"]`);
 }
@@ -9941,29 +11179,31 @@ function getNextReorderableSection(element) {
     return null;
 }
 
-function saveSectionOrder(objectName) {
+// tabKey - ключ вкладки (serverId:objectName)
+function saveSectionOrder(tabKey) {
     try {
-        const panel = document.querySelector(`.tab-panel[data-name="${objectName}"]`);
+        const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
         if (!panel) return;
 
         const sections = panel.querySelectorAll('.reorderable-section[data-section-id]');
         const order = Array.from(sections).map(s => s.dataset.sectionId);
 
         const saved = JSON.parse(localStorage.getItem('uniset2-viewer-section-order') || '{}');
-        saved[objectName] = order;
+        saved[tabKey] = order;
         localStorage.setItem('uniset2-viewer-section-order', JSON.stringify(saved));
     } catch (err) {
         console.warn('Failed to save section order:', err);
     }
 }
 
-function loadSectionOrder(objectName) {
+// tabKey - ключ вкладки (serverId:objectName)
+function loadSectionOrder(tabKey) {
     try {
         const saved = JSON.parse(localStorage.getItem('uniset2-viewer-section-order') || '{}');
-        const order = saved[objectName];
+        const order = saved[tabKey];
         if (!order || !Array.isArray(order)) return;
 
-        const panel = document.querySelector(`.tab-panel[data-name="${objectName}"]`);
+        const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
         if (!panel) return;
 
         // Собираем все reorderable секции в Map
@@ -10001,8 +11241,9 @@ function loadSectionOrder(objectName) {
     }
 }
 
-function updateReorderButtons(objectName) {
-    const panel = document.querySelector(`.tab-panel[data-name="${objectName}"]`);
+// tabKey - ключ вкладки (serverId:objectName)
+function updateReorderButtons(tabKey) {
+    const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
     if (!panel) return;
 
     const sections = Array.from(panel.querySelectorAll('.reorderable-section[data-section-id]'))
@@ -10022,13 +11263,18 @@ function updateReorderButtons(objectName) {
 }
 
 // IO Section resize, filter, and pin functionality
-function setupIOSections(objectName) {
+// tabKey - ключ вкладки (serverId:objectName)
+function setupIOSections(tabKey) {
+    const tabState = state.tabs.get(tabKey);
+    if (!tabState) return;
+    const objectName = tabState.displayName || tabKey;
+
     // Setup global filter for all IO sections
-    setupIOGlobalFilter(objectName);
+    setupIOGlobalFilter(tabKey, objectName);
 
     ['inputs', 'outputs', 'timers'].forEach(type => {
         setupIOResize(objectName, type);
-        setupIOUnpinAll(objectName, type);
+        setupIOUnpinAll(tabKey, objectName, type);
         setupIOCollapse(objectName, type);
     });
 }
@@ -10143,23 +11389,24 @@ function loadIOHeight(objectName, type) {
     }
 }
 
-function setupIOGlobalFilter(objectName) {
+// tabKey - ключ вкладки, objectName - displayName для DOM селекторов
+function setupIOGlobalFilter(tabKey, objectName) {
     const filterInput = document.getElementById(`io-filter-global-${objectName}`);
     if (!filterInput) return;
 
     let filterTimeout = null;
 
     const refilterAll = () => {
-        const tabState = state.tabs.get(objectName);
+        const tabState = state.tabs.get(tabKey);
         if (tabState) {
             if (tabState.ioData?.in) {
-                renderIO(objectName, 'inputs', tabState.ioData.in);
+                renderIO(tabKey, 'inputs', tabState.ioData.in);
             }
             if (tabState.ioData?.out) {
-                renderIO(objectName, 'outputs', tabState.ioData.out);
+                renderIO(tabKey, 'outputs', tabState.ioData.out);
             }
             if (tabState.timersData) {
-                renderTimers(objectName, tabState.timersData);
+                renderTimers(tabKey, tabState.timersData);
             }
         }
     };
@@ -10179,22 +11426,23 @@ function setupIOGlobalFilter(objectName) {
     });
 }
 
-function setupIOUnpinAll(objectName, type) {
+// tabKey - ключ вкладки, objectName - displayName для DOM селекторов
+function setupIOUnpinAll(tabKey, objectName, type) {
     const unpinBtn = document.getElementById(`io-unpin-${type}-${objectName}`);
     if (!unpinBtn) return;
 
     unpinBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        clearIOPinnedRows(objectName, type);
+        clearIOPinnedRows(tabKey, type);
         // Перерисовываем
-        const tabState = state.tabs.get(objectName);
+        const tabState = state.tabs.get(tabKey);
         if (tabState) {
             if (type === 'inputs' && tabState.ioData?.in) {
-                renderIO(objectName, 'inputs', tabState.ioData.in);
+                renderIO(tabKey, 'inputs', tabState.ioData.in);
             } else if (type === 'outputs' && tabState.ioData?.out) {
-                renderIO(objectName, 'outputs', tabState.ioData.out);
+                renderIO(tabKey, 'outputs', tabState.ioData.out);
             } else if (type === 'timers' && tabState.timersData) {
-                renderTimers(objectName, tabState.timersData);
+                renderTimers(tabKey, tabState.timersData);
             }
         }
     });
@@ -10337,6 +11585,9 @@ async function loadAppConfig() {
 
 // Инициализация
 document.addEventListener('DOMContentLoaded', () => {
+    // Инициализация токена контроля (из URL или localStorage)
+    initControlToken();
+
     // Загружаем конфигурацию приложения (не блокируем загрузку объектов)
     loadAppConfig();
 

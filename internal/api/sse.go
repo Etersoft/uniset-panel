@@ -132,10 +132,14 @@ func (h *SSEHub) BroadcastObjectsList(serverID, serverName string, objects []str
 	})
 }
 
+// SharedMemoryServerID - идентификатор сервера для SharedMemory событий
+const SharedMemoryServerID = "sm"
+
 // BroadcastSensorUpdate отправляет обновление внешнего датчика клиентам
 func (h *SSEHub) BroadcastSensorUpdate(update sm.SensorUpdate) {
 	h.Broadcast(SSEEvent{
 		Type:       "sensor_data",
+		ServerID:   SharedMemoryServerID,
 		ObjectName: update.ObjectName,
 		Data:       update.Sensor,
 		Timestamp:  update.Timestamp,

@@ -43,6 +43,7 @@ type MBRegistersResponse struct {
 	Result    string                   `json:"result"`
 	Error     string                   `json:"error,omitempty"`
 	Registers []map[string]interface{} `json:"registers,omitempty"`
+	Sensors   []map[string]interface{} `json:"sensors,omitempty"` // UniSet2 API returns "sensors" for /get endpoint
 	Total     int                      `json:"total,omitempty"`
 	Count     int                      `json:"count,omitempty"`
 	Limit     int                      `json:"limit,omitempty"`

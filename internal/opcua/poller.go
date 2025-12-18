@@ -43,6 +43,8 @@ type Poller struct {
 	subscriptions map[string]map[int64]struct{}
 	// lastValues: objectName -> sensorID -> value hash (для отправки только изменений)
 	lastValues map[string]map[int64]string
+	// objectTypes: objectName -> extensionType (OPCUAExchange или OPCUAServer)
+	objectTypes map[string]string
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -61,6 +63,7 @@ func NewPoller(client *uniset.Client, interval time.Duration, batchSize int, cal
 		batchSize:     batchSize,
 		subscriptions: make(map[string]map[int64]struct{}),
 		lastValues:    make(map[string]map[int64]string),
+		objectTypes:   make(map[string]string),
 		ctx:           ctx,
 		cancel:        cancel,
 	}
@@ -80,8 +83,14 @@ func (p *Poller) Stop() {
 	slog.Info("OPCUA Poller stopped")
 }
 
-// Subscribe подписывает на датчики объекта
+// Subscribe подписывает на датчики объекта (использует OPCUAExchange по умолчанию)
 func (p *Poller) Subscribe(objectName string, sensorIDs []int64) {
+	p.SubscribeWithType(objectName, sensorIDs, "")
+}
+
+// SubscribeWithType подписывает на датчики объекта с указанием типа
+// extensionType: "OPCUAExchange" или "OPCUAServer" (пустая строка = OPCUAExchange по умолчанию)
+func (p *Poller) SubscribeWithType(objectName string, sensorIDs []int64, extensionType string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -96,7 +105,12 @@ func (p *Poller) Subscribe(objectName string, sensorIDs []int64) {
 		p.subscriptions[objectName][id] = struct{}{}
 	}
 
-	slog.Debug("OPCUA sensors subscribed", "object", objectName, "count", len(sensorIDs))
+	// Сохраняем тип объекта (если указан)
+	if extensionType != "" {
+		p.objectTypes[objectName] = extensionType
+	}
+
+	slog.Debug("OPCUA sensors subscribed", "object", objectName, "count", len(sensorIDs), "type", extensionType)
 }
 
 // Unsubscribe отписывает от датчиков объекта
@@ -112,6 +126,7 @@ func (p *Poller) Unsubscribe(objectName string, sensorIDs []int64) {
 		if len(sensors) == 0 {
 			delete(p.subscriptions, objectName)
 			delete(p.lastValues, objectName)
+			delete(p.objectTypes, objectName)
 		}
 	}
 
@@ -125,6 +140,7 @@ func (p *Poller) UnsubscribeAll(objectName string) {
 
 	delete(p.subscriptions, objectName)
 	delete(p.lastValues, objectName)
+	delete(p.objectTypes, objectName)
 	slog.Debug("OPCUA all sensors unsubscribed", "object", objectName)
 }
 
@@ -259,7 +275,20 @@ func (p *Poller) pollObjectSingle(objectName string, sensorIDs []int64) ([]OPCUA
 		query += fmt.Sprintf("%d", id)
 	}
 
-	resp, err := p.client.GetOPCUASensorValues(objectName, query)
+	// Определяем тип объекта для выбора правильного API метода
+	p.mu.RLock()
+	objectType := p.objectTypes[objectName]
+	p.mu.RUnlock()
+
+	var resp *uniset.OPCUASensorsResponse
+	var err error
+
+	// OPCUAServer использует параметр id=, OPCUAExchange использует filter=
+	if objectType == "OPCUAServer" {
+		resp, err = p.client.GetOPCUAServerSensorValues(objectName, query)
+	} else {
+		resp, err = p.client.GetOPCUASensorValues(objectName, query)
+	}
 	if err != nil {
 		return nil, err
 	}

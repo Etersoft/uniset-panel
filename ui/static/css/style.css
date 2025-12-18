@@ -3590,6 +3590,38 @@ header h1 {
     padding: 0 4px;
 }
 
+/* Value change animation for Modbus/OPCUA tables */
+.value-changed {
+    animation: value-flash 0.5s ease;
+}
+
+@keyframes value-flash {
+    0% {
+        background-color: var(--accent-green);
+        color: white;
+    }
+    100% {
+        background-color: transparent;
+        color: inherit;
+    }
+}
+
+/* Value update animation for LogViewer */
+.value-updated {
+    animation: value-highlight 0.3s ease;
+}
+
+@keyframes value-highlight {
+    0% {
+        background-color: var(--accent-blue);
+        color: white;
+    }
+    100% {
+        background-color: transparent;
+        color: inherit;
+    }
+}
+
 .ionc-value-frozen {
     display: inline-flex;
     align-items: center;

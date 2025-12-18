@@ -201,6 +201,8 @@ func (p *Poller) poll() {
 		return
 	}
 
+	slog.Debug("Modbus poll started", "objects", len(subsSnapshot))
+
 	// Собираем все изменения в batch
 	var batch []RegisterUpdate
 	now := time.Now()
@@ -217,7 +219,10 @@ func (p *Poller) poll() {
 			continue
 		}
 
+		slog.Debug("Modbus poll result", "object", objectName, "registers_count", len(registers), "subscribed_count", len(registerIDs))
+
 		// Добавляем изменившиеся значения в batch
+		changedCount := 0
 		for _, reg := range registers {
 			if p.hasValueChanged(objectName, reg.ID, reg.Value) {
 				batch = append(batch, RegisterUpdate{
@@ -225,12 +230,18 @@ func (p *Poller) poll() {
 					Register:   reg,
 					Timestamp:  now,
 				})
+				changedCount++
 			}
+		}
+
+		if changedCount > 0 {
+			slog.Debug("Modbus values changed", "object", objectName, "changed_count", changedCount)
 		}
 	}
 
 	// Отправляем batch целиком
 	if len(batch) > 0 && p.callback != nil {
+		slog.Debug("Modbus sending batch", "updates_count", len(batch))
 		p.callback(batch)
 	}
 }
@@ -254,14 +265,25 @@ func (p *Poller) pollObjectSingle(objectName string, registerIDs []int64) ([]uni
 		query += fmt.Sprintf("%d", id)
 	}
 
+	slog.Debug("Modbus polling registers", "object", objectName, "ids_count", len(registerIDs), "query_length", len(query))
+
 	resp, err := p.client.GetMBRegisterValues(objectName, query)
 	if err != nil {
+		slog.Error("Modbus GetMBRegisterValues failed", "object", objectName, "error", err)
 		return nil, err
 	}
 
+	// GetMBRegisterValues uses /get endpoint which returns "sensors" field, not "registers"
+	sensorsData := resp.Sensors
+	if len(sensorsData) == 0 {
+		sensorsData = resp.Registers // fallback to registers if sensors is empty
+	}
+
+	slog.Debug("Modbus GetMBRegisterValues response", "object", objectName, "registers_received", len(sensorsData))
+
 	// Конвертируем map[string]interface{} в MBRegister
-	registers := make([]uniset.MBRegister, 0, len(resp.Registers))
-	for _, regMap := range resp.Registers {
+	registers := make([]uniset.MBRegister, 0, len(sensorsData))
+	for _, regMap := range sensorsData {
 		reg := uniset.MBRegister{}
 
 		if id, ok := regMap["id"].(float64); ok {

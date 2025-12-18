@@ -446,7 +446,8 @@ test.describe('ModbusSlave renderer', () => {
       const consoleMessages: string[] = [];
       page.on('console', msg => {
         const text = msg.text();
-        if (text.includes('[SSE]') || text.includes('[ModbusSlave]')) {
+        // Match real log format: "ModbusSlave SSE: подписка..." or "SSE: ..."
+        if (text.includes('SSE') || text.includes('ModbusSlave')) {
           consoleMessages.push(text);
         }
       });

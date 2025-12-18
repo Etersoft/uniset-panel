@@ -253,8 +253,30 @@ func (c *Client) ReleaseOPCUAControl(objectName string) (*OPCUAControlResponse, 
 
 // GetOPCUASensorValues получает значения конкретных датчиков по ID
 // GET /{objectName}/get?filter=id1,id2,id3
+// Используется для OPCUAExchange
 func (c *Client) GetOPCUASensorValues(objectName string, sensorIDs string) (*OPCUASensorsResponse, error) {
 	path := fmt.Sprintf("%s/get?filter=%s", objectName, sensorIDs)
+
+	data, err := c.doGet(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp OPCUASensorsResponse
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, fmt.Errorf("unmarshal failed: %w", err)
+	}
+	if err := ensureOPCUAResult(resp.Result, resp.Error); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// GetOPCUAServerSensorValues получает значения конкретных датчиков по ID
+// GET /{objectName}/get?id=id1,id2,id3
+// Используется для OPCUAServer (отличается от OPCUAExchange параметром: id= вместо filter=)
+func (c *Client) GetOPCUAServerSensorValues(objectName string, sensorIDs string) (*OPCUASensorsResponse, error) {
+	path := fmt.Sprintf("%s/get?id=%s", objectName, sensorIDs)
 
 	data, err := c.doGet(path)
 	if err != nil {

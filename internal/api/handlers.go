@@ -1316,7 +1316,8 @@ func (h *Handlers) GetModbusSubscriptions(w http.ResponseWriter, r *http.Request
 
 // OPCUASubscribeRequest структура запроса на подписку OPCUA датчиков
 type OPCUASubscribeRequest struct {
-	SensorIDs []int64 `json:"sensor_ids"`
+	SensorIDs     []int64 `json:"sensor_ids"`
+	ExtensionType string  `json:"extension_type,omitempty"` // "OPCUAExchange" или "OPCUAServer"
 }
 
 // SubscribeOPCUASensors подписывает на SSE обновления для датчиков объекта
@@ -1355,12 +1356,13 @@ func (h *Handlers) SubscribeOPCUASensors(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	opPoller.Subscribe(name, req.SensorIDs)
+	opPoller.SubscribeWithType(name, req.SensorIDs, req.ExtensionType)
 
 	h.writeJSON(w, map[string]interface{}{
-		"status":     "subscribed",
-		"object":     name,
-		"sensor_ids": req.SensorIDs,
+		"status":         "subscribed",
+		"object":         name,
+		"sensor_ids":     req.SensorIDs,
+		"extension_type": req.ExtensionType,
 	})
 }
 
