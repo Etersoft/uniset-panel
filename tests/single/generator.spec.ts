@@ -89,9 +89,13 @@ test.describe('IONC Value Generator', () => {
         await expect(page.locator('.ionc-dialog-overlay.visible')).toBeVisible();
     });
 
-    test('should validate period >= 100ms', async ({ page }) => {
+    test('should validate period >= 100ms for random type', async ({ page }) => {
         await page.locator('.ionc-btn-gen').first().click();
         await page.waitForSelector('.ionc-dialog-overlay.visible');
+
+        // Select random type (only random has period validation >= 100ms)
+        await page.selectOption('#ionc-gen-type', 'random');
+        await page.waitForTimeout(100);
 
         // Set invalid period
         await page.fill('#ionc-gen-period', '50');
@@ -414,7 +418,7 @@ test.describe('IONC Value Generator', () => {
         expect(prefs.params.linear).toEqual({
             min: 10,
             max: 90,
-            period: 3000,
+            pause: 3000,
             step: 15
         });
 

@@ -20,6 +20,9 @@ services:
       --uniset-url http://localhost:9494
       --uniset-url http://localhost:9595
       --uniset-url http://localhost:9696
+      --control-token admin123
+      --control-token operator456
+      --control-timeout 60s
     volumes:
       - ./config:/app/config:ro
     network_mode: host

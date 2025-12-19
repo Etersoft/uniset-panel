@@ -33,10 +33,11 @@ type Handlers struct {
 	ioncPoller      *ionc.Poller
 	modbusPoller    *modbus.Poller
 	opcuaPoller     *opcua.Poller
-	serverManager   *server.Manager // менеджер нескольких серверов
-	controlsEnabled bool            // true if uniset-config was specified (IONC controls visible)
+	serverManager   *server.Manager  // менеджер нескольких серверов
+	controlsEnabled bool             // true if uniset-config was specified (IONC controls visible)
 	uiConfig        *config.UIConfig
 	logStreamConfig *config.LogStreamConfig
+	controlMgr      *ControlManager  // менеджер сессий контроля
 }
 
 func NewHandlers(client *uniset.Client, store storage.Storage, p *poller.Poller, sensorCfg *sensorconfig.SensorConfig, pollInterval time.Duration) *Handlers {
@@ -93,6 +94,16 @@ func (h *Handlers) SetUIConfig(cfg *config.UIConfig) {
 // SetLogStreamConfig устанавливает конфигурацию стриминга логов
 func (h *Handlers) SetLogStreamConfig(cfg *config.LogStreamConfig) {
 	h.logStreamConfig = cfg
+}
+
+// SetControlManager устанавливает менеджер контроля сессий
+func (h *Handlers) SetControlManager(mgr *ControlManager) {
+	h.controlMgr = mgr
+}
+
+// GetControlManager возвращает менеджер контроля сессий
+func (h *Handlers) GetControlManager() *ControlManager {
+	return h.controlMgr
 }
 
 // SetSSEHub устанавливает SSE hub
@@ -582,6 +593,10 @@ type LogServerCommand struct {
 // SendLogServerCommand отправляет команду на LogServer объекта
 // POST /api/logs/{name}/command
 func (h *Handlers) SendLogServerCommand(w http.ResponseWriter, r *http.Request) {
+	if !h.checkControlAccess(w, r) {
+		return
+	}
+
 	name := r.PathValue("name")
 	if name == "" {
 		h.writeError(w, http.StatusBadRequest, "object name required")
@@ -798,6 +813,10 @@ type IONCSetRequest struct {
 // SetIONCSensorValue устанавливает значение датчика
 // POST /api/objects/{name}/ionc/set?server=...
 func (h *Handlers) SetIONCSensorValue(w http.ResponseWriter, r *http.Request) {
+	if !h.checkControlAccess(w, r) {
+		return
+	}
+
 	name, ok := h.requireObjectName(w, r)
 	if !ok {
 		return
@@ -834,6 +853,10 @@ type IONCFreezeRequest struct {
 // FreezeIONCSensor замораживает датчик
 // POST /api/objects/{name}/ionc/freeze?server=...
 func (h *Handlers) FreezeIONCSensor(w http.ResponseWriter, r *http.Request) {
+	if !h.checkControlAccess(w, r) {
+		return
+	}
+
 	name, ok := h.requireObjectName(w, r)
 	if !ok {
 		return
@@ -869,6 +892,10 @@ type IONCUnfreezeRequest struct {
 // UnfreezeIONCSensor размораживает датчик
 // POST /api/objects/{name}/ionc/unfreeze?server=...
 func (h *Handlers) UnfreezeIONCSensor(w http.ResponseWriter, r *http.Request) {
+	if !h.checkControlAccess(w, r) {
+		return
+	}
+
 	name, ok := h.requireObjectName(w, r)
 	if !ok {
 		return
@@ -1336,6 +1363,10 @@ func (h *Handlers) GetOPCUAParams(w http.ResponseWriter, r *http.Request) {
 // SetOPCUAParams устанавливает параметры OPCUAExchange
 // POST /api/objects/{name}/opcua/params
 func (h *Handlers) SetOPCUAParams(w http.ResponseWriter, r *http.Request) {
+	if !h.checkControlAccess(w, r) {
+		return
+	}
+
 	name, ok := h.requireObjectName(w, r)
 	if !ok {
 		return
@@ -1456,6 +1487,10 @@ func (h *Handlers) GetOPCUADiagnostics(w http.ResponseWriter, r *http.Request) {
 // TakeOPCUAControl включает HTTP-контроль
 // POST /api/objects/{name}/opcua/control/take
 func (h *Handlers) TakeOPCUAControl(w http.ResponseWriter, r *http.Request) {
+	if !h.checkControlAccess(w, r) {
+		return
+	}
+
 	name, ok := h.requireObjectName(w, r)
 	if !ok {
 		return
@@ -1477,6 +1512,10 @@ func (h *Handlers) TakeOPCUAControl(w http.ResponseWriter, r *http.Request) {
 // ReleaseOPCUAControl отключает HTTP-контроль
 // POST /api/objects/{name}/opcua/control/release
 func (h *Handlers) ReleaseOPCUAControl(w http.ResponseWriter, r *http.Request) {
+	if !h.checkControlAccess(w, r) {
+		return
+	}
+
 	name, ok := h.requireObjectName(w, r)
 	if !ok {
 		return
@@ -1515,6 +1554,10 @@ func (h *Handlers) GetServers(w http.ResponseWriter, r *http.Request) {
 // AddServer добавляет новый сервер
 // POST /api/servers
 func (h *Handlers) AddServer(w http.ResponseWriter, r *http.Request) {
+	if !h.checkControlAccess(w, r) {
+		return
+	}
+
 	if h.serverManager == nil {
 		h.writeError(w, http.StatusServiceUnavailable, "server manager not initialized")
 		return
@@ -1566,6 +1609,10 @@ func (h *Handlers) AddServer(w http.ResponseWriter, r *http.Request) {
 // RemoveServer удаляет сервер по ID
 // DELETE /api/servers/{id}
 func (h *Handlers) RemoveServer(w http.ResponseWriter, r *http.Request) {
+	if !h.checkControlAccess(w, r) {
+		return
+	}
+
 	if h.serverManager == nil {
 		h.writeError(w, http.StatusServiceUnavailable, "server manager not initialized")
 		return
@@ -1655,6 +1702,10 @@ func (h *Handlers) GetPollInterval(w http.ResponseWriter, r *http.Request) {
 // SetPollInterval изменяет интервал опроса
 // POST /api/settings/poll-interval
 func (h *Handlers) SetPollInterval(w http.ResponseWriter, r *http.Request) {
+	if !h.checkControlAccess(w, r) {
+		return
+	}
+
 	var req struct {
 		Interval int64 `json:"interval"` // миллисекунды
 	}
@@ -1748,6 +1799,10 @@ func (h *Handlers) GetMBParams(w http.ResponseWriter, r *http.Request) {
 // SetMBParams устанавливает параметры ModbusMaster
 // POST /api/objects/{name}/modbus/params
 func (h *Handlers) SetMBParams(w http.ResponseWriter, r *http.Request) {
+	if !h.checkControlAccess(w, r) {
+		return
+	}
+
 	name, ok := h.requireObjectName(w, r)
 	if !ok {
 		return
@@ -1881,6 +1936,10 @@ type MBModeSetRequest struct {
 // SetMBMode устанавливает режим ModbusMaster
 // POST /api/objects/{name}/modbus/mode
 func (h *Handlers) SetMBMode(w http.ResponseWriter, r *http.Request) {
+	if !h.checkControlAccess(w, r) {
+		return
+	}
+
 	name, ok := h.requireObjectName(w, r)
 	if !ok {
 		return
@@ -1913,6 +1972,10 @@ func (h *Handlers) SetMBMode(w http.ResponseWriter, r *http.Request) {
 // TakeMBControl перехватывает управление ModbusMaster через HTTP
 // POST /api/objects/{name}/modbus/control/take
 func (h *Handlers) TakeMBControl(w http.ResponseWriter, r *http.Request) {
+	if !h.checkControlAccess(w, r) {
+		return
+	}
+
 	name, ok := h.requireObjectName(w, r)
 	if !ok {
 		return
@@ -1934,6 +1997,10 @@ func (h *Handlers) TakeMBControl(w http.ResponseWriter, r *http.Request) {
 // ReleaseMBControl возвращает управление ModbusMaster
 // POST /api/objects/{name}/modbus/control/release
 func (h *Handlers) ReleaseMBControl(w http.ResponseWriter, r *http.Request) {
+	if !h.checkControlAccess(w, r) {
+		return
+	}
+
 	name, ok := h.requireObjectName(w, r)
 	if !ok {
 		return
@@ -1950,4 +2017,153 @@ func (h *Handlers) ReleaseMBControl(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.writeJSON(w, result)
+}
+
+// =============================================================================
+// Session Control API
+// =============================================================================
+
+// controlTokenRequest представляет запрос с токеном
+type controlTokenRequest struct {
+	Token string `json:"token"`
+}
+
+// GetControlStatus возвращает текущий статус контроля
+// GET /api/control/status
+func (h *Handlers) GetControlStatus(w http.ResponseWriter, r *http.Request) {
+	if h.controlMgr == nil {
+		// Контроль не настроен
+		h.writeJSON(w, ControlStatus{
+			Enabled:       false,
+			HasController: false,
+			IsController:  false,
+			TimeoutSec:    0,
+		})
+		return
+	}
+
+	token := r.Header.Get("X-Control-Token")
+	status := h.controlMgr.GetStatus(token)
+	h.writeJSON(w, status)
+}
+
+// TakeControl захватывает управление
+// POST /api/control/take
+func (h *Handlers) TakeControl(w http.ResponseWriter, r *http.Request) {
+	if h.controlMgr == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "control not configured")
+		return
+	}
+
+	var req controlTokenRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.Token == "" {
+		h.writeError(w, http.StatusBadRequest, "token is required")
+		return
+	}
+
+	err := h.controlMgr.TakeControl(req.Token)
+	if err != nil {
+		switch err {
+		case ErrInvalidToken:
+			h.writeError(w, http.StatusUnauthorized, "invalid token")
+		case ErrControlTaken:
+			h.writeError(w, http.StatusConflict, "control already taken by another session")
+		default:
+			h.writeError(w, http.StatusInternalServerError, err.Error())
+		}
+		return
+	}
+
+	status := h.controlMgr.GetStatus(req.Token)
+	h.writeJSON(w, status)
+}
+
+// ReleaseControl освобождает управление
+// POST /api/control/release
+func (h *Handlers) ReleaseControl(w http.ResponseWriter, r *http.Request) {
+	if h.controlMgr == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "control not configured")
+		return
+	}
+
+	var req controlTokenRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.Token == "" {
+		h.writeError(w, http.StatusBadRequest, "token is required")
+		return
+	}
+
+	err := h.controlMgr.ReleaseControl(req.Token)
+	if err != nil {
+		switch err {
+		case ErrNotController:
+			h.writeError(w, http.StatusForbidden, "not the controller")
+		default:
+			h.writeError(w, http.StatusInternalServerError, err.Error())
+		}
+		return
+	}
+
+	status := h.controlMgr.GetStatus(req.Token)
+	h.writeJSON(w, status)
+}
+
+// PingControl обновляет время активности контроллера
+// POST /api/control/ping
+func (h *Handlers) PingControl(w http.ResponseWriter, r *http.Request) {
+	if h.controlMgr == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "control not configured")
+		return
+	}
+
+	token := r.Header.Get("X-Control-Token")
+	if token == "" {
+		h.writeError(w, http.StatusBadRequest, "X-Control-Token header is required")
+		return
+	}
+
+	if !h.controlMgr.IsController(token) {
+		h.writeError(w, http.StatusForbidden, "not the controller")
+		return
+	}
+
+	h.controlMgr.Touch(token)
+	h.writeJSON(w, map[string]string{"status": "ok"})
+}
+
+// writeControlError отправляет ошибку контроля
+func (h *Handlers) writeControlError(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusForbidden)
+	json.NewEncoder(w).Encode(map[string]string{
+		"error": "Control not authorized",
+		"code":  "CONTROL_REQUIRED",
+	})
+}
+
+// checkControlAccess проверяет доступ на запись
+// Возвращает true если доступ разрешён
+func (h *Handlers) checkControlAccess(w http.ResponseWriter, r *http.Request) bool {
+	// Если контроль не настроен, разрешаем всё
+	if h.controlMgr == nil || !h.controlMgr.IsEnabled() {
+		return true
+	}
+
+	token := r.Header.Get("X-Control-Token")
+	if h.controlMgr.IsController(token) {
+		h.controlMgr.Touch(token)
+		return true
+	}
+
+	h.writeControlError(w)
+	return false
 }

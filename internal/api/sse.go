@@ -17,14 +17,16 @@ import (
 
 // SSEHub управляет SSE подключениями клиентов
 type SSEHub struct {
-	mu      sync.RWMutex
-	clients map[*sseClient]bool
+	mu         sync.RWMutex
+	clients    map[*sseClient]bool
+	controlMgr *ControlManager // для освобождения контроля при отключении
 }
 
 type sseClient struct {
-	objectName string           // если пусто - получает все события
-	events     chan SSEEvent
-	done       chan struct{}
+	objectName   string         // если пусто - получает все события
+	controlToken string         // токен контроля (если клиент контроллер)
+	events       chan SSEEvent
+	done         chan struct{}
 }
 
 // SSEEvent представляет событие для отправки клиенту
@@ -44,19 +46,38 @@ func NewSSEHub() *SSEHub {
 	}
 }
 
+// SetControlManager устанавливает менеджер контроля (для освобождения при отключении)
+func (h *SSEHub) SetControlManager(mgr *ControlManager) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.controlMgr = mgr
+}
+
 // AddClient добавляет нового SSE клиента
 func (h *SSEHub) AddClient(objectName string) *sseClient {
+	return h.AddClientWithToken(objectName, "")
+}
+
+// AddClientWithToken добавляет нового SSE клиента с токеном контроля
+func (h *SSEHub) AddClientWithToken(objectName, controlToken string) *sseClient {
 	client := &sseClient{
-		objectName: objectName,
-		events:     make(chan SSEEvent, 10),
-		done:       make(chan struct{}),
+		objectName:   objectName,
+		controlToken: controlToken,
+		events:       make(chan SSEEvent, 10),
+		done:         make(chan struct{}),
 	}
 
 	h.mu.Lock()
 	h.clients[client] = true
+	controlMgr := h.controlMgr
 	h.mu.Unlock()
 
-	logger.Debug("SSE client connected", "object", objectName, "total_clients", len(h.clients))
+	// Если клиент переподключается с токеном, отменяем отложенное освобождение
+	if controlToken != "" && controlMgr != nil {
+		controlMgr.CancelPendingRelease(controlToken)
+	}
+
+	logger.Debug("SSE client connected", "object", objectName, "hasToken", controlToken != "", "total_clients", len(h.clients))
 	return client
 }
 
@@ -64,9 +85,17 @@ func (h *SSEHub) AddClient(objectName string) *sseClient {
 func (h *SSEHub) RemoveClient(client *sseClient) {
 	h.mu.Lock()
 	delete(h.clients, client)
+	controlMgr := h.controlMgr
 	h.mu.Unlock()
 
 	close(client.done)
+
+	// Если клиент был контроллером, освобождаем управление
+	if client.controlToken != "" && controlMgr != nil {
+		controlMgr.ReleaseBySSE(client.controlToken)
+		logger.Debug("SSE client disconnected, released control", "object", client.objectName)
+	}
+
 	logger.Debug("SSE client disconnected", "object", client.objectName, "total_clients", len(h.clients))
 }
 
@@ -75,8 +104,8 @@ func (h *SSEHub) Broadcast(event SSEEvent) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	// События server_status и objects_list отправляются всем клиентам
-	isGlobalEvent := event.Type == "server_status" || event.Type == "objects_list"
+	// Глобальные события отправляются всем клиентам
+	isGlobalEvent := event.Type == "server_status" || event.Type == "objects_list" || event.Type == "control_status"
 
 	for client := range h.clients {
 		// Отправляем если: глобальное событие ИЛИ клиент подписан на все объекты ИЛИ на конкретный
@@ -237,8 +266,26 @@ func (h *SSEHub) ClientCount() int {
 	return len(h.clients)
 }
 
+// BroadcastControlStatus отправляет статус контроля всем клиентам
+func (h *SSEHub) BroadcastControlStatus(status ControlStatus) {
+	h.Broadcast(SSEEvent{
+		Type:      "control_status",
+		Data:      status,
+		Timestamp: time.Now(),
+	})
+}
+
+// UpdateClientControlToken обновляет токен контроля для клиента
+func (h *SSEHub) UpdateClientControlToken(client *sseClient, token string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if _, exists := h.clients[client]; exists {
+		client.controlToken = token
+	}
+}
+
 // HandleSSE обрабатывает SSE подключение
-// GET /api/events?object=ObjectName (опционально)
+// GET /api/events?object=ObjectName&token=xxx (опционально)
 func (h *Handlers) HandleSSE(w http.ResponseWriter, r *http.Request) {
 	// Проверяем поддержку SSE
 	flusher, ok := w.(http.Flusher)
@@ -247,8 +294,9 @@ func (h *Handlers) HandleSSE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Получаем имя объекта из query параметра (опционально)
+	// Получаем параметры из query
 	objectName := r.URL.Query().Get("object")
+	controlToken := r.URL.Query().Get("token")
 
 	// Устанавливаем заголовки SSE
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -257,18 +305,35 @@ func (h *Handlers) HandleSSE(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("X-Accel-Buffering", "no") // Для nginx
 
-	// Регистрируем клиента
-	client := h.sseHub.AddClient(objectName)
+	// Регистрируем клиента с токеном (если передан)
+	client := h.sseHub.AddClientWithToken(objectName, controlToken)
 	defer h.sseHub.RemoveClient(client)
 
-	// Отправляем приветственное сообщение с capabilities
+	// Формируем данные приветственного сообщения
+	connectedData := map[string]interface{}{
+		"pollInterval": h.pollInterval.Milliseconds(),
+		"smEnabled":    h.smPoller != nil,
+	}
+
+	// Добавляем статус контроля если менеджер настроен
+	if h.controlMgr != nil {
+		status := h.controlMgr.GetStatus(controlToken)
+		connectedData["control"] = status
+	} else {
+		// Контроль отключён
+		connectedData["control"] = ControlStatus{
+			Enabled:       false,
+			HasController: false,
+			IsController:  false,
+			TimeoutSec:    0,
+		}
+	}
+
+	// Отправляем приветственное сообщение с capabilities и статусом контроля
 	h.sendSSEEvent(w, SSEEvent{
 		Type:      "connected",
 		Timestamp: time.Now(),
-		Data: map[string]interface{}{
-			"pollInterval": h.pollInterval.Milliseconds(),
-			"smEnabled":    h.smPoller != nil,
-		},
+		Data:      connectedData,
 	})
 	flusher.Flush()
 

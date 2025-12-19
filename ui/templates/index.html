@@ -32,6 +32,7 @@
                     <span class="sse-status-dot"></span>
                     <span class="sse-status-text">Connecting...</span>
                 </div>
+                <div class="control-status hidden" id="control-status"></div>
             </div>
         </header>
 
@@ -122,6 +123,27 @@
             <div class="sensor-dialog-footer">
                 <span id="sensor-dialog-count">0 sensors</span>
                 <span id="sensor-dialog-hint">ESC — reset filter / close</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Control Session Dialog -->
+    <div class="control-dialog-overlay" id="control-dialog-overlay" onclick="if(event.target === this) closeControlDialog()">
+        <div class="control-dialog">
+            <div class="control-dialog-header">
+                <span class="control-dialog-title">Take Control</span>
+                <button class="control-dialog-close" onclick="closeControlDialog()" title="Close">&times;</button>
+            </div>
+            <div class="control-dialog-body">
+                <p>Enter your access token to take control of the system.</p>
+                <input type="password" id="control-token-input" class="control-token-input"
+                       placeholder="Enter token" autocomplete="off"
+                       onkeydown="if(event.key === 'Enter') tryTakeControl()">
+            </div>
+            <div class="control-dialog-error" id="control-error"></div>
+            <div class="control-dialog-footer">
+                <button class="control-btn control-btn-primary" onclick="tryTakeControl()">Take Control</button>
+                <button class="control-btn control-btn-cancel" onclick="closeControlDialog()">Cancel</button>
             </div>
         </div>
     </div>

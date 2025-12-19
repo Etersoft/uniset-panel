@@ -110,6 +110,12 @@ func (s *Server) setupRoutes(staticFS fs.FS) {
 	// Application config for UI
 	s.mux.HandleFunc("GET /api/config", s.handlers.GetConfig)
 
+	// Session Control API
+	s.mux.HandleFunc("GET /api/control/status", s.handlers.GetControlStatus)
+	s.mux.HandleFunc("POST /api/control/take", s.handlers.TakeControl)
+	s.mux.HandleFunc("POST /api/control/release", s.handlers.ReleaseControl)
+	s.mux.HandleFunc("POST /api/control/ping", s.handlers.PingControl)
+
 	// Static files
 	staticHandler := http.FileServer(http.FS(staticFS))
 	s.mux.Handle("GET /static/", staticHandler)

@@ -45,6 +45,31 @@
     width: auto;
 }
 
+/* --- Modbus Search Mode Toggle --- */
+.mb-search-mode {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.mb-search-mode input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+}
+
+.mb-search-mode span {
+    user-select: none;
+}
+
+.mb-search-mode:hover {
+    color: var(--text-primary);
+}
+
 /* --- Type Filter Dropdown --- */
 .type-filter {
     padding: 0.25rem 0.5rem;
@@ -3454,7 +3479,7 @@ header h1 {
 /* External sensor badge */
 .external-badge {
     display: inline-block;
-    background: var(--accent-color);
+    background: var(--accent-blue);
     color: white;
     font-size: 9px;
     font-weight: 600;
@@ -4124,4 +4149,186 @@ header h1 {
     padding: 24px;
     text-align: center;
     color: var(--text-muted);
+}
+
+/* ============================================================================
+   Session Control - banner and dialog
+   ============================================================================ */
+
+/* Control Status (compact header indicator) */
+.control-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.control-status.hidden {
+    display: none;
+}
+
+.control-status-readonly {
+    color: #ffc107;
+    border: 1px solid rgba(255, 193, 7, 0.3);
+}
+
+.control-status-active {
+    color: #4caf50;
+    border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+.control-status-icon {
+    font-size: 12px;
+}
+
+.control-status-text {
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.control-status-btn {
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    border: 1px solid currentColor;
+    border-radius: 3px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    margin-left: 4px;
+}
+
+.control-status-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Control Dialog */
+.control-dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.control-dialog-overlay.visible {
+    display: flex;
+}
+
+.control-dialog {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.control-dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.control-dialog-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.control-dialog-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.control-dialog-close:hover {
+    color: var(--text-primary);
+}
+
+.control-dialog-body {
+    padding: 20px;
+}
+
+.control-dialog-body p {
+    margin: 0 0 16px 0;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.control-token-input {
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-family: inherit;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    box-sizing: border-box;
+}
+
+.control-token-input:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+}
+
+.control-dialog-error {
+    padding: 0 20px;
+    color: #f44336;
+    font-size: 13px;
+    min-height: 20px;
+}
+
+.control-dialog-footer {
+    display: flex;
+    gap: 12px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-color);
+    justify-content: flex-end;
+}
+
+.control-btn {
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.control-btn-primary {
+    background: var(--accent-blue);
+    color: #fff;
+}
+
+.control-btn-primary:hover {
+    background: #4a8ae0;
+}
+
+.control-btn-cancel {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+.control-btn-cancel:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
 }

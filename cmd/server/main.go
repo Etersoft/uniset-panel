@@ -83,6 +83,16 @@ func main() {
 	// Create SSE hub (needed for callbacks)
 	sseHub := api.NewSSEHub()
 
+	// Create control manager if tokens configured
+	var controlMgr *api.ControlManager
+	if cfg.IsControlEnabled() {
+		controlMgr = api.NewControlManager(cfg.ControlTokens, cfg.GetControlTimeout(), sseHub)
+		sseHub.SetControlManager(controlMgr)
+		logger.Info("Session control enabled",
+			"tokens", len(cfg.ControlTokens),
+			"timeout", cfg.GetControlTimeout())
+	}
+
 	// Set callbacks for SSE broadcasting
 	serverMgr.SetObjectCallback(sseHub.BroadcastObjectDataWithServer)
 	serverMgr.SetIONCCallback(sseHub.BroadcastIONCSensorBatchWithServer)
@@ -120,6 +130,9 @@ func main() {
 	handlers.SetControlsEnabled(cfg.ConFile != "") // Controls visible only if uniset-config specified
 	handlers.SetUIConfig(cfg.UI)
 	handlers.SetLogStreamConfig(cfg.LogStream)
+	if controlMgr != nil {
+		handlers.SetControlManager(controlMgr)
+	}
 
 	// Set pollers if available
 	if ioncPollerInstance != nil {
@@ -186,6 +199,11 @@ func main() {
 	<-quit
 
 	logger.Info("Shutting down server...")
+
+	// Stop control manager
+	if controlMgr != nil {
+		controlMgr.Stop()
+	}
 
 	// Shutdown server manager
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)

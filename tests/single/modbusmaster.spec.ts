@@ -149,7 +149,7 @@ test.describe('ModbusMaster renderer', () => {
     await expect(mbValCell).toBeVisible();
   });
 
-  test('should filter registers by text', async ({ page }) => {
+  test('should filter registers by sensor name', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('#objects-list li', { timeout: 15000 });
 
@@ -161,6 +161,10 @@ test.describe('ModbusMaster renderer', () => {
     // Wait for registers to load
     await page.waitForTimeout(1500);
 
+    // Enable "by sensor" search mode
+    const bySensorCheckbox = page.locator(`#mb-search-sensor-${MB_OBJECT}`);
+    await bySensorCheckbox.check();
+
     const filterInput = page.locator(`#mb-registers-filter-${MB_OBJECT}`);
     await filterInput.fill('AI');
 
@@ -168,6 +172,31 @@ test.describe('ModbusMaster renderer', () => {
     await page.waitForTimeout(500);
 
     // All visible registers should contain "AI" in name
+    const visibleRows = page.locator(`#mb-registers-tbody-${MB_OBJECT} tr`);
+    const count = await visibleRows.count();
+    expect(count).toBeGreaterThan(0);
+  });
+
+  test('should filter registers by mbreg number', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+
+    const mbItem = page.locator('#objects-list li', { hasText: MB_OBJECT });
+    await mbItem.click();
+
+    await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
+
+    // Wait for registers to load
+    await page.waitForTimeout(1500);
+
+    // By default, filter searches by mbreg
+    const filterInput = page.locator(`#mb-registers-filter-${MB_OBJECT}`);
+    await filterInput.fill('70');
+
+    // Wait for filter to apply
+    await page.waitForTimeout(500);
+
+    // Should show registers with mbreg containing "70"
     const visibleRows = page.locator(`#mb-registers-tbody-${MB_OBJECT} tr`);
     const count = await visibleRows.count();
     expect(count).toBeGreaterThan(0);

@@ -112,6 +112,21 @@ type Config struct {
 	SMPollInterval  time.Duration // Интервал опроса SM (0 = использовать PollInterval)
 	UnisetSupplier  string        // Имя поставщика для операций set/freeze/unfreeze
 	SensorBatchSize int           // Макс. количество датчиков в одном запросе (default: 300)
+	ControlTokens   []string      // Токены для управления (пусто = управление для всех)
+	ControlTimeout  time.Duration // Таймаут неактивности контроллера (default: 60s)
+}
+
+// IsControlEnabled возвращает true если контроль токенами включён
+func (c *Config) IsControlEnabled() bool {
+	return len(c.ControlTokens) > 0
+}
+
+// GetControlTimeout возвращает таймаут с default
+func (c *Config) GetControlTimeout() time.Duration {
+	if c.ControlTimeout <= 0 {
+		return 60 * time.Second
+	}
+	return c.ControlTimeout
 }
 
 // GetSensorBatchSize возвращает размер батча датчиков с default
@@ -126,6 +141,7 @@ func Parse() *Config {
 	cfg := &Config{}
 
 	var unisetURLs stringSlice
+	var controlTokens stringSlice
 
 	flag.Var(&unisetURLs, "uniset-url", "UniSet2 HTTP API URL (can be specified multiple times)")
 	flag.StringVar(&cfg.Addr, "addr", ":8181", "Listen address (e.g. :8181 or 127.0.0.1:8181)")
@@ -144,8 +160,11 @@ func Parse() *Config {
 	flag.DurationVar(&cfg.SMPollInterval, "sm-poll-interval", 0, "SharedMemory polling interval (0 = use poll-interval)")
 	flag.StringVar(&cfg.UnisetSupplier, "uniset-supplier", "TestProc", "UniSet2 supplier name for set/freeze/unfreeze operations")
 	flag.IntVar(&cfg.SensorBatchSize, "sensor-batch-size", 300, "Max sensors per request to UniSet2 (default: 300)")
+	flag.Var(&controlTokens, "control-token", "Control token for write access (can be specified multiple times, empty = allow all)")
+	flag.DurationVar(&cfg.ControlTimeout, "control-timeout", 60*time.Second, "Control session timeout (default: 60s)")
 
 	flag.Parse()
+	cfg.ControlTokens = controlTokens
 
 	cfg.Storage = StorageType(storageStr)
 	if cfg.Storage != StorageMemory && cfg.Storage != StorageSQLite {
