@@ -1,0 +1,44 @@
+name: Tests
+
+on:
+  pull_request:
+    branches: [master, main]
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [master, main]
+
+jobs:
+  go-tests:
+    name: Go Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: Run unit tests
+        run: go test -mod=vendor -v ./...
+
+      - name: Build check
+        run: go build -mod=vendor -o /dev/null ./cmd/server
+
+  js-tests:
+    name: Playwright E2E Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run E2E tests (single server)
+        run: |
+          docker compose up --build --abort-on-container-exit --exit-code-from e2e
+          docker compose down
+
+      - name: Run E2E tests (multi server)
+        run: |
+          docker compose -f docker-compose.multi.yml up --build --abort-on-container-exit --exit-code-from e2e-multi
+          docker compose -f docker-compose.multi.yml down

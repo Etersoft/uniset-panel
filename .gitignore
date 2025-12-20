@@ -1,6 +1,6 @@
 # Binaries
-uniset2-viewer
-uniset2-viewer-go
+uniset-panel
+uniset-panel-go
 *.exe
 
 # Database

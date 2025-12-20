@@ -587,14 +587,15 @@ func TestGetVariableHistoryRange_WithTimeParams(t *testing.T) {
 	p := poller.New(client, store, 5*time.Second, time.Hour)
 	handlers := NewHandlers(client, store, p, nil, 5*time.Second)
 
-	now := time.Now()
+	// Truncate to seconds to avoid nanosecond precision issues with RFC3339
+	now := time.Now().Truncate(time.Second)
 	store.Save("", "TestProc", "var1", 100, now.Add(-2*time.Hour))
 	store.Save("", "TestProc", "var1", 200, now.Add(-30*time.Minute))
 	store.Save("", "TestProc", "var1", 300, now)
 
 	// Request with from/to parameters
 	from := now.Add(-1 * time.Hour).Format(time.RFC3339)
-	to := now.Format(time.RFC3339)
+	to := now.Add(time.Second).Format(time.RFC3339)
 	req := httptest.NewRequest("GET", "/api/objects/TestProc/variables/var1/history/range?from="+from+"&to="+to, nil)
 	req.SetPathValue("name", "TestProc")
 	req.SetPathValue("variable", "var1")

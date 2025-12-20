@@ -581,7 +581,7 @@ test.describe('ModbusSlave renderer', () => {
 
       // Check localStorage
       const pinnedIds = await page.evaluate(() => {
-        const stored = localStorage.getItem('uniset2-viewer-mbs-pinned');
+        const stored = localStorage.getItem('uniset-panel-mbs-pinned');
         return stored ? JSON.parse(stored) : {};
       });
 

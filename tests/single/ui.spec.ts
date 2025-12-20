@@ -1,11 +1,11 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('UniSet2 Viewer UI', () => {
+test.describe('UniSet Panel UI', () => {
 
   test('should load main page with title', async ({ page }) => {
     await page.goto('/');
-    await expect(page).toHaveTitle('UniSet2 Viewer');
-    await expect(page.locator('h1')).toHaveText('UniSet2 Viewer');
+    await expect(page).toHaveTitle('UniSet Panel');
+    await expect(page.locator('h1')).toHaveText('UniSet Panel');
   });
 
   test('should display objects list (not empty)', async ({ page }) => {
