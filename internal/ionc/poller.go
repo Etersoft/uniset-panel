@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/pv/uniset2-viewer-go/internal/poller"
+	"github.com/pv/uniset2-viewer-go/internal/recording"
 	"github.com/pv/uniset2-viewer-go/internal/uniset"
 )
 
@@ -78,5 +79,18 @@ func NewPoller(client *uniset.Client, interval time.Duration, batchSize int, cal
 		"IONC",
 	)
 
-	return &Poller{BasePoller: base}
+	p := &Poller{BasePoller: base}
+
+	// Устанавливаем функцию конвертации для recording
+	base.SetToDataRecord(func(serverID string, update SensorUpdate) recording.DataRecord {
+		return recording.DataRecord{
+			ServerID:     serverID,
+			ObjectName:   update.ObjectName,
+			VariableName: "ionc:" + update.Sensor.Name,
+			Value:        update.Sensor.Value,
+			Timestamp:    update.Timestamp,
+		}
+	})
+
+	return p
 }

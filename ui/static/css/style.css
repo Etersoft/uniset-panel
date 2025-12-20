@@ -4332,3 +4332,165 @@ header h1 {
     background: var(--bg-secondary);
     color: var(--text-primary);
 }
+
+/* Recording Status */
+.recording-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    font-size: 12px;
+    position: relative;
+}
+
+.recording-status.hidden {
+    display: none;
+}
+
+.recording-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+}
+
+.recording-status.recording .recording-dot {
+    background: #f44336;
+    animation: recording-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes recording-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+.recording-label {
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.recording-status.recording .recording-label {
+    color: #f44336;
+}
+
+.recording-badge {
+    padding: 2px 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    font-size: 10px;
+    color: var(--text-secondary);
+}
+
+.recording-badge.hidden {
+    display: none;
+}
+
+.recording-btn {
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    background: transparent;
+    border: 1px solid var(--text-muted);
+    border-radius: 3px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    margin-left: 4px;
+}
+
+.recording-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--text-secondary);
+    color: var(--text-secondary);
+}
+
+.recording-status.recording .recording-btn {
+    border-color: #f44336;
+    color: #f44336;
+}
+
+.recording-status.recording .recording-btn:hover {
+    background: rgba(244, 67, 54, 0.1);
+}
+
+.recording-dropdown {
+    position: relative;
+}
+
+.recording-dropdown-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.recording-dropdown-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.recording-dropdown-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--text-secondary);
+    color: var(--text-secondary);
+}
+
+.recording-dropdown-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    z-index: 100;
+    min-width: 180px;
+    padding: 4px 0;
+}
+
+.recording-dropdown-menu.hidden {
+    display: none;
+}
+
+.recording-dropdown-item {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.recording-dropdown-item:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.recording-dropdown-item.recording-clear {
+    color: #f44336;
+}
+
+.recording-dropdown-item.recording-clear:hover {
+    background: rgba(244, 67, 54, 0.1);
+}
+
+.recording-dropdown-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 4px 0;
+}

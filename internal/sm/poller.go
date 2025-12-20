@@ -184,7 +184,7 @@ func (p *Poller) poll() {
 		return
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 
 	// Отправляем обновления для каждого подписчика
 	for sensorName, objects := range allSensors {

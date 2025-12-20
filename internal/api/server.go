@@ -116,6 +116,17 @@ func (s *Server) setupRoutes(staticFS fs.FS) {
 	s.mux.HandleFunc("POST /api/control/release", s.handlers.ReleaseControl)
 	s.mux.HandleFunc("POST /api/control/ping", s.handlers.PingControl)
 
+	// Recording API
+	s.mux.HandleFunc("GET /api/recording/status", s.handlers.GetRecordingStatus)
+	s.mux.HandleFunc("POST /api/recording/start", s.handlers.StartRecording)
+	s.mux.HandleFunc("POST /api/recording/stop", s.handlers.StopRecording)
+	s.mux.HandleFunc("DELETE /api/recording/clear", s.handlers.ClearRecording)
+
+	// Export API
+	s.mux.HandleFunc("GET /api/export/database", s.handlers.ExportDatabase)
+	s.mux.HandleFunc("GET /api/export/csv", s.handlers.ExportCSV)
+	s.mux.HandleFunc("GET /api/export/json", s.handlers.ExportJSON)
+
 	// Static files
 	staticHandler := http.FileServer(http.FS(staticFS))
 	s.mux.Handle("GET /static/", staticHandler)

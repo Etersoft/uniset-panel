@@ -23,6 +23,7 @@ services:
       --control-token admin123
       --control-token operator456
       --control-timeout 60s
+      --recording-path /tmp/recording.db
     volumes:
       - ./config:/app/config:ro
     network_mode: host

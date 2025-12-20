@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/pv/uniset2-viewer-go/internal/logger"
+	"github.com/pv/uniset2-viewer-go/internal/recording"
 	"github.com/pv/uniset2-viewer-go/internal/storage"
 	"github.com/pv/uniset2-viewer-go/internal/uniset"
 )
@@ -26,6 +27,7 @@ type Poller struct {
 	lastCleanupTime time.Time
 
 	eventCallback EventCallback
+	recordingMgr  *recording.Manager // менеджер записи истории
 }
 
 func New(client *uniset.Client, store storage.Storage, interval, ttl time.Duration) *Poller {
@@ -53,6 +55,13 @@ func (p *Poller) SetEventCallback(cb EventCallback) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.eventCallback = cb
+}
+
+// SetRecordingManager устанавливает менеджер записи истории
+func (p *Poller) SetRecordingManager(mgr *recording.Manager) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.recordingMgr = mgr
 }
 
 // Watch добавляет объект в список наблюдения
@@ -102,7 +111,7 @@ func (p *Poller) poll() {
 	}
 	p.mu.RUnlock()
 
-	now := time.Now()
+	now := time.Now().UTC()
 
 	for _, objectName := range objects {
 		data, err := p.client.GetObjectData(objectName)
@@ -127,6 +136,10 @@ func (p *Poller) poll() {
 				if err := p.storage.Save(p.serverID, objectName, varName, value, now); err != nil {
 					logger.Warn("Save variable failed", "object", objectName, "var", varName, "error", err)
 				}
+				// Сохраняем в recording (если включено)
+				if p.recordingMgr != nil {
+					p.recordingMgr.Save(p.serverID, objectName, varName, value, now)
+				}
 			}
 		}
 
@@ -138,6 +151,10 @@ func (p *Poller) poll() {
 					if err := p.storage.Save(p.serverID, objectName, varName, io.Value, now); err != nil {
 						logger.Warn("Save IO input failed", "object", objectName, "var", varName, "error", err)
 					}
+					// Сохраняем в recording (если включено)
+					if p.recordingMgr != nil {
+						p.recordingMgr.Save(p.serverID, objectName, varName, io.Value, now)
+					}
 				}
 			}
 			if data.IO.Out != nil {
@@ -145,6 +162,10 @@ func (p *Poller) poll() {
 					varName := "io.out." + key
 					if err := p.storage.Save(p.serverID, objectName, varName, io.Value, now); err != nil {
 						logger.Warn("Save IO output failed", "object", objectName, "var", varName, "error", err)
+					}
+					// Сохраняем в recording (если включено)
+					if p.recordingMgr != nil {
+						p.recordingMgr.Save(p.serverID, objectName, varName, io.Value, now)
 					}
 				}
 			}

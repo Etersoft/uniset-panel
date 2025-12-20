@@ -33,6 +33,28 @@
                     <span class="sse-status-text">Connecting...</span>
                 </div>
                 <div class="control-status hidden" id="control-status"></div>
+                <div class="recording-status hidden" id="recording-status">
+                    <span class="recording-dot" id="recording-dot"></span>
+                    <span class="recording-label" id="recording-label">Rec</span>
+                    <span class="recording-badge hidden" id="recording-badge">0 / 0B</span>
+                    <button class="recording-btn" id="recording-toggle-btn" title="Start recording">Record</button>
+                    <div class="recording-dropdown">
+                        <button class="recording-dropdown-btn" id="recording-download-btn" title="Export data">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                        </button>
+                        <div class="recording-dropdown-menu hidden" id="recording-dropdown-menu">
+                            <button class="recording-dropdown-item" data-format="sqlite">SQLite Database (.db)</button>
+                            <button class="recording-dropdown-item" data-format="csv">CSV Export (.csv)</button>
+                            <button class="recording-dropdown-item" data-format="json">JSON Export (.json)</button>
+                            <div class="recording-dropdown-divider"></div>
+                            <button class="recording-dropdown-item recording-clear" data-action="clear">Clear recording data</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </header>
 

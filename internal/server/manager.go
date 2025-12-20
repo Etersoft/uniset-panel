@@ -11,6 +11,7 @@ import (
 	"github.com/pv/uniset2-viewer-go/internal/ionc"
 	"github.com/pv/uniset2-viewer-go/internal/modbus"
 	"github.com/pv/uniset2-viewer-go/internal/opcua"
+	"github.com/pv/uniset2-viewer-go/internal/recording"
 	"github.com/pv/uniset2-viewer-go/internal/storage"
 	"github.com/pv/uniset2-viewer-go/internal/uniset"
 )
@@ -49,6 +50,9 @@ type Manager struct {
 	opcuaCallback   OPCUAEventCallback
 	statusCallback  StatusEventCallback
 	objectsCallback ObjectsChangedCallback
+
+	// Recording manager for history recording
+	recordingMgr *recording.Manager
 }
 
 // NewManager создаёт новый менеджер серверов
@@ -111,6 +115,21 @@ func (m *Manager) SetObjectsCallback(cb ObjectsChangedCallback) {
 	m.objectsCallback = cb
 }
 
+// SetRecordingManager устанавливает менеджер записи для всех pollers
+func (m *Manager) SetRecordingManager(mgr *recording.Manager) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.recordingMgr = mgr
+
+	// Устанавливаем на все существующие инстансы
+	for _, instance := range m.instances {
+		instance.Poller.SetRecordingManager(mgr)
+		instance.IONCPoller.SetRecordingManager(mgr)
+		instance.ModbusPoller.SetRecordingManager(mgr)
+		instance.OPCUAPoller.SetRecordingManager(mgr)
+	}
+}
+
 // AddServer добавляет новый сервер
 func (m *Manager) AddServer(cfg config.ServerConfig) error {
 	m.mu.Lock()
@@ -140,6 +159,14 @@ func (m *Manager) AddServer(cfg config.ServerConfig) error {
 		m.statusCallback,
 		m.objectsCallback,
 	)
+
+	// Set recording manager on all pollers if configured
+	if m.recordingMgr != nil {
+		instance.Poller.SetRecordingManager(m.recordingMgr)
+		instance.IONCPoller.SetRecordingManager(m.recordingMgr)
+		instance.ModbusPoller.SetRecordingManager(m.recordingMgr)
+		instance.OPCUAPoller.SetRecordingManager(m.recordingMgr)
+	}
 
 	m.instances[cfg.ID] = instance
 	instance.Start()
@@ -443,4 +470,48 @@ func (m *Manager) GetFirstServer() (*Instance, bool) {
 		return instance, true
 	}
 	return nil, false
+}
+
+// GetAllInstances возвращает все экземпляры серверов
+func (m *Manager) GetAllInstances() []*Instance {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	result := make([]*Instance, 0, len(m.instances))
+	for _, instance := range m.instances {
+		result = append(result, instance)
+	}
+	return result
+}
+
+// ForceEmitAllPollers принудительно отправляет текущие значения со всех pollers
+// Используется при старте recording для сохранения начальных значений
+func (m *Manager) ForceEmitAllPollers() {
+	instances := m.GetAllInstances()
+
+	slog.Info("ForceEmitAllPollers started", "instances", len(instances))
+
+	for _, instance := range instances {
+		serverID := instance.Config.ID
+
+		// IONC poller
+		if instance.IONCPoller != nil {
+			slog.Debug("ForceEmitAll for IONC poller", "server", serverID)
+			instance.IONCPoller.ForceEmitAll()
+		}
+
+		// Modbus poller
+		if instance.ModbusPoller != nil {
+			slog.Debug("ForceEmitAll for Modbus poller", "server", serverID)
+			instance.ModbusPoller.ForceEmitAll()
+		}
+
+		// OPCUA poller
+		if instance.OPCUAPoller != nil {
+			slog.Debug("ForceEmitAll for OPCUA poller", "server", serverID)
+			instance.OPCUAPoller.ForceEmitAll()
+		}
+	}
+
+	slog.Info("ForceEmitAllPollers completed")
 }

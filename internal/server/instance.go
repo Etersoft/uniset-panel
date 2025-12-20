@@ -96,6 +96,7 @@ func NewInstance(
 			ioncCallback(serverID, serverName, updates)
 		}
 	})
+	ioncPoller.SetServerID(serverID)
 
 	// Создаём Modbus poller
 	modbusPoller := modbus.NewPoller(client, pollInterval, sensorBatchSize, func(updates []modbus.RegisterUpdate) {
@@ -103,6 +104,7 @@ func NewInstance(
 			modbusCallback(serverID, serverName, updates)
 		}
 	})
+	modbusPoller.SetServerID(serverID)
 
 	// Создаём OPCUA poller
 	opcuaPoller := opcua.NewPoller(client, pollInterval, sensorBatchSize, func(updates []opcua.SensorUpdate) {
@@ -110,6 +112,7 @@ func NewInstance(
 			opcuaCallback(serverID, serverName, updates)
 		}
 	})
+	opcuaPoller.SetServerID(serverID)
 
 	ctx, cancel := context.WithCancel(context.Background())
 

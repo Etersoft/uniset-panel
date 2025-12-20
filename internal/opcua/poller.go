@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/pv/uniset2-viewer-go/internal/poller"
+	"github.com/pv/uniset2-viewer-go/internal/recording"
 	"github.com/pv/uniset2-viewer-go/internal/uniset"
 )
 
@@ -141,6 +142,17 @@ func NewPoller(client *uniset.Client, interval time.Duration, batchSize int, cal
 		baseCallback,
 		"OPCUA",
 	)
+
+	// Устанавливаем функцию конвертации для recording
+	base.SetToDataRecord(func(serverID string, update SensorUpdate) recording.DataRecord {
+		return recording.DataRecord{
+			ServerID:     serverID,
+			ObjectName:   update.ObjectName,
+			VariableName: "ext:" + update.Sensor.Name,
+			Value:        update.Sensor.Value,
+			Timestamp:    update.Timestamp,
+		}
+	})
 
 	return &Poller{
 		BasePoller:  base,

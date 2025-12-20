@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/pv/uniset2-viewer-go/internal/poller"
+	"github.com/pv/uniset2-viewer-go/internal/recording"
 	"github.com/pv/uniset2-viewer-go/internal/uniset"
 )
 
@@ -128,5 +129,18 @@ func NewPoller(client *uniset.Client, interval time.Duration, batchSize int, cal
 		"Modbus",
 	)
 
-	return &Poller{BasePoller: base}
+	p := &Poller{BasePoller: base}
+
+	// Устанавливаем функцию конвертации для recording
+	base.SetToDataRecord(func(serverID string, update RegisterUpdate) recording.DataRecord {
+		return recording.DataRecord{
+			ServerID:     serverID,
+			ObjectName:   update.ObjectName,
+			VariableName: "mb:" + update.Register.Name,
+			Value:        update.Register.Value,
+			Timestamp:    update.Timestamp,
+		}
+	})
+
+	return p
 }

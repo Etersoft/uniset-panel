@@ -114,6 +114,11 @@ type Config struct {
 	SensorBatchSize int           // Макс. количество датчиков в одном запросе (default: 300)
 	ControlTokens   []string      // Токены для управления (пусто = управление для всех)
 	ControlTimeout  time.Duration // Таймаут неактивности контроллера (default: 60s)
+
+	// Recording settings
+	RecordingPath    string // Путь к файлу записи SQLite (default: ./recording.db)
+	RecordingEnabled bool   // Запись включена по умолчанию (default: false)
+	MaxRecords       int64  // Макс. записей (циклический буфер, default: 1000000)
 }
 
 // IsControlEnabled возвращает true если контроль токенами включён
@@ -135,6 +140,22 @@ func (c *Config) GetSensorBatchSize() int {
 		return 300
 	}
 	return c.SensorBatchSize
+}
+
+// GetMaxRecords возвращает максимальное количество записей с default
+func (c *Config) GetMaxRecords() int64 {
+	if c.MaxRecords <= 0 {
+		return 1000000
+	}
+	return c.MaxRecords
+}
+
+// GetRecordingPath возвращает путь к файлу записи с default
+func (c *Config) GetRecordingPath() string {
+	if c.RecordingPath == "" {
+		return "./recording.db"
+	}
+	return c.RecordingPath
 }
 
 func Parse() *Config {
@@ -162,6 +183,11 @@ func Parse() *Config {
 	flag.IntVar(&cfg.SensorBatchSize, "sensor-batch-size", 300, "Max sensors per request to UniSet2 (default: 300)")
 	flag.Var(&controlTokens, "control-token", "Control token for write access (can be specified multiple times, empty = allow all)")
 	flag.DurationVar(&cfg.ControlTimeout, "control-timeout", 60*time.Second, "Control session timeout (default: 60s)")
+
+	// Recording flags
+	flag.StringVar(&cfg.RecordingPath, "recording-path", "./recording.db", "Recording SQLite database path")
+	flag.BoolVar(&cfg.RecordingEnabled, "recording-enabled", false, "Start recording on startup")
+	flag.Int64Var(&cfg.MaxRecords, "max-records", 1000000, "Max records in recording database (circular buffer)")
 
 	flag.Parse()
 	cfg.ControlTokens = controlTokens

@@ -18,6 +18,7 @@ import (
 	"github.com/pv/uniset2-viewer-go/internal/modbus"
 	"github.com/pv/uniset2-viewer-go/internal/opcua"
 	"github.com/pv/uniset2-viewer-go/internal/poller"
+	"github.com/pv/uniset2-viewer-go/internal/recording"
 	"github.com/pv/uniset2-viewer-go/internal/sensorconfig"
 	"github.com/pv/uniset2-viewer-go/internal/server"
 	"github.com/pv/uniset2-viewer-go/internal/sm"
@@ -93,13 +94,75 @@ func main() {
 			"timeout", cfg.GetControlTimeout())
 	}
 
-	// Set callbacks for SSE broadcasting
+	// Create recording manager
+	var recordingMgr *recording.Manager
+	recordingPath := cfg.GetRecordingPath()
+	if recordingPath != "" {
+		backend := recording.NewSQLiteBackend(recordingPath)
+		recordingMgr = recording.NewManager(backend, cfg.GetMaxRecords())
+		logger.Info("Recording manager initialized",
+			"path", recordingPath,
+			"max_records", cfg.GetMaxRecords())
+
+		// Start recording if enabled by default
+		if cfg.RecordingEnabled {
+			if err := recordingMgr.Start(); err != nil {
+				logger.Error("Failed to start recording", "error", err)
+			} else {
+				logger.Info("Recording started (enabled by default)")
+			}
+		}
+	}
+
+	// Set callbacks for SSE broadcasting (with Recording integration)
 	serverMgr.SetObjectCallback(sseHub.BroadcastObjectDataWithServer)
-	serverMgr.SetIONCCallback(sseHub.BroadcastIONCSensorBatchWithServer)
-	serverMgr.SetModbusCallback(sseHub.BroadcastModbusRegisterBatchWithServer)
-	serverMgr.SetOPCUACallback(sseHub.BroadcastOPCUASensorBatchWithServer)
+
+	// IONC callback with recording
+	serverMgr.SetIONCCallback(func(serverID, serverName string, updates []ionc.SensorUpdate) {
+		sseHub.BroadcastIONCSensorBatchWithServer(serverID, serverName, updates)
+		// Record IONC sensor values
+		if recordingMgr != nil && recordingMgr.IsRecording() {
+			now := time.Now()
+			for _, u := range updates {
+				varName := "ionc:" + u.Sensor.Name
+				recordingMgr.Save(serverID, u.ObjectName, varName, u.Sensor.Value, now)
+			}
+		}
+	})
+
+	// Modbus callback with recording
+	serverMgr.SetModbusCallback(func(serverID, serverName string, updates []modbus.RegisterUpdate) {
+		sseHub.BroadcastModbusRegisterBatchWithServer(serverID, serverName, updates)
+		// Record Modbus register values
+		if recordingMgr != nil && recordingMgr.IsRecording() {
+			now := time.Now()
+			for _, u := range updates {
+				varName := "mb:" + u.Register.Name
+				recordingMgr.Save(serverID, u.ObjectName, varName, u.Register.Value, now)
+			}
+		}
+	})
+
+	// OPCUA callback with recording
+	serverMgr.SetOPCUACallback(func(serverID, serverName string, updates []opcua.SensorUpdate) {
+		sseHub.BroadcastOPCUASensorBatchWithServer(serverID, serverName, updates)
+		// Record OPCUA sensor values
+		if recordingMgr != nil && recordingMgr.IsRecording() {
+			now := time.Now()
+			for _, u := range updates {
+				varName := "opcua:" + u.Sensor.Name
+				recordingMgr.Save(serverID, u.ObjectName, varName, u.Sensor.Value, now)
+			}
+		}
+	})
+
 	serverMgr.SetStatusCallback(sseHub.BroadcastServerStatus)
 	serverMgr.SetObjectsCallback(sseHub.BroadcastObjectsList)
+
+	// Set recording manager on server manager (for all pollers)
+	if recordingMgr != nil {
+		serverMgr.SetRecordingManager(recordingMgr)
+	}
 
 	// Add servers from configuration
 	for _, srvCfg := range cfg.Servers {
@@ -132,6 +195,9 @@ func main() {
 	handlers.SetLogStreamConfig(cfg.LogStream)
 	if controlMgr != nil {
 		handlers.SetControlManager(controlMgr)
+	}
+	if recordingMgr != nil {
+		handlers.SetRecordingManager(recordingMgr)
 	}
 
 	// Set pollers if available
@@ -203,6 +269,13 @@ func main() {
 	// Stop control manager
 	if controlMgr != nil {
 		controlMgr.Stop()
+	}
+
+	// Stop recording manager
+	if recordingMgr != nil {
+		if err := recordingMgr.Stop(); err != nil {
+			logger.Error("Recording manager stop error", "error", err)
+		}
 	}
 
 	// Shutdown server manager
