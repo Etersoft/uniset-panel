@@ -1,6 +1,6 @@
 module github.com/pv/uniset-panel
 
-go 1.25
+go 1.25.3
 
 require modernc.org/sqlite v1.34.5
 

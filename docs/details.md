@@ -6,7 +6,7 @@
 
 ## Основные возможности
 
-- Подключение к UniSet2 HTTP API для получения списка объектов и переменных
+- Подключение к [UniSet2 HTTP API](https://etersoft.github.io/uniset2/) для получения списка объектов и переменных
 - Хранение истории значений (в памяти или SQLite)
 - Веб-интерфейс с тёмной темой и интерактивными графиками (Chart.js)
 - Поддержка типов сигналов: DI (Digital Input), DO (Digital Output), AI (Analog Input), AO (Analog Output)
@@ -28,7 +28,7 @@ Go HTTP Server (Port 8000)
     ├→ Storage (memory or SQLite)
     └→ API Handlers (JSON responses)
     ↓ (HTTP requests)
-UniSet2 Processes (/api/v2/...)
+UniSet2 Processes (/api/v2/...) — https://etersoft.github.io/uniset2/
 ```
 
 ### Структура пакетов
@@ -48,8 +48,8 @@ UniSet2 Processes (/api/v2/...)
 ## Стек технологий
 
 ### Backend
-- **Go 1.23** — стандартная библиотека `net/http` с паттернами маршрутов Go 1.23+
-- **SQLite** — `github.com/mattn/go-sqlite3` (опционально)
+- **Go 1.25+** — стандартная библиотека `net/http` с паттернами маршрутов
+- **SQLite** — `modernc.org/sqlite` (pure Go, без CGO)
 - **Логирование** — `log/slog` (JSON/text форматы)
 
 ### Frontend
