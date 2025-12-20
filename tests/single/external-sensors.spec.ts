@@ -155,7 +155,7 @@ test.describe('External Sensors (SM Integration)', () => {
 
     // Очистим localStorage перед тестом
     await page.evaluate((objName) => {
-      localStorage.removeItem(`uniset2-viewer-external-sensors-${objName}`);
+      localStorage.removeItem(`uniset-panel-external-sensors-${objName}`);
     }, 'TestProc');
 
     await page.locator('.add-sensor-btn').first().click();
@@ -183,7 +183,7 @@ test.describe('External Sensors (SM Integration)', () => {
 
     // Проверяем localStorage
     const savedSensors = await page.evaluate((objName) => {
-      return localStorage.getItem(`uniset2-viewer-external-sensors-${objName}`);
+      return localStorage.getItem(`uniset-panel-external-sensors-${objName}`);
     }, 'TestProc');
 
     expect(savedSensors).toBeTruthy();
@@ -282,7 +282,7 @@ test.describe('External Sensors (SM Integration)', () => {
 
     // Проверяем localStorage — датчик должен быть сохранён
     const savedSensors = await page.evaluate((objName) => {
-      return localStorage.getItem(`uniset2-viewer-external-sensors-${objName}`);
+      return localStorage.getItem(`uniset-panel-external-sensors-${objName}`);
     }, 'TestProc');
 
     expect(savedSensors).toBeTruthy();
@@ -296,7 +296,7 @@ test.describe('External Sensors (SM Integration)', () => {
 
     // Очистим localStorage перед тестом
     await page.evaluate((objName) => {
-      localStorage.removeItem(`uniset2-viewer-external-sensors-${objName}`);
+      localStorage.removeItem(`uniset-panel-external-sensors-${objName}`);
     }, 'TestProc');
 
     // Добавляем датчик
@@ -358,7 +358,7 @@ test.describe('External Sensors (SM Integration)', () => {
 
     // Очистим localStorage перед тестом
     await page.evaluate((objName) => {
-      localStorage.removeItem(`uniset2-viewer-external-sensors-${objName}`);
+      localStorage.removeItem(`uniset-panel-external-sensors-${objName}`);
     }, 'TestProc');
 
     // Добавляем несколько датчиков
@@ -407,7 +407,7 @@ test.describe('External Sensors (SM Integration)', () => {
 
     // Очистим localStorage перед тестом
     await page.evaluate((objName) => {
-      localStorage.removeItem(`uniset2-viewer-external-sensors-${objName}`);
+      localStorage.removeItem(`uniset-panel-external-sensors-${objName}`);
     }, 'TestProc');
 
     // Добавляем датчик
@@ -425,7 +425,7 @@ test.describe('External Sensors (SM Integration)', () => {
 
     // Проверяем формат данных в localStorage
     const savedData = await page.evaluate((objName) => {
-      const data = localStorage.getItem(`uniset2-viewer-external-sensors-${objName}`);
+      const data = localStorage.getItem(`uniset-panel-external-sensors-${objName}`);
       return data ? JSON.parse(data) : null;
     }, 'TestProc');
 
@@ -459,7 +459,7 @@ test.describe('External Sensors (SM Integration)', () => {
 
     // Очистим localStorage перед тестом
     await page.evaluate((objName) => {
-      localStorage.removeItem(`uniset2-viewer-external-sensors-${objName}`);
+      localStorage.removeItem(`uniset-panel-external-sensors-${objName}`);
     }, 'TestProc');
 
     // Открываем диалог
@@ -501,7 +501,7 @@ test.describe('External Sensors (SM Integration)', () => {
 
     // Проверяем localStorage - должны быть сохранены 3 датчика
     const savedSensors = await page.evaluate((objName) => {
-      const data = localStorage.getItem(`uniset2-viewer-external-sensors-${objName}`);
+      const data = localStorage.getItem(`uniset-panel-external-sensors-${objName}`);
       return data ? JSON.parse(data) : [];
     }, 'TestProc');
 
@@ -514,7 +514,7 @@ test.describe('External Sensors (SM Integration)', () => {
 
     // Очистим localStorage перед тестом
     await page.evaluate((objName) => {
-      localStorage.removeItem(`uniset2-viewer-external-sensors-${objName}`);
+      localStorage.removeItem(`uniset-panel-external-sensors-${objName}`);
     }, 'TestProc');
 
     await page.locator('.add-sensor-btn').first().click();

@@ -8,8 +8,8 @@ test.describe('IONotifyController (SharedMemory)', () => {
 
     // Очищаем localStorage для изоляции тестов
     await page.evaluate(() => {
-      localStorage.removeItem('uniset2-viewer-ionc-pinned');
-      localStorage.removeItem('uniset2-viewer-external-sensors');
+      localStorage.removeItem('uniset-panel-ionc-pinned');
+      localStorage.removeItem('uniset-panel-external-sensors');
     });
     await page.reload();
 
@@ -952,7 +952,7 @@ test.describe('IONotifyController (SharedMemory)', () => {
       // Удаляем все ключи связанные с графиками
       for (let i = localStorage.length - 1; i >= 0; i--) {
         const key = localStorage.key(i);
-        if (key && key.includes('uniset2-viewer-external-sensors')) {
+        if (key && key.includes('uniset-panel-external-sensors')) {
           localStorage.removeItem(key);
         }
       }
@@ -1014,7 +1014,7 @@ test.describe('IONotifyController (SharedMemory)', () => {
     await page.evaluate(() => {
       for (let i = localStorage.length - 1; i >= 0; i--) {
         const key = localStorage.key(i);
-        if (key && key.includes('uniset2-viewer-external-sensors')) {
+        if (key && key.includes('uniset-panel-external-sensors')) {
           localStorage.removeItem(key);
         }
       }
@@ -1065,7 +1065,7 @@ test.describe('IONotifyController (SharedMemory)', () => {
     await page.evaluate(() => {
       for (let i = localStorage.length - 1; i >= 0; i--) {
         const key = localStorage.key(i);
-        if (key && key.includes('uniset2-viewer-external-sensors')) {
+        if (key && key.includes('uniset-panel-external-sensors')) {
           localStorage.removeItem(key);
         }
       }
@@ -1083,7 +1083,7 @@ test.describe('IONotifyController (SharedMemory)', () => {
     const savedData = await page.evaluate(() => {
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && key.includes('uniset2-viewer-external-sensors')) {
+        if (key && key.includes('uniset-panel-external-sensors')) {
           const data = localStorage.getItem(key);
           return data ? JSON.parse(data) : null;
         }
@@ -1110,7 +1110,7 @@ test.describe('IONotifyController (SharedMemory)', () => {
     await page.evaluate(() => {
       for (let i = localStorage.length - 1; i >= 0; i--) {
         const key = localStorage.key(i);
-        if (key && key.includes('uniset2-viewer-external-sensors')) {
+        if (key && key.includes('uniset-panel-external-sensors')) {
           localStorage.removeItem(key);
         }
       }

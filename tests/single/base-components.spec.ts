@@ -13,8 +13,8 @@ test.describe('Base Components', () => {
 
     // Clear localStorage for test isolation
     await page.evaluate(() => {
-      localStorage.removeItem('uniset2-viewer-ionc-pinned');
-      localStorage.removeItem('uniset2-viewer-external-sensors');
+      localStorage.removeItem('uniset-panel-ionc-pinned');
+      localStorage.removeItem('uniset-panel-external-sensors');
     });
 
     // Open SharedMemory (IONotifyController)
