@@ -1,10 +1,12 @@
 # uniset-panel
 
-Веб-сервер для мониторинга состояния uniset2 процессов, отслеживания изменений внутренних переменных во времени с отображением графиков.
+Веб-сервер для мониторинга состояния uniset процессов, отслеживания изменений внутренних переменных во времени с отображением графиков.
+
+⚠️ Проект пишется в качестве получения опыта создания ПО с помощью ИИ. Т.е. "just for fun"
 
 ## Возможности
 
-- Получение списка доступных uniset2 объектов
+- Получение списка доступных uniset объектов
 - Просмотр внутренних переменных объекта в реальном времени
 - Графики для аналоговых и дискретных величин (Chart.js)
 - Хранение истории: in-memory или SQLite
@@ -51,15 +53,15 @@ go build -o uniset-panel ./cmd/server
 
 | Параметр | По умолчанию | Описание |
 |----------|--------------|----------|
-| `--uniset-url` | `http://localhost:8080` | Адрес uniset2 HTTP API |
+| `--uniset-url` | `http://localhost:8080` | Адрес uniset HTTP API |
 | `--port` | `8000` | Порт веб-сервера |
-| `--poll-interval` | `5s` | Интервал опроса uniset2 |
+| `--poll-interval` | `5s` | Интервал опроса uniset |
 | `--storage` | `memory` | Тип хранилища: `memory` или `sqlite` |
 | `--sqlite-path` | `./history.db` | Путь к SQLite базе данных |
 | `--history-ttl` | `1h` | Время хранения истории |
 | `--log-format` | `text` | Формат логов: `text` или `json` |
 | `--log-level` | `info` | Уровень логирования: `debug`, `info`, `warn`, `error` |
-| `--uniset-config` | - | Путь к XML конфигурации UniSet2 (для имён датчиков) |
+| `--uniset-config` | - | Путь к XML конфигурации uniset (для имён датчиков) |
 | `--recording-path` | - | Путь к файлу записи (включает Recording) |
 | `--recording-enabled` | `false` | Запись включена по умолчанию |
 | `--max-records` | `1000000` | Максимальное количество записей (циклический буфер) |
@@ -100,7 +102,7 @@ go build -o uniset-panel ./cmd/server
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                  UniSet2 процессы (HTTP API)                │
+│                  uniset процессы (HTTP API)                │
 │   /api/v2/list          - список объектов                   │
 │   /api/v2/{Object}      - данные объекта                    │
 │   /api/v2/{Object}/help - доступные команды                 │
@@ -114,12 +116,12 @@ uniset-panel/
 ├── cmd/server/main.go       # точка входа
 ├── internal/
 │   ├── config/              # конфигурация
-│   ├── uniset/              # HTTP клиент к uniset2
+│   ├── uniset/              # HTTP клиент к uniset
 │   ├── storage/             # хранилище истории
 │   ├── poller/              # периодический опрос
 │   ├── api/                 # REST API сервера + SSE
 │   ├── logger/              # structured logging (slog)
-│   ├── logserver/           # TCP клиент к LogServer UniSet2
+│   ├── logserver/           # TCP клиент к LogServer uniset
 │   ├── sensorconfig/        # парсер XML конфигурации датчиков
 │   └── recording/           # система записи истории в SQLite
 ├── ui/
@@ -147,49 +149,7 @@ uniset-panel/
 
 Система записи истории позволяет сохранять все изменения переменных в SQLite базу данных для последующего анализа и экспорта.
 
-### Включение
-
-```bash
-# Включить recording с путём к файлу
-./uniset-panel --recording-path ./recording.db
-
-# Включить recording и запустить запись сразу
-./uniset-panel --recording-path ./recording.db --recording-enabled
-```
-
-### UI управление
-
-В header приложения появляется панель Recording:
-- **Индикатор**: красная точка при активной записи
-- **Badge**: количество записей и размер файла (например: `1.2M / 45MB`)
-- **Record/Stop**: кнопка включения/выключения записи
-- **Download**: выпадающее меню экспорта
-
-### Экспорт
-
-Доступные форматы экспорта:
-- **SQLite Database (.db)** — копия файла базы данных
-- **CSV Export (.csv)** — текстовый формат с разделителями
-- **JSON Export (.json)** — структурированный JSON
-
-### API
-
-| Endpoint | Метод | Описание |
-|----------|-------|----------|
-| `/api/recording/status` | GET | Статус записи и статистика |
-| `/api/recording/start` | POST | Запустить запись |
-| `/api/recording/stop` | POST | Остановить запись |
-| `/api/recording/clear` | DELETE | Очистить все записи |
-| `/api/export/database` | GET | Скачать SQLite файл |
-| `/api/export/csv` | GET | Экспорт в CSV |
-| `/api/export/json` | GET | Экспорт в JSON |
-
-### Циклический буфер
-
-При достижении лимита записей (`--max-records`) автоматически удаляются самые старые записи:
-- Проверка выполняется при каждом сохранении
-- Удаляется 10% самых старых записей
-- По умолчанию лимит 1 000 000 записей
+Подробная документация: **[docs/recording.md](docs/recording.md)**
 
 ## Лицензия
 
