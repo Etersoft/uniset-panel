@@ -3,9 +3,6 @@ name: Release Build
 on:
   release:
     types: [published]
-  pull_request:
-    branches: [master, main]
-    types: [closed]
 
 jobs:
   test:
