@@ -119,6 +119,11 @@ func (c *Client) GetObjectData(objectName string) (*ObjectData, error) {
 				info.ExtensionsType = ""
 			}
 			result.Object = &info
+
+			// UWebSocketGate: logserver находится внутри object (lowercase)
+			if info.LogServer != nil && result.LogServer == nil {
+				result.LogServer = info.LogServer
+			}
 		}
 	}
 

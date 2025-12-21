@@ -13,6 +13,7 @@ import (
 	"github.com/pv/uniset-panel/internal/opcua"
 	"github.com/pv/uniset-panel/internal/sm"
 	"github.com/pv/uniset-panel/internal/uniset"
+	"github.com/pv/uniset-panel/internal/uwsgate"
 )
 
 // SSEHub управляет SSE подключениями клиентов
@@ -250,6 +251,34 @@ func (h *SSEHub) BroadcastOPCUASensorBatchWithServer(serverID, serverName string
 	for objectName, sensors := range byObject {
 		h.Broadcast(SSEEvent{
 			Type:       "opcua_sensor_batch",
+			ServerID:   serverID,
+			ServerName: serverName,
+			ObjectName: objectName,
+			Data:       sensors,
+			Timestamp:  timestamp,
+		})
+	}
+}
+
+// BroadcastUWSGateSensorBatchWithServer отправляет батч обновлений UWebSocketGate датчиков с информацией о сервере
+func (h *SSEHub) BroadcastUWSGateSensorBatchWithServer(serverID, serverName string, updates []uwsgate.SensorUpdate) {
+	if len(updates) == 0 {
+		return
+	}
+
+	// Группируем по objectName
+	byObject := make(map[string][]uwsgate.SensorData)
+	var timestamp time.Time
+
+	for _, u := range updates {
+		byObject[u.ObjectName] = append(byObject[u.ObjectName], u.Sensor)
+		timestamp = u.Timestamp
+	}
+
+	// Отправляем по одному событию на объект
+	for objectName, sensors := range byObject {
+		h.Broadcast(SSEEvent{
+			Type:       "uwsgate_sensor_batch",
 			ServerID:   serverID,
 			ServerName: serverName,
 			ObjectName: objectName,

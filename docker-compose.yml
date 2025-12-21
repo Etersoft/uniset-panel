@@ -12,7 +12,7 @@ services:
     command: >
       ./uniset-panel --addr :8000
       --log-level debug
-      --uniset-config /app/config/test.xml
+      --uniset-config /app/config/test_noid.xml
       --uniset-url http://localhost:9090
       --uniset-url http://localhost:9191
       --uniset-url http://localhost:9292
@@ -20,6 +20,7 @@ services:
       --uniset-url http://localhost:9494
       --uniset-url http://localhost:9595
       --uniset-url http://localhost:9696
+      --uniset-url http://localhost:8081
       --control-token admin123
       --control-token operator456
       --control-timeout 60s

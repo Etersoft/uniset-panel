@@ -316,6 +316,8 @@
 .sensors-table .col-vtype { width: 90px; }  /* 10 chars */
 .sensors-table .col-precision { width: 85px; }  /* "Precision" */
 .sensors-table .col-status { width: 90px; }  /* 10 chars */
+.sensors-table .col-supplier { width: 120px; overflow: hidden; text-overflow: ellipsis; }
+.sensors-table .col-actions { width: 40px; text-align: center; }
 
 .sensors-table th {
     position: sticky;
@@ -4507,4 +4509,283 @@ header h1 {
     height: 1px;
     background: var(--border-color);
     margin: 4px 0;
+}
+
+/* ============================================================================
+   UWEBSOCKETGATE STYLES
+   ============================================================================ */
+
+/* Add Sensor Container */
+.uwsgate-add-sensor {
+    position: relative;
+    padding: 12px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.uwsgate-sensor-input {
+    flex: 1;
+    padding: 8px 12px;
+    font-size: 14px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--comp-border-radius);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color var(--comp-transition);
+}
+
+.uwsgate-sensor-input:focus {
+    border-color: var(--accent-blue);
+}
+
+.uwsgate-sensor-input::placeholder {
+    color: var(--text-muted);
+}
+
+/* Autocomplete Dropdown */
+.uwsgate-autocomplete {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    top: calc(100% - 6px);
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--comp-border-radius);
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.uwsgate-autocomplete-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background-color var(--comp-transition);
+}
+
+.uwsgate-autocomplete-item:hover,
+.uwsgate-autocomplete-item.selected {
+    background: var(--bg-hover);
+}
+
+.uwsgate-autocomplete-item .sensor-name {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.uwsgate-autocomplete-item .sensor-id {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.uwsgate-autocomplete-empty {
+    padding: 12px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+/* UWebSocketGate Sensor Table */
+.uwsgate-table-container {
+    overflow-x: auto;
+}
+
+.uwsgate-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.uwsgate-table th {
+    background: var(--bg-tertiary);
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 500;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+
+.uwsgate-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.uwsgate-table tr:hover td {
+    background: var(--bg-hover);
+}
+
+.uwsgate-table .col-chart {
+    width: 40px;
+    text-align: center;
+}
+
+.uwsgate-table .col-id {
+    width: 80px;
+}
+
+.uwsgate-table .col-name {
+    min-width: 150px;
+}
+
+.uwsgate-table .col-value {
+    width: 120px;
+    font-family: 'JetBrains Mono', 'SF Mono', 'Monaco', 'Consolas', monospace;
+    text-align: right;
+}
+
+.uwsgate-table .col-status {
+    width: 80px;
+    text-align: center;
+}
+
+.uwsgate-table .col-actions {
+    width: 50px;
+    text-align: center;
+}
+
+/* Remove Button */
+.uwsgate-btn-remove {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: var(--comp-border-radius-sm);
+    transition: all var(--comp-transition);
+}
+
+.uwsgate-btn-remove:hover {
+    color: var(--accent-red);
+    background: rgba(242, 73, 92, 0.1);
+}
+
+/* Sensor Error Row */
+.uwsgate-sensor-error {
+    background: rgba(242, 73, 92, 0.05);
+}
+
+.uwsgate-sensor-error td {
+    color: var(--accent-red);
+}
+
+/* Sensor Value States */
+.uwsgate-value-ok {
+    color: var(--accent-green);
+}
+
+.uwsgate-value-error {
+    color: var(--accent-red);
+}
+
+/* Status Badge */
+.uwsgate-status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: var(--comp-border-radius-sm);
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.uwsgate-status-ok {
+    background: rgba(115, 191, 105, 0.15);
+    color: var(--accent-green);
+}
+
+.uwsgate-status-error {
+    background: rgba(242, 73, 92, 0.15);
+    color: var(--accent-red);
+}
+
+/* No Sensors Message */
+.uwsgate-no-sensors {
+    padding: 24px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+/* Chart Checkbox */
+.uwsgate-chart-checkbox {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+/* Pinned sensor row */
+.uwsgate-sensor-pinned {
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.uwsgate-unpin-all {
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 2px 4px;
+}
+
+.uwsgate-unpin-all:hover {
+    color: var(--accent-red);
+}
+
+/* Highlight Toggle */
+.uwsgate-highlight-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 12px;
+    font-size: 13px;
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+}
+
+.uwsgate-highlight-toggle input {
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    accent-color: var(--accent-blue);
+}
+
+.uwsgate-highlight-toggle:hover {
+    color: var(--text-secondary);
+}
+
+/* WebSocket Clients Info */
+.ws-count {
+    display: inline-block;
+    min-width: 24px;
+    text-align: center;
+    padding: 2px 8px;
+    border-radius: var(--comp-border-radius-sm);
+    font-weight: 500;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+.ws-count.ws-active {
+    background: rgba(115, 191, 105, 0.15);
+    color: var(--accent-green);
+}
+
+.ws-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.ws-item {
+    font-size: 11px;
+    padding: 2px 6px;
+    background: var(--bg-tertiary);
+    border-radius: var(--comp-border-radius-sm);
+    color: var(--text-muted);
 }

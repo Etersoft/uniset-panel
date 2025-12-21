@@ -14,6 +14,7 @@ import (
 	"github.com/pv/uniset-panel/internal/recording"
 	"github.com/pv/uniset-panel/internal/storage"
 	"github.com/pv/uniset-panel/internal/uniset"
+	"github.com/pv/uniset-panel/internal/uwsgate"
 )
 
 // ObjectWithServer расширяет имя объекта информацией о сервере
@@ -48,6 +49,7 @@ type Manager struct {
 	ioncCallback    IONCEventCallback
 	modbusCallback  ModbusEventCallback
 	opcuaCallback   OPCUAEventCallback
+	uwsgateCallback UWSGateEventCallback
 	statusCallback  StatusEventCallback
 	objectsCallback ObjectsChangedCallback
 
@@ -99,6 +101,13 @@ func (m *Manager) SetOPCUACallback(cb OPCUAEventCallback) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.opcuaCallback = cb
+}
+
+// SetUWSGateCallback устанавливает callback для событий UWebSocketGate
+func (m *Manager) SetUWSGateCallback(cb UWSGateEventCallback) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.uwsgateCallback = cb
 }
 
 // SetStatusCallback устанавливает callback для изменения статуса серверов
@@ -408,6 +417,27 @@ func (m *Manager) GetOPCUAPoller(serverID string) (*opcua.Poller, bool) {
 	}
 
 	return instance.OPCUAPoller, true
+}
+
+// GetUWSGatePoller возвращает UWebSocketGate poller для указанного сервера
+// Создаёт poller "лениво" если ещё не создан
+func (m *Manager) GetUWSGatePoller(serverID string) *uwsgate.Poller {
+	instance, exists := m.GetServer(serverID)
+	if !exists {
+		return nil
+	}
+
+	// Если poller уже создан, возвращаем его
+	if instance.UWSGatePoller != nil {
+		return instance.UWSGatePoller
+	}
+
+	// Создаём поллер "лениво"
+	m.mu.RLock()
+	callback := m.uwsgateCallback
+	m.mu.RUnlock()
+
+	return instance.CreateUWSGatePoller(callback)
 }
 
 // GetClient возвращает клиент для указанного сервера

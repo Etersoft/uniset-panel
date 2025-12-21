@@ -53,6 +53,12 @@ type IOData struct {
 	Out map[string]IOVar `json:"out,omitempty"`
 }
 
+// WebsocketsInfo информация о WebSocket подключениях (UWebSocketGate)
+type WebsocketsInfo struct {
+	Count int      `json:"count"`
+	Items []string `json:"items,omitempty"`
+}
+
 // ObjectInfo информация об объекте
 type ObjectInfo struct {
 	ID                    int64  `json:"id"`
@@ -65,6 +71,10 @@ type ObjectInfo struct {
 	ExtensionType         string `json:"extensionType,omitempty"`
 	ExtensionsType        string `json:"extensionsType,omitempty"` // some endpoints return extensionsType
 	TransportType         string `json:"transportType,omitempty"`  // tcp, rtu, multi для ModbusMaster
+
+	// UWebSocketGate specific fields (inside object)
+	Websockets *WebsocketsInfo `json:"websockets,omitempty"`
+	LogServer  *LogServer      `json:"logserver,omitempty"` // lowercase for UWebSocketGate
 }
 
 // ObjectData данные объекта из /api/v2/{ObjectName}
