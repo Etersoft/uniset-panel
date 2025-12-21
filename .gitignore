@@ -1,6 +1,7 @@
 # Binaries
 uniset-panel
 uniset-panel-go
+server
 *.exe
 
 # Database

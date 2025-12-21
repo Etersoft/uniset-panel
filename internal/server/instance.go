@@ -13,6 +13,7 @@ import (
 	"github.com/pv/uniset-panel/internal/poller"
 	"github.com/pv/uniset-panel/internal/storage"
 	"github.com/pv/uniset-panel/internal/uniset"
+	"github.com/pv/uniset-panel/internal/uwsgate"
 )
 
 // ObjectEventCallback вызывается при получении данных объекта
@@ -27,6 +28,9 @@ type ModbusEventCallback func(serverID, serverName string, updates []modbus.Regi
 // OPCUAEventCallback вызывается при обновлении OPCUA датчиков
 type OPCUAEventCallback func(serverID, serverName string, updates []opcua.SensorUpdate)
 
+// UWSGateEventCallback вызывается при обновлении UWebSocketGate датчиков
+type UWSGateEventCallback func(serverID, serverName string, updates []uwsgate.SensorUpdate)
+
 // StatusEventCallback вызывается при изменении статуса подключения
 type StatusEventCallback func(serverID, serverName string, connected bool, lastError string)
 
@@ -35,12 +39,13 @@ type ObjectsChangedCallback func(serverID, serverName string, objects []string)
 
 // Instance представляет подключение к одному UniSet2 серверу
 type Instance struct {
-	Config       config.ServerConfig
-	Client       *uniset.Client
-	Poller       *poller.Poller
-	IONCPoller   *ionc.Poller
-	ModbusPoller *modbus.Poller
-	OPCUAPoller  *opcua.Poller
+	Config        config.ServerConfig
+	Client        *uniset.Client
+	Poller        *poller.Poller
+	IONCPoller    *ionc.Poller
+	ModbusPoller  *modbus.Poller
+	OPCUAPoller   *opcua.Poller
+	UWSGatePoller *uwsgate.Poller
 
 	mu               sync.RWMutex
 	connected        bool
@@ -207,9 +212,46 @@ func (i *Instance) Stop() {
 	i.IONCPoller.Stop()
 	i.ModbusPoller.Stop()
 	i.OPCUAPoller.Stop()
+	if i.UWSGatePoller != nil {
+		i.UWSGatePoller.Stop()
+	}
 	i.wg.Wait()
 
 	slog.Info("Server instance stopped", "id", i.Config.ID)
+}
+
+// CreateUWSGatePoller создаёт UWebSocketGate poller "лениво"
+// Возвращает существующий poller если уже создан
+func (i *Instance) CreateUWSGatePoller(callback UWSGateEventCallback) *uwsgate.Poller {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
+	if i.UWSGatePoller != nil {
+		return i.UWSGatePoller
+	}
+
+	serverID := i.Config.ID
+	serverName := i.Config.Name
+	if serverName == "" {
+		serverName = i.Config.URL
+	}
+
+	i.UWSGatePoller = uwsgate.NewPoller(i.Config.URL, func(updates []uwsgate.SensorUpdate) {
+		if callback != nil {
+			callback(serverID, serverName, updates)
+		}
+	}, slog.Default())
+	i.UWSGatePoller.SetServerID(serverID)
+
+	// Запускаем poller
+	if err := i.UWSGatePoller.Start(i.ctx); err != nil {
+		slog.Error("Failed to start UWSGate poller", "error", err)
+		i.UWSGatePoller = nil
+		return nil
+	}
+
+	slog.Info("UWSGate poller created", "id", i.Config.ID)
+	return i.UWSGatePoller
 }
 
 // GetStatus возвращает текущий статус сервера

@@ -91,6 +91,12 @@ func (s *Server) setupRoutes(staticFS fs.FS) {
 	s.mux.HandleFunc("POST /api/objects/{name}/opcua/unsubscribe", s.handlers.UnsubscribeOPCUASensors)
 	s.mux.HandleFunc("GET /api/objects/{name}/opcua/subscriptions", s.handlers.GetOPCUASubscriptions)
 
+	// UWebSocketGate API
+	s.mux.HandleFunc("POST /api/objects/{name}/uwsgate/subscribe", s.handlers.SubscribeUWSGateSensors)
+	s.mux.HandleFunc("POST /api/objects/{name}/uwsgate/unsubscribe", s.handlers.UnsubscribeUWSGateSensors)
+	s.mux.HandleFunc("GET /api/objects/{name}/uwsgate/subscriptions", s.handlers.GetUWSGateSubscriptions)
+	s.mux.HandleFunc("GET /api/objects/{name}/uwsgate/sensors", s.handlers.GetUWSGateSensors)
+
 	// LogServer API
 	s.mux.HandleFunc("GET /api/logs/status", s.handlers.GetAllLogServerStatuses)
 	s.mux.HandleFunc("GET /api/logs/{name}/status", s.handlers.GetLogServerStatus)

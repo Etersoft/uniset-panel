@@ -24,6 +24,7 @@ import (
 	"github.com/pv/uniset-panel/internal/sm"
 	"github.com/pv/uniset-panel/internal/storage"
 	"github.com/pv/uniset-panel/internal/uniset"
+	"github.com/pv/uniset-panel/internal/uwsgate"
 	"github.com/pv/uniset-panel/ui"
 )
 
@@ -154,6 +155,19 @@ func main() {
 			now := time.Now()
 			for _, u := range updates {
 				varName := "opcua:" + u.Sensor.Name
+				recordingMgr.Save(serverID, u.ObjectName, varName, u.Sensor.Value, now)
+			}
+		}
+	})
+
+	// UWebSocketGate callback with recording
+	serverMgr.SetUWSGateCallback(func(serverID, serverName string, updates []uwsgate.SensorUpdate) {
+		sseHub.BroadcastUWSGateSensorBatchWithServer(serverID, serverName, updates)
+		// Record UWebSocketGate sensor values
+		if recordingMgr != nil && recordingMgr.IsRecording() {
+			now := time.Now()
+			for _, u := range updates {
+				varName := "ws:" + u.Sensor.Name
 				recordingMgr.Save(serverID, u.ObjectName, varName, u.Sensor.Value, now)
 			}
 		}
