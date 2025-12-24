@@ -309,7 +309,7 @@ test.describe('IONC Value Generator', () => {
         await expect(page.locator('#ionc-gen-step-field')).not.toBeVisible();
     });
 
-    test('should validate step > 0 for linear', async ({ page }) => {
+    test('should validate step !== 0 for linear', async ({ page }) => {
         await page.locator('.ionc-btn-gen').first().click();
         await page.waitForSelector('.ionc-dialog-overlay.visible');
 
@@ -325,7 +325,7 @@ test.describe('IONC Value Generator', () => {
 
         // Check error message
         const error = page.locator('.ionc-dialog-error');
-        await expect(error).toHaveText('Шаг должен быть больше 0');
+        await expect(error).toHaveText('Шаг не может быть равен 0');
     });
 
     test('should validate step <= (max - min) for linear', async ({ page }) => {
