@@ -3740,11 +3740,11 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                 showIoncDialogError('Пауза должна быть не менее 10мс');
                 return;
             }
-            if (step <= 0) {
-                showIoncDialogError('Шаг должен быть больше 0');
+            if (step === 0) {
+                showIoncDialogError('Шаг не может быть равен 0');
                 return;
             }
-            if (step > (max - min)) {
+            if (Math.abs(step) > (max - min)) {
                 showIoncDialogError('Шаг должен быть меньше или равен разности Max - Min');
                 return;
             }
@@ -3856,23 +3856,36 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                 }
                 case 'linear': {
                     // Пилообразный с шагом-инкрементом и паузой (как в SImitator)
-                    // Вверх: min, min+step, min+2*step, ..., max (numStepsUp значений)
-                    // Вниз: max-step, max-2*step, ..., min+step (numStepsDown значений, БЕЗ min)
-                    // После нисходящей фазы цикл начинается снова с min
-                    const numStepsUp = Math.floor(range / genState.step) + 1;
-                    const numStepsDown = Math.floor(range / genState.step) - 1;
-                    const totalSteps = numStepsUp + numStepsDown;
+                    // Положительный шаг: min -> max -> min (начинаем с min, идём вверх)
+                    // Отрицательный шаг: max -> min -> max (начинаем с max, идём вниз)
+                    const absStep = Math.abs(genState.step);
+                    const numStepsFirst = Math.floor(range / absStep) + 1;
+                    const numStepsSecond = Math.floor(range / absStep) - 1;
+                    const totalSteps = numStepsFirst + numStepsSecond;
                     const fullCycle = totalSteps * genState.pause;
                     const positionInCycle = elapsed % fullCycle;
                     const stepNumber = Math.floor(positionInCycle / genState.pause);
 
-                    if (stepNumber < numStepsUp) {
-                        // Вверх: min -> max
-                        value = min + stepNumber * genState.step;
+                    if (genState.step > 0) {
+                        // Положительный шаг: min -> max -> min
+                        if (stepNumber < numStepsFirst) {
+                            // Вверх: min -> max
+                            value = min + stepNumber * absStep;
+                        } else {
+                            // Вниз: max-step -> min+step (НЕ включая min)
+                            const downStepNumber = stepNumber - numStepsFirst;
+                            value = max - (downStepNumber + 1) * absStep;
+                        }
                     } else {
-                        // Вниз: max-step -> min+step (НЕ включая min)
-                        const downStepNumber = stepNumber - numStepsUp;
-                        value = max - (downStepNumber + 1) * genState.step;
+                        // Отрицательный шаг: max -> min -> max
+                        if (stepNumber < numStepsFirst) {
+                            // Вниз: max -> min
+                            value = max - stepNumber * absStep;
+                        } else {
+                            // Вверх: min+step -> max-step (НЕ включая max)
+                            const upStepNumber = stepNumber - numStepsFirst;
+                            value = min + (upStepNumber + 1) * absStep;
+                        }
                     }
                     break;
                 }
