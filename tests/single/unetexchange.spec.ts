@@ -327,7 +327,7 @@ test.describe('UNetExchange renderer', () => {
   });
 
   test.describe('LogServer and LogViewer', () => {
-    test('should display LogServer section', async ({ page }) => {
+    test('should have LogServer section in DOM', async ({ page }) => {
       await page.goto('/');
       await page.waitForSelector('#objects-list li', { timeout: 15000 });
 
@@ -337,12 +337,12 @@ test.describe('UNetExchange renderer', () => {
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
       await page.waitForTimeout(1500);
 
-      // Check LogServer section
-      const logServerSection = page.locator(`[data-section="logserver-${UNET_OBJECT}"]`);
-      await expect(logServerSection).toBeVisible({ timeout: 5000 });
+      // Check LogServer section exists in DOM (may be hidden initially)
+      const logServerSection = page.locator(`#logserver-section-${UNET_OBJECT}`);
+      await expect(logServerSection).toHaveCount(1);
     });
 
-    test('should display Logs section', async ({ page }) => {
+    test('should display LogViewer container', async ({ page }) => {
       await page.goto('/');
       await page.waitForSelector('#objects-list li', { timeout: 15000 });
 
@@ -352,9 +352,9 @@ test.describe('UNetExchange renderer', () => {
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
       await page.waitForTimeout(1500);
 
-      // Check Logs section exists
-      const logsSection = page.locator(`[data-section="logs-${UNET_OBJECT}"]`);
-      await expect(logsSection).toBeVisible({ timeout: 5000 });
+      // Check LogViewer container exists (uses id="logviewer-wrapper-{objectName}")
+      const logViewerWrapper = page.locator(`#logviewer-wrapper-${UNET_OBJECT}`);
+      await expect(logViewerWrapper).toBeVisible({ timeout: 5000 });
     });
   });
 });

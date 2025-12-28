@@ -169,6 +169,11 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
             this.renderSenders();
             this.updateCharts();
 
+            // Handle LogServer section
+            if (this.status.LogServer) {
+                this.handleLogServer(this.status.LogServer);
+            }
+
         } catch (err) {
             console.error('Failed to load UNet status:', err);
             this.renderStatusError(err.message);
