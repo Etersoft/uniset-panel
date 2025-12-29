@@ -152,16 +152,21 @@ class DashboardManager {
                     for (const info of dashboardInfos) {
                         const name = info.name;
                         if (!name) continue;
-                        // Don't overwrite user dashboards with same name
-                        if (dashboardState.dashboards.has(name)) {
-                            continue;
+
+                        // Check if dashboard already exists (e.g., from localStorage)
+                        const existing = dashboardState.dashboards.get(name);
+                        if (existing) {
+                            // Mark existing dashboard as server dashboard
+                            // (it might have been loaded from localStorage without _server flag)
+                            existing._server = true;
+                        } else {
+                            // Create placeholder - will be loaded on demand
+                            dashboardState.dashboards.set(name, {
+                                _server: true,
+                                _loaded: false,
+                                meta: { name, description: info.description || '' }
+                            });
                         }
-                        // Create placeholder - will be loaded on demand
-                        dashboardState.dashboards.set(name, {
-                            _server: true,
-                            _loaded: false,
-                            meta: { name, description: info.description || '' }
-                        });
                     }
                     this.updateDashboardSelector();
                 }
@@ -281,6 +286,7 @@ class DashboardManager {
         let config = dashboardState.dashboards.get(name);
         if (!config) {
             console.warn('Dashboard not found:', name);
+            this.clearDashboard();
             return;
         }
 
@@ -296,10 +302,12 @@ class DashboardManager {
                     config = fullConfig;
                 } else {
                     console.error('Failed to load dashboard:', name, response.status);
+                    this.clearDashboard();
                     return;
                 }
             } catch (err) {
                 console.error('Error loading dashboard:', name, err);
+                this.clearDashboard();
                 return;
             }
         }
@@ -319,14 +327,12 @@ class DashboardManager {
         // Save last viewed
         localStorage.setItem('last-dashboard', name);
 
-        // Update edit button for server dashboards
-        const editBtn = document.getElementById('dashboard-edit-btn');
+        // Hide delete button for server dashboards (they are read-only on server)
+        // Edit button remains visible - user can modify and export to JSON
         const deleteBtn = document.getElementById('dashboard-delete-btn');
         if (config._server) {
-            editBtn?.classList.add('hidden');
             deleteBtn?.classList.add('hidden');
         } else {
-            editBtn?.classList.remove('hidden');
             deleteBtn?.classList.remove('hidden');
         }
     }
@@ -608,6 +614,17 @@ class DashboardManager {
         dashboardState.currentDashboard = null;
         this.clearWidgets();
         this.actionsEl?.classList.add('hidden');
+
+        // Reset selector to empty value
+        if (this.selectEl) {
+            this.selectEl.value = '';
+        }
+
+        // Update sidebar to remove active state
+        this.updateSidebarDashboards();
+
+        // Clear last-dashboard from localStorage
+        localStorage.removeItem('last-dashboard');
 
         if (this.gridEl) {
             this.gridEl.innerHTML = `
