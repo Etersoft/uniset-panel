@@ -20146,7 +20146,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Кнопка очистки кэша
     document.getElementById('clear-cache').addEventListener('click', () => {
-        if (confirm('Clear all saved settings?\n\nWill be deleted:\n- section order\n- selected charts\n- LogViewer settings\n- sidebar state')) {
+        if (confirm('Clear all saved settings?\n\nWill be deleted:\n- user dashboards\n- pinned sensors\n- selected charts\n- section order and heights\n- filter settings\n- LogViewer settings\n- control session token')) {
             localStorage.clear();
             location.reload();
         }
