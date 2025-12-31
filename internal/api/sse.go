@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pv/uniset-panel/internal/ionc"
+	"github.com/pv/uniset-panel/internal/journal"
 	"github.com/pv/uniset-panel/internal/logger"
 	"github.com/pv/uniset-panel/internal/modbus"
 	"github.com/pv/uniset-panel/internal/opcua"
@@ -89,7 +90,13 @@ func (h *SSEHub) RemoveClient(client *sseClient) {
 	controlMgr := h.controlMgr
 	h.mu.Unlock()
 
-	close(client.done)
+	// Close done channel (avoid panic on double close)
+	select {
+	case <-client.done:
+		// already closed
+	default:
+		close(client.done)
+	}
 
 	// Если клиент был контроллером, освобождаем управление
 	if client.controlToken != "" && controlMgr != nil {
@@ -295,6 +302,24 @@ func (h *SSEHub) ClientCount() int {
 	return len(h.clients)
 }
 
+// Close закрывает все SSE соединения (для graceful shutdown)
+func (h *SSEHub) Close() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	for client := range h.clients {
+		select {
+		case <-client.done:
+			// already closed
+		default:
+			close(client.done)
+		}
+	}
+	h.clients = make(map[*sseClient]bool)
+
+	logger.Info("SSE hub closed, all clients disconnected")
+}
+
 // BroadcastControlStatus отправляет статус контроля всем клиентам
 func (h *SSEHub) BroadcastControlStatus(status ControlStatus) {
 	h.Broadcast(SSEEvent{
@@ -311,6 +336,21 @@ func (h *SSEHub) UpdateClientControlToken(client *sseClient, token string) {
 	if _, exists := h.clients[client]; exists {
 		client.controlToken = token
 	}
+}
+
+// BroadcastJournalMessages отправляет новые сообщения журнала
+func (h *SSEHub) BroadcastJournalMessages(journalID string, messages []journal.Message) {
+	if len(messages) == 0 {
+		return
+	}
+	h.Broadcast(SSEEvent{
+		Type: "journal_messages",
+		Data: map[string]interface{}{
+			"journalId": journalID,
+			"messages":  messages,
+		},
+		Timestamp: time.Now(),
+	})
 }
 
 // HandleSSE обрабатывает SSE подключение

@@ -1,3 +1,4 @@
+// Загрузка версии приложения
 async function loadAppVersion() {
     try {
         const response = await fetch('/api/version');
@@ -50,7 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Кнопка очистки кэша
     document.getElementById('clear-cache').addEventListener('click', () => {
-        if (confirm('Clear all saved settings?\n\nWill be deleted:\n- section order\n- selected charts\n- LogViewer settings\n- sidebar state')) {
+        if (confirm('Clear all saved settings?\n\nWill be deleted:\n- user dashboards\n- pinned sensors\n- selected charts\n- section order and heights\n- filter settings\n- LogViewer settings\n- control session token')) {
             localStorage.clear();
             location.reload();
         }
@@ -72,6 +73,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Loading сохранённых настроек
     loadSettings();
+
+    // Инициализация Dashboard Manager
+    dashboardManager = window.dashboardManager = new DashboardManager();
+
+    // Инициализация Journals (не блокируем)
+    initJournals().catch(err => {
+        console.warn('Failed to initialize journals:', err);
+    });
 });
 
 // Инициализация селектора интервала опроса

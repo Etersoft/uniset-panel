@@ -11,11 +11,14 @@ const state = window.state = {
     activeTab: null,
     sensors: new Map(), // sensorId -> sensorInfo
     sensorsByName: new Map(), // sensorName -> sensorInfo
+    sensorValuesCache: new Map(), // sensorName -> { value, error, timestamp } - cache for dashboard init
     timeRange: 900, // секунды (по умолчанию 15 минут)
     sidebarCollapsed: false, // свёрнутая боковая панель
     collapsedSections: {}, // состояние спойлеров
     collapsedServerGroups: new Set(), // свёрнутые группы серверов в списке объектов
+    objectsSectionCollapsed: false, // свёрнута ли секция "Objects"
     serversSectionCollapsed: false, // свёрнута ли секция "Servers"
+    journalsSectionCollapsed: false, // свёрнута ли секция "Journals"
     capabilities: {
         smEnabled: false // по умолчанию SM отключен
     },

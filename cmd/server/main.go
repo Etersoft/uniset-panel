@@ -12,7 +12,9 @@ import (
 
 	"github.com/pv/uniset-panel/internal/api"
 	"github.com/pv/uniset-panel/internal/config"
+	"github.com/pv/uniset-panel/internal/dashboard"
 	"github.com/pv/uniset-panel/internal/ionc"
+	"github.com/pv/uniset-panel/internal/journal"
 	"github.com/pv/uniset-panel/internal/logger"
 	"github.com/pv/uniset-panel/internal/logserver"
 	"github.com/pv/uniset-panel/internal/modbus"
@@ -29,7 +31,7 @@ import (
 )
 
 // Version is set at build time via ldflags
-var Version = "0.0.1"
+var Version = "0.0.2"
 
 func main() {
 	cfg := config.Parse()
@@ -218,6 +220,40 @@ func main() {
 		handlers.SetRecordingManager(recordingMgr)
 	}
 
+	// Create dashboard manager if directory specified
+	if cfg.DashboardsDir != "" {
+		dashboardMgr := dashboard.NewManager(cfg.DashboardsDir)
+		if err := dashboardMgr.Load(); err != nil {
+			logger.Error("Failed to load dashboards", "dir", cfg.DashboardsDir, "error", err)
+		} else {
+			handlers.SetDashboardManager(dashboardMgr)
+			logger.Info("Loaded server dashboards", "dir", cfg.DashboardsDir, "count", dashboardMgr.Count())
+		}
+	}
+
+	// Create journal manager if configured
+	var journalMgr *journal.Manager
+	var journalPollers []*journal.Poller
+	if len(cfg.JournalURLs) > 0 {
+		journalMgr = journal.NewManager(slog.Default())
+		for _, url := range cfg.JournalURLs {
+			if err := journalMgr.AddJournal(url); err != nil {
+				logger.Error("Failed to add journal", "url", url, "error", err)
+				continue
+			}
+		}
+		handlers.SetJournalManager(journalMgr)
+		logger.Info("Journal manager initialized", "count", journalMgr.Count())
+
+		// Create pollers for each journal
+		for _, client := range journalMgr.GetAllClients() {
+			poller := journal.NewPoller(client, 2*time.Second, func(journalID string, messages []journal.Message) {
+				sseHub.BroadcastJournalMessages(journalID, messages)
+			}, slog.Default())
+			journalPollers = append(journalPollers, poller)
+		}
+	}
+
 	// Set pollers if available
 	if ioncPollerInstance != nil {
 		handlers.SetIONCPoller(ioncPollerInstance)
@@ -244,12 +280,25 @@ func main() {
 		logger.Info("SM integration enabled", "url", cfg.SMURL, "poll_interval", smInterval)
 	}
 
-	apiServer := api.NewServer(handlers, ui.Content)
+	// Create API server with optional external files for hot reload
+	var serverOpts []api.ServerOption
+	if cfg.JSFile != "" {
+		serverOpts = append(serverOpts, api.WithJSFile(cfg.JSFile))
+	}
+	if cfg.CSSFile != "" {
+		serverOpts = append(serverOpts, api.WithCSSFile(cfg.CSSFile))
+	}
+	apiServer := api.NewServer(handlers, ui.Content, serverOpts...)
 
 	// Start SM poller if configured
 	if smPoller != nil {
 		smPoller.Start()
 		defer smPoller.Stop()
+	}
+
+	// Start journal pollers
+	for _, jp := range journalPollers {
+		jp.Start()
 	}
 
 	// Start HTTP server
@@ -296,12 +345,23 @@ func main() {
 		}
 	}
 
+	// Stop journal pollers and manager
+	for _, jp := range journalPollers {
+		jp.Stop()
+	}
+	if journalMgr != nil {
+		journalMgr.Close()
+	}
+
 	// Shutdown server manager
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 	if err := serverMgr.Shutdown(shutdownCtx); err != nil {
 		logger.Error("Server manager shutdown error", "error", err)
 	}
+
+	// Close all SSE connections to allow HTTP handlers to complete
+	sseHub.Close()
 
 	// Graceful shutdown HTTP server with timeout
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {

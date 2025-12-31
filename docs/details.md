@@ -36,24 +36,35 @@ UniSet2 Processes (/api/v2/...) — https://etersoft.github.io/uniset2/
 | Пакет | Файл | Назначение |
 |-------|------|-----------|
 | `cmd/server` | `main.go` | Точка входа, инициализация компонентов, graceful shutdown |
-| `internal/config` | `config.go` | Парсинг флагов командной строки |
-| `internal/uniset` | `client.go`, `types.go` | HTTP-клиент к UniSet2 API |
+| `internal/config` | `config.go`, `yaml.go` | Парсинг CLI + YAML конфигурации |
+| `internal/uniset` | `client.go`, `types.go`, `unet.go` | HTTP-клиент к UniSet2 API |
+| `internal/server` | `manager.go` | Менеджер мульти-серверных подключений |
 | `internal/storage` | `storage.go`, `memory.go`, `sqlite.go` | Интерфейс хранилища и реализации |
 | `internal/poller` | `poller.go` | Периодический опрос объектов |
-| `internal/api` | `server.go`, `handlers.go` | HTTP API и обработчики запросов |
+| `internal/api` | `server.go`, `sse.go`, `handlers*.go` | HTTP API, SSE и обработчики запросов |
 | `internal/sensorconfig` | `sensorconfig.go` | Парсер XML-конфигурации датчиков |
 | `internal/logger` | `logger.go` | Структурированное логирование (slog) |
-| `ui/` | `embed.go`, `templates/`, `static/` | Встроенный фронтенд |
+| `internal/logserver` | `client.go` | TCP клиент к LogServer uniset |
+| `internal/recording` | `recording.go` | Система записи истории в SQLite |
+| `internal/dashboard` | `dashboard.go` | Серверные дашборды |
+| `internal/journal` | `journal.go` | ClickHouse журналы |
+| `internal/ionc` | `poller.go` | IONC poller |
+| `internal/modbus` | `poller.go` | Modbus poller |
+| `internal/opcua` | `poller.go` | OPCUA poller |
+| `internal/uwsgate` | `client.go`, `poller.go` | UWebSocketGate WebSocket клиент |
+| `internal/sm` | `poller.go` | SharedMemory интеграция |
+| `ui/` | `embed.go`, `concat.go`, `templates/`, `static/` | Встроенный фронтенд |
 
 ## Стек технологий
 
 ### Backend
 - **Go 1.25+** — стандартная библиотека `net/http` с паттернами маршрутов
 - **SQLite** — `modernc.org/sqlite` (pure Go, без CGO)
+- **ClickHouse** — интеграция журналов (github.com/ClickHouse/ch-go)
 - **Логирование** — `log/slog` (JSON/text форматы)
 
 ### Frontend
-- **Vanilla JavaScript** — без фреймворков
+- **Vanilla JavaScript** — без фреймворков, модульная архитектура
 - **Chart.js** — интерактивные графики с адаптером date-fns
 - **CSS** — кастомные переменные, тёмная тема в стиле Grafana
 
@@ -65,15 +76,23 @@ UniSet2 Processes (/api/v2/...) — https://etersoft.github.io/uniset2/
 ## Конфигурация
 
 ```
---uniset-url     URL UniSet2 API (default: http://localhost:8080)
---port           Порт веб-сервера (default: 8181)
---poll-interval  Интервал опроса (default: 5s)
---storage        Тип хранилища: memory | sqlite (default: memory)
---sqlite-path    Путь к SQLite базе (default: ./history.db)
---history-ttl    Время жизни истории (default: 1h)
---log-format     Формат логов: text | json (default: text)
---log-level      Уровень логов: debug | info | warn | error (default: info)
---uniset-config  Путь к XML-конфигурации датчиков
+--uniset-url       URL UniSet2 API (можно указать несколько раз)
+--config           YAML файл конфигурации серверов
+--addr             Адрес веб-сервера (default: :8181)
+--poll-interval    Интервал опроса (default: 1s)
+--storage          Тип хранилища: memory | sqlite (default: memory)
+--sqlite-path      Путь к SQLite базе (default: ./history.db)
+--history-ttl      Время жизни истории (default: 1h)
+--log-format       Формат логов: text | json (default: text)
+--log-level        Уровень логов: debug | info | warn | error (default: warn)
+--uniset-config    Путь к XML-конфигурации датчиков
+--dashboards-dir   Директория с серверными дашбордами
+--journal-url      ClickHouse URL для журналов (можно несколько раз)
+--control-token    Токен доступа для режима управления (можно несколько)
+--control-timeout  Таймаут сессии управления (default: 60s)
+--recording-path   Путь к файлу записи (default: ./recording.db)
+--recording-enabled Запись включена по умолчанию
+--max-records      Максимальное количество записей (default: 1000000)
 ```
 
 ## API Endpoints
@@ -220,17 +239,19 @@ uniset-panel/
 
 ## Система рендереров (objectType)
 
-Интерфейс автоматически адаптируется под тип объекта (`object.objectType`).
+Интерфейс автоматически адаптируется под тип объекта (`object.objectType` или `object.extensionType`).
 
 ### Архитектура
 
 ```javascript
 objectRenderers (Map)
-  ├── 'IONotifyController' → IONotifyControllerRenderer
+  ├── 'IONotifyController' → IONCRenderer
   ├── 'OPCUAExchange' → OPCUAExchangeRenderer
   ├── 'ModbusMaster' → ModbusMasterRenderer
   ├── 'ModbusSlave' → ModbusSlaveRenderer
   ├── 'OPCUAServer' → OPCUAServerRenderer
+  ├── 'UWebSocketGate' → UWebSocketGateRenderer
+  ├── 'UNetExchange' → UNetExchangeRenderer
   └── default → DefaultObjectRenderer
 ```
 
@@ -249,11 +270,13 @@ objectRenderers (Map)
 | Класс | Секции |
 |-------|--------|
 | **BaseObjectRenderer** | Базовый класс с методами создания секций, collapsible sections |
-| **IONotifyControllerRenderer** | Датчики (виртуальный скролл), Графики, LogServer, Потерянные подписчики |
+| **IONCRenderer** | Датчики (виртуальный скролл), Графики, LogServer, Потерянные подписчики |
 | **OPCUAExchangeRenderer** | Статус OPC UA, Каналы, Датчики, Параметры, Диагностика, Графики |
 | **ModbusMasterRenderer** | Статус Modbus, Устройства, Регистры (виртуальный скролл), Параметры, Графики |
 | **ModbusSlaveRenderer** | Статус ModbusSlave, Регистры (виртуальный скролл), Параметры, Графики |
 | **OPCUAServerRenderer** | Статус OPC UA Server, Endpoints, Config, Переменные, Параметры, Графики |
+| **UWebSocketGateRenderer** | WebSocket датчики с autocomplete, Графики, LogServer |
+| **UNetExchangeRenderer** | UNet каналы, Входящие/Исходящие датчики, Графики |
 | **DefaultObjectRenderer** | Fallback для неизвестных типов |
 
 ### Добавление нового типа
@@ -271,16 +294,18 @@ registerRenderer('MyType', MyRenderer);
 ## История изменений
 
 ### Текущая версия
+- **Dashboard система** — настраиваемые панели с виджетами (Gauge, Level, LED, Digital, Chart, StatusBar, Label, Divider)
+- **Журналы (Journal)** — интеграция с ClickHouse для просмотра сообщений с фильтрацией
+- **Режим управления (Control)** — защита write-операций токенами доступа
+- **Recording** — запись истории изменений в SQLite с экспортом
+- **YAML конфигурация** — альтернатива CLI флагам
+- **7 типов рендереров**: IONC, OPCUAExchange, ModbusMaster, ModbusSlave, OPCUAServer, UWebSocketGate, UNetExchange
 - **Миксины для переиспользования кода** (~450 строк экономии)
   - FilterMixin: `setupFilterListeners()` для унификации фильтров
   - SSESubscriptionMixin: `subscribeToSSEFor()` для SSE подписок
   - ResizableSectionMixin: `setupSectionResize()` для resize секций
   - ParamsAccessibilityMixin: `updateParamsAccessibility(prefix)` для блокировки параметров
 - **httpEnabledSetParams**: автоматическая блокировка секции параметров когда флаг = false
-  - Применяется к: OPCUAExchange, OPCUAServer, ModbusMaster, ModbusSlave
-  - Сворачивает секцию, блокирует inputs и кнопку "Применить"
-- **5 типов рендереров**: IONotifyController, OPCUAExchange, ModbusMaster, ModbusSlave, OPCUAServer
-- **212 E2E тестов** (197 single + 15 multi-server)
 - Chart toggle для всех рендереров (графики по клику на строку)
 - Virtual scroll для списков датчиков/регистров
 - SSE обновления значений в реальном времени
