@@ -39,6 +39,10 @@ function initSSE() {
             // Обновляем доступность кнопок "Add sensor"
             updateAddSensorButtons();
 
+            // Синхронизируем статусы серверов при переподключении
+            // Это важно, т.к. могли пропустить события server_status во время отключения
+            refreshObjectsList();
+
             // Отключаем polling для всех открытых вкладок
             state.tabs.forEach((tabState, objectName) => {
                 if (tabState.updateInterval) {

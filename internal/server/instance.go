@@ -189,9 +189,15 @@ func (i *Instance) checkHealth(serverName string) {
 
 	if err != nil {
 		// Сервер недоступен
+		if wasConnected {
+			slog.Debug("Server became unavailable", "id", i.Config.ID, "error", err.Error())
+		}
 		i.UpdateStatus(false, err)
 	} else {
 		// Сервер доступен
+		if !wasConnected {
+			slog.Debug("Server became available", "id", i.Config.ID, "objects", len(objects))
+		}
 		i.UpdateStatus(true, nil)
 		i.SetObjectCount(len(objects))
 
