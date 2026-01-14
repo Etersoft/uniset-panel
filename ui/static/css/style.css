@@ -315,7 +315,7 @@
 .sensors-table .col-tick { width: 60px; }
 .sensors-table .col-vtype { width: 90px; }  /* 10 chars */
 .sensors-table .col-precision { width: 85px; }  /* "Precision" */
-.sensors-table .col-status { width: 90px; }  /* 10 chars */
+.sensors-table .col-status { width: 90px; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }  /* 10 chars + ellipsis */
 .sensors-table .col-supplier { width: 120px; overflow: hidden; text-overflow: ellipsis; }
 .sensors-table .col-actions { width: 40px; text-align: center; }
 

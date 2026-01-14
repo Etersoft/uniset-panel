@@ -5271,7 +5271,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
                 <td class="col-tick">${sensor.tick ?? '—'}</td>
                 <td class="col-vtype">${sensor.vtype || '—'}</td>
                 <td class="col-precision">${sensor.precision ?? '—'}</td>
-                <td class="col-status ${sensor.status && sensor.status.toLowerCase() !== 'ok' ? 'status-bad' : ''}">${sensor.status || '—'}</td>
+                <td class="col-status ${sensor.status && sensor.status.toLowerCase() !== 'ok' ? 'status-bad' : ''}" title="${escapeHtml(sensor.status || '')}">${escapeHtml(sensor.status || '—')}</td>
             </tr>
         `}).join('');
 
