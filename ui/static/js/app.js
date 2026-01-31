@@ -4247,9 +4247,10 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             } else {
                 const rows = consumers.map(c => `
                     <tr>
-                        <td>${c.id}</td>
                         <td>${escapeHtml(c.name)}</td>
-                        <td>${escapeHtml(c.node || '')}</td>
+                        <td>${escapeHtml(c.node_name || '')}</td>
+                        <td>${c.smCount ?? 0}</td>
+                        <td>${c.lostEvents ?? 0}</td>
                     </tr>
                 `).join('');
 
@@ -4262,9 +4263,10 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                         <table>
                             <thead>
                                 <tr>
-                                    <th style="width: 60px">ID</th>
                                     <th>Name</th>
-                                    <th style="width: 80px">Узел</th>
+                                    <th>Узел</th>
+                                    <th>smCount</th>
+                                    <th>lostEvents</th>
                                 </tr>
                             </thead>
                             <tbody>${rows}</tbody>
