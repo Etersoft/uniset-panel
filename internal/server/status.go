@@ -11,4 +11,5 @@ type Status struct {
 	LastPoll    time.Time `json:"lastPoll"`
 	LastError   string    `json:"lastError,omitempty"`
 	ObjectCount int       `json:"objectCount"`
+	Order       int       `json:"order"` // порядок сортировки (0 = первый)
 }

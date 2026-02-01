@@ -11419,12 +11419,15 @@ async function fetchObjects() {
     });
 
     state.servers.clear();
-    serversData.servers.forEach(server => {
+    // Сортируем серверы по полю order (backend задаёт порядок)
+    const sortedServers = [...serversData.servers].sort((a, b) => (a.order || 0) - (b.order || 0));
+    sortedServers.forEach(server => {
         state.servers.set(server.id, {
             id: server.id,
             url: server.url,
             name: server.name || server.url,
             connected: server.connected,
+            order: server.order || 0,
             cachedObjects: cachedObjectsMap.get(server.id) || [] // восстанавливаем кеш
         });
     });

@@ -37,6 +37,7 @@ type ServerObjects struct {
 type Manager struct {
 	mu        sync.RWMutex
 	instances map[string]*Instance // serverID -> Instance
+	order     []string             // порядок серверов (slice с ID)
 
 	storage         storage.Storage
 	pollInterval    time.Duration
@@ -178,6 +179,7 @@ func (m *Manager) AddServer(cfg config.ServerConfig) error {
 	}
 
 	m.instances[cfg.ID] = instance
+	m.order = append(m.order, cfg.ID) // сохраняем порядок
 	instance.Start()
 
 	slog.Info("Server added", "id", cfg.ID, "url", cfg.URL, "name", cfg.Name)
@@ -197,6 +199,14 @@ func (m *Manager) RemoveServer(id string) error {
 
 	instance.Stop()
 	delete(m.instances, id)
+
+	// Удаляем из order
+	for i, oid := range m.order {
+		if oid == id {
+			m.order = append(m.order[:i], m.order[i+1:]...)
+			break
+		}
+	}
 
 	slog.Info("Server removed", "id", id)
 
@@ -225,14 +235,18 @@ func (m *Manager) GetServerByURL(url string) (*Instance, bool) {
 	return nil, false
 }
 
-// ListServers возвращает статусы всех серверов
+// ListServers возвращает статусы всех серверов в порядке добавления
 func (m *Manager) ListServers() []Status {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	result := make([]Status, 0, len(m.instances))
-	for _, instance := range m.instances {
-		result = append(result, instance.GetStatus())
+	result := make([]Status, 0, len(m.order))
+	for i, id := range m.order {
+		if instance, exists := m.instances[id]; exists {
+			status := instance.GetStatus()
+			status.Order = i // устанавливаем порядок
+			result = append(result, status)
+		}
 	}
 	return result
 }
@@ -259,12 +273,14 @@ func (m *Manager) SetPollInterval(interval time.Duration) {
 	slog.Info("Poll interval changed", "interval", interval)
 }
 
-// GetAllObjects возвращает объекты со всех серверов (плоский список)
+// GetAllObjects возвращает объекты со всех серверов (плоский список, в порядке добавления)
 func (m *Manager) GetAllObjects() ([]ObjectWithServer, error) {
 	m.mu.RLock()
-	instances := make([]*Instance, 0, len(m.instances))
-	for _, instance := range m.instances {
-		instances = append(instances, instance)
+	instances := make([]*Instance, 0, len(m.order))
+	for _, id := range m.order {
+		if instance, exists := m.instances[id]; exists {
+			instances = append(instances, instance)
+		}
 	}
 	m.mu.RUnlock()
 
@@ -301,12 +317,14 @@ func (m *Manager) GetAllObjects() ([]ObjectWithServer, error) {
 	return result, nil
 }
 
-// GetAllObjectsGrouped возвращает объекты сгруппированные по серверам
+// GetAllObjectsGrouped возвращает объекты сгруппированные по серверам (в порядке добавления)
 func (m *Manager) GetAllObjectsGrouped() ([]ServerObjects, error) {
 	m.mu.RLock()
-	instances := make([]*Instance, 0, len(m.instances))
-	for _, instance := range m.instances {
-		instances = append(instances, instance)
+	instances := make([]*Instance, 0, len(m.order))
+	for _, id := range m.order {
+		if instance, exists := m.instances[id]; exists {
+			instances = append(instances, instance)
+		}
 	}
 	m.mu.RUnlock()
 
@@ -502,14 +520,16 @@ func (m *Manager) GetFirstServer() (*Instance, bool) {
 	return nil, false
 }
 
-// GetAllInstances возвращает все экземпляры серверов
+// GetAllInstances возвращает все экземпляры серверов (в порядке добавления)
 func (m *Manager) GetAllInstances() []*Instance {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	result := make([]*Instance, 0, len(m.instances))
-	for _, instance := range m.instances {
-		result = append(result, instance)
+	result := make([]*Instance, 0, len(m.order))
+	for _, id := range m.order {
+		if instance, exists := m.instances[id]; exists {
+			result = append(result, instance)
+		}
 	}
 	return result
 }
