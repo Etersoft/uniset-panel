@@ -73,7 +73,41 @@ make build
 
 ## Debugging UI
 
-Для отладки проблем с UI (особенно с SSE, подписками, сетевыми запросами) используй Playwright скрипты вместо ручного тестирования в браузере.
+Для отладки проблем с UI (особенно с SSE, подписками, сетевыми запросами) используй Playwright.
+
+### Способ 1: MCP Playwright Plugin (рекомендуется)
+
+Используй встроенные MCP инструменты браузера для интерактивной отладки:
+
+```
+# Открыть страницу
+mcp__plugin_playwright_playwright__browser_navigate url=http://localhost:8000
+
+# Сделать снимок состояния (accessibility tree)
+mcp__plugin_playwright_playwright__browser_snapshot
+
+# Кликнуть на элемент по ref из snapshot
+mcp__plugin_playwright_playwright__browser_click ref="..." element="description"
+
+# Посмотреть сетевые запросы
+mcp__plugin_playwright_playwright__browser_network_requests includeStatic=false
+
+# Посмотреть console логи
+mcp__plugin_playwright_playwright__browser_console_messages level=info
+
+# Выполнить JavaScript в браузере
+mcp__plugin_playwright_playwright__browser_evaluate function="() => window.state?.tabs"
+```
+
+**Преимущества:**
+- Интерактивная отладка прямо в Claude Code
+- Не требует написания скриптов
+- Видны все сетевые запросы и console логи
+- Можно выполнять произвольный JS в контексте страницы
+
+### Способ 2: Playwright скрипты
+
+Для сложных сценариев или автоматизации используй скрипты:
 
 **Почему Playwright:**
 - Перехватывает все HTTP запросы/ответы (включая те, что не отображаются в Network tab)

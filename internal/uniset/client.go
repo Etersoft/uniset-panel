@@ -231,9 +231,13 @@ type IONCSensorsResponse struct {
 
 // IONCConsumer описывает подписчика на датчик
 type IONCConsumer struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
-	Node string `json:"node"`
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	Node       int64  `json:"node"`
+	NodeName   string `json:"node_name"`
+	Attempt    int    `json:"attempt"`
+	LostEvents int    `json:"lostEvents"`
+	SmCount    int    `json:"smCount"`
 }
 
 // IONCConsumersResponse ответ от IONotifyController /consumers endpoint
@@ -335,7 +339,7 @@ func (c *Client) UnfreezeIONCSensor(objectName string, sensorID int64) error {
 }
 
 // GetIONCConsumers возвращает список подписчиков на датчики
-// GET /{objectName}/consumers?sensor1,sensor2
+// GET /{objectName}/consumers?id1,id2
 func (c *Client) GetIONCConsumers(objectName string, sensors string) (*IONCConsumersResponse, error) {
 	path := fmt.Sprintf("%s/consumers?%s", objectName, sensors)
 
