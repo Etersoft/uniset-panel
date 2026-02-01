@@ -2457,6 +2457,26 @@ td.ionc-col-add-buttons > *:last-child {
     cursor: not-allowed;
 }
 
+/* HTTP Control active state */
+.btn-take-control.control-active,
+.opcua-actions .btn-take-control.control-active,
+.mb-actions .btn-take-control.control-active {
+    background: var(--accent-green);
+    border-color: var(--accent-green);
+    color: #fff;
+    box-shadow: 0 0 8px rgba(115, 191, 105, 0.5);
+}
+
+.btn-take-control.control-active:hover {
+    background: #5fa855;
+    border-color: #5fa855;
+}
+
+.control-note-success {
+    color: var(--accent-green);
+    font-weight: 500;
+}
+
 /* ModbusMaster/Slave param inputs */
 .param-field {
     background: var(--bg-secondary);

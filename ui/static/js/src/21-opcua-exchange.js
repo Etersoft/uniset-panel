@@ -407,13 +407,30 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         // Обновляем кнопки
         const takeBtn = document.getElementById(`opcua-control-take-${this.objectName}`);
         const releaseBtn = document.getElementById(`opcua-control-release-${this.objectName}`);
+        const noteEl = document.getElementById(`opcua-control-note-${this.objectName}`);
+
         if (takeBtn) {
             takeBtn.disabled = !allow;
             takeBtn.title = allowText;
+            // Подсветка кнопки когда контроль активен
+            if (active) {
+                takeBtn.classList.add('control-active');
+            } else {
+                takeBtn.classList.remove('control-active');
+            }
         }
         if (releaseBtn) {
             releaseBtn.disabled = !allow;
             releaseBtn.title = allowText;
+        }
+
+        // Обновляем стиль сообщения
+        if (noteEl) {
+            if (active) {
+                noteEl.classList.add('control-note-success');
+            } else {
+                noteEl.classList.remove('control-note-success');
+            }
         }
     }
 

@@ -443,3 +443,128 @@ func TestJournalConfigFields(t *testing.T) {
 		t.Errorf("Database = %q, want custom", cfg.Database)
 	}
 }
+
+func TestMergeAndSortServers(t *testing.T) {
+	tests := []struct {
+		name          string
+		configServers []ServerConfig
+		cliServers    []ServerConfig
+		expectedURLs  []string // ожидаемый порядок URL
+	}{
+		{
+			name:          "only CLI servers - sorted alphabetically",
+			configServers: nil,
+			cliServers: []ServerConfig{
+				{URL: "http://zebra:8080"},
+				{URL: "http://alpha:8080"},
+				{URL: "http://beta:8080"},
+			},
+			expectedURLs: []string{
+				"http://alpha:8080",
+				"http://beta:8080",
+				"http://zebra:8080",
+			},
+		},
+		{
+			name: "only config servers - preserve original order",
+			configServers: []ServerConfig{
+				{URL: "http://zebra:8080"},
+				{URL: "http://alpha:8080"},
+				{URL: "http://beta:8080"},
+			},
+			cliServers: nil,
+			expectedURLs: []string{
+				"http://zebra:8080",
+				"http://alpha:8080",
+				"http://beta:8080",
+			},
+		},
+		{
+			name: "config + CLI - config order preserved, CLI sorted and appended",
+			configServers: []ServerConfig{
+				{URL: "http://prod-3:8080"},
+				{URL: "http://prod-1:8080"},
+			},
+			cliServers: []ServerConfig{
+				{URL: "http://dev-z:8080"},
+				{URL: "http://dev-a:8080"},
+			},
+			expectedURLs: []string{
+				"http://prod-3:8080", // config первый (оригинальный порядок)
+				"http://prod-1:8080", // config второй (оригинальный порядок)
+				"http://dev-a:8080",  // CLI отсортирован
+				"http://dev-z:8080",  // CLI отсортирован
+			},
+		},
+		{
+			name:          "empty both",
+			configServers: nil,
+			cliServers:    nil,
+			expectedURLs:  []string{},
+		},
+		{
+			name: "single config server",
+			configServers: []ServerConfig{
+				{URL: "http://single:8080"},
+			},
+			cliServers:   nil,
+			expectedURLs: []string{"http://single:8080"},
+		},
+		{
+			name:          "single CLI server",
+			configServers: nil,
+			cliServers: []ServerConfig{
+				{URL: "http://single:8080"},
+			},
+			expectedURLs: []string{"http://single:8080"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := MergeAndSortServers(tt.configServers, tt.cliServers)
+
+			if len(result) != len(tt.expectedURLs) {
+				t.Fatalf("got %d servers, want %d", len(result), len(tt.expectedURLs))
+			}
+
+			for i, expected := range tt.expectedURLs {
+				if result[i].URL != expected {
+					t.Errorf("server[%d].URL = %q, want %q", i, result[i].URL, expected)
+				}
+			}
+		})
+	}
+}
+
+func TestMergeAndSortServers_DoesNotModifyInput(t *testing.T) {
+	// Проверяем что функция не модифицирует входные слайсы
+	configServers := []ServerConfig{
+		{URL: "http://b:8080"},
+		{URL: "http://a:8080"},
+	}
+	cliServers := []ServerConfig{
+		{URL: "http://z:8080"},
+		{URL: "http://y:8080"},
+	}
+
+	// Копируем для сравнения
+	origConfig := make([]ServerConfig, len(configServers))
+	copy(origConfig, configServers)
+	origCLI := make([]ServerConfig, len(cliServers))
+	copy(origCLI, cliServers)
+
+	_ = MergeAndSortServers(configServers, cliServers)
+
+	// Проверяем что входные данные не изменились
+	for i, srv := range configServers {
+		if srv.URL != origConfig[i].URL {
+			t.Errorf("configServers was modified: [%d].URL = %q, was %q", i, srv.URL, origConfig[i].URL)
+		}
+	}
+	for i, srv := range cliServers {
+		if srv.URL != origCLI[i].URL {
+			t.Errorf("cliServers was modified: [%d].URL = %q, was %q", i, srv.URL, origCLI[i].URL)
+		}
+	}
+}

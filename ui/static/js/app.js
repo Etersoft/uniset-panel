@@ -4832,13 +4832,30 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         // Обновляем кнопки
         const takeBtn = document.getElementById(`opcua-control-take-${this.objectName}`);
         const releaseBtn = document.getElementById(`opcua-control-release-${this.objectName}`);
+        const noteEl = document.getElementById(`opcua-control-note-${this.objectName}`);
+
         if (takeBtn) {
             takeBtn.disabled = !allow;
             takeBtn.title = allowText;
+            // Подсветка кнопки когда контроль активен
+            if (active) {
+                takeBtn.classList.add('control-active');
+            } else {
+                takeBtn.classList.remove('control-active');
+            }
         }
         if (releaseBtn) {
             releaseBtn.disabled = !allow;
             releaseBtn.title = allowText;
+        }
+
+        // Обновляем стиль сообщения
+        if (noteEl) {
+            if (active) {
+                noteEl.classList.add('control-note-success');
+            } else {
+                noteEl.classList.remove('control-note-success');
+            }
         }
     }
 
@@ -5628,14 +5645,29 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         super(objectName, tabKey);
         this.status = null;
         this.params = {};
-        this.paramNames = [
+        // Параметры только для чтения (статус)
+        this.readonlyParams = [
             'force',
             'force_out',
+            'maxHeartBeat'
+        ];
+        // Параметры для записи
+        this.writableParams = [
+            'exchangeMode',
             'recv_timeout',
             'sleepPause_msec',
             'polltime',
-            'default_timeout',
-            'maxHeartBeat'
+            'default_timeout'
+        ];
+        // Все параметры для загрузки
+        this.paramNames = [...this.readonlyParams, ...this.writableParams];
+        // Режимы обмена (как в OPCUA)
+        this.exchangeModes = [
+            { value: 0, name: 'none', label: 'Normal' },
+            { value: 1, name: 'writeOnly', label: 'Write only' },
+            { value: 2, name: 'readOnly', label: 'Read only' },
+            { value: 3, name: 'skipSaveToSM', label: 'Skip save to SM' },
+            { value: 4, name: 'skipExchange', label: 'Disable exchange' }
         ];
         this.devices = [];
         this.registersHeight = this.loadRegistersHeight();
@@ -5671,6 +5703,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     createPanelHTML() {
         return `
             ${this.createChartsSection()}
+            ${this.createMBControlSection()}
             ${this.createMBStatusSection()}
             ${this.createMBParamsSection()}
             ${this.createMBDevicesSection()}
@@ -5726,6 +5759,17 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
             `mb-registers-filter-${this.objectName}`,
             `mb-type-filter-${this.objectName}`
         );
+
+        // HTTP Control buttons
+        const takeControl = document.getElementById(`mb-control-take-${this.objectName}`);
+        if (takeControl) {
+            takeControl.addEventListener('click', () => this.takeControl());
+        }
+
+        const releaseControl = document.getElementById(`mb-control-release-${this.objectName}`);
+        if (releaseControl) {
+            releaseControl.addEventListener('click', () => this.releaseControl());
+        }
     }
 
     // Настройка фильтров для Modbus
@@ -5761,6 +5805,32 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
                 this.loadRegisters(); // Тип фильтруется на сервере
             });
         }
+    }
+
+    createMBControlSection() {
+        const headerIndicators = `
+            <div class="header-indicators" id="mb-control-indicators-${this.objectName}" onclick="event.stopPropagation()">
+                <div class="header-indicator">
+                    <span class="header-indicator-label">Allowed</span>
+                    <span class="header-indicator-dot" id="mb-ind-allow-${this.objectName}"></span>
+                </div>
+                <div class="header-indicator">
+                    <span class="header-indicator-label">Active</span>
+                    <span class="header-indicator-dot" id="mb-ind-active-${this.objectName}"></span>
+                </div>
+                <div class="header-indicator">
+                    <span class="header-indicator-label">Parameters</span>
+                    <span class="header-indicator-dot" id="mb-ind-params-${this.objectName}"></span>
+                </div>
+            </div>
+        `;
+        return this.createCollapsibleSection('mb-control', 'HTTP Control', `
+            <div class="mb-actions">
+                <button class="btn btn-take-control" id="mb-control-take-${this.objectName}">Take control</button>
+                <button class="btn btn-release-control" id="mb-control-release-${this.objectName}">Release</button>
+                <span class="mb-note" id="mb-control-note-${this.objectName}"></span>
+            </div>
+        `, { sectionId: `mb-control-section-${this.objectName}`, headerExtra: headerIndicators });
     }
 
     createMBStatusSection() {
@@ -5854,6 +5924,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
             const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/status`);
             this.status = data.status || null;
             this.renderStatus();
+            this.renderControl();
             this.updateParamsAccessibility('mb');
             this.updateStatusTimestamp();
             this.setNote(`mb-status-note-${this.objectName}`, '');
@@ -5897,6 +5968,90 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         });
     }
 
+    renderControl() {
+        const allow = this.status?.httpControlAllow;
+        const active = this.status?.httpControlActive;
+        const enabledParams = this.status?.httpEnabledSetParams;
+        const allowText = allow ? 'Take control' : 'Control not allowed';
+
+        // Обновляем индикаторы в шапке
+        const indAllow = document.getElementById(`mb-ind-allow-${this.objectName}`);
+        const indActive = document.getElementById(`mb-ind-active-${this.objectName}`);
+        const indParams = document.getElementById(`mb-ind-params-${this.objectName}`);
+
+        if (indAllow) {
+            indAllow.className = `header-indicator-dot ${allow ? 'ok' : 'fail'}`;
+            indAllow.title = allow ? 'Allowed: Yes' : 'Allowed: No';
+        }
+        if (indActive) {
+            indActive.className = `header-indicator-dot ${active ? 'ok' : 'fail'}`;
+            indActive.title = active ? 'Active: Yes' : 'Active: No';
+        }
+        if (indParams) {
+            indParams.className = `header-indicator-dot ${enabledParams ? 'ok' : 'fail'}`;
+            indParams.title = enabledParams ? 'Parameters: Yes' : 'Parameters: No';
+        }
+
+        // Обновляем кнопки
+        const takeBtn = document.getElementById(`mb-control-take-${this.objectName}`);
+        const releaseBtn = document.getElementById(`mb-control-release-${this.objectName}`);
+        const noteEl = document.getElementById(`mb-control-note-${this.objectName}`);
+
+        if (takeBtn) {
+            takeBtn.disabled = !allow;
+            takeBtn.title = allowText;
+            // Подсветка кнопки когда контроль активен
+            if (active) {
+                takeBtn.classList.add('control-active');
+            } else {
+                takeBtn.classList.remove('control-active');
+            }
+        }
+        if (releaseBtn) {
+            releaseBtn.disabled = !allow;
+            releaseBtn.title = allowText;
+        }
+
+        // Обновляем стиль сообщения
+        if (noteEl) {
+            if (active) {
+                noteEl.classList.add('control-note-success');
+            } else {
+                noteEl.classList.remove('control-note-success');
+            }
+        }
+    }
+
+    async takeControl() {
+        if (this.status && this.status.httpControlAllow === false) {
+            this.setNote(`mb-control-note-${this.objectName}`, 'Control not allowed', true);
+            return;
+        }
+
+        try {
+            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/control/take`, { method: 'POST' });
+            this.setNote(`mb-control-note-${this.objectName}`, 'HTTP control activated');
+            this.loadStatus();
+        } catch (err) {
+            this.setNote(`mb-control-note-${this.objectName}`, err.message, true);
+        }
+    }
+
+    async releaseControl() {
+        if (this.status && this.status.httpControlAllow === false) {
+            this.setNote(`mb-control-note-${this.objectName}`, 'Control not allowed', true);
+            return;
+        }
+
+        try {
+            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/control/release`, { method: 'POST' });
+            this.setNote(`mb-control-note-${this.objectName}`, 'Control returned to sensor');
+            this.loadStatus();
+        } catch (err) {
+            this.setNote(`mb-control-note-${this.objectName}`, err.message, true);
+        }
+    }
+
     async loadParams() {
         try {
             const query = this.paramNames.map(n => `name=${encodeURIComponent(n)}`).join('&');
@@ -5916,45 +6071,100 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
 
         tbody.innerHTML = '';
 
-        this.paramNames.forEach(name => {
+        const httpControlActive = this.status?.httpControlActive === 1 || this.status?.httpControlActive === true;
+
+        // Человекочитаемые названия параметров
+        const paramLabels = {
+            force: 'Force read',
+            force_out: 'Force write',
+            maxHeartBeat: 'Max heartbeat (ms)',
+            exchangeMode: 'Exchange mode',
+            recv_timeout: 'Receive timeout (ms)',
+            sleepPause_msec: 'Sleep pause (ms)',
+            polltime: 'Poll interval (ms)',
+            default_timeout: 'Default timeout (ms)'
+        };
+
+        // Readonly параметры
+        this.readonlyParams.forEach(name => {
             const value = this.params[name];
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td class="param-name">${name}</td>
-                <td class="param-value">${value !== undefined ? value : '—'}</td>
-                <td class="param-input">
-                    <input type="text" class="param-field" data-param="${name}" placeholder="${value !== undefined ? value : ''}" />
-                </td>
+                <td class="param-name">${paramLabels[name] || name}</td>
+                <td class="param-value">${value !== undefined ? formatValue(value) : '—'}</td>
+                <td class="param-input">—</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        // Writable параметры
+        this.writableParams.forEach(name => {
+            const value = this.params[name];
+            const tr = document.createElement('tr');
+            let inputHtml;
+
+            if (name === 'exchangeMode') {
+                // Выпадающий список для режима обмена
+                const options = this.exchangeModes.map(m => {
+                    const selected = value === m.value ? 'selected' : '';
+                    return `<option value="${m.value}" ${selected}>${m.label}</option>`;
+                }).join('');
+                const disabled = httpControlActive ? '' : 'disabled title="HTTP control required"';
+                inputHtml = `<select class="param-field" data-param="${name}" ${disabled}>${options}</select>`;
+                tr.className = 'param-row-primary';
+            } else {
+                inputHtml = `<input type="text" class="param-field" data-param="${name}" placeholder="${value !== undefined ? value : ''}" />`;
+            }
+
+            tr.innerHTML = `
+                <td class="param-name">${paramLabels[name] || name}</td>
+                <td class="param-value">${value !== undefined ? formatValue(value) : '—'}</td>
+                <td class="param-input">${inputHtml}</td>
             `;
             tbody.appendChild(tr);
         });
     }
 
     async saveParams() {
-        const inputs = document.querySelectorAll(`#mb-params-${this.objectName} input.param-field`);
-        const params = {};
+        const tbody = document.getElementById(`mb-params-${this.objectName}`);
+        if (!tbody) return;
+
+        const inputs = tbody.querySelectorAll('input.param-field');
+        const selects = tbody.querySelectorAll('select.param-field');
+        const changed = {};
 
         inputs.forEach(input => {
             const name = input.dataset.param;
             const val = input.value.trim();
             if (val !== '') {
-                params[name] = val;
+                changed[name] = val;
             }
         });
 
-        if (Object.keys(params).length === 0) {
+        selects.forEach(select => {
+            const name = select.dataset.param;
+            const current = this.params[name];
+            const newValue = parseInt(select.value);
+            if (current !== newValue) {
+                changed[name] = newValue;
+            }
+        });
+
+        if (Object.keys(changed).length === 0) {
             this.setNote(`mb-params-note-${this.objectName}`, 'No changes');
             return;
         }
 
         try {
-            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/params`, {
+            const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/params`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ params })
+                body: JSON.stringify({ params: changed })
             });
-            this.setNote(`mb-params-note-${this.objectName}`, 'Saved');
-            this.loadParams();
+            this.params = { ...this.params, ...(data.updated || {}) };
+            this.renderParams();
+            this.setNote(`mb-params-note-${this.objectName}`, 'Parameters applied');
+            this.loadStatus();
         } catch (err) {
             this.setNote(`mb-params-note-${this.objectName}`, err.message, true);
         }
@@ -11209,12 +11419,15 @@ async function fetchObjects() {
     });
 
     state.servers.clear();
-    serversData.servers.forEach(server => {
+    // Сортируем серверы по полю order (backend задаёт порядок)
+    const sortedServers = [...serversData.servers].sort((a, b) => (a.order || 0) - (b.order || 0));
+    sortedServers.forEach(server => {
         state.servers.set(server.id, {
             id: server.id,
             url: server.url,
             name: server.name || server.url,
             connected: server.connected,
+            order: server.order || 0,
             cachedObjects: cachedObjectsMap.get(server.id) || [] // восстанавливаем кеш
         });
     });

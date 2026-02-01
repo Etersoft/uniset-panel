@@ -6,6 +6,7 @@ import (
 	"flag"
 	"log/slog"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 )
@@ -251,12 +252,16 @@ func Parse() *Config {
 		}
 	}
 
-	// Добавление серверов из CLI флагов (приоритет над YAML)
+	// Добавление серверов из CLI флагов
+	var cliServers []ServerConfig
 	for _, url := range unisetURLs {
-		cfg.Servers = append(cfg.Servers, ServerConfig{
+		cliServers = append(cliServers, ServerConfig{
 			URL: url,
 		})
 	}
+
+	// Объединяем и сортируем серверы
+	cfg.Servers = MergeAndSortServers(cfg.Servers, cliServers)
 
 	// Если серверы не указаны, использовать значение по умолчанию
 	if len(cfg.Servers) == 0 {
@@ -279,6 +284,33 @@ func Parse() *Config {
 func generateServerID(urlStr string) string {
 	hash := sha256.Sum256([]byte(urlStr))
 	return hex.EncodeToString(hash[:4]) // первые 8 символов hex
+}
+
+// MergeAndSortServers объединяет серверы из конфига и CLI с правильной сортировкой:
+// - Серверы из конфига сохраняют оригинальный порядок
+// - CLI серверы сортируются по алфавиту и добавляются в конец
+// - Если нет серверов из конфига, все серверы сортируются по алфавиту
+func MergeAndSortServers(configServers, cliServers []ServerConfig) []ServerConfig {
+	// Сортируем CLI серверы по алфавиту (по URL)
+	sortedCLI := make([]ServerConfig, len(cliServers))
+	copy(sortedCLI, cliServers)
+	sort.Slice(sortedCLI, func(i, j int) bool {
+		return sortedCLI[i].URL < sortedCLI[j].URL
+	})
+
+	// Объединяем: сначала конфиг (в оригинальном порядке), потом CLI (отсортированные)
+	result := make([]ServerConfig, 0, len(configServers)+len(sortedCLI))
+	result = append(result, configServers...)
+	result = append(result, sortedCLI...)
+
+	// Если не было серверов из конфига, сортируем весь результат по алфавиту
+	if len(configServers) == 0 && len(result) > 1 {
+		sort.Slice(result, func(i, j int) bool {
+			return result[i].URL < result[j].URL
+		})
+	}
+
+	return result
 }
 
 // buildJournalURL строит URL для журнала из YAML конфигурации
