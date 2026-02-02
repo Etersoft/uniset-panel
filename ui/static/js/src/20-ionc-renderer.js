@@ -37,6 +37,16 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         // Генераторы значений: Map<sensorId, GeneratorState>
         this.activeGenerators = new Map();
+
+        // Инициализация сортировки
+        this.initSortProps();
+        // Определение колонок для сортировки
+        this.sortColumnDefs = {
+            id: { field: 'id', type: 'number' },
+            name: { field: 'name', type: 'string' },
+            type: { field: 'type', type: 'string' },
+            value: { field: 'value', type: 'number' }
+        };
     }
 
     // IONotifyController датчики - показываем badge "IO" и prefix "io"
@@ -56,6 +66,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     initialize() {
+        this.loadSortState('uniset-panel-ionc-sort');
         this.setupEventListeners();
         this.loadSensors();
         this.loadLostConsumers();
@@ -92,17 +103,17 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                     <div class="ionc-sensors-table-container" id="ionc-sensors-container-${this.objectName}">
                         <div class="ionc-sensors-viewport" id="ionc-sensors-viewport-${this.objectName}">
                             <div class="ionc-sensors-spacer" id="ionc-sensors-spacer-${this.objectName}"></div>
-                            <table class="sensors-table ionc-sensors-table">
+                            <table class="sensors-table ionc-sensors-table" id="ionc-sensors-table-${this.objectName}">
                                 <thead>
                                     <tr>
                                         <th class="ionc-col-pin">
                                             <span class="ionc-unpin-all" id="ionc-unpin-${this.objectName}" title="Unpin all" style="display:none">✕</span>
                                         </th>
                                         <th class="ionc-col-add-buttons"></th>
-                                        <th class="ionc-col-id">ID</th>
-                                        <th class="ionc-col-name">Name</th>
-                                        <th class="ionc-col-type">Type</th>
-                                        <th class="ionc-col-value">Value</th>
+                                        ${this.renderSortableHeader('id', 'ID', true, 'ionc-col-id')}
+                                        ${this.renderSortableHeader('name', 'Name', true, 'ionc-col-name')}
+                                        ${this.renderSortableHeader('type', 'Type', true, 'ionc-col-type')}
+                                        ${this.renderSortableHeader('value', 'Value', true, 'ionc-col-value')}
                                         <th class="ionc-col-flags">Status</th>
                                         <th class="ionc-col-supplier">Supplier</th>
                                         <th class="ionc-col-consumers">Consumers</th>
@@ -231,6 +242,10 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
             // Устанавливаем делегирование для кнопки добавления на dashboard
             this.setupDashboardClickHandler();
+
+            // Привязываем обработчики сортировки
+            const table = document.getElementById(`ionc-sensors-table-${this.objectName}`);
+            this.attachSortHandlers(table);
         } catch (err) {
             console.error('Error loading IONC sensors:', err);
             if (tbody) {
@@ -423,6 +438,9 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             sensorsToShow = this.allSensors.filter(s => pinnedSensors.has(String(s.id)));
         }
 
+        // Сортировка: pinned всегда вверху, остальные по выбранной колонке
+        sensorsToShow = this.sortItems(sensorsToShow, pinnedSensors, this.sortColumnDefs);
+
         if (sensorsToShow.length === 0) {
             tbody.innerHTML = '<tr><td colspan="9" class="ionc-empty">No sensors</td></tr>';
             return;
@@ -503,6 +521,33 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     // Legacy alias for compatibility
     renderSensorsTable() {
         this.renderVisibleSensors();
+    }
+
+    // Метод для перерисовки после изменения сортировки
+    renderAfterSort() {
+        // Обновляем заголовки таблицы
+        this.updateSortHeaders();
+        // Перерисовываем данные
+        this.renderVisibleSensors();
+    }
+
+    // Обновление заголовков таблицы с индикаторами сортировки
+    updateSortHeaders() {
+        const table = document.getElementById(`ionc-sensors-table-${this.objectName}`);
+        if (!table) return;
+
+        table.querySelectorAll('th.th-sortable').forEach(th => {
+            const column = th.dataset.column;
+            th.classList.toggle('th-sorted', column === this.sortColumn);
+            const arrow = th.querySelector('.sort-arrow');
+            if (arrow) {
+                if (column === this.sortColumn) {
+                    arrow.textContent = this.sortDirection === 'asc' ? ' ↑' : ' ↓';
+                } else {
+                    arrow.textContent = '';
+                }
+            }
+        });
     }
 
     renderSensorRow(sensor, isPinned) {
@@ -1808,4 +1853,5 @@ applyMixin(IONotifyControllerRenderer, ResizableSectionMixin);
 applyMixin(IONotifyControllerRenderer, FilterMixin);
 applyMixin(IONotifyControllerRenderer, ItemCounterMixin);
 applyMixin(IONotifyControllerRenderer, SectionHeightMixin);
+applyMixin(IONotifyControllerRenderer, TableSortMixin);
 

@@ -391,8 +391,13 @@ test.describe('IONC Value Generator', () => {
         // Clear localStorage first
         await page.evaluate(() => localStorage.removeItem('ionc-gen-preferences'));
 
-        // Open generator dialog for first sensor
-        await page.locator('.ionc-btn-gen').first().click();
+        // Filter by AI type to ensure we have analog sensors with enabled generator buttons
+        // (with sorting by name, sensor order changes and DI/DO sensors may come first)
+        await page.selectOption('#ionc-type-filter-SharedMemory', 'AI');
+        await page.waitForTimeout(200);
+
+        // Open generator dialog for first non-readonly AI sensor (readonly sensors have disabled buttons)
+        await page.locator('.ionc-btn-gen:not([disabled])').first().click();
         await page.waitForSelector('.ionc-dialog-overlay.visible');
 
         // Configure and start linear generator
@@ -425,8 +430,8 @@ test.describe('IONC Value Generator', () => {
         // Stop generator
         await page.locator('.ionc-btn-gen-stop').first().click();
 
-        // Open dialog for second sensor - should have linear preselected
-        await page.locator('.ionc-btn-gen').nth(1).click();
+        // Open dialog for second non-readonly AI sensor - should have linear preselected
+        await page.locator('.ionc-btn-gen:not([disabled])').nth(1).click();
         await page.waitForSelector('.ionc-dialog-overlay.visible');
 
         const selectedType = await page.locator('#ionc-gen-type').inputValue();

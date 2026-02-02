@@ -548,6 +548,189 @@ const PinManagementMixin = {
     }
 };
 
+/**
+ * Миксин для сортировки таблиц по колонкам
+ * Требует: sortColumnDefs - объект с описанием колонок
+ */
+const TableSortMixin = {
+    /**
+     * Инициализация свойств сортировки
+     * Вызывать в конструкторе рендерера
+     */
+    initSortProps() {
+        this.sortColumn = 'name';      // Текущая колонка сортировки
+        this.sortDirection = 'asc';    // Направление: 'asc' | 'desc'
+        this.sortStorageKey = null;    // Ключ для localStorage (устанавливается в loadSortState)
+    },
+
+    /**
+     * Загрузка состояния сортировки из localStorage
+     * @param {string} storageKey - Ключ в localStorage
+     */
+    loadSortState(storageKey) {
+        this.sortStorageKey = storageKey;
+        try {
+            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
+            const state = saved[this.objectName];
+            if (state) {
+                this.sortColumn = state.column || 'name';
+                this.sortDirection = state.direction || 'asc';
+            }
+        } catch (err) {
+            console.warn('Failed to load sort state:', err);
+        }
+    },
+
+    /**
+     * Сохранение состояния сортировки в localStorage
+     */
+    saveSortState() {
+        if (!this.sortStorageKey) return;
+        try {
+            const saved = JSON.parse(localStorage.getItem(this.sortStorageKey) || '{}');
+            saved[this.objectName] = {
+                column: this.sortColumn,
+                direction: this.sortDirection
+            };
+            localStorage.setItem(this.sortStorageKey, JSON.stringify(saved));
+        } catch (err) {
+            console.warn('Failed to save sort state:', err);
+        }
+    },
+
+    /**
+     * Переключение сортировки по колонке
+     * @param {string} column - Имя колонки
+     */
+    toggleSort(column) {
+        if (this.sortColumn === column) {
+            // Toggle direction
+            this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            this.sortColumn = column;
+            this.sortDirection = 'asc';
+        }
+        this.saveSortState();
+        // Вызываем метод перерисовки (должен быть определён в рендерере)
+        if (typeof this.renderAfterSort === 'function') {
+            this.renderAfterSort();
+        }
+    },
+
+    /**
+     * Сортировка элементов с учётом закреплённых записей
+     * @param {Array} items - Массив элементов для сортировки
+     * @param {Set} pinnedSet - Множество ID закреплённых элементов
+     * @param {Object} columnDefs - Определения колонок: { columnName: { field, type, accessor } }
+     * @param {string} pinnedKey - Поле для проверки закреплённости (по умолчанию 'id')
+     * @returns {Array} - Отсортированный массив
+     */
+    sortItems(items, pinnedSet, columnDefs, pinnedKey = 'id') {
+        if (!items || items.length === 0) return items;
+
+        const colDef = columnDefs[this.sortColumn];
+        if (!colDef) return items;
+
+        const { field, type = 'string', accessor } = colDef;
+
+        // Функция получения значения
+        const getValue = (item) => {
+            if (accessor) return accessor(item);
+            return item[field];
+        };
+
+        // Функция сравнения
+        const compare = (a, b) => {
+            let valA = getValue(a);
+            let valB = getValue(b);
+
+            // Обработка null/undefined
+            if (valA == null && valB == null) return 0;
+            if (valA == null) return 1;
+            if (valB == null) return -1;
+
+            // Сравнение по типу
+            if (type === 'number') {
+                valA = Number(valA) || 0;
+                valB = Number(valB) || 0;
+                return valA - valB;
+            } else {
+                // string comparison (case-insensitive)
+                valA = String(valA).toLowerCase();
+                valB = String(valB).toLowerCase();
+                return valA.localeCompare(valB);
+            }
+        };
+
+        // Разделяем на закреплённые и обычные
+        const pinned = [];
+        const unpinned = [];
+
+        items.forEach(item => {
+            const keyValue = String(item[pinnedKey]);
+            if (pinnedSet && pinnedSet.has(keyValue)) {
+                pinned.push(item);
+            } else {
+                unpinned.push(item);
+            }
+        });
+
+        // Сортируем каждую группу
+        const sortFn = this.sortDirection === 'asc' ? compare : (a, b) => -compare(a, b);
+        pinned.sort(sortFn);
+        unpinned.sort(sortFn);
+
+        // Объединяем: закреплённые всегда вверху
+        return [...pinned, ...unpinned];
+    },
+
+    /**
+     * Рендеринг заголовка колонки с индикатором сортировки
+     * @param {string} column - Имя колонки (ключ в sortColumnDefs)
+     * @param {string} label - Отображаемый текст
+     * @param {boolean} sortable - Можно ли сортировать по этой колонке
+     * @param {string} className - Дополнительные CSS классы
+     * @returns {string} HTML
+     */
+    renderSortableHeader(column, label, sortable = true, className = '') {
+        if (!sortable) {
+            return `<th class="${className}">${label}</th>`;
+        }
+
+        const isActive = this.sortColumn === column;
+        const arrow = isActive ? (this.sortDirection === 'asc' ? ' ↑' : ' ↓') : '';
+        const sortedClass = isActive ? 'th-sorted' : '';
+
+        return `<th class="th-sortable ${sortedClass} ${className}" data-column="${column}">${label}<span class="sort-arrow">${arrow}</span></th>`;
+    },
+
+    /**
+     * Привязка обработчиков сортировки к заголовкам таблицы
+     * @param {HTMLElement} tableElement - Элемент таблицы или её контейнера
+     */
+    attachSortHandlers(tableElement) {
+        if (!tableElement) return;
+
+        const headers = tableElement.querySelectorAll('.th-sortable');
+        headers.forEach(th => {
+            // Удаляем старый обработчик если есть
+            if (th._sortHandler) {
+                th.removeEventListener('click', th._sortHandler);
+            }
+
+            const handler = () => {
+                const column = th.dataset.column;
+                if (column) {
+                    this.toggleSort(column);
+                }
+            };
+
+            th._sortHandler = handler;
+            th.addEventListener('click', handler);
+        });
+    }
+};
+
 // Функция для применения миксина к классу
 function applyMixin(targetClass, mixin) {
     Object.getOwnPropertyNames(mixin).forEach(name => {

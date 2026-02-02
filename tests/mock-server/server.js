@@ -1,9 +1,10 @@
 const http = require('http');
+const WebSocket = require('ws');
 
 const PORT = 9393;
 
 // Mock data
-const objects = ['UniSetActivator', 'TestProc', 'SharedMemory', 'OPCUAClient1', 'MBTCPMaster1', 'MBTCPSlave1', 'OPCUAServer1', 'UNetExchange'];
+const objects = ['UniSetActivator', 'TestProc', 'SharedMemory', 'OPCUAClient1', 'MBTCPMaster1', 'MBTCPSlave1', 'OPCUAServer1', 'UNetExchange', 'UWebSocketGate'];
 
 const testProcData = {
   TestProc: {
@@ -462,6 +463,51 @@ const unetStatus = {
     }
   }
 };
+
+// UWebSocketGate mock data
+const uwsgSensors = [];
+for (let i = 1; i <= 60; i++) {
+  const iotype = sensorTypes[(i - 1) % 4];
+  const isAnalog = iotype.startsWith('A');
+  uwsgSensors.push({
+    id: 8000 + i,
+    name: `WS_${iotype}${String(i).padStart(3, '0')}_S`,
+    sm_type: iotype,
+    value: isAnalog ? Math.round((20 + i * 1.5) * 100) / 100 : (i % 2),
+    node: 3000,
+    supplier_id: 5003,
+    supplier: 'SharedMemory',
+    undefined: false,
+    error: '',
+    calibration: isAnalog ? { cmax: 100, cmin: 0, precision: 2, rmax: 4095, rmin: 0 } : null
+  });
+}
+
+const uwsgStatus = {
+  result: 'OK',
+  status: {
+    name: 'UWebSocketGate',
+    activated: true,
+    maxHeartBeat: 10,
+    wsPort: 8081,
+    wsPingInterval: 3000,
+    httpEnabledSetParams: 1,
+    LogServer: { host: 'localhost', port: 6010, state: 'RUNNING' },
+    sessions: [
+      { id: 1, remote: '127.0.0.1:54321', subscriptions: 5, connected: '2024-01-15T10:00:00Z' },
+      { id: 2, remote: '192.168.1.100:12345', subscriptions: 12, connected: '2024-01-15T09:30:00Z' }
+    ],
+    statistics: {
+      totalConnections: 150,
+      activeConnections: 2,
+      messagesReceived: 5000,
+      messagesSent: 8500
+    }
+  }
+};
+
+// WebSocket sessions tracking
+const wsClients = new Map(); // ws -> { subscriptions: Set<id>, frozen: Map<id, value> }
 
 const mbParams = {
   force: 0,
@@ -1030,6 +1076,96 @@ const server = http.createServer((req, res) => {
     }));
   } else if (url === '/api/v2/UNetExchange/status') {
     res.end(JSON.stringify(unetStatus));
+  // UWebSocketGate endpoints
+  } else if (url === '/api/v2/UWebSocketGate') {
+    res.end(JSON.stringify({
+      UWebSocketGate: {},
+      object: {
+        id: 8001,
+        isActive: true,
+        name: 'UWebSocketGate',
+        objectType: 'UniSetObject',
+        extensionType: 'UWebSocketGate'
+      }
+    }));
+  } else if (url === '/api/v2/UWebSocketGate/status') {
+    // Update sessions from active WebSocket connections
+    uwsgStatus.status.sessions = [];
+    let sessionId = 1;
+    wsClients.forEach((clientData, ws) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        uwsgStatus.status.sessions.push({
+          id: sessionId++,
+          remote: ws._socket?.remoteAddress || 'unknown',
+          subscriptions: clientData.subscriptions.size,
+          frozen: clientData.frozen.size
+        });
+      }
+    });
+    uwsgStatus.status.statistics.activeConnections = wsClients.size;
+    res.end(JSON.stringify(uwsgStatus));
+  } else if (url === '/api/v2/UWebSocketGate/help') {
+    res.end(JSON.stringify({
+      UWebSocketGate: [
+        { name: 'status', desc: 'Get UWebSocketGate status and sessions' },
+        { name: 'sensors', desc: 'Get list of available sensors' },
+        { name: 'get', desc: 'Get sensor values by id or name' }
+      ],
+      websocket: {
+        url: 'ws://host:port/wsgate/',
+        commands: [
+          { cmd: 'ask:id1,id2,...', desc: 'Subscribe to sensor updates' },
+          { cmd: 'get:id1,id2,...', desc: 'Get current sensor values' },
+          { cmd: 'set:id=val,...', desc: 'Set sensor value' },
+          { cmd: 'freeze:id=val,...', desc: 'Freeze sensor at value' },
+          { cmd: 'unfreeze:id,...', desc: 'Unfreeze sensor' },
+          { cmd: 'del:id,...', desc: 'Unsubscribe from sensors' }
+        ]
+      }
+    }));
+  } else if (url === '/api/v2/UWebSocketGate/sensors' || url.startsWith('/api/v2/UWebSocketGate/sensors?')) {
+    const urlObj = new URL(url, `http://localhost:${PORT}`);
+    const offset = parseInt(urlObj.searchParams.get('offset') || '0', 10);
+    const limit = parseInt(urlObj.searchParams.get('limit') || '50', 10);
+    const search = (urlObj.searchParams.get('search') || '').toLowerCase();
+    const iotype = (urlObj.searchParams.get('iotype') || '').toUpperCase();
+
+    let filtered = uwsgSensors;
+    if (search) {
+      filtered = filtered.filter(s =>
+        s.name.toLowerCase().includes(search) ||
+        String(s.id).includes(search)
+      );
+    }
+    if (iotype && iotype !== 'ALL') {
+      filtered = filtered.filter(s => s.sm_type === iotype);
+    }
+
+    const paginatedSensors = filtered.slice(offset, offset + limit);
+
+    res.end(JSON.stringify({
+      result: 'OK',
+      sensors: paginatedSensors,
+      total: filtered.length,
+      limit: limit,
+      offset: offset
+    }));
+  } else if (url.startsWith('/api/v2/UWebSocketGate/get')) {
+    const urlObj = new URL(url, `http://localhost:${PORT}`);
+    const filter = urlObj.searchParams.get('filter');
+    const sensors = [];
+
+    if (filter) {
+      filter.split(',').forEach(idStr => {
+        const id = parseInt(idStr.trim(), 10);
+        if (!isNaN(id)) {
+          const sensor = uwsgSensors.find(s => s.id === id);
+          if (sensor && !sensors.find(s => s.id === sensor.id)) sensors.push(sensor);
+        }
+      });
+    }
+
+    res.end(JSON.stringify({ result: 'OK', sensors }));
   } else {
     res.statusCode = 404;
     res.end(JSON.stringify({ error: 'Not found' }));
@@ -1039,3 +1175,257 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Mock UniSet2 server running on port ${PORT}`);
 });
+
+// WebSocket server for UWebSocketGate
+const wss = new WebSocket.Server({ noServer: true });
+
+// Handle WebSocket upgrade
+server.on('upgrade', (request, socket, head) => {
+  const pathname = new URL(request.url, `http://localhost:${PORT}`).pathname;
+
+  if (pathname === '/wsgate/' || pathname === '/wsgate') {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit('connection', ws, request);
+    });
+  } else {
+    socket.destroy();
+  }
+});
+
+// Helper: create SensorInfo response
+function createSensorInfo(sensor) {
+  const now = Date.now();
+  return {
+    type: 'SensorInfo',
+    tv_sec: Math.floor(now / 1000),
+    tv_nsec: (now % 1000) * 1000000,
+    value: sensor.value,
+    sm_type: sensor.sm_type,
+    error: sensor.error || '',
+    id: sensor.id,
+    name: sensor.name,
+    node: sensor.node,
+    supplier_id: sensor.supplier_id,
+    supplier: sensor.supplier,
+    undefined: sensor.undefined || false,
+    calibration: sensor.calibration || { cmax: 0, cmin: 0, precision: 0, rmax: 0, rmin: 0 }
+  };
+}
+
+// Helper: create ShortSensorInfo response
+function createShortSensorInfo(sensor) {
+  return {
+    type: 'ShortSensorInfo',
+    id: sensor.id,
+    value: sensor.value,
+    error: sensor.error || '',
+    supplier_id: sensor.supplier_id,
+    supplier: sensor.supplier
+  };
+}
+
+// Helper: find sensor by id or name
+function findSensor(idOrName) {
+  const id = parseInt(idOrName, 10);
+  if (!isNaN(id)) {
+    return uwsgSensors.find(s => s.id === id);
+  }
+  return uwsgSensors.find(s => s.name === idOrName);
+}
+
+// Handle WebSocket commands
+function handleWSCommand(ws, clientData, message) {
+  const msg = message.toString().trim();
+  const colonIndex = msg.indexOf(':');
+
+  if (colonIndex === -1) {
+    ws.send(JSON.stringify({ data: [{ type: 'Error', message: 'Invalid command format' }] }));
+    return;
+  }
+
+  const cmd = msg.substring(0, colonIndex);
+  const args = msg.substring(colonIndex + 1);
+
+  switch (cmd) {
+    case 'ask': {
+      // Subscribe to sensors
+      const ids = args.split(',').map(s => s.trim()).filter(Boolean);
+      const results = [];
+      ids.forEach(idOrName => {
+        const sensor = findSensor(idOrName);
+        if (sensor) {
+          clientData.subscriptions.add(sensor.id);
+          results.push(createSensorInfo(sensor));
+        } else {
+          results.push({ type: 'Error', message: `Sensor not found: ${idOrName}` });
+        }
+      });
+      ws.send(JSON.stringify({ data: results }));
+      break;
+    }
+
+    case 'get': {
+      // Get current values (without subscribing)
+      const ids = args.split(',').map(s => s.trim()).filter(Boolean);
+      const results = [];
+      ids.forEach(idOrName => {
+        const sensor = findSensor(idOrName);
+        if (sensor) {
+          results.push(createShortSensorInfo(sensor));
+        } else {
+          results.push({ type: 'Error', message: `Sensor not found: ${idOrName}` });
+        }
+      });
+      ws.send(JSON.stringify({ data: results }));
+      break;
+    }
+
+    case 'set': {
+      // Set sensor values: set:id1=val1,id2=val2
+      const pairs = args.split(',').map(s => s.trim()).filter(Boolean);
+      const results = [];
+      pairs.forEach(pair => {
+        const [idOrName, value] = pair.split('=');
+        const sensor = findSensor(idOrName);
+        if (sensor && value !== undefined) {
+          const numValue = parseFloat(value);
+          if (!isNaN(numValue)) {
+            sensor.value = numValue;
+            results.push(createShortSensorInfo(sensor));
+          } else {
+            results.push({ type: 'Error', message: `Invalid value for ${idOrName}` });
+          }
+        } else {
+          results.push({ type: 'Error', message: `Sensor not found: ${idOrName}` });
+        }
+      });
+      ws.send(JSON.stringify({ data: results }));
+      break;
+    }
+
+    case 'freeze': {
+      // Freeze sensor at value: freeze:id1=val1,id2=val2
+      const pairs = args.split(',').map(s => s.trim()).filter(Boolean);
+      const results = [];
+      pairs.forEach(pair => {
+        const [idOrName, value] = pair.split('=');
+        const sensor = findSensor(idOrName);
+        if (sensor && value !== undefined) {
+          const numValue = parseFloat(value);
+          if (!isNaN(numValue)) {
+            clientData.frozen.set(sensor.id, numValue);
+            sensor.value = numValue;
+            results.push(createShortSensorInfo(sensor));
+          } else {
+            results.push({ type: 'Error', message: `Invalid value for ${idOrName}` });
+          }
+        } else {
+          results.push({ type: 'Error', message: `Sensor not found or missing value: ${idOrName}` });
+        }
+      });
+      ws.send(JSON.stringify({ data: results }));
+      break;
+    }
+
+    case 'unfreeze': {
+      // Unfreeze sensors: unfreeze:id1,id2
+      const ids = args.split(',').map(s => s.trim()).filter(Boolean);
+      const results = [];
+      ids.forEach(idOrName => {
+        const sensor = findSensor(idOrName);
+        if (sensor) {
+          clientData.frozen.delete(sensor.id);
+          results.push(createShortSensorInfo(sensor));
+        } else {
+          results.push({ type: 'Error', message: `Sensor not found: ${idOrName}` });
+        }
+      });
+      ws.send(JSON.stringify({ data: results }));
+      break;
+    }
+
+    case 'del': {
+      // Unsubscribe from sensors: del:id1,id2
+      const ids = args.split(',').map(s => s.trim()).filter(Boolean);
+      ids.forEach(idOrName => {
+        const sensor = findSensor(idOrName);
+        if (sensor) {
+          clientData.subscriptions.delete(sensor.id);
+        }
+      });
+      ws.send(JSON.stringify({ data: [{ type: 'OK', message: 'Unsubscribed' }] }));
+      break;
+    }
+
+    default:
+      ws.send(JSON.stringify({ data: [{ type: 'Error', message: `Unknown command: ${cmd}` }] }));
+  }
+}
+
+wss.on('connection', (ws) => {
+  console.log('WebSocket client connected to /wsgate/');
+
+  const clientData = {
+    subscriptions: new Set(),
+    frozen: new Map()
+  };
+  wsClients.set(ws, clientData);
+
+  // Send initial ping
+  ws.send(JSON.stringify({ data: [{ type: 'Ping' }] }));
+
+  // Ping interval (every 3 seconds as per protocol)
+  const pingInterval = setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ data: [{ type: 'Ping' }] }));
+    }
+  }, 3000);
+
+  // Sensor value update simulation (for subscribed sensors)
+  const updateInterval = setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN && clientData.subscriptions.size > 0) {
+      const updates = [];
+      clientData.subscriptions.forEach(sensorId => {
+        const sensor = uwsgSensors.find(s => s.id === sensorId);
+        if (sensor) {
+          // Only update if not frozen
+          if (!clientData.frozen.has(sensorId)) {
+            // Simulate value change
+            if (sensor.sm_type === 'AI' || sensor.sm_type === 'AO') {
+              sensor.value = Math.round((sensor.value + (Math.random() - 0.5) * 2) * 100) / 100;
+            } else {
+              // DI/DO: occasional toggle
+              if (Math.random() < 0.1) {
+                sensor.value = sensor.value === 0 ? 1 : 0;
+              }
+            }
+          }
+          updates.push(createSensorInfo(sensor));
+        }
+      });
+      if (updates.length > 0) {
+        ws.send(JSON.stringify({ data: updates }));
+      }
+    }
+  }, 1000);
+
+  ws.on('message', (message) => {
+    handleWSCommand(ws, clientData, message);
+  });
+
+  ws.on('close', () => {
+    console.log('WebSocket client disconnected');
+    clearInterval(pingInterval);
+    clearInterval(updateInterval);
+    wsClients.delete(ws);
+  });
+
+  ws.on('error', (err) => {
+    console.error('WebSocket error:', err);
+    clearInterval(pingInterval);
+    clearInterval(updateInterval);
+    wsClients.delete(ws);
+  });
+});
+
+console.log('WebSocket server ready on /wsgate/');

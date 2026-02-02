@@ -33,6 +33,17 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         // Высота секции датчиков
         this.sensorsHeight = this.loadSectionHeight('uwsgate-sensors-height', 400);
 
+        // Инициализация сортировки
+        this.initSortProps();
+        this.sortColumnDefs = {
+            id: { field: 'id', type: 'number' },
+            name: { field: 'name', type: 'string' },
+            type: { field: 'iotype', type: 'string' },
+            value: { field: 'value', type: 'number' },
+            supplier: { field: 'supplier', type: 'string' },
+            status: { field: 'status', type: 'string', accessor: (item) => item.error || '' }
+        };
+
         // localStorage ключи
         this.subscriptionsKey = `uwsgate-subscriptions-${this.tabKey}`;
         this.pinnedKey = `uwsgate-pinned-${this.tabKey}`;
@@ -119,18 +130,18 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
                 </label>
             </div>
             <div class="uwsgate-sensors-container" id="uwsgate-sensors-container-${this.objectName}" style="height: ${this.sensorsHeight}px; overflow-y: auto;">
-                <table class="sensors-table uwsgate-sensors-table">
+                <table class="sensors-table uwsgate-sensors-table" id="uwsgate-sensors-table-${this.objectName}">
                     <thead>
                         <tr>
                             <th class="col-pin">
                                 <span class="uwsgate-unpin-all" id="uwsgate-unpin-${this.objectName}" title="Unpin all" style="display:none">✕</span>
                             </th>
                             <th class="col-add-buttons"></th>
-                            <th class="col-id">ID</th>
-                            <th class="col-name">Name</th>
-                            <th class="col-type">Type</th>
-                            <th class="col-value">Value</th>
-                            <th class="col-supplier">Supplier</th>
+                            ${this.renderSortableHeader('id', 'ID', true, 'col-id')}
+                            ${this.renderSortableHeader('name', 'Name', true, 'col-name')}
+                            ${this.renderSortableHeader('type', 'Type', true, 'col-type')}
+                            ${this.renderSortableHeader('value', 'Value', true, 'col-value')}
+                            ${this.renderSortableHeader('supplier', 'Supplier', true, 'col-supplier')}
                             <th class="col-status">Status</th>
                             <th class="col-actions"></th>
                         </tr>
@@ -148,10 +159,17 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
     }
 
     initialize() {
+        this.loadSortState('uniset-panel-uwsgate-sort');
         this.setupEventListeners();
         this.setupSensorsResize();
         this.loadSavedSubscriptions();
         setupChartsResize(this.tabKey);
+
+        // Обработчики сортировки
+        const table = getElementInTab(this.tabKey, `uwsgate-sensors-table-${this.objectName}`);
+        if (table) {
+            this.attachSortHandlers(table);
+        }
     }
 
     setupEventListeners() {
@@ -444,16 +462,13 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
             return;
         }
 
-        // Sort: pinned first, then by name
-        const sortedSensors = Array.from(this.sensors.values()).sort((a, b) => {
-            const aPinned = this.pinnedSensors.has(a.name);
-            const bPinned = this.pinnedSensors.has(b.name);
-            if (aPinned && !bPinned) return -1;
-            if (!aPinned && bPinned) return 1;
-            return a.name.localeCompare(b.name);
-        });
+        // Используем sortItems из TableSortMixin для единообразной сортировки
+        // pinnedSensors использует name вместо id
+        const pinnedByName = new Set(this.pinnedSensors);
+        let sensorsArray = Array.from(this.sensors.values());
+        sensorsArray = this.sortItems(sensorsArray, pinnedByName, this.sortColumnDefs, 'name');
 
-        const rows = sortedSensors.map(sensor => this.renderSensorRow(sensor));
+        const rows = sensorsArray.map(sensor => this.renderSensorRow(sensor));
         tbody.innerHTML = rows.join('');
         this.bindRowEvents(tbody);
         this.updateSensorCount();
@@ -756,10 +771,36 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
             }).catch(err => console.warn('Failed to unsubscribe on destroy:', err));
         }
     }
+
+    // Перерисовка после смены сортировки
+    renderAfterSort() {
+        this.renderSensorsTable();
+        this.updateSortHeaders();
+    }
+
+    // Обновление визуальных индикаторов сортировки
+    updateSortHeaders() {
+        const table = getElementInTab(this.tabKey, `uwsgate-sensors-table-${this.objectName}`);
+        if (!table) return;
+
+        table.querySelectorAll('th.th-sortable').forEach(th => {
+            const column = th.dataset.column;
+            th.classList.toggle('th-sorted', column === this.sortColumn);
+            const arrow = th.querySelector('.sort-arrow');
+            if (arrow) {
+                if (column === this.sortColumn) {
+                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
+                } else {
+                    arrow.textContent = '';
+                }
+            }
+        });
+    }
 }
 
 // Apply mixins
 applyMixin(UWebSocketGateRenderer, SectionHeightMixin);
+applyMixin(UWebSocketGateRenderer, TableSortMixin);
 
 // UWebSocketGate рендерер (по extensionType)
 registerRenderer('UWebSocketGate', UWebSocketGateRenderer);

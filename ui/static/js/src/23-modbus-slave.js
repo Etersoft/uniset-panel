@@ -46,6 +46,22 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
 
         // Register map for chart support
         this.registerMap = new Map();
+
+        // Инициализация сортировки
+        this.initSortProps();
+        this.sortColumnDefs = {
+            id: { field: 'id', type: 'number' },
+            name: { field: 'name', type: 'string' },
+            type: { field: 'iotype', type: 'string' },
+            value: { field: 'value', type: 'number' },
+            mbaddr: { field: 'device', type: 'number' },
+            register: { field: 'register', type: 'number', accessor: (item) => {
+                const regInfo = item.register || {};
+                return regInfo.mbreg !== undefined ? regInfo.mbreg : item.mbreg;
+            }},
+            func: { field: 'func', type: 'string', accessor: (item) => (item.register || {}).mbfunc },
+            access: { field: 'amode', type: 'string' }
+        };
     }
 
     createPanelHTML() {
@@ -62,6 +78,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     }
 
     initialize() {
+        this.loadSortState('uniset-panel-mbslave-sort');
         this.bindEvents();
         this.reloadAll();
         setupChartsResize(this.tabKey);
@@ -207,21 +224,21 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             <div class="mb-registers-container" id="mbs-registers-container-${this.objectName}" style="height: ${this.registersHeight}px">
                 <div class="mb-registers-viewport" id="mbs-registers-viewport-${this.objectName}">
                     <div class="mb-registers-spacer" id="mbs-registers-spacer-${this.objectName}"></div>
-                    <table class="sensors-table variables-table mb-registers-table">
+                    <table class="sensors-table variables-table mb-registers-table" id="mbs-registers-table-${this.objectName}">
                         <thead>
                             <tr>
                                 <th class="col-pin">
                                     <span class="mbs-unpin-all" id="mbs-unpin-${this.objectName}" title="Unpin all" style="display:none">✕</span>
                                 </th>
                                 <th class="col-add-buttons"></th>
-                                <th class="col-id">ID</th>
-                                <th class="col-name">Name</th>
-                                <th class="col-type">Type</th>
-                                <th class="col-value">Value</th>
-                                <th class="col-mbaddr">MB Addr</th>
-                                <th class="col-register">Register</th>
-                                <th class="col-func">Function</th>
-                                <th class="col-access">Access</th>
+                                ${this.renderSortableHeader('id', 'ID', true, 'col-id')}
+                                ${this.renderSortableHeader('name', 'Name', true, 'col-name')}
+                                ${this.renderSortableHeader('type', 'Type', true, 'col-type')}
+                                ${this.renderSortableHeader('value', 'Value', true, 'col-value')}
+                                ${this.renderSortableHeader('mbaddr', 'MB Addr', true, 'col-mbaddr')}
+                                ${this.renderSortableHeader('register', 'Register', true, 'col-register')}
+                                ${this.renderSortableHeader('func', 'Function', true, 'col-func')}
+                                ${this.renderSortableHeader('access', 'Access', true, 'col-access')}
                             </tr>
                         </thead>
                         <tbody id="mbs-registers-tbody-${this.objectName}"></tbody>
@@ -436,6 +453,15 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
 
             // Подписываемся на SSE обновления после загрузки
             this.subscribeToSSE();
+
+            // Обработчики сортировки (только при первой загрузке)
+            if (offset === 0) {
+                const table = document.getElementById(`mbs-registers-table-${this.objectName}`);
+                if (table) {
+                    this.attachSortHandlers(table);
+                    this.updateSortHeaders();
+                }
+            }
         } catch (err) {
             this.setNote(`mbs-registers-note-${this.objectName}`, err.message, true);
         } finally {
@@ -505,6 +531,9 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         if (hasPinned && !this.filter) {
             registersToShow = registersToShow.filter(r => pinnedRegisters.has(String(r.id)));
         }
+
+        // Сортировка: pinned всегда вверху, остальные по выбранной колонке
+        registersToShow = this.sortItems(registersToShow, pinnedRegisters, this.sortColumnDefs);
 
         // Обновляем счётчик с учётом фильтрации
         this.updateItemCount(`mbs-register-count-${this.objectName}`, registersToShow.length, this.registersTotal);
@@ -709,6 +738,31 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     unpinAllRegisters() {
         this.unpinAllItems('uniset-panel-mbs-pinned', this.renderRegisters);
     }
+
+    // Перерисовка после смены сортировки
+    renderAfterSort() {
+        this.renderRegisters();
+        this.updateSortHeaders();
+    }
+
+    // Обновление визуальных индикаторов сортировки
+    updateSortHeaders() {
+        const table = document.getElementById(`mbs-registers-table-${this.objectName}`);
+        if (!table) return;
+
+        table.querySelectorAll('th.th-sortable').forEach(th => {
+            const column = th.dataset.column;
+            th.classList.toggle('th-sorted', column === this.sortColumn);
+            const arrow = th.querySelector('.sort-arrow');
+            if (arrow) {
+                if (column === this.sortColumn) {
+                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
+                } else {
+                    arrow.textContent = '';
+                }
+            }
+        });
+    }
 }
 
 // Apply mixins to ModbusSlaveRenderer
@@ -720,6 +774,7 @@ applyMixin(ModbusSlaveRenderer, ParamsAccessibilityMixin);
 applyMixin(ModbusSlaveRenderer, ItemCounterMixin);
 applyMixin(ModbusSlaveRenderer, SectionHeightMixin);
 applyMixin(ModbusSlaveRenderer, PinManagementMixin);
+applyMixin(ModbusSlaveRenderer, TableSortMixin);
 
 // ModbusSlave рендерер (по extensionType)
 registerRenderer('ModbusSlave', ModbusSlaveRenderer);

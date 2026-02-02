@@ -381,6 +381,10 @@ test.describe('OPCUAExchange renderer', () => {
       await panel.waitFor({ timeout: 10000 });
       await page.waitForSelector(`#opcua-sensors-${OPCUA_OBJECT} tr`, { timeout: 10000 });
 
+      // Filter by DI type to ensure DI sensors are visible (with sorting by name, DI may be out of viewport)
+      await page.selectOption(`#opcua-type-filter-${OPCUA_OBJECT}`, 'DI');
+      await page.waitForTimeout(200);
+
       // Find a DI type sensor row
       const diRow = panel.locator(`#opcua-sensors-${OPCUA_OBJECT} tr`, { hasText: 'DI' }).first();
       await expect(diRow).toBeVisible();
