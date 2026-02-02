@@ -71,7 +71,7 @@ services:
     working_dir: /app
     volumes:
       - ./tests/mock-server:/app
-    command: node server.js
+    command: sh -c "npm install --silent 2>/dev/null && node server.js"
     expose:
       - "9393"
     healthcheck:

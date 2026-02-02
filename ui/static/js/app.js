@@ -1815,6 +1815,189 @@ const PinManagementMixin = {
     }
 };
 
+/**
+ * Миксин для сортировки таблиц по колонкам
+ * Требует: sortColumnDefs - объект с описанием колонок
+ */
+const TableSortMixin = {
+    /**
+     * Инициализация свойств сортировки
+     * Вызывать в конструкторе рендерера
+     */
+    initSortProps() {
+        this.sortColumn = 'name';      // Текущая колонка сортировки
+        this.sortDirection = 'asc';    // Направление: 'asc' | 'desc'
+        this.sortStorageKey = null;    // Ключ для localStorage (устанавливается в loadSortState)
+    },
+
+    /**
+     * Загрузка состояния сортировки из localStorage
+     * @param {string} storageKey - Ключ в localStorage
+     */
+    loadSortState(storageKey) {
+        this.sortStorageKey = storageKey;
+        try {
+            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
+            const state = saved[this.objectName];
+            if (state) {
+                this.sortColumn = state.column || 'name';
+                this.sortDirection = state.direction || 'asc';
+            }
+        } catch (err) {
+            console.warn('Failed to load sort state:', err);
+        }
+    },
+
+    /**
+     * Сохранение состояния сортировки в localStorage
+     */
+    saveSortState() {
+        if (!this.sortStorageKey) return;
+        try {
+            const saved = JSON.parse(localStorage.getItem(this.sortStorageKey) || '{}');
+            saved[this.objectName] = {
+                column: this.sortColumn,
+                direction: this.sortDirection
+            };
+            localStorage.setItem(this.sortStorageKey, JSON.stringify(saved));
+        } catch (err) {
+            console.warn('Failed to save sort state:', err);
+        }
+    },
+
+    /**
+     * Переключение сортировки по колонке
+     * @param {string} column - Имя колонки
+     */
+    toggleSort(column) {
+        if (this.sortColumn === column) {
+            // Toggle direction
+            this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            this.sortColumn = column;
+            this.sortDirection = 'asc';
+        }
+        this.saveSortState();
+        // Вызываем метод перерисовки (должен быть определён в рендерере)
+        if (typeof this.renderAfterSort === 'function') {
+            this.renderAfterSort();
+        }
+    },
+
+    /**
+     * Сортировка элементов с учётом закреплённых записей
+     * @param {Array} items - Массив элементов для сортировки
+     * @param {Set} pinnedSet - Множество ID закреплённых элементов
+     * @param {Object} columnDefs - Определения колонок: { columnName: { field, type, accessor } }
+     * @param {string} pinnedKey - Поле для проверки закреплённости (по умолчанию 'id')
+     * @returns {Array} - Отсортированный массив
+     */
+    sortItems(items, pinnedSet, columnDefs, pinnedKey = 'id') {
+        if (!items || items.length === 0) return items;
+
+        const colDef = columnDefs[this.sortColumn];
+        if (!colDef) return items;
+
+        const { field, type = 'string', accessor } = colDef;
+
+        // Функция получения значения
+        const getValue = (item) => {
+            if (accessor) return accessor(item);
+            return item[field];
+        };
+
+        // Функция сравнения
+        const compare = (a, b) => {
+            let valA = getValue(a);
+            let valB = getValue(b);
+
+            // Обработка null/undefined
+            if (valA == null && valB == null) return 0;
+            if (valA == null) return 1;
+            if (valB == null) return -1;
+
+            // Сравнение по типу
+            if (type === 'number') {
+                valA = Number(valA) || 0;
+                valB = Number(valB) || 0;
+                return valA - valB;
+            } else {
+                // string comparison (case-insensitive)
+                valA = String(valA).toLowerCase();
+                valB = String(valB).toLowerCase();
+                return valA.localeCompare(valB);
+            }
+        };
+
+        // Разделяем на закреплённые и обычные
+        const pinned = [];
+        const unpinned = [];
+
+        items.forEach(item => {
+            const keyValue = String(item[pinnedKey]);
+            if (pinnedSet && pinnedSet.has(keyValue)) {
+                pinned.push(item);
+            } else {
+                unpinned.push(item);
+            }
+        });
+
+        // Сортируем каждую группу
+        const sortFn = this.sortDirection === 'asc' ? compare : (a, b) => -compare(a, b);
+        pinned.sort(sortFn);
+        unpinned.sort(sortFn);
+
+        // Объединяем: закреплённые всегда вверху
+        return [...pinned, ...unpinned];
+    },
+
+    /**
+     * Рендеринг заголовка колонки с индикатором сортировки
+     * @param {string} column - Имя колонки (ключ в sortColumnDefs)
+     * @param {string} label - Отображаемый текст
+     * @param {boolean} sortable - Можно ли сортировать по этой колонке
+     * @param {string} className - Дополнительные CSS классы
+     * @returns {string} HTML
+     */
+    renderSortableHeader(column, label, sortable = true, className = '') {
+        if (!sortable) {
+            return `<th class="${className}">${label}</th>`;
+        }
+
+        const isActive = this.sortColumn === column;
+        const arrow = isActive ? (this.sortDirection === 'asc' ? ' ↑' : ' ↓') : '';
+        const sortedClass = isActive ? 'th-sorted' : '';
+
+        return `<th class="th-sortable ${sortedClass} ${className}" data-column="${column}">${label}<span class="sort-arrow">${arrow}</span></th>`;
+    },
+
+    /**
+     * Привязка обработчиков сортировки к заголовкам таблицы
+     * @param {HTMLElement} tableElement - Элемент таблицы или её контейнера
+     */
+    attachSortHandlers(tableElement) {
+        if (!tableElement) return;
+
+        const headers = tableElement.querySelectorAll('.th-sortable');
+        headers.forEach(th => {
+            // Удаляем старый обработчик если есть
+            if (th._sortHandler) {
+                th.removeEventListener('click', th._sortHandler);
+            }
+
+            const handler = () => {
+                const column = th.dataset.column;
+                if (column) {
+                    this.toggleSort(column);
+                }
+            };
+
+            th._sortHandler = handler;
+            th.addEventListener('click', handler);
+        });
+    }
+};
+
 // Функция для применения миксина к классу
 function applyMixin(targetClass, mixin) {
     Object.getOwnPropertyNames(mixin).forEach(name => {
@@ -2648,6 +2831,16 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         // Генераторы значений: Map<sensorId, GeneratorState>
         this.activeGenerators = new Map();
+
+        // Инициализация сортировки
+        this.initSortProps();
+        // Определение колонок для сортировки
+        this.sortColumnDefs = {
+            id: { field: 'id', type: 'number' },
+            name: { field: 'name', type: 'string' },
+            type: { field: 'type', type: 'string' },
+            value: { field: 'value', type: 'number' }
+        };
     }
 
     // IONotifyController датчики - показываем badge "IO" и prefix "io"
@@ -2667,6 +2860,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     initialize() {
+        this.loadSortState('uniset-panel-ionc-sort');
         this.setupEventListeners();
         this.loadSensors();
         this.loadLostConsumers();
@@ -2703,17 +2897,17 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                     <div class="ionc-sensors-table-container" id="ionc-sensors-container-${this.objectName}">
                         <div class="ionc-sensors-viewport" id="ionc-sensors-viewport-${this.objectName}">
                             <div class="ionc-sensors-spacer" id="ionc-sensors-spacer-${this.objectName}"></div>
-                            <table class="sensors-table ionc-sensors-table">
+                            <table class="sensors-table ionc-sensors-table" id="ionc-sensors-table-${this.objectName}">
                                 <thead>
                                     <tr>
                                         <th class="ionc-col-pin">
                                             <span class="ionc-unpin-all" id="ionc-unpin-${this.objectName}" title="Unpin all" style="display:none">✕</span>
                                         </th>
                                         <th class="ionc-col-add-buttons"></th>
-                                        <th class="ionc-col-id">ID</th>
-                                        <th class="ionc-col-name">Name</th>
-                                        <th class="ionc-col-type">Type</th>
-                                        <th class="ionc-col-value">Value</th>
+                                        ${this.renderSortableHeader('id', 'ID', true, 'ionc-col-id')}
+                                        ${this.renderSortableHeader('name', 'Name', true, 'ionc-col-name')}
+                                        ${this.renderSortableHeader('type', 'Type', true, 'ionc-col-type')}
+                                        ${this.renderSortableHeader('value', 'Value', true, 'ionc-col-value')}
                                         <th class="ionc-col-flags">Status</th>
                                         <th class="ionc-col-supplier">Supplier</th>
                                         <th class="ionc-col-consumers">Consumers</th>
@@ -2842,6 +3036,10 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
             // Устанавливаем делегирование для кнопки добавления на dashboard
             this.setupDashboardClickHandler();
+
+            // Привязываем обработчики сортировки
+            const table = document.getElementById(`ionc-sensors-table-${this.objectName}`);
+            this.attachSortHandlers(table);
         } catch (err) {
             console.error('Error loading IONC sensors:', err);
             if (tbody) {
@@ -3034,6 +3232,9 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             sensorsToShow = this.allSensors.filter(s => pinnedSensors.has(String(s.id)));
         }
 
+        // Сортировка: pinned всегда вверху, остальные по выбранной колонке
+        sensorsToShow = this.sortItems(sensorsToShow, pinnedSensors, this.sortColumnDefs);
+
         if (sensorsToShow.length === 0) {
             tbody.innerHTML = '<tr><td colspan="9" class="ionc-empty">No sensors</td></tr>';
             return;
@@ -3114,6 +3315,33 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     // Legacy alias for compatibility
     renderSensorsTable() {
         this.renderVisibleSensors();
+    }
+
+    // Метод для перерисовки после изменения сортировки
+    renderAfterSort() {
+        // Обновляем заголовки таблицы
+        this.updateSortHeaders();
+        // Перерисовываем данные
+        this.renderVisibleSensors();
+    }
+
+    // Обновление заголовков таблицы с индикаторами сортировки
+    updateSortHeaders() {
+        const table = document.getElementById(`ionc-sensors-table-${this.objectName}`);
+        if (!table) return;
+
+        table.querySelectorAll('th.th-sortable').forEach(th => {
+            const column = th.dataset.column;
+            th.classList.toggle('th-sorted', column === this.sortColumn);
+            const arrow = th.querySelector('.sort-arrow');
+            if (arrow) {
+                if (column === this.sortColumn) {
+                    arrow.textContent = this.sortDirection === 'asc' ? ' ↑' : ' ↓';
+                } else {
+                    arrow.textContent = '';
+                }
+            }
+        });
     }
 
     renderSensorRow(sensor, isPinned) {
@@ -4419,6 +4647,7 @@ applyMixin(IONotifyControllerRenderer, ResizableSectionMixin);
 applyMixin(IONotifyControllerRenderer, FilterMixin);
 applyMixin(IONotifyControllerRenderer, ItemCounterMixin);
 applyMixin(IONotifyControllerRenderer, SectionHeightMixin);
+applyMixin(IONotifyControllerRenderer, TableSortMixin);
 
 
 
@@ -4494,6 +4723,19 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
         // Sensor map for chart support
         this.sensorMap = new Map();
+
+        // Инициализация сортировки
+        this.initSortProps();
+        this.sortColumnDefs = {
+            id: { field: 'id', type: 'number' },
+            name: { field: 'name', type: 'string' },
+            type: { field: 'iotype', type: 'string' },
+            value: { field: 'value', type: 'number' },
+            tick: { field: 'tick', type: 'number' },
+            vtype: { field: 'vtype', type: 'string' },
+            precision: { field: 'precision', type: 'number' },
+            status: { field: 'status', type: 'string' }
+        };
     }
 
     createPanelHTML() {
@@ -4511,6 +4753,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     initialize() {
+        this.loadSortState('uniset-panel-opcua-sort');
         this.bindEvents();
         this.reloadAll();
         setupChartsResize(this.tabKey);
@@ -4660,21 +4903,21 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             <div class="opcua-sensors-container" id="opcua-sensors-container-${this.objectName}" style="height: ${this.sensorsHeight}px">
                 <div class="opcua-sensors-viewport" id="opcua-sensors-viewport-${this.objectName}">
                     <div class="opcua-sensors-spacer" id="opcua-sensors-spacer-${this.objectName}"></div>
-                    <table class="sensors-table variables-table opcua-sensors-table">
+                    <table class="sensors-table variables-table opcua-sensors-table" id="opcua-sensors-table-${this.objectName}">
                         <thead>
                             <tr>
                                 <th class="col-pin">
                                     <span class="opcua-unpin-all" id="opcua-unpin-${this.objectName}" title="Unpin all" style="display:none">✕</span>
                                 </th>
                                 <th class="col-add-buttons"></th>
-                                <th class="col-id">ID</th>
-                                <th class="col-name">Name</th>
-                                <th class="col-type">Type</th>
-                                <th class="col-value">Value</th>
-                                <th class="col-tick">Tick</th>
-                                <th class="col-vtype">VType</th>
-                                <th class="col-precision">Precision</th>
-                                <th class="col-status">Status</th>
+                                ${this.renderSortableHeader('id', 'ID', true, 'col-id')}
+                                ${this.renderSortableHeader('name', 'Name', true, 'col-name')}
+                                ${this.renderSortableHeader('type', 'Type', true, 'col-type')}
+                                ${this.renderSortableHeader('value', 'Value', true, 'col-value')}
+                                ${this.renderSortableHeader('tick', 'Tick', true, 'col-tick')}
+                                ${this.renderSortableHeader('vtype', 'VType', true, 'col-vtype')}
+                                ${this.renderSortableHeader('precision', 'Precision', true, 'col-precision')}
+                                ${this.renderSortableHeader('status', 'Status', true, 'col-status')}
                             </tr>
                         </thead>
                         <tbody id="opcua-sensors-${this.objectName}"></tbody>
@@ -5081,6 +5324,13 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
             // Подписываемся на SSE обновления после загрузки
             this.subscribeToSSE();
+
+            // Обработчики сортировки
+            const table = document.getElementById(`opcua-sensors-table-${this.objectName}`);
+            if (table) {
+                this.attachSortHandlers(table);
+                this.updateSortHeaders();
+            }
         } catch (err) {
             this.setNote(`opcua-sensors-note-${this.objectName}`, err.message, true);
         }
@@ -5255,6 +5505,9 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             tbody.innerHTML = '<tr><td colspan="11" class="opcua-no-sensors">No sensors</td></tr>';
             return;
         }
+
+        // Сортировка: pinned всегда вверху, остальные по выбранной колонке
+        sensorsToShow = this.sortItems(sensorsToShow, pinnedSensors, this.sortColumnDefs);
 
         // Get visible slice
         const visibleSensors = sensorsToShow.slice(this.startIndex, this.endIndex);
@@ -5617,6 +5870,31 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     unpinAllSensors() {
         this.unpinAllItems('uniset-panel-opcua-pinned', this.renderVisibleSensors);
     }
+
+    // Перерисовка после смены сортировки
+    renderAfterSort() {
+        this.renderVisibleSensors();
+        this.updateSortHeaders();
+    }
+
+    // Обновление визуальных индикаторов сортировки
+    updateSortHeaders() {
+        const table = document.getElementById(`opcua-sensors-table-${this.objectName}`);
+        if (!table) return;
+
+        table.querySelectorAll('th.th-sortable').forEach(th => {
+            const column = th.dataset.column;
+            th.classList.toggle('th-sorted', column === this.sortColumn);
+            const arrow = th.querySelector('.sort-arrow');
+            if (arrow) {
+                if (column === this.sortColumn) {
+                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
+                } else {
+                    arrow.textContent = '';
+                }
+            }
+        });
+    }
 }
 
 // Apply mixins to OPCUAExchangeRenderer
@@ -5628,6 +5906,7 @@ applyMixin(OPCUAExchangeRenderer, ParamsAccessibilityMixin);
 applyMixin(OPCUAExchangeRenderer, ItemCounterMixin);
 applyMixin(OPCUAExchangeRenderer, SectionHeightMixin);
 applyMixin(OPCUAExchangeRenderer, PinManagementMixin);
+applyMixin(OPCUAExchangeRenderer, TableSortMixin);
 
 
 
@@ -5698,6 +5977,18 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
 
         // Register map for chart support
         this.registerMap = new Map();
+
+        // Инициализация сортировки
+        this.initSortProps();
+        this.sortColumnDefs = {
+            id: { field: 'id', type: 'number' },
+            name: { field: 'name', type: 'string' },
+            type: { field: 'iotype', type: 'string' },
+            value: { field: 'value', type: 'number' },
+            device: { field: 'device', type: 'number' },
+            register: { field: 'register', type: 'number', accessor: (item) => (item.register || {}).mbreg },
+            func: { field: 'func', type: 'string', accessor: (item) => (item.register || {}).mbfunc }
+        };
     }
 
     createPanelHTML() {
@@ -5715,6 +6006,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     }
 
     initialize() {
+        this.loadSortState('uniset-panel-mbmaster-sort');
         this.bindEvents();
         this.reloadAll();
         setupChartsResize(this.tabKey);
@@ -5893,20 +6185,20 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
             <div class="mb-registers-container" id="mb-registers-container-${this.objectName}" style="height: ${this.registersHeight}px">
                 <div class="mb-registers-viewport" id="mb-registers-viewport-${this.objectName}">
                     <div class="mb-registers-spacer" id="mb-registers-spacer-${this.objectName}"></div>
-                    <table class="sensors-table variables-table mb-registers-table">
+                    <table class="sensors-table variables-table mb-registers-table" id="mb-registers-table-${this.objectName}">
                         <thead>
                             <tr>
                                 <th class="col-pin">
                                     <span class="mb-unpin-all" id="mb-unpin-${this.objectName}" title="Unpin all" style="display:none">✕</span>
                                 </th>
                                 <th class="col-add-buttons"></th>
-                                <th class="col-id">ID</th>
-                                <th class="col-name">Name</th>
-                                <th class="col-type">Type</th>
-                                <th class="col-value">Value</th>
-                                <th class="col-device">Устройство</th>
-                                <th class="col-register">Регистр</th>
-                                <th class="col-func">Функция</th>
+                                ${this.renderSortableHeader('id', 'ID', true, 'col-id')}
+                                ${this.renderSortableHeader('name', 'Name', true, 'col-name')}
+                                ${this.renderSortableHeader('type', 'Type', true, 'col-type')}
+                                ${this.renderSortableHeader('value', 'Value', true, 'col-value')}
+                                ${this.renderSortableHeader('device', 'Устройство', true, 'col-device')}
+                                ${this.renderSortableHeader('register', 'Регистр', true, 'col-register')}
+                                ${this.renderSortableHeader('func', 'Функция', true, 'col-func')}
                                 <th class="col-mbval">MB Val</th>
                             </tr>
                         </thead>
@@ -6279,6 +6571,15 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
 
             // Подписываемся на SSE обновления после загрузки
             this.subscribeToSSE();
+
+            // Обработчики сортировки (только при первой загрузке)
+            if (offset === 0) {
+                const table = document.getElementById(`mb-registers-table-${this.objectName}`);
+                if (table) {
+                    this.attachSortHandlers(table);
+                    this.updateSortHeaders();
+                }
+            }
         } catch (err) {
             this.setNote(`mb-registers-note-${this.objectName}`, err.message, true);
         } finally {
@@ -6344,6 +6645,9 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         if (hasPinned && !this.filter) {
             registersToShow = registersToShow.filter(r => pinnedRegisters.has(String(r.id)));
         }
+
+        // Сортировка: pinned всегда вверху, остальные по выбранной колонке
+        registersToShow = this.sortItems(registersToShow, pinnedRegisters, this.sortColumnDefs);
 
         // Обновляем счётчик с учётом фильтрации
         this.updateItemCount(`mb-register-count-${this.objectName}`, registersToShow.length, this.registersTotal);
@@ -6547,6 +6851,31 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     unpinAllRegisters() {
         this.unpinAllItems('uniset-panel-mb-pinned', this.renderRegisters);
     }
+
+    // Перерисовка после смены сортировки
+    renderAfterSort() {
+        this.renderRegisters();
+        this.updateSortHeaders();
+    }
+
+    // Обновление визуальных индикаторов сортировки
+    updateSortHeaders() {
+        const table = document.getElementById(`mb-registers-table-${this.objectName}`);
+        if (!table) return;
+
+        table.querySelectorAll('th.th-sortable').forEach(th => {
+            const column = th.dataset.column;
+            th.classList.toggle('th-sorted', column === this.sortColumn);
+            const arrow = th.querySelector('.sort-arrow');
+            if (arrow) {
+                if (column === this.sortColumn) {
+                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
+                } else {
+                    arrow.textContent = '';
+                }
+            }
+        });
+    }
 }
 
 // Apply mixins to ModbusMasterRenderer
@@ -6558,6 +6887,7 @@ applyMixin(ModbusMasterRenderer, ParamsAccessibilityMixin);
 applyMixin(ModbusMasterRenderer, ItemCounterMixin);
 applyMixin(ModbusMasterRenderer, SectionHeightMixin);
 applyMixin(ModbusMasterRenderer, PinManagementMixin);
+applyMixin(ModbusMasterRenderer, TableSortMixin);
 
 // Регистрируем стандартные рендереры
 registerRenderer('UniSetManager', UniSetManagerRenderer);
@@ -6626,6 +6956,22 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
 
         // Register map for chart support
         this.registerMap = new Map();
+
+        // Инициализация сортировки
+        this.initSortProps();
+        this.sortColumnDefs = {
+            id: { field: 'id', type: 'number' },
+            name: { field: 'name', type: 'string' },
+            type: { field: 'iotype', type: 'string' },
+            value: { field: 'value', type: 'number' },
+            mbaddr: { field: 'device', type: 'number' },
+            register: { field: 'register', type: 'number', accessor: (item) => {
+                const regInfo = item.register || {};
+                return regInfo.mbreg !== undefined ? regInfo.mbreg : item.mbreg;
+            }},
+            func: { field: 'func', type: 'string', accessor: (item) => (item.register || {}).mbfunc },
+            access: { field: 'amode', type: 'string' }
+        };
     }
 
     createPanelHTML() {
@@ -6642,6 +6988,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     }
 
     initialize() {
+        this.loadSortState('uniset-panel-mbslave-sort');
         this.bindEvents();
         this.reloadAll();
         setupChartsResize(this.tabKey);
@@ -6787,21 +7134,21 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             <div class="mb-registers-container" id="mbs-registers-container-${this.objectName}" style="height: ${this.registersHeight}px">
                 <div class="mb-registers-viewport" id="mbs-registers-viewport-${this.objectName}">
                     <div class="mb-registers-spacer" id="mbs-registers-spacer-${this.objectName}"></div>
-                    <table class="sensors-table variables-table mb-registers-table">
+                    <table class="sensors-table variables-table mb-registers-table" id="mbs-registers-table-${this.objectName}">
                         <thead>
                             <tr>
                                 <th class="col-pin">
                                     <span class="mbs-unpin-all" id="mbs-unpin-${this.objectName}" title="Unpin all" style="display:none">✕</span>
                                 </th>
                                 <th class="col-add-buttons"></th>
-                                <th class="col-id">ID</th>
-                                <th class="col-name">Name</th>
-                                <th class="col-type">Type</th>
-                                <th class="col-value">Value</th>
-                                <th class="col-mbaddr">MB Addr</th>
-                                <th class="col-register">Register</th>
-                                <th class="col-func">Function</th>
-                                <th class="col-access">Access</th>
+                                ${this.renderSortableHeader('id', 'ID', true, 'col-id')}
+                                ${this.renderSortableHeader('name', 'Name', true, 'col-name')}
+                                ${this.renderSortableHeader('type', 'Type', true, 'col-type')}
+                                ${this.renderSortableHeader('value', 'Value', true, 'col-value')}
+                                ${this.renderSortableHeader('mbaddr', 'MB Addr', true, 'col-mbaddr')}
+                                ${this.renderSortableHeader('register', 'Register', true, 'col-register')}
+                                ${this.renderSortableHeader('func', 'Function', true, 'col-func')}
+                                ${this.renderSortableHeader('access', 'Access', true, 'col-access')}
                             </tr>
                         </thead>
                         <tbody id="mbs-registers-tbody-${this.objectName}"></tbody>
@@ -7016,6 +7363,15 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
 
             // Подписываемся на SSE обновления после загрузки
             this.subscribeToSSE();
+
+            // Обработчики сортировки (только при первой загрузке)
+            if (offset === 0) {
+                const table = document.getElementById(`mbs-registers-table-${this.objectName}`);
+                if (table) {
+                    this.attachSortHandlers(table);
+                    this.updateSortHeaders();
+                }
+            }
         } catch (err) {
             this.setNote(`mbs-registers-note-${this.objectName}`, err.message, true);
         } finally {
@@ -7085,6 +7441,9 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         if (hasPinned && !this.filter) {
             registersToShow = registersToShow.filter(r => pinnedRegisters.has(String(r.id)));
         }
+
+        // Сортировка: pinned всегда вверху, остальные по выбранной колонке
+        registersToShow = this.sortItems(registersToShow, pinnedRegisters, this.sortColumnDefs);
 
         // Обновляем счётчик с учётом фильтрации
         this.updateItemCount(`mbs-register-count-${this.objectName}`, registersToShow.length, this.registersTotal);
@@ -7289,6 +7648,31 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     unpinAllRegisters() {
         this.unpinAllItems('uniset-panel-mbs-pinned', this.renderRegisters);
     }
+
+    // Перерисовка после смены сортировки
+    renderAfterSort() {
+        this.renderRegisters();
+        this.updateSortHeaders();
+    }
+
+    // Обновление визуальных индикаторов сортировки
+    updateSortHeaders() {
+        const table = document.getElementById(`mbs-registers-table-${this.objectName}`);
+        if (!table) return;
+
+        table.querySelectorAll('th.th-sortable').forEach(th => {
+            const column = th.dataset.column;
+            th.classList.toggle('th-sorted', column === this.sortColumn);
+            const arrow = th.querySelector('.sort-arrow');
+            if (arrow) {
+                if (column === this.sortColumn) {
+                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
+                } else {
+                    arrow.textContent = '';
+                }
+            }
+        });
+    }
 }
 
 // Apply mixins to ModbusSlaveRenderer
@@ -7300,6 +7684,7 @@ applyMixin(ModbusSlaveRenderer, ParamsAccessibilityMixin);
 applyMixin(ModbusSlaveRenderer, ItemCounterMixin);
 applyMixin(ModbusSlaveRenderer, SectionHeightMixin);
 applyMixin(ModbusSlaveRenderer, PinManagementMixin);
+applyMixin(ModbusSlaveRenderer, TableSortMixin);
 
 // ModbusSlave рендерер (по extensionType)
 registerRenderer('ModbusSlave', ModbusSlaveRenderer);
@@ -7355,6 +7740,17 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
         // Sensor map for chart support
         this.sensorMap = new Map();
+
+        // Инициализация сортировки
+        this.initSortProps();
+        this.sortColumnDefs = {
+            id: { field: 'id', type: 'number' },
+            name: { field: 'name', type: 'string' },
+            type: { field: 'iotype', type: 'string' },
+            value: { field: 'value', type: 'number' },
+            vtype: { field: 'vtype', type: 'string' },
+            precision: { field: 'precision', type: 'number' }
+        };
     }
 
     createPanelHTML() {
@@ -7370,6 +7766,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     initialize() {
+        this.loadSortState('uniset-panel-opcuasrv-sort');
         this.bindEvents();
         this.reloadAll();
         setupChartsResize(this.tabKey);
@@ -7466,19 +7863,19 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
             <div class="opcua-sensors-container" id="opcuasrv-sensors-container-${this.objectName}" style="height: ${this.sensorsHeight}px">
                 <div class="opcua-sensors-viewport" id="opcuasrv-sensors-viewport-${this.objectName}">
                     <div class="opcua-sensors-spacer" id="opcuasrv-sensors-spacer-${this.objectName}"></div>
-                    <table class="sensors-table variables-table opcua-sensors-table">
+                    <table class="sensors-table variables-table opcua-sensors-table" id="opcuasrv-sensors-table-${this.objectName}">
                         <thead>
                             <tr>
                                 <th class="col-pin">
                                     <span class="opcuasrv-unpin-all" id="opcuasrv-unpin-${this.objectName}" title="Unpin all" style="display:none">✕</span>
                                 </th>
                                 <th class="col-add-buttons"></th>
-                                <th class="col-id">ID</th>
-                                <th class="col-name">Name</th>
-                                <th class="col-type">Type</th>
-                                <th class="col-value">Value</th>
-                                <th class="col-vtype">VType</th>
-                                <th class="col-precision">Precision</th>
+                                ${this.renderSortableHeader('id', 'ID', true, 'col-id')}
+                                ${this.renderSortableHeader('name', 'Name', true, 'col-name')}
+                                ${this.renderSortableHeader('type', 'Type', true, 'col-type')}
+                                ${this.renderSortableHeader('value', 'Value', true, 'col-value')}
+                                ${this.renderSortableHeader('vtype', 'VType', true, 'col-vtype')}
+                                ${this.renderSortableHeader('precision', 'Precision', true, 'col-precision')}
                             </tr>
                         </thead>
                         <tbody id="opcuasrv-sensors-${this.objectName}"></tbody>
@@ -7710,6 +8107,13 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
             // Подписываемся на SSE обновления после загрузки
             this.subscribeToSSE();
+
+            // Обработчики сортировки
+            const table = document.getElementById(`opcuasrv-sensors-table-${this.objectName}`);
+            if (table) {
+                this.attachSortHandlers(table);
+                this.updateSortHeaders();
+            }
         } catch (err) {
             this.setNote(`opcuasrv-sensors-note-${this.objectName}`, err.message, true);
         }
@@ -7850,6 +8254,9 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
             tbody.innerHTML = '<tr><td colspan="9" class="opcua-no-sensors">No variables</td></tr>';
             return;
         }
+
+        // Сортировка: pinned всегда вверху, остальные по выбранной колонке
+        sensorsToShow = this.sortItems(sensorsToShow, pinnedSensors, this.sortColumnDefs);
 
         // Get visible slice
         const visibleSensors = sensorsToShow.slice(this.startIndex, this.endIndex);
@@ -8030,6 +8437,31 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     unpinAllSensors() {
         this.unpinAllItems('uniset-panel-opcuasrv-pinned', this.renderVisibleSensors);
     }
+
+    // Перерисовка после смены сортировки
+    renderAfterSort() {
+        this.renderVisibleSensors();
+        this.updateSortHeaders();
+    }
+
+    // Обновление визуальных индикаторов сортировки
+    updateSortHeaders() {
+        const table = document.getElementById(`opcuasrv-sensors-table-${this.objectName}`);
+        if (!table) return;
+
+        table.querySelectorAll('th.th-sortable').forEach(th => {
+            const column = th.dataset.column;
+            th.classList.toggle('th-sorted', column === this.sortColumn);
+            const arrow = th.querySelector('.sort-arrow');
+            if (arrow) {
+                if (column === this.sortColumn) {
+                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
+                } else {
+                    arrow.textContent = '';
+                }
+            }
+        });
+    }
 }
 
 // Apply mixins to OPCUAServerRenderer
@@ -8041,6 +8473,7 @@ applyMixin(OPCUAServerRenderer, ParamsAccessibilityMixin);
 applyMixin(OPCUAServerRenderer, ItemCounterMixin);
 applyMixin(OPCUAServerRenderer, SectionHeightMixin);
 applyMixin(OPCUAServerRenderer, PinManagementMixin);
+applyMixin(OPCUAServerRenderer, TableSortMixin);
 
 // OPCUAServer рендерер (по extensionType)
 registerRenderer('OPCUAServer', OPCUAServerRenderer);
@@ -8082,6 +8515,17 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
 
         // Высота секции датчиков
         this.sensorsHeight = this.loadSectionHeight('uwsgate-sensors-height', 400);
+
+        // Инициализация сортировки
+        this.initSortProps();
+        this.sortColumnDefs = {
+            id: { field: 'id', type: 'number' },
+            name: { field: 'name', type: 'string' },
+            type: { field: 'iotype', type: 'string' },
+            value: { field: 'value', type: 'number' },
+            supplier: { field: 'supplier', type: 'string' },
+            status: { field: 'status', type: 'string', accessor: (item) => item.error || '' }
+        };
 
         // localStorage ключи
         this.subscriptionsKey = `uwsgate-subscriptions-${this.tabKey}`;
@@ -8169,18 +8613,18 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
                 </label>
             </div>
             <div class="uwsgate-sensors-container" id="uwsgate-sensors-container-${this.objectName}" style="height: ${this.sensorsHeight}px; overflow-y: auto;">
-                <table class="sensors-table uwsgate-sensors-table">
+                <table class="sensors-table uwsgate-sensors-table" id="uwsgate-sensors-table-${this.objectName}">
                     <thead>
                         <tr>
                             <th class="col-pin">
                                 <span class="uwsgate-unpin-all" id="uwsgate-unpin-${this.objectName}" title="Unpin all" style="display:none">✕</span>
                             </th>
                             <th class="col-add-buttons"></th>
-                            <th class="col-id">ID</th>
-                            <th class="col-name">Name</th>
-                            <th class="col-type">Type</th>
-                            <th class="col-value">Value</th>
-                            <th class="col-supplier">Supplier</th>
+                            ${this.renderSortableHeader('id', 'ID', true, 'col-id')}
+                            ${this.renderSortableHeader('name', 'Name', true, 'col-name')}
+                            ${this.renderSortableHeader('type', 'Type', true, 'col-type')}
+                            ${this.renderSortableHeader('value', 'Value', true, 'col-value')}
+                            ${this.renderSortableHeader('supplier', 'Supplier', true, 'col-supplier')}
                             <th class="col-status">Status</th>
                             <th class="col-actions"></th>
                         </tr>
@@ -8198,10 +8642,17 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
     }
 
     initialize() {
+        this.loadSortState('uniset-panel-uwsgate-sort');
         this.setupEventListeners();
         this.setupSensorsResize();
         this.loadSavedSubscriptions();
         setupChartsResize(this.tabKey);
+
+        // Обработчики сортировки
+        const table = getElementInTab(this.tabKey, `uwsgate-sensors-table-${this.objectName}`);
+        if (table) {
+            this.attachSortHandlers(table);
+        }
     }
 
     setupEventListeners() {
@@ -8494,16 +8945,13 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
             return;
         }
 
-        // Sort: pinned first, then by name
-        const sortedSensors = Array.from(this.sensors.values()).sort((a, b) => {
-            const aPinned = this.pinnedSensors.has(a.name);
-            const bPinned = this.pinnedSensors.has(b.name);
-            if (aPinned && !bPinned) return -1;
-            if (!aPinned && bPinned) return 1;
-            return a.name.localeCompare(b.name);
-        });
+        // Используем sortItems из TableSortMixin для единообразной сортировки
+        // pinnedSensors использует name вместо id
+        const pinnedByName = new Set(this.pinnedSensors);
+        let sensorsArray = Array.from(this.sensors.values());
+        sensorsArray = this.sortItems(sensorsArray, pinnedByName, this.sortColumnDefs, 'name');
 
-        const rows = sortedSensors.map(sensor => this.renderSensorRow(sensor));
+        const rows = sensorsArray.map(sensor => this.renderSensorRow(sensor));
         tbody.innerHTML = rows.join('');
         this.bindRowEvents(tbody);
         this.updateSensorCount();
@@ -8806,10 +9254,36 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
             }).catch(err => console.warn('Failed to unsubscribe on destroy:', err));
         }
     }
+
+    // Перерисовка после смены сортировки
+    renderAfterSort() {
+        this.renderSensorsTable();
+        this.updateSortHeaders();
+    }
+
+    // Обновление визуальных индикаторов сортировки
+    updateSortHeaders() {
+        const table = getElementInTab(this.tabKey, `uwsgate-sensors-table-${this.objectName}`);
+        if (!table) return;
+
+        table.querySelectorAll('th.th-sortable').forEach(th => {
+            const column = th.dataset.column;
+            th.classList.toggle('th-sorted', column === this.sortColumn);
+            const arrow = th.querySelector('.sort-arrow');
+            if (arrow) {
+                if (column === this.sortColumn) {
+                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
+                } else {
+                    arrow.textContent = '';
+                }
+            }
+        });
+    }
 }
 
 // Apply mixins
 applyMixin(UWebSocketGateRenderer, SectionHeightMixin);
+applyMixin(UWebSocketGateRenderer, TableSortMixin);
 
 // UWebSocketGate рендерер (по extensionType)
 registerRenderer('UWebSocketGate', UWebSocketGateRenderer);

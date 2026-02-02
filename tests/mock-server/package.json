@@ -1,0 +1,9 @@
+{
+  "name": "mock-uniset",
+  "version": "1.0.0",
+  "description": "Mock UniSet2 server for testing",
+  "main": "server.js",
+  "dependencies": {
+    "ws": "^8.16.0"
+  }
+}

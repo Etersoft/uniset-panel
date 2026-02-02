@@ -407,6 +407,22 @@
     color: var(--accent-orange);
 }
 
+/* --- Sortable Table Headers --- */
+.th-sortable {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    transition: color var(--comp-transition);
+}
+
+.th-sortable:hover {
+    color: var(--accent-blue);
+}
+
+.th-sorted {
+    color: var(--accent-blue);
+}
+
 /* --- Resize Handle --- */
 .resize-handle {
     height: 6px;

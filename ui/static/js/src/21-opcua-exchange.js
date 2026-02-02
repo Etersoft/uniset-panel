@@ -69,6 +69,19 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
         // Sensor map for chart support
         this.sensorMap = new Map();
+
+        // Инициализация сортировки
+        this.initSortProps();
+        this.sortColumnDefs = {
+            id: { field: 'id', type: 'number' },
+            name: { field: 'name', type: 'string' },
+            type: { field: 'iotype', type: 'string' },
+            value: { field: 'value', type: 'number' },
+            tick: { field: 'tick', type: 'number' },
+            vtype: { field: 'vtype', type: 'string' },
+            precision: { field: 'precision', type: 'number' },
+            status: { field: 'status', type: 'string' }
+        };
     }
 
     createPanelHTML() {
@@ -86,6 +99,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     initialize() {
+        this.loadSortState('uniset-panel-opcua-sort');
         this.bindEvents();
         this.reloadAll();
         setupChartsResize(this.tabKey);
@@ -235,21 +249,21 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             <div class="opcua-sensors-container" id="opcua-sensors-container-${this.objectName}" style="height: ${this.sensorsHeight}px">
                 <div class="opcua-sensors-viewport" id="opcua-sensors-viewport-${this.objectName}">
                     <div class="opcua-sensors-spacer" id="opcua-sensors-spacer-${this.objectName}"></div>
-                    <table class="sensors-table variables-table opcua-sensors-table">
+                    <table class="sensors-table variables-table opcua-sensors-table" id="opcua-sensors-table-${this.objectName}">
                         <thead>
                             <tr>
                                 <th class="col-pin">
                                     <span class="opcua-unpin-all" id="opcua-unpin-${this.objectName}" title="Unpin all" style="display:none">✕</span>
                                 </th>
                                 <th class="col-add-buttons"></th>
-                                <th class="col-id">ID</th>
-                                <th class="col-name">Name</th>
-                                <th class="col-type">Type</th>
-                                <th class="col-value">Value</th>
-                                <th class="col-tick">Tick</th>
-                                <th class="col-vtype">VType</th>
-                                <th class="col-precision">Precision</th>
-                                <th class="col-status">Status</th>
+                                ${this.renderSortableHeader('id', 'ID', true, 'col-id')}
+                                ${this.renderSortableHeader('name', 'Name', true, 'col-name')}
+                                ${this.renderSortableHeader('type', 'Type', true, 'col-type')}
+                                ${this.renderSortableHeader('value', 'Value', true, 'col-value')}
+                                ${this.renderSortableHeader('tick', 'Tick', true, 'col-tick')}
+                                ${this.renderSortableHeader('vtype', 'VType', true, 'col-vtype')}
+                                ${this.renderSortableHeader('precision', 'Precision', true, 'col-precision')}
+                                ${this.renderSortableHeader('status', 'Status', true, 'col-status')}
                             </tr>
                         </thead>
                         <tbody id="opcua-sensors-${this.objectName}"></tbody>
@@ -656,6 +670,13 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
             // Подписываемся на SSE обновления после загрузки
             this.subscribeToSSE();
+
+            // Обработчики сортировки
+            const table = document.getElementById(`opcua-sensors-table-${this.objectName}`);
+            if (table) {
+                this.attachSortHandlers(table);
+                this.updateSortHeaders();
+            }
         } catch (err) {
             this.setNote(`opcua-sensors-note-${this.objectName}`, err.message, true);
         }
@@ -830,6 +851,9 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             tbody.innerHTML = '<tr><td colspan="11" class="opcua-no-sensors">No sensors</td></tr>';
             return;
         }
+
+        // Сортировка: pinned всегда вверху, остальные по выбранной колонке
+        sensorsToShow = this.sortItems(sensorsToShow, pinnedSensors, this.sortColumnDefs);
 
         // Get visible slice
         const visibleSensors = sensorsToShow.slice(this.startIndex, this.endIndex);
@@ -1192,6 +1216,31 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     unpinAllSensors() {
         this.unpinAllItems('uniset-panel-opcua-pinned', this.renderVisibleSensors);
     }
+
+    // Перерисовка после смены сортировки
+    renderAfterSort() {
+        this.renderVisibleSensors();
+        this.updateSortHeaders();
+    }
+
+    // Обновление визуальных индикаторов сортировки
+    updateSortHeaders() {
+        const table = document.getElementById(`opcua-sensors-table-${this.objectName}`);
+        if (!table) return;
+
+        table.querySelectorAll('th.th-sortable').forEach(th => {
+            const column = th.dataset.column;
+            th.classList.toggle('th-sorted', column === this.sortColumn);
+            const arrow = th.querySelector('.sort-arrow');
+            if (arrow) {
+                if (column === this.sortColumn) {
+                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
+                } else {
+                    arrow.textContent = '';
+                }
+            }
+        });
+    }
 }
 
 // Apply mixins to OPCUAExchangeRenderer
@@ -1203,4 +1252,5 @@ applyMixin(OPCUAExchangeRenderer, ParamsAccessibilityMixin);
 applyMixin(OPCUAExchangeRenderer, ItemCounterMixin);
 applyMixin(OPCUAExchangeRenderer, SectionHeightMixin);
 applyMixin(OPCUAExchangeRenderer, PinManagementMixin);
+applyMixin(OPCUAExchangeRenderer, TableSortMixin);
 
