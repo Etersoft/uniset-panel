@@ -531,6 +531,40 @@ function initSSE() {
         }
     });
 
+    // Обработка статуса Launcher'а
+    eventSource.addEventListener('launcher_status', (e) => {
+        try {
+            const event = JSON.parse(e.data);
+            const tabKey = `launcher:${event.serverId}`;
+            const tabState = state.tabs.get(tabKey);
+            if (tabState?.renderer?.updateStatus) {
+                tabState.renderer.updateStatus(event.data);
+            }
+            // Обновляем индикатор в sidebar
+            updateLauncherNodeStatus(event.serverId, true);
+        } catch (err) {
+            console.warn('SSE: Error обработки launcher_status:', err);
+        }
+    });
+
+    // Обработка connectivity Launcher'а
+    eventSource.addEventListener('launcher_connection', (e) => {
+        try {
+            const event = JSON.parse(e.data);
+            const connected = event.data?.connected ?? false;
+            updateLauncherNodeStatus(event.serverId, connected);
+
+            // Обновляем renderer если вкладка открыта
+            const tabKey = `launcher:${event.serverId}`;
+            const tabState = state.tabs.get(tabKey);
+            if (tabState?.renderer?.updateConnectionStatus) {
+                tabState.renderer.updateConnectionStatus(connected);
+            }
+        } catch (err) {
+            console.warn('SSE: Error обработки launcher_connection:', err);
+        }
+    });
+
     // Обработка сообщений журнала
     eventSource.addEventListener('journal_messages', (e) => {
         try {

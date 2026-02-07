@@ -7,6 +7,7 @@ const SM_SERVER_ID = 'sm';
 const state = window.state = {
     objects: [],
     servers: new Map(), // serverId -> { id, url, name, connected, objectCount }
+    nodes: new Map(), // nodeId -> { id, name, launcherUrl, connected, hasControl }
     tabs: new Map(), // tabKey -> { charts, updateInterval, chartStartTime, objectType, renderer, serverId, serverName, displayName }
     activeTab: null,
     sensors: new Map(), // sensorId -> sensorInfo
@@ -19,6 +20,7 @@ const state = window.state = {
     objectsSectionCollapsed: false, // свёрнута ли секция "Objects"
     serversSectionCollapsed: false, // свёрнута ли секция "Servers"
     journalsSectionCollapsed: false, // свёрнута ли секция "Journals"
+    launchersSectionCollapsed: false, // свёрнута ли секция "Launchers"
     capabilities: {
         smEnabled: false // по умолчанию SM отключен
     },

@@ -38,19 +38,12 @@ services:
     command: >
       ./uniset-panel --addr :8000
       --log-level debug
+      --config /app/config/dev-viewer.yaml
       --uniset-config /app/config/test_noid.xml
-      --uniset-url http://localhost:9090
-      --uniset-url http://localhost:9191
-      --uniset-url http://localhost:9292
-      --uniset-url http://localhost:9393
-      --uniset-url http://localhost:9494
-      --uniset-url http://localhost:9595
-      --uniset-url http://localhost:9696
-      --uniset-url http://localhost:8081
+      --control-token admin
       --control-timeout 60s
       --recording-path /tmp/recording.db
       --dashboards-dir /app/dashboards
-      --journal-url "clickhouse://localhost:9000/uniset?name=DevJournal"
       --js /app/ext/app.js
       --css /app/ext/style.css
     volumes:
@@ -62,6 +55,47 @@ services:
     depends_on:
       clickhouse:
         condition: service_healthy
+      mock-launcher-1:
+        condition: service_healthy
+      mock-launcher-2:
+        condition: service_healthy
+    profiles:
+      - dev
+
+  # Mock Launcher servers for dev-viewer
+  mock-launcher-1:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./tests/mock-launcher:/app:ro
+    environment:
+      - PORT=8111
+      - NODE_NAME=Основная нода
+    command: node server.js
+    network_mode: host
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8111/api/v2/launcher/health"]
+      interval: 2s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - dev
+
+  mock-launcher-2:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./tests/mock-launcher:/app:ro
+    environment:
+      - PORT=8222
+      - NODE_NAME=Резервная нода
+    command: node server.js
+    network_mode: host
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8222/api/v2/launcher/health"]
+      interval: 2s
+      timeout: 5s
+      retries: 5
     profiles:
       - dev
 

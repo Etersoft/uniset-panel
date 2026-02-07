@@ -9,6 +9,7 @@ import (
 
 	"github.com/pv/uniset-panel/internal/ionc"
 	"github.com/pv/uniset-panel/internal/journal"
+	"github.com/pv/uniset-panel/internal/launcher"
 	"github.com/pv/uniset-panel/internal/logger"
 	"github.com/pv/uniset-panel/internal/modbus"
 	"github.com/pv/uniset-panel/internal/opcua"
@@ -113,7 +114,8 @@ func (h *SSEHub) Broadcast(event SSEEvent) {
 	defer h.mu.RUnlock()
 
 	// Глобальные события отправляются всем клиентам
-	isGlobalEvent := event.Type == "server_status" || event.Type == "objects_list" || event.Type == "control_status"
+	isGlobalEvent := event.Type == "server_status" || event.Type == "objects_list" || event.Type == "control_status" ||
+		event.Type == "launcher_status" || event.Type == "launcher_connection"
 
 	for client := range h.clients {
 		// Отправляем если: глобальное событие ИЛИ клиент подписан на все объекты ИЛИ на конкретный
@@ -336,6 +338,31 @@ func (h *SSEHub) UpdateClientControlToken(client *sseClient, token string) {
 	if _, exists := h.clients[client]; exists {
 		client.controlToken = token
 	}
+}
+
+// BroadcastLauncherStatus отправляет статус Launcher'а
+func (h *SSEHub) BroadcastLauncherStatus(nodeID, nodeName string, status *launcher.LauncherStatus) {
+	h.Broadcast(SSEEvent{
+		Type:       "launcher_status",
+		ServerID:   nodeID,
+		ServerName: nodeName,
+		Data:       status,
+		Timestamp:  time.Now(),
+	})
+}
+
+// BroadcastLauncherConnection отправляет изменение connectivity Launcher'а
+func (h *SSEHub) BroadcastLauncherConnection(nodeID, nodeName string, connected bool, lastError string) {
+	h.Broadcast(SSEEvent{
+		Type:       "launcher_connection",
+		ServerID:   nodeID,
+		ServerName: nodeName,
+		Data: map[string]interface{}{
+			"connected": connected,
+			"lastError": lastError,
+		},
+		Timestamp: time.Now(),
+	})
 }
 
 // BroadcastJournalMessages отправляет новые сообщения журнала
