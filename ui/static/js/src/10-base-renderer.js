@@ -108,6 +108,9 @@ const SSESubscriptionMixin = {
     async subscribeToSSEFor(apiPath, ids, idField = 'sensor_ids', logPrefix = 'SSE', extraBody = {}) {
         if (!ids || ids.length === 0) return;
 
+        // Сохраняем параметры подписки для повторной подписки (resubscribeIfNeeded)
+        this._sseSubscriptionParams = { apiPath, idField, logPrefix, extraBody };
+
         // Пропускаем если уже подписаны на те же ID
         const newIds = new Set(ids);
         if (this.subscribedSensorIds.size === newIds.size &&
@@ -146,6 +149,20 @@ const SSESubscriptionMixin = {
         } catch (err) {
             console.warn(`${logPrefix}: ошибка отписки:`, err);
         }
+    },
+
+    // Повторная подписка после переподключения SSE
+    // Сервер мог потерять состояние подписок при рестарте
+    async resubscribeIfNeeded() {
+        if (this.subscribedSensorIds.size === 0) return;
+        if (!this._sseSubscriptionParams) return;
+
+        const ids = [...this.subscribedSensorIds];
+        const { apiPath, idField, logPrefix, extraBody } = this._sseSubscriptionParams;
+
+        console.log(`${logPrefix}: Переподписка ${ids.length} элементов для ${this.objectName}`);
+        this.subscribedSensorIds.clear(); // Очищаем кэш чтобы subscribeToSSEFor не пропустил
+        await this.subscribeToSSEFor(apiPath, ids, idField, logPrefix, extraBody);
     },
 
     // Планирование батчевого рендера обновлений

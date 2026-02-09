@@ -1,4 +1,10 @@
 function initSSE() {
+    // Очищаем таймер переподключения (если есть)
+    if (state.sse.reconnectTimerId) {
+        clearTimeout(state.sse.reconnectTimerId);
+        state.sse.reconnectTimerId = null;
+    }
+
     if (state.sse.eventSource) {
         state.sse.eventSource.close();
     }
@@ -42,6 +48,9 @@ function initSSE() {
             // Синхронизируем статусы серверов при переподключении
             // Это важно, т.к. могли пропустить события server_status во время отключения
             refreshObjectsList();
+
+            // Переподписываемся на все SSE обновления (сервер мог потерять состояние подписок)
+            setTimeout(resubscribeAll, 1000);
 
             // Отключаем polling fallback если был активен
             disablePollingFallback();
@@ -165,7 +174,7 @@ function initSSE() {
 
                     // Обновляем значение в легенде
                     const safeVarName = varName.replace(/:/g, '-');
-                    const legendEl = document.getElementById(`legend-value-${displayName}-${safeVarName}`);
+                    const legendEl = getElementInTab(tabKey, `legend-value-${displayName}-${safeVarName}`);
                     if (legendEl) {
                         legendEl.textContent = formatValue(value);
                     }
@@ -224,7 +233,7 @@ function initSSE() {
 
                     // Обновляем значение в легенде
                     const safeVarName = varName.replace(/:/g, '-');
-                    const legendEl = document.getElementById(`legend-value-${tabState.displayName}-${safeVarName}`);
+                    const legendEl = getElementInTab(tabKey, `legend-value-${tabState.displayName}-${safeVarName}`);
                     if (legendEl) {
                         legendEl.textContent = formatValue(value);
                     }
@@ -298,7 +307,7 @@ function initSSE() {
 
                     // Обновляем значение в легенде
                     const safeVarName = varName.replace(/:/g, '-');
-                    const legendEl = document.getElementById(`legend-value-${tabState.displayName}-${safeVarName}`);
+                    const legendEl = getElementInTab(tabKey, `legend-value-${tabState.displayName}-${safeVarName}`);
                     if (legendEl) {
                         legendEl.textContent = formatValue(value);
                     }
@@ -369,7 +378,7 @@ function initSSE() {
 
                     // Обновляем значение в легенде
                     const safeVarName = varName.replace(/:/g, '-');
-                    const legendEl = document.getElementById(`legend-value-${tabState.displayName}-${safeVarName}`);
+                    const legendEl = getElementInTab(tabKey, `legend-value-${tabState.displayName}-${safeVarName}`);
                     if (legendEl) {
                         legendEl.textContent = formatValue(value);
                     }
@@ -437,7 +446,7 @@ function initSSE() {
 
                     // Обновляем значение в легенде
                     const safeVarName = varName.replace(/:/g, '-');
-                    const legendEl = document.getElementById(`legend-value-${tabState.displayName}-${safeVarName}`);
+                    const legendEl = getElementInTab(tabKey, `legend-value-${tabState.displayName}-${safeVarName}`);
                     if (legendEl) {
                         legendEl.textContent = formatValue(value);
                     }
@@ -593,7 +602,7 @@ function initSSE() {
             const delay = Math.round(cappedDelay + jitter);
             console.log(`SSE: Переподключение через ${delay}ms (попытка ${state.sse.reconnectAttempts}/${state.sse.maxReconnectAttempts})`);
             updateSSEStatus('reconnecting');
-            setTimeout(initSSE, delay);
+            state.sse.reconnectTimerId = setTimeout(initSSE, delay);
         } else {
             console.warn('SSE: Превышено количество попыток, переход на polling');
             updateSSEStatus('polling');
@@ -656,6 +665,12 @@ function disablePollingFallback() {
         state.sse.recoveryProbeInterval = null;
     }
 
+    // Очищаем таймер переподключения
+    if (state.sse.reconnectTimerId) {
+        clearTimeout(state.sse.reconnectTimerId);
+        state.sse.reconnectTimerId = null;
+    }
+
     // Останавливаем polling для всех вкладок
     state.tabs.forEach((tabState, tabKey) => {
         if (tabState.updateInterval) {
@@ -691,6 +706,17 @@ function startSSERecoveryProbe() {
             // Сервер всё ещё недоступен
         }
     }, probeInterval);
+}
+
+// Переподписка всех открытых вкладок после восстановления SSE
+function resubscribeAll() {
+    console.log('SSE: Переподписка всех вкладок после переподключения');
+    state.tabs.forEach((tabState, tabKey) => {
+        const renderer = tabState.renderer;
+        if (renderer?.resubscribeIfNeeded) {
+            renderer.resubscribeIfNeeded();
+        }
+    });
 }
 
 // Close SSE соединение

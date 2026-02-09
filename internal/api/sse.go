@@ -28,6 +28,7 @@ type SSEHub struct {
 type sseClient struct {
 	objectName   string         // если пусто - получает все события
 	controlToken string         // токен контроля (если клиент контроллер)
+	connectedAt  time.Time      // время подключения (для логирования)
 	events       chan SSEEvent
 	done         chan struct{}
 }
@@ -66,7 +67,8 @@ func (h *SSEHub) AddClientWithToken(objectName, controlToken string) *sseClient 
 	client := &sseClient{
 		objectName:   objectName,
 		controlToken: controlToken,
-		events:       make(chan SSEEvent, 10),
+		connectedAt:  time.Now(),
+		events:       make(chan SSEEvent, 50),
 		done:         make(chan struct{}),
 	}
 
@@ -105,7 +107,8 @@ func (h *SSEHub) RemoveClient(client *sseClient) {
 		logger.Debug("SSE client disconnected, released control", "object", client.objectName)
 	}
 
-	logger.Debug("SSE client disconnected", "object", client.objectName, "total_clients", len(h.clients))
+	duration := time.Since(client.connectedAt).Round(time.Second)
+	logger.Debug("SSE client disconnected", "object", client.objectName, "duration", duration, "total_clients", len(h.clients))
 }
 
 // Broadcast отправляет событие всем подходящим клиентам
@@ -433,6 +436,10 @@ func (h *Handlers) HandleSSE(w http.ResponseWriter, r *http.Request) {
 	})
 	flusher.Flush()
 
+	// Heartbeat для поддержания соединения (предотвращает разрыв прокси/балансировщиками)
+	heartbeat := time.NewTicker(25 * time.Second)
+	defer heartbeat.Stop()
+
 	// Слушаем события
 	for {
 		select {
@@ -440,6 +447,10 @@ func (h *Handlers) HandleSSE(w http.ResponseWriter, r *http.Request) {
 			return
 		case <-client.done:
 			return
+		case <-heartbeat.C:
+			// SSE комментарий для keep-alive (не является событием, игнорируется клиентом)
+			fmt.Fprintf(w, ": heartbeat\n\n")
+			flusher.Flush()
 		case event := <-client.events:
 			h.sendSSEEvent(w, event)
 			flusher.Flush()
