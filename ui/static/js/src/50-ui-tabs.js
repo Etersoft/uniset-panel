@@ -349,7 +349,7 @@ function createTab(tabKey, displayName, rendererInfo, initialData, serverId, ser
     // Если SSE подключен, не запускаем polling (данные будут приходить через SSE)
     const updateInterval = state.sse.connected
         ? null
-        : setInterval(() => loadObjectData(displayName), state.sse.pollInterval);
+        : setInterval(() => loadObjectData(tabKey), state.sse.pollInterval);
 
     state.tabs.set(tabKey, {
         charts: new Map(),
@@ -608,13 +608,15 @@ async function loadLauncherNodes() {
     }
 }
 
-async function loadObjectData(name) {
+async function loadObjectData(tabKey) {
     try {
-        const data = await fetchObjectData(name);
-        const tabState = state.tabs.get(name);
+        const tabState = state.tabs.get(tabKey);
+        if (!tabState) return;
+
+        const data = await fetchObjectData(tabState.displayName, tabState.serverId);
 
         // Используем рендерер для обновления данных
-        if (tabState && tabState.renderer) {
+        if (tabState.renderer) {
             tabState.renderer.update(data);
         }
 
@@ -623,7 +625,7 @@ async function loadObjectData(name) {
             updateSSEStatus('polling', new Date());
         }
     } catch (err) {
-        console.error(`Error загрузки ${name}:`, err);
+        console.error(`Error загрузки ${tabKey}:`, err);
     }
 }
 

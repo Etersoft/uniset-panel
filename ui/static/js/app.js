@@ -705,14 +705,8 @@ function initSSE() {
             // Это важно, т.к. могли пропустить события server_status во время отключения
             refreshObjectsList();
 
-            // Отключаем polling для всех открытых вкладок
-            state.tabs.forEach((tabState, objectName) => {
-                if (tabState.updateInterval) {
-                    clearInterval(tabState.updateInterval);
-                    tabState.updateInterval = null;
-                    console.log('SSE: Отключен polling для', objectName);
-                }
-            });
+            // Отключаем polling fallback если был активен
+            disablePollingFallback();
         } catch (err) {
             console.warn('SSE: Error парсинга connected:', err);
         }
@@ -1244,6 +1238,14 @@ function initSSE() {
         console.warn('SSE: Error соединения');
         state.sse.connected = false;
 
+        // Закрываем EventSource чтобы предотвратить нативный auto-reconnect браузера,
+        // который стреляет дополнительными onerror и быстро расходует счётчик попыток
+        // (аналогично handleConnectionError в LogViewer)
+        if (state.sse.eventSource) {
+            state.sse.eventSource.close();
+            state.sse.eventSource = null;
+        }
+
         if (state.sse.reconnectAttempts < state.sse.maxReconnectAttempts) {
             state.sse.reconnectAttempts++;
             // Exponential backoff: baseDelay * 2^(attempt-1) с jitter ±10%
@@ -1269,25 +1271,88 @@ function initSSE() {
 // Включить polling как fallback при недоступности SSE
 function enablePollingFallback() {
     console.log('Polling: Включение fallback режима');
-    state.tabs.forEach((tabState, objectName) => {
+
+    // Периодически обновляем sidebar (статусы серверов и список объектов)
+    state.sse.sidebarPollInterval = setInterval(() => {
+        refreshObjectsList();
+    }, state.sse.pollInterval * 6); // Реже чем данные объектов
+
+    state.tabs.forEach((tabState, tabKey) => {
         // Включаем polling для данных объекта
         if (!tabState.updateInterval) {
             tabState.updateInterval = setInterval(
-                () => loadObjectData(objectName),
+                () => loadObjectData(tabKey),
                 state.sse.pollInterval
             );
-            console.log('Polling: Включен для', objectName);
+            console.log('Polling: Включен для', tabState.displayName, '(tab:', tabKey, ')');
         }
 
         // Включаем polling для графиков
+        const displayName = tabState.displayName;
         tabState.charts.forEach((chartData, varName) => {
             if (!chartData.updateInterval) {
                 chartData.updateInterval = setInterval(async () => {
-                    await updateChart(objectName, varName, chartData.chart);
+                    await updateChart(displayName, varName, chartData.chart);
                 }, state.sse.pollInterval);
             }
         });
     });
+
+    // Запускаем периодическую проверку доступности SSE
+    startSSERecoveryProbe();
+}
+
+// Отключить polling fallback (при восстановлении SSE)
+function disablePollingFallback() {
+    console.log('Polling: Отключение fallback режима');
+
+    // Останавливаем polling sidebar
+    if (state.sse.sidebarPollInterval) {
+        clearInterval(state.sse.sidebarPollInterval);
+        state.sse.sidebarPollInterval = null;
+    }
+
+    // Останавливаем recovery probe
+    if (state.sse.recoveryProbeInterval) {
+        clearInterval(state.sse.recoveryProbeInterval);
+        state.sse.recoveryProbeInterval = null;
+    }
+
+    // Останавливаем polling для всех вкладок
+    state.tabs.forEach((tabState, tabKey) => {
+        if (tabState.updateInterval) {
+            clearInterval(tabState.updateInterval);
+            tabState.updateInterval = null;
+        }
+        tabState.charts.forEach((chartData) => {
+            if (chartData.updateInterval) {
+                clearInterval(chartData.updateInterval);
+                chartData.updateInterval = null;
+            }
+        });
+    });
+}
+
+// Периодическая проверка доступности сервера для восстановления SSE
+function startSSERecoveryProbe() {
+    if (state.sse.recoveryProbeInterval) return;
+
+    const probeInterval = 30000; // 30 секунд
+    console.log('SSE: Запуск recovery probe каждые', probeInterval, 'ms');
+
+    state.sse.recoveryProbeInterval = setInterval(async () => {
+        try {
+            const response = await fetch('/api/version', { method: 'HEAD' });
+            if (response.ok) {
+                console.log('SSE: Сервер доступен, восстанавливаем SSE');
+                disablePollingFallback();
+                state.sse.reconnectAttempts = 0;
+                initSSE();
+            }
+        } catch (err) {
+            // Сервер всё ещё недоступен
+        }
+    }, probeInterval);
 }
 
 // Close SSE соединение
@@ -13758,7 +13823,7 @@ function createTab(tabKey, displayName, rendererInfo, initialData, serverId, ser
     // Если SSE подключен, не запускаем polling (данные будут приходить через SSE)
     const updateInterval = state.sse.connected
         ? null
-        : setInterval(() => loadObjectData(displayName), state.sse.pollInterval);
+        : setInterval(() => loadObjectData(tabKey), state.sse.pollInterval);
 
     state.tabs.set(tabKey, {
         charts: new Map(),
@@ -14017,13 +14082,15 @@ async function loadLauncherNodes() {
     }
 }
 
-async function loadObjectData(name) {
+async function loadObjectData(tabKey) {
     try {
-        const data = await fetchObjectData(name);
-        const tabState = state.tabs.get(name);
+        const tabState = state.tabs.get(tabKey);
+        if (!tabState) return;
+
+        const data = await fetchObjectData(tabState.displayName, tabState.serverId);
 
         // Используем рендерер для обновления данных
-        if (tabState && tabState.renderer) {
+        if (tabState.renderer) {
             tabState.renderer.update(data);
         }
 
@@ -14032,7 +14099,7 @@ async function loadObjectData(name) {
             updateSSEStatus('polling', new Date());
         }
     } catch (err) {
-        console.error(`Error загрузки ${name}:`, err);
+        console.error(`Error загрузки ${tabKey}:`, err);
     }
 }
 
