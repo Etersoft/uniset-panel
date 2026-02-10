@@ -554,11 +554,37 @@ const mbStatus = {
   }
 };
 
+// Simulate server down state
+let simulateDown = false;
+
 const server = http.createServer((req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   const url = req.url;
+
+  // Control endpoints for testing
+  if (url === '/api/mock/disconnect') {
+    simulateDown = true;
+    console.log('[mock] Simulating server DOWN');
+    res.end(JSON.stringify({ status: 'disconnected' }));
+    return;
+  } else if (url === '/api/mock/reconnect') {
+    simulateDown = false;
+    console.log('[mock] Simulating server UP');
+    res.end(JSON.stringify({ status: 'connected' }));
+    return;
+  } else if (url === '/api/mock/status') {
+    res.end(JSON.stringify({ simulateDown }));
+    return;
+  }
+
+  // When simulating down, return 503 for all API endpoints
+  if (simulateDown && url.startsWith('/api/v2/')) {
+    res.statusCode = 503;
+    res.end(JSON.stringify({ error: 'Service Unavailable (simulated)' }));
+    return;
+  }
 
   if (url === '/api/v2/list') {
     res.end(JSON.stringify(objects));

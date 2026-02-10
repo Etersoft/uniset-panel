@@ -54,6 +54,10 @@ function initSSE() {
 
             // Отключаем polling fallback если был активен
             disablePollingFallback();
+
+            // Запускаем периодическую синхронизацию статуса серверов
+            // (ловит пропущенные server_status SSE-события)
+            startServerStatusSync();
         } catch (err) {
             console.warn('SSE: Error парсинга connected:', err);
         }
@@ -584,6 +588,7 @@ function initSSE() {
     eventSource.onerror = (e) => {
         console.warn('SSE: Error соединения');
         state.sse.connected = false;
+        stopServerStatusSync();
 
         // Закрываем EventSource чтобы предотвратить нативный auto-reconnect браузера,
         // который стреляет дополнительными onerror и быстро расходует счётчик попыток
@@ -708,6 +713,26 @@ function startSSERecoveryProbe() {
     }, probeInterval);
 }
 
+// Периодическая синхронизация статуса серверов (гарантирует актуальность каждые 30с)
+function startServerStatusSync() {
+    stopServerStatusSync();
+    state.sse.statusSyncInterval = setInterval(async () => {
+        try {
+            const resp = await fetchServers();
+            if (resp?.servers) {
+                resp.servers.forEach(s => updateServerStatus(s.id, s.connected));
+            }
+        } catch (err) { /* фоновая синхронизация */ }
+    }, 30000);
+}
+
+function stopServerStatusSync() {
+    if (state.sse.statusSyncInterval) {
+        clearInterval(state.sse.statusSyncInterval);
+        state.sse.statusSyncInterval = null;
+    }
+}
+
 // Переподписка всех открытых вкладок после восстановления SSE
 function resubscribeAll() {
     console.log('SSE: Переподписка всех вкладок после переподключения');
@@ -721,6 +746,7 @@ function resubscribeAll() {
 
 // Close SSE соединение
 function closeSSE() {
+    stopServerStatusSync();
     if (state.sse.eventSource) {
         state.sse.eventSource.close();
         state.sse.eventSource = null;

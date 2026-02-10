@@ -8,8 +8,6 @@
 #   - url: http://localhost:8111
 #     name: "Основная нода"
 #     controlToken: "secret"           # токен для управления (restart/stop/start)
-#     # readToken: ""                  # токен для чтения (опционально)
-#     # id: "main"                     # уникальный ID (генерируется из URL если не указан)
 #
 #   - url: http://192.168.1.100:8111
 #     name: "Резервная нода"

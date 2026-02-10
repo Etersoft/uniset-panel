@@ -167,7 +167,7 @@ services:
         cd /tmp
         cp -r /app/* .
         npm install --no-fund --no-audit
-        npx playwright test single/ --reporter=list
+        npx playwright test single/ --reporter=list && npx playwright test integration/ --reporter=list
 
   # Demo mock server - Diesel Generator Simulator
   # Usage: docker-compose --profile demo up demo-viewer

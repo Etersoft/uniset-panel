@@ -37,7 +37,8 @@ const state = window.state = {
         maxReconnectAttempts: 10,
         baseReconnectDelay: 1000,   // начальная задержка (1s)
         maxReconnectDelay: 30000,   // максимальная задержка (30s)
-        reconnectTimerId: null      // ID таймера переподключения (для очистки)
+        reconnectTimerId: null,     // ID таймера переподключения (для очистки)
+        statusSyncInterval: null    // ID интервала периодической синхронизации статуса серверов
     },
     control: {
         enabled: false,       // включён ли контроль на сервере
