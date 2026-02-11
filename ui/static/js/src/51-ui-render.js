@@ -211,6 +211,15 @@ async function addChart(tabKey, varName, sensorId, passedTextname) {
     // textname: приоритет - справочник сенсоров, потом переданный параметр (comment из API)
     const textName = sensor?.textname || passedTextname || '';
 
+    // Находим supplier из данных рендерера (если есть)
+    let supplierText = '';
+    if (tabState.renderer && tabState.renderer.allSensors) {
+        const sData = tabState.renderer.allSensors.find(s => s.id === sensorId);
+        if (sData && sData.supplier) {
+            supplierText = sData.supplier;
+        }
+    }
+
     // Создаём панель графика
     const chartDiv = document.createElement('div');
     chartDiv.className = 'chart-panel';
@@ -221,6 +230,7 @@ async function addChart(tabKey, varName, sensorId, passedTextname) {
                 <span class="legend-color-picker" data-object="${tabKey}" data-variable="${varName}" style="background:${color}" title="Click to choose color"></span>
                 <span class="chart-panel-title">${sensorDisplayName}</span>
                 <span class="chart-panel-value" id="legend-value-${displayName}-${varName}">--</span>
+                <span class="chart-panel-supplier" id="legend-supplier-${displayName}-${varName}">${supplierText}</span>
                 <span class="chart-panel-textname">${textName}</span>
                 ${sensor?.iotype ? `<span class="type-badge type-${sensor.iotype}">${sensor.iotype}</span>` : ''}
             </div>
@@ -518,13 +528,17 @@ function updateChartLegends(tabKey, data) {
 
     const displayName = tabState.displayName || tabKey;
 
-    // Обновляем значения в таблицах
+    // Обновляем значения и supplier в таблицах
     if (data.io?.in) {
         Object.entries(data.io.in).forEach(([key, io]) => {
             const varName = `io.in.${key}`;
             const legendEl = getElementInTab(tabKey, `legend-value-${displayName}-${varName}`);
             if (legendEl) {
                 legendEl.textContent = formatValue(io.value);
+            }
+            if (io.supplier !== undefined) {
+                const supplierEl = getElementInTab(tabKey, `legend-supplier-${displayName}-${varName}`);
+                if (supplierEl) supplierEl.textContent = io.supplier || '';
             }
         });
     }
@@ -535,6 +549,10 @@ function updateChartLegends(tabKey, data) {
             const legendEl = getElementInTab(tabKey, `legend-value-${displayName}-${varName}`);
             if (legendEl) {
                 legendEl.textContent = formatValue(io.value);
+            }
+            if (io.supplier !== undefined) {
+                const supplierEl = getElementInTab(tabKey, `legend-supplier-${displayName}-${varName}`);
+                if (supplierEl) supplierEl.textContent = io.supplier || '';
             }
         });
     }

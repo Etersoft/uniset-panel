@@ -235,11 +235,15 @@ function initSSE() {
                     chartData.chart.data.datasets[0].data.push({ x: timestamp, y: value });
                     chartsToUpdate.add(varName);
 
-                    // Обновляем значение в легенде
+                    // Обновляем значение и supplier в легенде
                     const safeVarName = varName.replace(/:/g, '-');
                     const legendEl = getElementInTab(tabKey, `legend-value-${tabState.displayName}-${safeVarName}`);
                     if (legendEl) {
                         legendEl.textContent = formatValue(value);
+                    }
+                    const supplierEl = getElementInTab(tabKey, `legend-supplier-${tabState.displayName}-${safeVarName}`);
+                    if (supplierEl) {
+                        supplierEl.textContent = sensor.supplier || '';
                     }
                 }
             }
@@ -448,11 +452,15 @@ function initSSE() {
                     chartData.chart.data.datasets[0].data.push({ x: timestamp, y: value });
                     chartsToUpdate.add(varName);
 
-                    // Обновляем значение в легенде
+                    // Обновляем значение и supplier в легенде
                     const safeVarName = varName.replace(/:/g, '-');
                     const legendEl = getElementInTab(tabKey, `legend-value-${tabState.displayName}-${safeVarName}`);
                     if (legendEl) {
                         legendEl.textContent = formatValue(value);
+                    }
+                    const supplierEl = getElementInTab(tabKey, `legend-supplier-${tabState.displayName}-${safeVarName}`);
+                    if (supplierEl) {
+                        supplierEl.textContent = sensor.supplier || '';
                     }
                 }
             }

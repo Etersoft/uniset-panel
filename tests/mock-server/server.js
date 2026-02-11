@@ -124,17 +124,32 @@ const unisetActivatorData = {
 
 // Mock sensors for SharedMemory (IONotifyController)
 const mockSensors = [];
+const supplierNames = ['TestProc', 'SharedMemory', 'MBTCPMaster1', '', 'OPCUAClient1'];
+const supplierIds = [6000, 5003, 3001, 0, 2001];
 for (let i = 1; i <= 200; i++) {
   const types = ['AI', 'DI', 'AO', 'DO'];
+  const val = Math.floor(Math.random() * 1000);
+  const supplierIdx = i % supplierNames.length;
   mockSensors.push({
     id: i,
     name: `Sensor${i}_S`,
     type: types[i % 4],
-    value: Math.floor(Math.random() * 1000),
+    value: val,
+    real_value: val,
+    default_val: 0,
     frozen: i % 20 === 0,
     blocked: i % 30 === 0,
     readonly: i % 10 === 0,
-    undefined: false
+    undefined: false,
+    dbignore: false,
+    nchanges: Math.floor(Math.random() * 500),
+    tv_sec: Math.floor(Date.now() / 1000),
+    tv_nsec: 0,
+    supplier: supplierNames[supplierIdx],
+    supplier_id: supplierIds[supplierIdx],
+    calibration: types[i % 4].startsWith('A') ?
+      { cmin: 0, cmax: 1000, rmin: 0, rmax: 4095, precision: 2 } :
+      { cmin: 0, cmax: 0, rmin: 0, rmax: 0, precision: 0 }
   });
 }
 
@@ -645,29 +660,42 @@ const server = http.createServer((req, res) => {
 
     res.end(JSON.stringify({ sensors }));
   } else if (url.startsWith('/api/v2/SharedMemory/get')) {
-    // Return mock sensor values from mockSensors
-    // URL format: /api/v2/SharedMemory/get?supplier=...&filter=id1,id2,id3
+    // Return mock sensor values from mockSensors (matches real UniSet2 /get protocol)
+    // URL format: /api/v2/SharedMemory/get?supplier=...&filter=id1,id2,id3[&shortInfo]
     const urlObj = new URL(url, `http://localhost:${PORT}`);
     const filter = urlObj.searchParams.get('filter') || '';
+    const shortInfo = urlObj.searchParams.has('shortInfo');
     const sensorIds = filter.split(',').filter(Boolean).map(Number);
     const sensors = sensorIds.map(id => {
       const sensor = mockSensors.find(s => s.id === id);
       if (sensor) {
-        return {
+        // shortInfo returns only basic fields (like real UniSet2)
+        const base = {
           id: sensor.id,
           name: sensor.name,
           value: sensor.value,
-          real_value: sensor.real_value || sensor.value,
-          frozen: sensor.frozen || false,
-          blocked: sensor.blocked || false
+          real_value: sensor.real_value,
+          tv_sec: sensor.tv_sec,
+          tv_nsec: sensor.tv_nsec,
+          supplier_id: sensor.supplier_id,
+          supplier: sensor.supplier
+        };
+        if (shortInfo) return base;
+        // Full info includes all fields
+        return {
+          ...base,
+          type: sensor.type,
+          default_val: sensor.default_val,
+          dbignore: sensor.dbignore,
+          nchanges: sensor.nchanges,
+          undefined: sensor.undefined,
+          frozen: sensor.frozen,
+          blocked: sensor.blocked,
+          readonly: sensor.readonly,
+          calibration: sensor.calibration
         };
       }
-      return {
-        id: id,
-        name: `Sensor${id}_S`,
-        value: 0,
-        real_value: 0
-      };
+      return { name: `Sensor${id}_S`, error: 'not found' };
     });
     res.end(JSON.stringify({ sensors }));
   } else if (url.startsWith('/api/v2/SharedMemory/set?')) {
@@ -1197,6 +1225,42 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({ error: 'Not found' }));
   }
 });
+
+// Simulate value changes for IONC sensors (triggers SSE batch events in backend)
+setInterval(() => {
+  mockSensors.forEach(sensor => {
+    if (sensor.type === 'AI' || sensor.type === 'AO') {
+      sensor.value += Math.floor(Math.random() * 5) - 2;
+      sensor.real_value = sensor.value;
+    } else {
+      if (Math.random() < 0.05) {
+        sensor.value = sensor.value === 0 ? 1 : 0;
+        sensor.real_value = sensor.value;
+      }
+    }
+    sensor.tv_sec = Math.floor(Date.now() / 1000);
+  });
+}, 1000);
+
+// Simulate value changes for OPCUA sensors
+setInterval(() => {
+  opcuaSensors.forEach(sensor => {
+    if (sensor.iotype === 'AI' || sensor.iotype === 'AO') {
+      sensor.value = Math.round((sensor.value + (Math.random() - 0.5) * 2) * 100) / 100;
+      sensor.tick++;
+    }
+  });
+}, 1000);
+
+// Simulate value changes for Modbus registers
+setInterval(() => {
+  mbRegisters.forEach(reg => {
+    if (reg.iotype === 'AI' || reg.iotype === 'AO') {
+      reg.value += Math.floor(Math.random() * 3) - 1;
+      reg.register.mbval = reg.value;
+    }
+  });
+}, 1000);
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Mock UniSet2 server running on port ${PORT}`);

@@ -899,11 +899,15 @@ function initSSE() {
                     chartData.chart.data.datasets[0].data.push({ x: timestamp, y: value });
                     chartsToUpdate.add(varName);
 
-                    // Обновляем значение в легенде
+                    // Обновляем значение и supplier в легенде
                     const safeVarName = varName.replace(/:/g, '-');
                     const legendEl = getElementInTab(tabKey, `legend-value-${tabState.displayName}-${safeVarName}`);
                     if (legendEl) {
                         legendEl.textContent = formatValue(value);
+                    }
+                    const supplierEl = getElementInTab(tabKey, `legend-supplier-${tabState.displayName}-${safeVarName}`);
+                    if (supplierEl) {
+                        supplierEl.textContent = sensor.supplier || '';
                     }
                 }
             }
@@ -1112,11 +1116,15 @@ function initSSE() {
                     chartData.chart.data.datasets[0].data.push({ x: timestamp, y: value });
                     chartsToUpdate.add(varName);
 
-                    // Обновляем значение в легенде
+                    // Обновляем значение и supplier в легенде
                     const safeVarName = varName.replace(/:/g, '-');
                     const legendEl = getElementInTab(tabKey, `legend-value-${tabState.displayName}-${safeVarName}`);
                     if (legendEl) {
                         legendEl.textContent = formatValue(value);
+                    }
+                    const supplierEl = getElementInTab(tabKey, `legend-supplier-${tabState.displayName}-${safeVarName}`);
+                    if (supplierEl) {
+                        supplierEl.textContent = sensor.supplier || '';
                     }
                 }
             }
@@ -13161,6 +13169,15 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
     // Используем CSS-безопасный ID (заменяем : на -)
     const safeVarName = varName.replace(/:/g, '-');
 
+    // Находим supplier из данных рендерера (если есть)
+    let supplierText = '';
+    if (tabState.renderer && tabState.renderer.allSensors) {
+        const sData = tabState.renderer.allSensors.find(s => s.id === sensor.id);
+        if (sData && sData.supplier) {
+            supplierText = sData.supplier;
+        }
+    }
+
     // Badge: SM для SharedMemory, MB для Modbus, или скрыт
     const badge = options.badge !== undefined ? options.badge : 'SM';
     const badgeHtml = badge ? `<span class="chart-panel-badge ${badge === 'SM' ? 'external-badge' : 'modbus-badge'}">${badge}</span>` : '';
@@ -13174,6 +13191,7 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
                 <span class="legend-color-picker" data-object="${tabKey}" data-variable="${varName}" style="background:${color}" title="Click to choose color"></span>
                 <span class="chart-panel-title">${escapeHtml(displayName)}</span>
                 <span class="chart-panel-value" id="legend-value-${objectName}-${safeVarName}">--</span>
+                <span class="chart-panel-supplier" id="legend-supplier-${objectName}-${safeVarName}">${escapeHtml(supplierText)}</span>
                 <span class="chart-panel-textname">${escapeHtml(sensor.name)}</span>
                 <span class="type-badge type-${sensor.iotype || 'unknown'}">${sensor.iotype || '?'}</span>
                 ${badgeHtml}
@@ -14446,6 +14464,15 @@ async function addChart(tabKey, varName, sensorId, passedTextname) {
     // textname: приоритет - справочник сенсоров, потом переданный параметр (comment из API)
     const textName = sensor?.textname || passedTextname || '';
 
+    // Находим supplier из данных рендерера (если есть)
+    let supplierText = '';
+    if (tabState.renderer && tabState.renderer.allSensors) {
+        const sData = tabState.renderer.allSensors.find(s => s.id === sensorId);
+        if (sData && sData.supplier) {
+            supplierText = sData.supplier;
+        }
+    }
+
     // Создаём панель графика
     const chartDiv = document.createElement('div');
     chartDiv.className = 'chart-panel';
@@ -14456,6 +14483,7 @@ async function addChart(tabKey, varName, sensorId, passedTextname) {
                 <span class="legend-color-picker" data-object="${tabKey}" data-variable="${varName}" style="background:${color}" title="Click to choose color"></span>
                 <span class="chart-panel-title">${sensorDisplayName}</span>
                 <span class="chart-panel-value" id="legend-value-${displayName}-${varName}">--</span>
+                <span class="chart-panel-supplier" id="legend-supplier-${displayName}-${varName}">${supplierText}</span>
                 <span class="chart-panel-textname">${textName}</span>
                 ${sensor?.iotype ? `<span class="type-badge type-${sensor.iotype}">${sensor.iotype}</span>` : ''}
             </div>
@@ -14753,13 +14781,17 @@ function updateChartLegends(tabKey, data) {
 
     const displayName = tabState.displayName || tabKey;
 
-    // Обновляем значения в таблицах
+    // Обновляем значения и supplier в таблицах
     if (data.io?.in) {
         Object.entries(data.io.in).forEach(([key, io]) => {
             const varName = `io.in.${key}`;
             const legendEl = getElementInTab(tabKey, `legend-value-${displayName}-${varName}`);
             if (legendEl) {
                 legendEl.textContent = formatValue(io.value);
+            }
+            if (io.supplier !== undefined) {
+                const supplierEl = getElementInTab(tabKey, `legend-supplier-${displayName}-${varName}`);
+                if (supplierEl) supplierEl.textContent = io.supplier || '';
             }
         });
     }
@@ -14770,6 +14802,10 @@ function updateChartLegends(tabKey, data) {
             const legendEl = getElementInTab(tabKey, `legend-value-${displayName}-${varName}`);
             if (legendEl) {
                 legendEl.textContent = formatValue(io.value);
+            }
+            if (io.supplier !== undefined) {
+                const supplierEl = getElementInTab(tabKey, `legend-supplier-${displayName}-${varName}`);
+                if (supplierEl) supplierEl.textContent = io.supplier || '';
             }
         });
     }

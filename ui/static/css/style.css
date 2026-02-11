@@ -1375,6 +1375,16 @@ header h1 {
     margin-left: 0.5rem;
 }
 
+.chart-panel-supplier:not(:empty) {
+    font-size: 11px;
+    color: var(--text-secondary);
+    opacity: 0.7;
+}
+
+.chart-panel-supplier:not(:empty)::before {
+    content: "← ";
+}
+
 /* Fill toggle checkbox */
 .fill-toggle {
     display: flex;
