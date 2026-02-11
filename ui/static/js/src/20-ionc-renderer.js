@@ -1781,7 +1781,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         // Обновляем DOM для всех ожидающих датчиков
         for (const [id, sensor] of this.pendingUpdates) {
             // Обновляем значение с учётом формата frozen
-            const valueEl = document.getElementById(`ionc-value-${this.objectName}-${id}`);
+            const valueEl = getElementInTab(this.tabKey, `ionc-value-${this.objectName}-${id}`);
             if (valueEl) {
                 // Рендерим правильный формат в зависимости от состояния frozen
                 if (sensor.frozen && sensor.real_value !== undefined && sensor.real_value !== sensor.value) {
@@ -1800,13 +1800,14 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             }
 
             // Обновляем флаги если изменились
-            const row = document.querySelector(`tr[data-sensor-id="${id}"]`);
-            if (row) {
-                row.classList.toggle('ionc-sensor-frozen', sensor.frozen);
-                row.classList.toggle('ionc-sensor-blocked', sensor.blocked);
+            const row = getElementsInTab(this.tabKey, `tr[data-sensor-id="${id}"]`);
+            if (row.length > 0) {
+                row[0].classList.toggle('ionc-sensor-frozen', sensor.frozen);
+                row[0].classList.toggle('ionc-sensor-blocked', sensor.blocked);
+                row[0].classList.toggle('ionc-sensor-readonly', sensor.readonly);
             }
 
-            // Обновляем supplier если изменился
+            // Обновляем supplier
             const supplierEl = getElementInTab(this.tabKey, `ionc-supplier-${this.objectName}-${id}`);
             if (supplierEl) {
                 const supplierValue = sensor.supplier || (sensor.supplier_id ? String(sensor.supplier_id) : '');
@@ -1820,8 +1821,10 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         // Убираем анимацию через 500ms
         setTimeout(() => {
-            const updatedEls = document.querySelectorAll('.ionc-value-updated');
-            updatedEls.forEach(el => el.classList.remove('ionc-value-updated'));
+            const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
+            if (panel) {
+                panel.querySelectorAll('.ionc-value-updated').forEach(el => el.classList.remove('ionc-value-updated'));
+            }
         }, 500);
     }
 

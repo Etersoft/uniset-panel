@@ -45,8 +45,8 @@ func (f *ioncFetcher) GetItemID(sensor uniset.IONCSensor) int64 {
 }
 
 func (f *ioncFetcher) GetValueHash(sensor uniset.IONCSensor) string {
-	// Хеш включает Value и RealValue - чтобы обновлять и при изменении real_value (для замороженных датчиков)
-	return fmt.Sprintf("%d|%d", sensor.Value, sensor.RealValue)
+	// Хеш включает все отображаемые поля - чтобы обновлять при любых изменениях
+	return fmt.Sprintf("%d|%d|%s|%d|%v|%v", sensor.Value, sensor.RealValue, sensor.Supplier, sensor.SupplierID, sensor.Frozen, sensor.Blocked)
 }
 
 // NewPoller создает новый IONC poller
