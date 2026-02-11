@@ -206,19 +206,19 @@ func TestClient_PostPaths(t *testing.T) {
 		{
 			name:     "RestartProcess",
 			action:   func(c *Client) error { return c.RestartProcess(context.Background(), "SM") },
-			wantPath: "/api/v2/launcher/processes/SM/restart",
+			wantPath: "/api/v2/launcher/process/SM/restart",
 			wantPost: true,
 		},
 		{
 			name:     "StopProcess",
 			action:   func(c *Client) error { return c.StopProcess(context.Background(), "SM") },
-			wantPath: "/api/v2/launcher/processes/SM/stop",
+			wantPath: "/api/v2/launcher/process/SM/stop",
 			wantPost: true,
 		},
 		{
 			name:     "StartProcess",
 			action:   func(c *Client) error { return c.StartProcess(context.Background(), "SM") },
-			wantPath: "/api/v2/launcher/processes/SM/start",
+			wantPath: "/api/v2/launcher/process/SM/start",
 			wantPost: true,
 		},
 		{

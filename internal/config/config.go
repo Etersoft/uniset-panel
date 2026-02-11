@@ -285,9 +285,11 @@ func Parse() *Config {
 
 	// Добавление Launcher'ов из CLI флагов
 	var cliLaunchers []LauncherConfig
-	for _, url := range launcherURLs {
+	for _, rawURL := range launcherURLs {
+		cleanURL, token := parseLauncherURL(rawURL)
 		cliLaunchers = append(cliLaunchers, LauncherConfig{
-			URL: url,
+			URL:          cleanURL,
+			ControlToken: token,
 		})
 	}
 
@@ -301,7 +303,29 @@ func Parse() *Config {
 		}
 	}
 
+	// Fallback имени Launcher'а на host:port из URL
+	for i := range cfg.Launchers {
+		if cfg.Launchers[i].Name == "" {
+			if u, err := url.Parse(cfg.Launchers[i].URL); err == nil {
+				cfg.Launchers[i].Name = u.Host
+			}
+		}
+	}
+
 	return cfg
+}
+
+// parseLauncherURL извлекает токен из userinfo части URL.
+// Формат: http://token@host:port → cleanURL="http://host:port", token="token"
+// Если userinfo отсутствует, возвращает URL как есть и пустой токен.
+func parseLauncherURL(rawURL string) (cleanURL, token string) {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.User == nil {
+		return rawURL, ""
+	}
+	token = u.User.Username()
+	u.User = nil
+	return u.String(), token
 }
 
 // generateServerID генерирует короткий ID на основе URL

@@ -71,21 +71,21 @@ func (c *Client) Health(ctx context.Context) (*HealthStatus, error) {
 }
 
 // RestartProcess перезапускает процесс
-// POST /api/v2/launcher/processes/{name}/restart
+// POST /api/v2/launcher/process/{name}/restart
 func (c *Client) RestartProcess(ctx context.Context, name string) error {
-	return c.doPost(ctx, fmt.Sprintf("/api/v2/launcher/processes/%s/restart", name))
+	return c.doPost(ctx, fmt.Sprintf("/api/v2/launcher/process/%s/restart", name))
 }
 
 // StopProcess останавливает процесс
-// POST /api/v2/launcher/processes/{name}/stop
+// POST /api/v2/launcher/process/{name}/stop
 func (c *Client) StopProcess(ctx context.Context, name string) error {
-	return c.doPost(ctx, fmt.Sprintf("/api/v2/launcher/processes/%s/stop", name))
+	return c.doPost(ctx, fmt.Sprintf("/api/v2/launcher/process/%s/stop", name))
 }
 
 // StartProcess запускает процесс
-// POST /api/v2/launcher/processes/{name}/start
+// POST /api/v2/launcher/process/{name}/start
 func (c *Client) StartProcess(ctx context.Context, name string) error {
-	return c.doPost(ctx, fmt.Sprintf("/api/v2/launcher/processes/%s/start", name))
+	return c.doPost(ctx, fmt.Sprintf("/api/v2/launcher/process/%s/start", name))
 }
 
 // RestartAll перезапускает все запущенные процессы
