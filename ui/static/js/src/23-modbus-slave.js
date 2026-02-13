@@ -676,20 +676,19 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             updateMap.set(reg.id, reg);
         });
 
-        // Обновляем данные в allRegisters
-        let hasChanges = false;
+        // Обновляем данные в allRegisters (все поля)
         this.allRegisters.forEach((reg, index) => {
             const update = updateMap.get(reg.id);
-            if (update && update.value !== reg.value) {
-                this.allRegisters[index] = { ...reg, value: update.value };
-                hasChanges = true;
+            if (update) {
+                this.allRegisters[index] = { ...reg, ...update };
             }
         });
 
-        if (!hasChanges) return;
+        // Обновляем изменившиеся ячейки в DOM
+        const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
+        if (!panel) return;
 
-        // Обновляем только изменившиеся ячейки в DOM
-        const tbody = document.getElementById(`mbs-registers-tbody-${this.objectName}`);
+        const tbody = panel.querySelector(`#mbs-registers-tbody-${CSS.escape(this.objectName)}`);
         if (!tbody) return;
 
         const rows = tbody.querySelectorAll('tr');
@@ -698,20 +697,26 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             if (!regId) return;
 
             const update = updateMap.get(regId);
-            if (update && update.value !== undefined) {
-                // Value ячейка (class-based selector)
-                const valueCell = row.querySelector('.col-value');
-                if (valueCell) {
-                    const oldValue = valueCell.textContent;
-                    const newValue = String(update.value);
-                    if (oldValue !== newValue) {
-                        valueCell.textContent = newValue;
-                        // CSS анимация изменения
-                        valueCell.classList.remove('value-changed');
-                        void valueCell.offsetWidth; // force reflow
-                        valueCell.classList.add('value-changed');
-                    }
+            if (!update) return;
+
+            // Value
+            const valueCell = row.querySelector('.col-value');
+            if (valueCell) {
+                const newValue = update.value !== undefined ? String(update.value) : '';
+                if (valueCell.textContent !== newValue) {
+                    valueCell.textContent = newValue;
+                    valueCell.classList.remove('value-changed');
+                    void valueCell.offsetWidth;
+                    valueCell.classList.add('value-changed');
                 }
+            }
+
+            // Device respond status
+            const deviceCell = row.querySelector('.col-device .mb-respond');
+            if (deviceCell && update.device !== undefined) {
+                const deviceAddr = update.device;
+                const deviceInfo = this.devicesDict ? (this.devicesDict[deviceAddr] || {}) : {};
+                deviceCell.className = `mb-respond ${deviceInfo.respond ? 'ok' : 'fail'}`;
             }
         });
     }

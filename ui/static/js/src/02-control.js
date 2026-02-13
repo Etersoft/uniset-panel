@@ -117,6 +117,7 @@ function updateAllControlButtons() {
             btn.title = '';
         }
     });
+
 }
 
 // Показать диалог ввода токена

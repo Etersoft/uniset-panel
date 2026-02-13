@@ -107,7 +107,7 @@ function renderObjectsList(data) {
         list.appendChild(group);
     });
 
-    // Рендерим секцию серверов и обновляем objects section
+    // Рендерим секцию серверов, обновляем objects section
     renderServersSection();
     updateObjectsSectionHeader();
 }
@@ -192,15 +192,12 @@ function renderServersSection() {
         header.dataset.listenerAdded = 'true';
     }
 
-    // Обновляем счётчик
-    if (countEl) {
-        countEl.textContent = state.servers.size;
-    }
-
-    // Рендерим список серверов
     list.innerHTML = '';
 
+    let serverCount = 0;
+
     state.servers.forEach((server, serverId) => {
+        serverCount++;
         const li = document.createElement('li');
         li.className = 'server-item' + (server.connected ? ' connected' : ' disconnected');
         li.dataset.serverId = serverId;
@@ -245,6 +242,11 @@ function renderServersSection() {
 
         list.appendChild(li);
     });
+
+    // Обновляем счётчик (только standalone серверы)
+    if (countEl) {
+        countEl.textContent = serverCount;
+    }
 }
 
 // Переключить свёрнутость секции "Servers"
@@ -347,7 +349,7 @@ function createTab(tabKey, displayName, rendererInfo, initialData, serverId, ser
     // Если SSE подключен, не запускаем polling (данные будут приходить через SSE)
     const updateInterval = state.sse.connected
         ? null
-        : setInterval(() => loadObjectData(displayName), state.sse.pollInterval);
+        : setInterval(() => loadObjectData(tabKey), state.sse.pollInterval);
 
     state.tabs.set(tabKey, {
         charts: new Map(),
@@ -421,13 +423,200 @@ function closeTab(name) {
     }
 }
 
-async function loadObjectData(name) {
+// ============================================================================
+// Launcher вкладки
+// ============================================================================
+
+function openLauncherTab(nodeId, nodeName, launcherUrl, hasControl) {
+    const tabKey = `launcher:${nodeId}`;
+
+    // Переключаемся на Objects view если сейчас на Dashboard
+    if (dashboardManager && dashboardState.currentView !== 'objects') {
+        dashboardManager.switchView('objects');
+    }
+
+    if (state.tabs.has(tabKey)) {
+        activateTab(tabKey);
+        return;
+    }
+
+    createLauncherTab(tabKey, nodeId, nodeName, launcherUrl, hasControl);
+    activateTab(tabKey);
+}
+
+function createLauncherTab(tabKey, nodeId, nodeName, launcherUrl, hasControl) {
+    const tabsHeader = document.getElementById('tabs-header');
+    const tabsContent = document.getElementById('tabs-content');
+
+    const placeholder = tabsContent.querySelector('.placeholder');
+    if (placeholder) placeholder.remove();
+
+    const renderer = new LauncherRenderer(nodeName, tabKey, nodeId, launcherUrl, hasControl);
+
+    // Кнопка вкладки
+    const tabBtn = document.createElement('button');
+    tabBtn.className = 'tab-btn';
+    tabBtn.dataset.name = tabKey;
+    tabBtn.dataset.objectType = 'Launcher';
+    tabBtn.innerHTML = `
+        <span class="tab-type-badge tab-badge-launcher">Launcher</span>
+        ${escapeHtml(nodeName)}
+        <span class="close">&times;</span>
+    `;
+    tabBtn.addEventListener('click', (e) => {
+        if (e.target.classList.contains('close')) {
+            closeTab(tabKey);
+        } else {
+            activateTab(tabKey);
+        }
+    });
+    tabsHeader.appendChild(tabBtn);
+
+    // Панель содержимого
+    const panel = document.createElement('div');
+    panel.className = 'tab-panel';
+    panel.dataset.name = tabKey;
+    panel.dataset.objectType = 'Launcher';
+    panel.innerHTML = renderer.createPanelHTML();
+    tabsContent.appendChild(panel);
+
+    // Сохраняем состояние
+    state.tabs.set(tabKey, {
+        charts: new Map(),
+        variables: {},
+        objectType: 'Launcher',
+        renderer: renderer,
+        updateInterval: null,
+        displayName: nodeName,
+        serverId: nodeId,
+        serverName: nodeName
+    });
+
+    renderer.initialize();
+}
+
+// ============================================================================
+// Секция Launchers (плоский список Launcher'ов)
+// ============================================================================
+
+// Рендеринг секции Launchers в sidebar
+function renderLaunchersSection(launchers) {
+    const section = document.getElementById('launchers-section');
+    if (!section) return;
+
+    if (!launchers || launchers.length === 0) {
+        section.style.display = 'none';
+        return;
+    }
+    section.style.display = '';
+
+    const list = document.getElementById('launchers-list');
+    const countEl = document.getElementById('launchers-count');
+    const header = document.getElementById('launchers-section-header');
+
+    if (countEl) {
+        countEl.textContent = launchers.length;
+    }
+
+    // Применяем сохранённое состояние свёрнутости
+    if (state.launchersSectionCollapsed) {
+        section.classList.add('collapsed');
+    } else {
+        section.classList.remove('collapsed');
+    }
+
+    // Обработчик клика на заголовок
+    if (header && !header.dataset.listenerAdded) {
+        header.addEventListener('click', toggleLaunchersSection);
+        header.dataset.listenerAdded = 'true';
+    }
+
+    if (!list) return;
+    list.innerHTML = '';
+
+    for (const launcher of launchers) {
+        // Сохраняем в state
+        state.nodes.set(launcher.id, {
+            id: launcher.id,
+            name: launcher.name,
+            launcherUrl: launcher.launcherUrl,
+            connected: launcher.connected ?? false,
+            hasControl: launcher.hasControl ?? false
+        });
+
+        const displayName = launcher.name || launcher.id;
+        const connected = launcher.connected ?? false;
+
+        let statusText = '';
+        if (launcher.status && launcher.status.processes) {
+            const total = launcher.status.processes.length;
+            const running = launcher.status.processes.filter(p => p.state === 'running').length;
+            statusText = `${running}/${total}`;
+        }
+
+        const li = document.createElement('li');
+        li.className = 'launcher-sidebar-item';
+        li.dataset.nodeId = launcher.id;
+        li.innerHTML = `
+            <span class="server-status-dot${connected ? '' : ' disconnected'}"></span>
+            <span class="launcher-sidebar-name">${escapeHtml(displayName)}</span>
+            ${statusText ? `<span class="launcher-sidebar-stats">${statusText}</span>` : ''}
+        `;
+        li.addEventListener('click', () => {
+            openLauncherTab(launcher.id, launcher.name, launcher.launcherUrl, launcher.hasControl);
+        });
+        list.appendChild(li);
+    }
+}
+
+function toggleLaunchersSection() {
+    const section = document.getElementById('launchers-section');
+    if (!section) return;
+
+    state.launchersSectionCollapsed = !state.launchersSectionCollapsed;
+    section.classList.toggle('collapsed', state.launchersSectionCollapsed);
+    saveSettings();
+}
+
+// Обновить статус Launcher'а в sidebar
+function updateLauncherNodeStatus(nodeId, connected) {
+    const nodeState = state.nodes.get(nodeId);
+    if (nodeState) {
+        nodeState.connected = connected;
+    }
+
+    const item = document.querySelector(`.launcher-sidebar-item[data-node-id="${nodeId}"]`);
+    if (!item) return;
+
+    const dot = item.querySelector('.server-status-dot');
+    if (dot) {
+        dot.className = `server-status-dot${connected ? '' : ' disconnected'}`;
+    }
+}
+
+// Загрузка списка Launcher'ов (вызывается при инициализации)
+async function loadLauncherNodes() {
     try {
-        const data = await fetchObjectData(name);
-        const tabState = state.tabs.get(name);
+        const resp = await fetch('/api/launchers');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (data.launchers && data.launchers.length > 0) {
+            renderLaunchersSection(data.launchers);
+        }
+    } catch (err) {
+        console.warn('Failed to load launchers:', err);
+    }
+}
+
+async function loadObjectData(tabKey) {
+    try {
+        const tabState = state.tabs.get(tabKey);
+        if (!tabState) return;
+
+        const data = await fetchObjectData(tabState.displayName, tabState.serverId);
 
         // Используем рендерер для обновления данных
-        if (tabState && tabState.renderer) {
+        if (tabState.renderer) {
             tabState.renderer.update(data);
         }
 
@@ -436,7 +625,7 @@ async function loadObjectData(name) {
             updateSSEStatus('polling', new Date());
         }
     } catch (err) {
-        console.error(`Error загрузки ${name}:`, err);
+        console.error(`Error загрузки ${tabKey}:`, err);
     }
 }
 

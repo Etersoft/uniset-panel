@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -274,12 +275,9 @@ func TestInstanceGetObjects(t *testing.T) {
 		t.Errorf("expected 2 objects, got %d", len(objects))
 	}
 
-	// Check that status was updated to connected
+	// GetObjects не должен менять статус подключения — за это отвечает checkHealth
+	// Но ObjectCount должен обновиться
 	status := instance.GetStatus()
-	if !status.Connected {
-		t.Error("expected Connected=true after successful GetObjects")
-	}
-
 	if status.ObjectCount != 2 {
 		t.Errorf("expected ObjectCount=2, got %d", status.ObjectCount)
 	}
@@ -306,10 +304,10 @@ func TestInstanceGetObjectsError(t *testing.T) {
 		t.Fatal("expected error from unavailable server")
 	}
 
-	// Check that status was updated to disconnected
+	// GetObjects не должен менять статус подключения — за это отвечает checkHealth
 	status := instance.GetStatus()
-	if status.Connected {
-		t.Error("expected Connected=false after failed GetObjects")
+	if !status.Connected {
+		t.Error("expected Connected to remain true after failed GetObjects (status managed by checkHealth)")
 	}
 }
 
@@ -339,11 +337,7 @@ func TestInstanceGetObjectData(t *testing.T) {
 		t.Errorf("expected Name=TestProc, got %s", data.Name)
 	}
 
-	// Check that status was updated to connected
-	status := instance.GetStatus()
-	if !status.Connected {
-		t.Error("expected Connected=true after successful GetObjectData")
-	}
+	// GetObjectData не должен менять статус подключения — за это отвечает checkHealth
 }
 
 func TestInstanceWatchUnwatch(t *testing.T) {
@@ -535,6 +529,171 @@ func TestInstanceStatusCallbackOnlyOnChange(t *testing.T) {
 
 	if count != 2 {
 		t.Errorf("expected status callback to be called 2 times after status change, got %d", count)
+	}
+}
+
+// mockSwitchableServer создаёт сервер с переключаемым состоянием (доступен/недоступен).
+// При simulateDown=1 возвращает 503 на все запросы.
+func mockSwitchableServer(simulateDown *atomic.Int32) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if simulateDown.Load() != 0 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v2/list":
+			json.NewEncoder(w).Encode([]string{"TestProc", "AnotherObj"})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+}
+
+// statusEvent хранит одно событие изменения статуса
+type statusEvent struct {
+	connected bool
+	lastError string
+}
+
+// TestInstanceDisconnectReconnectEvents проверяет полный цикл:
+// 1. Сервер доступен → health check шлёт connected=true
+// 2. Сервер падает → health check шлёт connected=false
+// 3. Сервер восстанавливается → health check шлёт connected=true
+func TestInstanceDisconnectReconnectEvents(t *testing.T) {
+	var simulateDown atomic.Int32
+	server := mockSwitchableServer(&simulateDown)
+	defer server.Close()
+
+	cfg := config.ServerConfig{
+		ID:   "test-server",
+		URL:  server.URL,
+		Name: "Test Server",
+	}
+
+	store := storage.NewMemoryStorage()
+
+	events := make(chan statusEvent, 10)
+
+	statusCallback := func(serverID, serverName string, connected bool, lastError string) {
+		events <- statusEvent{connected: connected, lastError: lastError}
+	}
+
+	healthInterval := 50 * time.Millisecond
+	instance := NewInstance(cfg, store, healthInterval, time.Hour, "", 0, nil, nil, nil, nil, statusCallback, nil)
+
+	instance.Start()
+	defer instance.Stop()
+
+	// Фаза 1: ждём событие connected=true (сервер доступен)
+	waitForEvent(t, events, true, 2*time.Second,"initial connect")
+
+	// Фаза 2: имитируем падение сервера
+	simulateDown.Store(1)
+
+	// Ждём событие connected=false
+	waitForEvent(t, events, false, 2*time.Second,"disconnect")
+
+	// Фаза 3: восстанавливаем сервер
+	simulateDown.Store(0)
+
+	// Ждём событие connected=true
+	waitForEvent(t, events, true, 2*time.Second,"reconnect")
+}
+
+// TestInstanceDisconnectEventContainsError проверяет, что событие disconnect содержит описание ошибки
+func TestInstanceDisconnectEventContainsError(t *testing.T) {
+	var simulateDown atomic.Int32
+	server := mockSwitchableServer(&simulateDown)
+	defer server.Close()
+
+	cfg := config.ServerConfig{
+		ID:   "test-server",
+		URL:  server.URL,
+		Name: "Test Server",
+	}
+
+	store := storage.NewMemoryStorage()
+	events := make(chan statusEvent, 10)
+
+	statusCallback := func(serverID, serverName string, connected bool, lastError string) {
+		events <- statusEvent{connected: connected, lastError: lastError}
+	}
+
+	instance := NewInstance(cfg, store, 50*time.Millisecond, time.Hour, "", 0, nil, nil, nil, nil, statusCallback, nil)
+
+	instance.Start()
+	defer instance.Stop()
+
+	// Ждём подключения
+	waitForEvent(t, events, true, 2*time.Second,"initial connect")
+
+	// Имитируем падение
+	simulateDown.Store(1)
+
+	// Ждём disconnect с непустой ошибкой
+	ev := waitForEventRaw(t, events, false, 2*time.Second, "disconnect with error")
+	if ev.lastError == "" {
+		t.Error("ожидалось непустое lastError в событии disconnect")
+	}
+}
+
+// TestInstanceNoSpuriousEventsWhileStable проверяет, что при стабильном соединении
+// callback вызывается только один раз (при первом подключении), а не на каждый health check
+func TestInstanceNoSpuriousEventsWhileStable(t *testing.T) {
+	server := mockUnisetServer()
+	defer server.Close()
+
+	cfg := config.ServerConfig{
+		ID:   "test-server",
+		URL:  server.URL,
+		Name: "Test Server",
+	}
+
+	store := storage.NewMemoryStorage()
+
+	var callCount atomic.Int32
+
+	statusCallback := func(serverID, serverName string, connected bool, lastError string) {
+		callCount.Add(1)
+	}
+
+	instance := NewInstance(cfg, store, 50*time.Millisecond, time.Hour, "", 0, nil, nil, nil, nil, statusCallback, nil)
+
+	instance.Start()
+
+	// Ждём несколько health check циклов
+	time.Sleep(300 * time.Millisecond)
+
+	instance.Stop()
+
+	count := callCount.Load()
+	if count != 1 {
+		t.Errorf("ожидался ровно 1 вызов statusCallback (initial connect), получено %d", count)
+	}
+}
+
+// waitForEvent ожидает событие с заданным connected в канале
+func waitForEvent(t *testing.T, events chan statusEvent, wantConnected bool, timeout time.Duration, phase string) {
+	t.Helper()
+	waitForEventRaw(t, events, wantConnected, timeout, phase)
+}
+
+// waitForEventRaw ожидает событие с заданным connected и возвращает его
+func waitForEventRaw(t *testing.T, events chan statusEvent, wantConnected bool, timeout time.Duration, phase string) statusEvent {
+	t.Helper()
+	deadline := time.After(timeout)
+	for {
+		select {
+		case ev := <-events:
+			if ev.connected == wantConnected {
+				return ev
+			}
+			// Пропускаем события с другим статусом (могут быть промежуточные)
+		case <-deadline:
+			t.Fatalf("таймаут ожидания события connected=%v (фаза: %s)", wantConnected, phase)
+			return statusEvent{}
+		}
 	}
 }
 

@@ -1,8 +1,8 @@
 package modbus
 
 import (
+	"fmt"
 	"log/slog"
-	"strconv"
 	"time"
 
 	"github.com/pv/uniset-panel/internal/poller"
@@ -96,7 +96,20 @@ func (f *modbusFetcher) GetItemID(reg uniset.MBRegister) int64 {
 }
 
 func (f *modbusFetcher) GetValueHash(reg uniset.MBRegister) string {
-	return strconv.FormatInt(reg.Value, 10)
+	// Хеш включает value и device respond — чтобы обновлять при изменении статуса устройства
+	respond := ""
+	if dev := reg.Device; dev != nil {
+		if r, ok := dev["respond"]; ok {
+			respond = fmt.Sprintf("%v", r)
+		}
+	}
+	mbval := ""
+	if r := reg.Register; r != nil {
+		if v, ok := r["mbval"]; ok {
+			mbval = fmt.Sprintf("%v", v)
+		}
+	}
+	return fmt.Sprintf("%d|%s|%s", reg.Value, respond, mbval)
 }
 
 // NewPoller создает новый Modbus poller

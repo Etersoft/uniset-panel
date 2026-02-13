@@ -335,27 +335,25 @@ func (i *Instance) SetObjectCount(count int) {
 }
 
 // GetObjects возвращает список объектов сервера
+// Не мутирует статус подключения — за это отвечает checkHealth()
 func (i *Instance) GetObjects() ([]string, error) {
 	objects, err := i.Client.GetObjectList()
 	if err != nil {
-		i.UpdateStatus(false, err)
 		return nil, err
 	}
 
-	i.UpdateStatus(true, nil)
 	i.SetObjectCount(len(objects))
 	return objects, nil
 }
 
 // GetObjectData возвращает данные объекта
+// Не мутирует статус подключения — за это отвечает checkHealth()
 func (i *Instance) GetObjectData(objectName string) (*uniset.ObjectData, error) {
 	data, err := i.Client.GetObjectData(objectName)
 	if err != nil {
-		i.UpdateStatus(false, err)
 		return nil, err
 	}
 
-	i.UpdateStatus(true, nil)
 	return data, nil
 }
 

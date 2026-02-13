@@ -461,7 +461,8 @@ function saveSettings() {
         timeRange: state.timeRange,
         sidebarCollapsed: state.sidebarCollapsed,
         collapsedServerGroups: Array.from(state.collapsedServerGroups),
-        serversSectionCollapsed: state.serversSectionCollapsed
+        serversSectionCollapsed: state.serversSectionCollapsed,
+        launchersSectionCollapsed: state.launchersSectionCollapsed
     };
     localStorage.setItem('uniset-panel-settings', JSON.stringify(settings));
 }
@@ -495,6 +496,11 @@ function loadSettings() {
             // Восстановить состояние секции "Servers"
             if (settings.serversSectionCollapsed !== undefined) {
                 state.serversSectionCollapsed = settings.serversSectionCollapsed;
+            }
+
+            // Восстановить состояние секции "Launchers"
+            if (settings.launchersSectionCollapsed !== undefined) {
+                state.launchersSectionCollapsed = settings.launchersSectionCollapsed;
             }
         }
     } catch (err) {

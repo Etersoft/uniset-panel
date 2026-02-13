@@ -241,9 +241,30 @@ func (c *Client) ReleaseOPCUAControl(objectName string) (*OPCUAControlResponse, 
 	return &resp, nil
 }
 
+// GetOPCUASensorsByFilter получает датчики через /sensors?filter=
+// Возвращает больше полей чем /get (tick, nodeid, vtype, precision)
+// Используется поллером для OPCUAExchange
+func (c *Client) GetOPCUASensorsByFilter(objectName string, sensorIDs string) (*OPCUASensorsResponse, error) {
+	path := fmt.Sprintf("%s/sensors?filter=%s", objectName, sensorIDs)
+
+	data, err := c.doGet(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp OPCUASensorsResponse
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, fmt.Errorf("unmarshal failed: %w", err)
+	}
+	if err := ensureResult(resp.Result, resp.Error); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
 // GetOPCUASensorValues получает значения конкретных датчиков по ID
 // GET /{objectName}/get?filter=id1,id2,id3
-// Используется для OPCUAExchange
+// Используется для OPCUAExchange (API прокси)
 func (c *Client) GetOPCUASensorValues(objectName string, sensorIDs string) (*OPCUASensorsResponse, error) {
 	path := fmt.Sprintf("%s/get?filter=%s", objectName, sensorIDs)
 

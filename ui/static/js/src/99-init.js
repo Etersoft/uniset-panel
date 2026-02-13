@@ -77,6 +77,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Инициализация Dashboard Manager
     dashboardManager = window.dashboardManager = new DashboardManager();
 
+    // Загрузка Launcher нод (не блокируем)
+    loadLauncherNodes().catch(err => {
+        console.warn('Failed to load launcher nodes:', err);
+    });
+
     // Инициализация Journals (не блокируем)
     initJournals().catch(err => {
         console.warn('Failed to initialize journals:', err);

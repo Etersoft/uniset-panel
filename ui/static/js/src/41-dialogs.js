@@ -463,6 +463,15 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
     // Используем CSS-безопасный ID (заменяем : на -)
     const safeVarName = varName.replace(/:/g, '-');
 
+    // Находим supplier из данных рендерера (если есть)
+    let supplierText = '';
+    if (tabState.renderer && tabState.renderer.allSensors) {
+        const sData = tabState.renderer.allSensors.find(s => s.id === sensor.id);
+        if (sData && sData.supplier) {
+            supplierText = sData.supplier;
+        }
+    }
+
     // Badge: SM для SharedMemory, MB для Modbus, или скрыт
     const badge = options.badge !== undefined ? options.badge : 'SM';
     const badgeHtml = badge ? `<span class="chart-panel-badge ${badge === 'SM' ? 'external-badge' : 'modbus-badge'}">${badge}</span>` : '';
@@ -476,6 +485,7 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
                 <span class="legend-color-picker" data-object="${tabKey}" data-variable="${varName}" style="background:${color}" title="Click to choose color"></span>
                 <span class="chart-panel-title">${escapeHtml(displayName)}</span>
                 <span class="chart-panel-value" id="legend-value-${objectName}-${safeVarName}">--</span>
+                <span class="chart-panel-supplier" id="legend-supplier-${objectName}-${safeVarName}">${escapeHtml(supplierText)}</span>
                 <span class="chart-panel-textname">${escapeHtml(sensor.name)}</span>
                 <span class="type-badge type-${sensor.iotype || 'unknown'}">${sensor.iotype || '?'}</span>
                 ${badgeHtml}

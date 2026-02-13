@@ -11,6 +11,7 @@ const SM_SERVER_ID = 'sm';
 const state = window.state = {
     objects: [],
     servers: new Map(), // serverId -> { id, url, name, connected, objectCount }
+    nodes: new Map(), // nodeId -> { id, name, launcherUrl, connected, hasControl }
     tabs: new Map(), // tabKey -> { charts, updateInterval, chartStartTime, objectType, renderer, serverId, serverName, displayName }
     activeTab: null,
     sensors: new Map(), // sensorId -> sensorInfo
@@ -23,6 +24,7 @@ const state = window.state = {
     objectsSectionCollapsed: false, // свёрнута ли секция "Objects"
     serversSectionCollapsed: false, // свёрнута ли секция "Servers"
     journalsSectionCollapsed: false, // свёрнута ли секция "Journals"
+    launchersSectionCollapsed: false, // свёрнута ли секция "Launchers"
     capabilities: {
         smEnabled: false // по умолчанию SM отключен
     },
@@ -38,7 +40,9 @@ const state = window.state = {
         reconnectAttempts: 0,
         maxReconnectAttempts: 10,
         baseReconnectDelay: 1000,   // начальная задержка (1s)
-        maxReconnectDelay: 30000    // максимальная задержка (30s)
+        maxReconnectDelay: 30000,   // максимальная задержка (30s)
+        reconnectTimerId: null,     // ID таймера переподключения (для очистки)
+        statusSyncInterval: null    // ID интервала периодической синхронизации статуса серверов
     },
     control: {
         enabled: false,       // включён ли контроль на сервере
@@ -313,6 +317,7 @@ function updateAllControlButtons() {
             btn.title = '';
         }
     });
+
 }
 
 // Показать диалог ввода токена
@@ -658,6 +663,12 @@ function updateRecordingUI() {
 
 // === 04-sse.js ===
 function initSSE() {
+    // Очищаем таймер переподключения (если есть)
+    if (state.sse.reconnectTimerId) {
+        clearTimeout(state.sse.reconnectTimerId);
+        state.sse.reconnectTimerId = null;
+    }
+
     if (state.sse.eventSource) {
         state.sse.eventSource.close();
     }
@@ -702,14 +713,15 @@ function initSSE() {
             // Это важно, т.к. могли пропустить события server_status во время отключения
             refreshObjectsList();
 
-            // Отключаем polling для всех открытых вкладок
-            state.tabs.forEach((tabState, objectName) => {
-                if (tabState.updateInterval) {
-                    clearInterval(tabState.updateInterval);
-                    tabState.updateInterval = null;
-                    console.log('SSE: Отключен polling для', objectName);
-                }
-            });
+            // Переподписываемся на все SSE обновления (сервер мог потерять состояние подписок)
+            setTimeout(resubscribeAll, 1000);
+
+            // Отключаем polling fallback если был активен
+            disablePollingFallback();
+
+            // Запускаем периодическую синхронизацию статуса серверов
+            // (ловит пропущенные server_status SSE-события)
+            startServerStatusSync();
         } catch (err) {
             console.warn('SSE: Error парсинга connected:', err);
         }
@@ -830,7 +842,7 @@ function initSSE() {
 
                     // Обновляем значение в легенде
                     const safeVarName = varName.replace(/:/g, '-');
-                    const legendEl = document.getElementById(`legend-value-${displayName}-${safeVarName}`);
+                    const legendEl = getElementInTab(tabKey, `legend-value-${displayName}-${safeVarName}`);
                     if (legendEl) {
                         legendEl.textContent = formatValue(value);
                     }
@@ -887,11 +899,15 @@ function initSSE() {
                     chartData.chart.data.datasets[0].data.push({ x: timestamp, y: value });
                     chartsToUpdate.add(varName);
 
-                    // Обновляем значение в легенде
+                    // Обновляем значение и supplier в легенде
                     const safeVarName = varName.replace(/:/g, '-');
-                    const legendEl = document.getElementById(`legend-value-${tabState.displayName}-${safeVarName}`);
+                    const legendEl = getElementInTab(tabKey, `legend-value-${tabState.displayName}-${safeVarName}`);
                     if (legendEl) {
                         legendEl.textContent = formatValue(value);
+                    }
+                    const supplierEl = getElementInTab(tabKey, `legend-supplier-${tabState.displayName}-${safeVarName}`);
+                    if (supplierEl) {
+                        supplierEl.textContent = sensor.supplier || '';
                     }
                 }
             }
@@ -963,7 +979,7 @@ function initSSE() {
 
                     // Обновляем значение в легенде
                     const safeVarName = varName.replace(/:/g, '-');
-                    const legendEl = document.getElementById(`legend-value-${tabState.displayName}-${safeVarName}`);
+                    const legendEl = getElementInTab(tabKey, `legend-value-${tabState.displayName}-${safeVarName}`);
                     if (legendEl) {
                         legendEl.textContent = formatValue(value);
                     }
@@ -1034,7 +1050,7 @@ function initSSE() {
 
                     // Обновляем значение в легенде
                     const safeVarName = varName.replace(/:/g, '-');
-                    const legendEl = document.getElementById(`legend-value-${tabState.displayName}-${safeVarName}`);
+                    const legendEl = getElementInTab(tabKey, `legend-value-${tabState.displayName}-${safeVarName}`);
                     if (legendEl) {
                         legendEl.textContent = formatValue(value);
                     }
@@ -1100,11 +1116,15 @@ function initSSE() {
                     chartData.chart.data.datasets[0].data.push({ x: timestamp, y: value });
                     chartsToUpdate.add(varName);
 
-                    // Обновляем значение в легенде
+                    // Обновляем значение и supplier в легенде
                     const safeVarName = varName.replace(/:/g, '-');
-                    const legendEl = document.getElementById(`legend-value-${tabState.displayName}-${safeVarName}`);
+                    const legendEl = getElementInTab(tabKey, `legend-value-${tabState.displayName}-${safeVarName}`);
                     if (legendEl) {
                         legendEl.textContent = formatValue(value);
+                    }
+                    const supplierEl = getElementInTab(tabKey, `legend-supplier-${tabState.displayName}-${safeVarName}`);
+                    if (supplierEl) {
+                        supplierEl.textContent = sensor.supplier || '';
                     }
                 }
             }
@@ -1190,6 +1210,40 @@ function initSSE() {
         }
     });
 
+    // Обработка статуса Launcher'а
+    eventSource.addEventListener('launcher_status', (e) => {
+        try {
+            const event = JSON.parse(e.data);
+            const tabKey = `launcher:${event.serverId}`;
+            const tabState = state.tabs.get(tabKey);
+            if (tabState?.renderer?.updateStatus) {
+                tabState.renderer.updateStatus(event.data);
+            }
+            // Обновляем индикатор в sidebar
+            updateLauncherNodeStatus(event.serverId, true);
+        } catch (err) {
+            console.warn('SSE: Error обработки launcher_status:', err);
+        }
+    });
+
+    // Обработка connectivity Launcher'а
+    eventSource.addEventListener('launcher_connection', (e) => {
+        try {
+            const event = JSON.parse(e.data);
+            const connected = event.data?.connected ?? false;
+            updateLauncherNodeStatus(event.serverId, connected);
+
+            // Обновляем renderer если вкладка открыта
+            const tabKey = `launcher:${event.serverId}`;
+            const tabState = state.tabs.get(tabKey);
+            if (tabState?.renderer?.updateConnectionStatus) {
+                tabState.renderer.updateConnectionStatus(connected);
+            }
+        } catch (err) {
+            console.warn('SSE: Error обработки launcher_connection:', err);
+        }
+    });
+
     // Обработка сообщений журнала
     eventSource.addEventListener('journal_messages', (e) => {
         try {
@@ -1206,6 +1260,15 @@ function initSSE() {
     eventSource.onerror = (e) => {
         console.warn('SSE: Error соединения');
         state.sse.connected = false;
+        stopServerStatusSync();
+
+        // Закрываем EventSource чтобы предотвратить нативный auto-reconnect браузера,
+        // который стреляет дополнительными onerror и быстро расходует счётчик попыток
+        // (аналогично handleConnectionError в LogViewer)
+        if (state.sse.eventSource) {
+            state.sse.eventSource.close();
+            state.sse.eventSource = null;
+        }
 
         if (state.sse.reconnectAttempts < state.sse.maxReconnectAttempts) {
             state.sse.reconnectAttempts++;
@@ -1216,7 +1279,7 @@ function initSSE() {
             const delay = Math.round(cappedDelay + jitter);
             console.log(`SSE: Переподключение через ${delay}ms (попытка ${state.sse.reconnectAttempts}/${state.sse.maxReconnectAttempts})`);
             updateSSEStatus('reconnecting');
-            setTimeout(initSSE, delay);
+            state.sse.reconnectTimerId = setTimeout(initSSE, delay);
         } else {
             console.warn('SSE: Превышено количество попыток, переход на polling');
             updateSSEStatus('polling');
@@ -1232,29 +1295,130 @@ function initSSE() {
 // Включить polling как fallback при недоступности SSE
 function enablePollingFallback() {
     console.log('Polling: Включение fallback режима');
-    state.tabs.forEach((tabState, objectName) => {
+
+    // Периодически обновляем sidebar (статусы серверов и список объектов)
+    state.sse.sidebarPollInterval = setInterval(() => {
+        refreshObjectsList();
+    }, state.sse.pollInterval * 6); // Реже чем данные объектов
+
+    state.tabs.forEach((tabState, tabKey) => {
         // Включаем polling для данных объекта
         if (!tabState.updateInterval) {
             tabState.updateInterval = setInterval(
-                () => loadObjectData(objectName),
+                () => loadObjectData(tabKey),
                 state.sse.pollInterval
             );
-            console.log('Polling: Включен для', objectName);
+            console.log('Polling: Включен для', tabState.displayName, '(tab:', tabKey, ')');
         }
 
         // Включаем polling для графиков
+        const displayName = tabState.displayName;
         tabState.charts.forEach((chartData, varName) => {
             if (!chartData.updateInterval) {
                 chartData.updateInterval = setInterval(async () => {
-                    await updateChart(objectName, varName, chartData.chart);
+                    await updateChart(displayName, varName, chartData.chart);
                 }, state.sse.pollInterval);
+            }
+        });
+    });
+
+    // Запускаем периодическую проверку доступности SSE
+    startSSERecoveryProbe();
+}
+
+// Отключить polling fallback (при восстановлении SSE)
+function disablePollingFallback() {
+    console.log('Polling: Отключение fallback режима');
+
+    // Останавливаем polling sidebar
+    if (state.sse.sidebarPollInterval) {
+        clearInterval(state.sse.sidebarPollInterval);
+        state.sse.sidebarPollInterval = null;
+    }
+
+    // Останавливаем recovery probe
+    if (state.sse.recoveryProbeInterval) {
+        clearInterval(state.sse.recoveryProbeInterval);
+        state.sse.recoveryProbeInterval = null;
+    }
+
+    // Очищаем таймер переподключения
+    if (state.sse.reconnectTimerId) {
+        clearTimeout(state.sse.reconnectTimerId);
+        state.sse.reconnectTimerId = null;
+    }
+
+    // Останавливаем polling для всех вкладок
+    state.tabs.forEach((tabState, tabKey) => {
+        if (tabState.updateInterval) {
+            clearInterval(tabState.updateInterval);
+            tabState.updateInterval = null;
+        }
+        tabState.charts.forEach((chartData) => {
+            if (chartData.updateInterval) {
+                clearInterval(chartData.updateInterval);
+                chartData.updateInterval = null;
             }
         });
     });
 }
 
+// Периодическая проверка доступности сервера для восстановления SSE
+function startSSERecoveryProbe() {
+    if (state.sse.recoveryProbeInterval) return;
+
+    const probeInterval = 30000; // 30 секунд
+    console.log('SSE: Запуск recovery probe каждые', probeInterval, 'ms');
+
+    state.sse.recoveryProbeInterval = setInterval(async () => {
+        try {
+            const response = await fetch('/api/version', { method: 'HEAD' });
+            if (response.ok) {
+                console.log('SSE: Сервер доступен, восстанавливаем SSE');
+                disablePollingFallback();
+                state.sse.reconnectAttempts = 0;
+                initSSE();
+            }
+        } catch (err) {
+            // Сервер всё ещё недоступен
+        }
+    }, probeInterval);
+}
+
+// Периодическая синхронизация статуса серверов (гарантирует актуальность каждые 30с)
+function startServerStatusSync() {
+    stopServerStatusSync();
+    state.sse.statusSyncInterval = setInterval(async () => {
+        try {
+            const resp = await fetchServers();
+            if (resp?.servers) {
+                resp.servers.forEach(s => updateServerStatus(s.id, s.connected));
+            }
+        } catch (err) { /* фоновая синхронизация */ }
+    }, 30000);
+}
+
+function stopServerStatusSync() {
+    if (state.sse.statusSyncInterval) {
+        clearInterval(state.sse.statusSyncInterval);
+        state.sse.statusSyncInterval = null;
+    }
+}
+
+// Переподписка всех открытых вкладок после восстановления SSE
+function resubscribeAll() {
+    console.log('SSE: Переподписка всех вкладок после переподключения');
+    state.tabs.forEach((tabState, tabKey) => {
+        const renderer = tabState.renderer;
+        if (renderer?.resubscribeIfNeeded) {
+            renderer.resubscribeIfNeeded();
+        }
+    });
+}
+
 // Close SSE соединение
 function closeSSE() {
+    stopServerStatusSync();
     if (state.sse.eventSource) {
         state.sse.eventSource.close();
         state.sse.eventSource = null;
@@ -1375,6 +1539,9 @@ const SSESubscriptionMixin = {
     async subscribeToSSEFor(apiPath, ids, idField = 'sensor_ids', logPrefix = 'SSE', extraBody = {}) {
         if (!ids || ids.length === 0) return;
 
+        // Сохраняем параметры подписки для повторной подписки (resubscribeIfNeeded)
+        this._sseSubscriptionParams = { apiPath, idField, logPrefix, extraBody };
+
         // Пропускаем если уже подписаны на те же ID
         const newIds = new Set(ids);
         if (this.subscribedSensorIds.size === newIds.size &&
@@ -1413,6 +1580,20 @@ const SSESubscriptionMixin = {
         } catch (err) {
             console.warn(`${logPrefix}: ошибка отписки:`, err);
         }
+    },
+
+    // Повторная подписка после переподключения SSE
+    // Сервер мог потерять состояние подписок при рестарте
+    async resubscribeIfNeeded() {
+        if (this.subscribedSensorIds.size === 0) return;
+        if (!this._sseSubscriptionParams) return;
+
+        const ids = [...this.subscribedSensorIds];
+        const { apiPath, idField, logPrefix, extraBody } = this._sseSubscriptionParams;
+
+        console.log(`${logPrefix}: Переподписка ${ids.length} элементов для ${this.objectName}`);
+        this.subscribedSensorIds.clear(); // Очищаем кэш чтобы subscribeToSSEFor не пропустил
+        await this.subscribeToSSEFor(apiPath, ids, idField, logPrefix, extraBody);
     },
 
     // Планирование батчевого рендера обновлений
@@ -4575,7 +4756,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         // Обновляем DOM для всех ожидающих датчиков
         for (const [id, sensor] of this.pendingUpdates) {
             // Обновляем значение с учётом формата frozen
-            const valueEl = document.getElementById(`ionc-value-${this.objectName}-${id}`);
+            const valueEl = getElementInTab(this.tabKey, `ionc-value-${this.objectName}-${id}`);
             if (valueEl) {
                 // Рендерим правильный формат в зависимости от состояния frozen
                 if (sensor.frozen && sensor.real_value !== undefined && sensor.real_value !== sensor.value) {
@@ -4594,13 +4775,14 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             }
 
             // Обновляем флаги если изменились
-            const row = document.querySelector(`tr[data-sensor-id="${id}"]`);
-            if (row) {
-                row.classList.toggle('ionc-sensor-frozen', sensor.frozen);
-                row.classList.toggle('ionc-sensor-blocked', sensor.blocked);
+            const row = getElementsInTab(this.tabKey, `tr[data-sensor-id="${id}"]`);
+            if (row.length > 0) {
+                row[0].classList.toggle('ionc-sensor-frozen', sensor.frozen);
+                row[0].classList.toggle('ionc-sensor-blocked', sensor.blocked);
+                row[0].classList.toggle('ionc-sensor-readonly', sensor.readonly);
             }
 
-            // Обновляем supplier если изменился
+            // Обновляем supplier
             const supplierEl = getElementInTab(this.tabKey, `ionc-supplier-${this.objectName}-${id}`);
             if (supplierEl) {
                 const supplierValue = sensor.supplier || (sensor.supplier_id ? String(sensor.supplier_id) : '');
@@ -4614,8 +4796,10 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         // Убираем анимацию через 500ms
         setTimeout(() => {
-            const updatedEls = document.querySelectorAll('.ionc-value-updated');
-            updatedEls.forEach(el => el.classList.remove('ionc-value-updated'));
+            const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
+            if (panel) {
+                panel.querySelectorAll('.ionc-value-updated').forEach(el => el.classList.remove('ionc-value-updated'));
+            }
         }, 500);
     }
 
@@ -5803,20 +5987,19 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             updateMap.set(sensor.id, sensor);
         });
 
-        // Обновляем данные в allSensors
-        let hasChanges = false;
+        // Обновляем данные в allSensors (все поля)
         this.allSensors.forEach((sensor, index) => {
             const update = updateMap.get(sensor.id);
-            if (update && update.value !== sensor.value) {
-                this.allSensors[index] = { ...sensor, value: update.value, tick: update.tick };
-                hasChanges = true;
+            if (update) {
+                this.allSensors[index] = { ...sensor, ...update };
             }
         });
 
-        if (!hasChanges) return;
-
         // Обновляем видимые строки в DOM
-        const tbody = document.getElementById(`opcua-sensors-${this.objectName}`);
+        const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
+        if (!panel) return;
+
+        const tbody = panel.querySelector(`#opcua-sensors-${CSS.escape(this.objectName)}`);
         if (!tbody) return;
 
         const rows = tbody.querySelectorAll('tr');
@@ -5825,25 +6008,45 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             if (!sensorId) return;
 
             const update = updateMap.get(sensorId);
-            if (update && update.value !== undefined) {
-                // Value ячейка (class-based selector)
-                const valueCell = row.querySelector('.col-value');
-                if (valueCell) {
-                    const oldValue = valueCell.textContent;
-                    const newValue = String(update.value);
-                    if (oldValue !== newValue) {
-                        valueCell.textContent = newValue;
-                        // CSS анимация изменения
-                        valueCell.classList.remove('value-changed');
-                        void valueCell.offsetWidth; // force reflow
-                        valueCell.classList.add('value-changed');
-                    }
+            if (!update) return;
+
+            // Value
+            const valueCell = row.querySelector('.col-value');
+            if (valueCell && update.value !== undefined) {
+                const oldValue = valueCell.textContent;
+                const newValue = String(update.value);
+                if (oldValue !== newValue) {
+                    valueCell.textContent = newValue;
+                    valueCell.classList.remove('value-changed');
+                    void valueCell.offsetWidth;
+                    valueCell.classList.add('value-changed');
                 }
-                // Tick ячейка (class-based selector)
-                const tickCell = row.querySelector('.col-tick');
-                if (tickCell && update.tick !== undefined) {
-                    tickCell.textContent = String(update.tick);
+            }
+            // Tick
+            const tickCell = row.querySelector('.col-tick');
+            if (tickCell && update.tick !== undefined) {
+                tickCell.textContent = String(update.tick);
+            }
+            // Status
+            const statusCell = row.querySelector('.col-status');
+            if (statusCell && update.status !== undefined) {
+                statusCell.textContent = update.status || '—';
+                statusCell.title = update.status || '';
+                if (update.status && update.status.toLowerCase() !== 'ok') {
+                    statusCell.classList.add('status-bad');
+                } else {
+                    statusCell.classList.remove('status-bad');
                 }
+            }
+            // VType
+            const vtypeCell = row.querySelector('.col-vtype');
+            if (vtypeCell && update.vtype !== undefined) {
+                vtypeCell.textContent = update.vtype || '—';
+            }
+            // Precision
+            const precisionCell = row.querySelector('.col-precision');
+            if (precisionCell && update.precision !== undefined) {
+                precisionCell.textContent = update.precision ?? '—';
             }
         });
     }
@@ -6789,20 +6992,19 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
             updateMap.set(reg.id, reg);
         });
 
-        // Обновляем данные в allRegisters
-        let hasChanges = false;
+        // Обновляем данные в allRegisters (все поля)
         this.allRegisters.forEach((reg, index) => {
             const update = updateMap.get(reg.id);
-            if (update && update.value !== reg.value) {
-                this.allRegisters[index] = { ...reg, value: update.value };
-                hasChanges = true;
+            if (update) {
+                this.allRegisters[index] = { ...reg, ...update };
             }
         });
 
-        if (!hasChanges) return;
+        // Обновляем изменившиеся ячейки в DOM
+        const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
+        if (!panel) return;
 
-        // Обновляем только изменившиеся ячейки в DOM
-        const tbody = document.getElementById(`mb-registers-tbody-${this.objectName}`);
+        const tbody = panel.querySelector(`#mb-registers-tbody-${CSS.escape(this.objectName)}`);
         if (!tbody) return;
 
         const rows = tbody.querySelectorAll('tr');
@@ -6811,20 +7013,33 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
             if (!regId) return;
 
             const update = updateMap.get(regId);
-            if (update && update.value !== undefined) {
-                // Value ячейка (class-based selector)
-                const valueCell = row.querySelector('.col-value');
-                if (valueCell) {
-                    const oldValue = valueCell.textContent;
-                    const newValue = String(update.value);
-                    if (oldValue !== newValue) {
-                        valueCell.textContent = newValue;
-                        // CSS анимация изменения
-                        valueCell.classList.remove('value-changed');
-                        void valueCell.offsetWidth; // force reflow
-                        valueCell.classList.add('value-changed');
-                    }
+            if (!update) return;
+
+            // Value
+            const valueCell = row.querySelector('.col-value');
+            if (valueCell) {
+                const newValue = update.value !== undefined ? String(update.value) : '';
+                if (valueCell.textContent !== newValue) {
+                    valueCell.textContent = newValue;
+                    valueCell.classList.remove('value-changed');
+                    void valueCell.offsetWidth;
+                    valueCell.classList.add('value-changed');
                 }
+            }
+
+            // Device respond status
+            const deviceCell = row.querySelector('.col-device .mb-respond');
+            if (deviceCell && update.device !== undefined) {
+                const deviceAddr = update.device;
+                const deviceInfo = this.devicesDict[deviceAddr] || {};
+                deviceCell.className = `mb-respond ${deviceInfo.respond ? 'ok' : 'fail'}`;
+            }
+
+            // MB val (raw modbus value)
+            const mbvalCell = row.querySelector('.col-mbval');
+            if (mbvalCell && update.register) {
+                const newMbval = update.register.mbval !== undefined ? String(update.register.mbval) : '';
+                mbvalCell.textContent = newMbval;
             }
         });
     }
@@ -7586,20 +7801,19 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             updateMap.set(reg.id, reg);
         });
 
-        // Обновляем данные в allRegisters
-        let hasChanges = false;
+        // Обновляем данные в allRegisters (все поля)
         this.allRegisters.forEach((reg, index) => {
             const update = updateMap.get(reg.id);
-            if (update && update.value !== reg.value) {
-                this.allRegisters[index] = { ...reg, value: update.value };
-                hasChanges = true;
+            if (update) {
+                this.allRegisters[index] = { ...reg, ...update };
             }
         });
 
-        if (!hasChanges) return;
+        // Обновляем изменившиеся ячейки в DOM
+        const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
+        if (!panel) return;
 
-        // Обновляем только изменившиеся ячейки в DOM
-        const tbody = document.getElementById(`mbs-registers-tbody-${this.objectName}`);
+        const tbody = panel.querySelector(`#mbs-registers-tbody-${CSS.escape(this.objectName)}`);
         if (!tbody) return;
 
         const rows = tbody.querySelectorAll('tr');
@@ -7608,20 +7822,26 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             if (!regId) return;
 
             const update = updateMap.get(regId);
-            if (update && update.value !== undefined) {
-                // Value ячейка (class-based selector)
-                const valueCell = row.querySelector('.col-value');
-                if (valueCell) {
-                    const oldValue = valueCell.textContent;
-                    const newValue = String(update.value);
-                    if (oldValue !== newValue) {
-                        valueCell.textContent = newValue;
-                        // CSS анимация изменения
-                        valueCell.classList.remove('value-changed');
-                        void valueCell.offsetWidth; // force reflow
-                        valueCell.classList.add('value-changed');
-                    }
+            if (!update) return;
+
+            // Value
+            const valueCell = row.querySelector('.col-value');
+            if (valueCell) {
+                const newValue = update.value !== undefined ? String(update.value) : '';
+                if (valueCell.textContent !== newValue) {
+                    valueCell.textContent = newValue;
+                    valueCell.classList.remove('value-changed');
+                    void valueCell.offsetWidth;
+                    valueCell.classList.add('value-changed');
                 }
+            }
+
+            // Device respond status
+            const deviceCell = row.querySelector('.col-device .mb-respond');
+            if (deviceCell && update.device !== undefined) {
+                const deviceAddr = update.device;
+                const deviceInfo = this.devicesDict ? (this.devicesDict[deviceAddr] || {}) : {};
+                deviceCell.className = `mb-respond ${deviceInfo.respond ? 'ok' : 'fail'}`;
             }
         });
     }
@@ -8393,30 +8613,32 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         this.pendingUpdates.forEach(u => updateMap.set(u.id, u));
         this.pendingUpdates = [];
 
-        // Update allSensors array
-        this.allSensors.forEach(sensor => {
+        // Update allSensors array (все поля)
+        this.allSensors.forEach((sensor, index) => {
             const update = updateMap.get(sensor.id);
             if (update) {
-                sensor.value = update.value;
+                this.allSensors[index] = { ...sensor, ...update };
             }
         });
 
         // Update visible rows in DOM
-        const tbody = document.getElementById(`opcuasrv-sensors-${this.objectName}`);
+        const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
+        if (!panel) return;
+
+        const tbody = panel.querySelector(`#opcuasrv-sensors-${CSS.escape(this.objectName)}`);
         if (!tbody) return;
 
         tbody.querySelectorAll('tr[data-sensor-id]').forEach(row => {
             const sensorId = parseInt(row.dataset.sensorId, 10);
             const update = updateMap.get(sensorId);
-            if (update) {
-                const valueCell = row.querySelector('.sensor-value');
-                if (valueCell) {
-                    valueCell.textContent = formatValue(update.value);
-                    // CSS animation trigger via reflow
-                    valueCell.classList.remove('value-updated');
-                    void valueCell.offsetWidth;
-                    valueCell.classList.add('value-updated');
-                }
+            if (!update) return;
+
+            const valueCell = row.querySelector('.sensor-value');
+            if (valueCell && update.value !== undefined) {
+                valueCell.textContent = formatValue(update.value);
+                valueCell.classList.remove('value-updated');
+                void valueCell.offsetWidth;
+                valueCell.classList.add('value-updated');
             }
         });
     }
@@ -9914,6 +10136,452 @@ function removeUNetMetricChart(tabKey, chartKey) {
 
 // Регистрация рендерера
 registerRenderer('UNetExchange', UNetExchangeRenderer);
+
+
+// === 27-launcher-renderer.js ===
+// LauncherRenderer — рендерер для вкладки Launcher
+// Не наследует BaseObjectRenderer (Launcher не является UniSet2-объектом)
+class LauncherRenderer {
+    constructor(nodeName, tabKey, nodeId, launcherUrl, hasControl) {
+        this.nodeName = nodeName;
+        this.tabKey = tabKey;
+        this.nodeId = nodeId;
+        this.launcherUrl = launcherUrl;
+        this.hasControlToken = hasControl || false; // есть ли controlToken на бэкенде
+        this.controlActive = false; // пользователь взял управление
+        this.processes = [];
+        this.groups = [];
+        this.filterText = '';
+        this.autoRefreshInterval = null;
+    }
+
+    createPanelHTML() {
+        const takeBtn = this.hasControlToken
+            ? `<span class="launcher-control-badge readonly">
+                   <span class="launcher-control-icon">&#128274;</span>
+                   <button class="launcher-control-btn" id="launcher-take-${this.nodeId}">Take</button>
+               </span>`
+            : '';
+
+        return `
+            <div class="launcher-panel">
+                <div class="launcher-header">
+                    <div class="launcher-header-left">
+                        <h2 class="launcher-title">${escapeHtml(this.nodeName)}</h2>
+                        <span class="launcher-status-indicator" id="launcher-status-${this.nodeId}">
+                            <span class="launcher-status-dot"></span>
+                            <span class="launcher-status-text">Connecting...</span>
+                        </span>
+                    </div>
+                    <div class="launcher-header-right">
+                        <span class="launcher-control-info" id="launcher-control-${this.nodeId}">${takeBtn}</span>
+                        ${this.launcherUrl ? `<a class="launcher-link" href="${escapeHtml(this.launcherUrl)}" target="_blank" rel="noopener noreferrer">Open Launcher UI</a>` : ''}
+                    </div>
+                </div>
+                <div class="launcher-filter">
+                    <input type="text" class="launcher-filter-input" id="launcher-filter-${this.nodeId}"
+                           placeholder="Filter processes..." autocomplete="off">
+                </div>
+                <div class="launcher-content" id="launcher-content-${this.nodeId}">
+                    <div class="launcher-loading">Loading processes...</div>
+                </div>
+            </div>
+        `;
+    }
+
+    initialize() {
+        // Обработчик фильтра
+        const filterInput = document.getElementById(`launcher-filter-${this.nodeId}`);
+        if (filterInput) {
+            filterInput.addEventListener('input', (e) => {
+                this.filterText = e.target.value.toLowerCase();
+                this.renderProcessTable();
+            });
+        }
+
+        // Обработчик Take Control
+        this.attachTakeHandler();
+
+        // Загружаем начальные данные
+        this.loadStatus();
+
+        // Авто-обновление каждые 5 секунд
+        this.autoRefreshInterval = setInterval(() => this.loadStatus(), 5000);
+    }
+
+    attachTakeHandler() {
+        const takeBtn = document.getElementById(`launcher-take-${this.nodeId}`);
+        if (!takeBtn) return;
+
+        takeBtn.addEventListener('click', () => {
+            this.controlActive = !this.controlActive;
+            this.updateControlUI();
+            this.renderProcessTable();
+        });
+    }
+
+    updateControlUI() {
+        const container = document.getElementById(`launcher-control-${this.nodeId}`);
+        if (!container) return;
+
+        if (!this.hasControlToken) {
+            container.innerHTML = '';
+            return;
+        }
+
+        if (this.controlActive) {
+            container.innerHTML = `
+                <span class="launcher-control-badge active">
+                    <span class="launcher-control-icon">&#10003;</span>
+                    <span class="launcher-control-text">Control</span>
+                    <button class="launcher-control-btn" id="launcher-release-${this.nodeId}">Release</button>
+                </span>
+            `;
+            const releaseBtn = document.getElementById(`launcher-release-${this.nodeId}`);
+            if (releaseBtn) {
+                releaseBtn.addEventListener('click', () => {
+                    this.controlActive = false;
+                    this.updateControlUI();
+                    this.renderProcessTable();
+                });
+            }
+        } else {
+            container.innerHTML = `
+                <span class="launcher-control-badge readonly">
+                    <span class="launcher-control-icon">&#128274;</span>
+                    <button class="launcher-control-btn" id="launcher-take-${this.nodeId}">Take</button>
+                </span>
+            `;
+            this.attachTakeHandler();
+        }
+    }
+
+    async loadStatus() {
+        try {
+            const resp = await fetch(`/api/launchers/${encodeURIComponent(this.nodeId)}/status`);
+            if (!resp.ok) {
+                throw new Error(`HTTP ${resp.status}`);
+            }
+            const data = await resp.json();
+            this.updateStatus(data);
+        } catch (err) {
+            console.warn(`Launcher ${this.nodeName}: failed to load status:`, err);
+            this.updateConnectionStatus(false);
+        }
+    }
+
+    updateStatus(data) {
+        if (!data) return;
+
+        this.processes = data.processes || [];
+        this.groups = data.groups || [];
+        this.updateConnectionStatus(true);
+        this.updateSummary(data);
+        this.renderProcessTable();
+    }
+
+    updateConnectionStatus(connected) {
+        const indicator = document.getElementById(`launcher-status-${this.nodeId}`);
+        if (!indicator) return;
+
+        const dot = indicator.querySelector('.launcher-status-dot');
+        const text = indicator.querySelector('.launcher-status-text');
+        if (dot) {
+            dot.className = `launcher-status-dot ${connected ? 'connected' : 'disconnected'}`;
+        }
+        if (text) {
+            text.textContent = connected ? 'Connected' : 'Disconnected';
+        }
+    }
+
+    updateSummary(data) {
+        const indicator = document.getElementById(`launcher-status-${this.nodeId}`);
+        if (!indicator) return;
+
+        const text = indicator.querySelector('.launcher-status-text');
+        if (!text) return;
+
+        const total = this.processes.length;
+        const running = this.processes.filter(p => p.state === 'running').length;
+
+        if (data.allRunning) {
+            text.textContent = `All running (${total})`;
+        } else if (data.anyCriticalFailed) {
+            text.textContent = `Critical failed! ${running}/${total} running`;
+        } else {
+            text.textContent = `${running}/${total} running`;
+        }
+    }
+
+    renderProcessTable() {
+        const content = document.getElementById(`launcher-content-${this.nodeId}`);
+        if (!content) return;
+
+        if (this.processes.length === 0) {
+            content.innerHTML = '<div class="launcher-empty">No processes</div>';
+            return;
+        }
+
+        const showActions = this.controlActive;
+
+        // Группируем процессы
+        const grouped = this.groupProcesses();
+        let html = '';
+
+        for (const group of grouped) {
+            const filteredProcesses = group.processes.filter(p => {
+                if (!this.filterText) return true;
+                const searchText = `${p.name} ${p.state} ${p.group || ''} ${p.lastError || ''}`.toLowerCase();
+                return searchText.includes(this.filterText);
+            });
+
+            if (filteredProcesses.length === 0) continue;
+
+            if (group.name) {
+                html += `<div class="launcher-group">
+                    <div class="launcher-group-header">${escapeHtml(group.name)}</div>`;
+            }
+
+            html += `<table class="variables-table launcher-table">
+                <thead>
+                    <tr>
+                        <th>Process</th>
+                        <th>State</th>
+                        <th>PID</th>
+                        <th>Uptime</th>
+                        <th>Group</th>
+                        <th>Restarts</th>`;
+
+            if (showActions) {
+                html += `<th class="launcher-actions-header">Actions
+                    <button class="launcher-bulk-btn launcher-bulk-restart" data-node="${this.nodeId}" data-bulk="restart-all" title="Restart all processes">Restart</button>
+                    <button class="launcher-bulk-btn launcher-bulk-reload" data-node="${this.nodeId}" data-bulk="reload-all" title="Reload all processes">Reload</button>
+                </th>`;
+            }
+
+            html += `</tr>
+                </thead>
+                <tbody>`;
+
+            for (const proc of filteredProcesses) {
+                const stateClass = this.getStateClass(proc.state);
+                const uptime = proc.uptime ? this.formatUptime(proc.uptime) : '-';
+                const actions = showActions ? this.getActionsHTML(proc) : '';
+                const badges = [];
+                if (proc.manual) badges.push('<span class="launcher-badge launcher-badge-manual">manual</span>');
+                if (proc.oneshot) badges.push('<span class="launcher-badge launcher-badge-oneshot">oneshot</span>');
+
+                html += `<tr>
+                    <td class="variable-name">${escapeHtml(proc.name)} ${badges.join(' ')}</td>
+                    <td><span class="launcher-state-badge ${stateClass}"><span class="launcher-state-dot"></span>${escapeHtml(proc.state).toUpperCase()}</span></td>
+                    <td>${proc.pid || '-'}</td>
+                    <td>${uptime}</td>
+                    <td>${escapeHtml(proc.group || '')}</td>
+                    <td>${proc.restartCount || 0}</td>`;
+
+                if (showActions) {
+                    html += `<td class="launcher-actions-cell">${actions}</td>`;
+                }
+
+                html += `</tr>`;
+            }
+
+            html += `</tbody></table>`;
+
+            if (group.name) {
+                html += `</div>`;
+            }
+        }
+
+        content.innerHTML = html;
+
+        if (showActions) {
+            this.attachControlHandlers();
+            this.attachBulkHandlers();
+        }
+    }
+
+    groupProcesses() {
+        if (this.groups.length === 0) {
+            // Нет групп — показываем одним списком
+            return [{ name: '', processes: this.processes }];
+        }
+
+        const result = [];
+        const assigned = new Set();
+
+        // Сортируем группы по order
+        const sortedGroups = [...this.groups].sort((a, b) => (a.order || 0) - (b.order || 0));
+
+        for (const group of sortedGroups) {
+            const procs = this.processes.filter(p => {
+                const inGroup = p.group === group.name ||
+                    (group.processes && group.processes.includes(p.name));
+                if (inGroup) assigned.add(p.name);
+                return inGroup;
+            });
+            if (procs.length > 0) {
+                result.push({ name: group.name, processes: procs });
+            }
+        }
+
+        // Процессы без группы
+        const ungrouped = this.processes.filter(p => !assigned.has(p.name));
+        if (ungrouped.length > 0) {
+            result.push({ name: '', processes: ungrouped });
+        }
+
+        return result;
+    }
+
+    getStateClass(state) {
+        switch (state) {
+            case 'running': return 'launcher-state-running';
+            case 'failed': return 'launcher-state-failed';
+            case 'stopped': return 'launcher-state-stopped';
+            case 'starting':
+            case 'restarting':
+            case 'stopping': return 'launcher-state-transitioning';
+            case 'completed': return 'launcher-state-completed';
+            default: return 'launcher-state-unknown';
+        }
+    }
+
+    getActionsHTML(proc) {
+        const nodeId = this.nodeId;
+        switch (proc.state) {
+            case 'running':
+                return `
+                    <button class="launcher-ctrl-btn launcher-ctrl-restart" data-node="${nodeId}" data-process="${proc.name}" data-action="restart" title="Restart">&#8635;</button>
+                    <button class="launcher-ctrl-btn launcher-ctrl-stop" data-node="${nodeId}" data-process="${proc.name}" data-action="stop" title="Stop">&#9632;</button>
+                `;
+            case 'stopped':
+            case 'failed':
+                return `
+                    <button class="launcher-ctrl-btn launcher-ctrl-start" data-node="${nodeId}" data-process="${proc.name}" data-action="start" title="Start">&#9654;</button>
+                `;
+            case 'completed':
+                return `
+                    <button class="launcher-ctrl-btn launcher-ctrl-restart" data-node="${nodeId}" data-process="${proc.name}" data-action="restart" title="Re-run">&#8635;</button>
+                `;
+            case 'starting':
+            case 'stopping':
+            case 'restarting':
+                return '<span class="launcher-ctrl-loading">...</span>';
+            default:
+                return '';
+        }
+    }
+
+    attachControlHandlers() {
+        const content = document.getElementById(`launcher-content-${this.nodeId}`);
+        if (!content) return;
+
+        content.querySelectorAll('.launcher-ctrl-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const action = e.currentTarget.dataset.action;
+                const processName = e.currentTarget.dataset.process;
+                const nodeId = e.currentTarget.dataset.node;
+
+                const actionLabels = { restart: 'Restart', stop: 'Stop', start: 'Start' };
+                const label = actionLabels[action] || action;
+
+                // Подтверждение для restart и stop
+                if (action === 'restart' || action === 'stop') {
+                    const confirmed = await showConfirmDialog(
+                        `${label} Process`,
+                        `${label} process "${processName}"?`,
+                        label
+                    );
+                    if (!confirmed) return;
+                }
+
+                btn.disabled = true;
+                btn.textContent = '...';
+
+                try {
+                    const resp = await fetch(`/api/launchers/${encodeURIComponent(nodeId)}/process/${encodeURIComponent(processName)}/${action}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+
+                    if (!resp.ok) {
+                        const data = await resp.json().catch(() => ({}));
+                        await showConfirmDialog('Error', data.error || resp.statusText, 'OK');
+                    }
+
+                    setTimeout(() => this.loadStatus(), 1000);
+                } catch (err) {
+                    console.error(`Launcher action ${action} failed:`, err);
+                    await showConfirmDialog('Error', err.message, 'OK');
+                } finally {
+                    btn.disabled = false;
+                }
+            });
+        });
+    }
+
+    attachBulkHandlers() {
+        const content = document.getElementById(`launcher-content-${this.nodeId}`);
+        if (!content) return;
+
+        content.querySelectorAll('.launcher-bulk-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const bulkAction = e.currentTarget.dataset.bulk;
+                const nodeId = e.currentTarget.dataset.node;
+                const label = bulkAction === 'restart-all' ? 'Restart' : 'Reload';
+
+                const confirmed = await showConfirmDialog(
+                    `${label} All`,
+                    `${label} ALL processes on this launcher?`,
+                    label
+                );
+                if (!confirmed) return;
+
+                btn.disabled = true;
+                const origText = btn.textContent;
+                btn.textContent = '...';
+
+                try {
+                    const resp = await fetch(`/api/launchers/${encodeURIComponent(nodeId)}/${bulkAction}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+
+                    if (!resp.ok) {
+                        const data = await resp.json().catch(() => ({}));
+                        await showConfirmDialog('Error', `${label} failed: ${data.error || resp.statusText}`, 'OK');
+                    }
+
+                    setTimeout(() => this.loadStatus(), 1500);
+                } catch (err) {
+                    console.error(`Launcher bulk ${bulkAction} failed:`, err);
+                    await showConfirmDialog('Error', `${label} failed: ${err.message}`, 'OK');
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = origText;
+                }
+            });
+        });
+    }
+
+    formatUptime(seconds) {
+        if (seconds < 60) return `${seconds}s`;
+        if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        if (hours < 24) return `${hours}h ${minutes}m`;
+        const days = Math.floor(hours / 24);
+        return `${days}d ${hours % 24}h`;
+    }
+
+    destroy() {
+        if (this.autoRefreshInterval) {
+            clearInterval(this.autoRefreshInterval);
+            this.autoRefreshInterval = null;
+        }
+    }
+}
 
 
 // === 30-log-viewer.js ===
@@ -11916,13 +12584,28 @@ async function fetchObjects() {
 }
 
 // Обновить список объектов (вызывается при восстановлении связи с сервером)
+// Защита от конкурентных вызовов: повторный вызов во время выполнения запланирует ещё одно обновление
+let _refreshObjectsInProgress = false;
+let _refreshObjectsPending = false;
+
 async function refreshObjectsList() {
+    if (_refreshObjectsInProgress) {
+        _refreshObjectsPending = true;
+        return;
+    }
+    _refreshObjectsInProgress = true;
     try {
         const data = await fetchObjects();
         renderObjectsList(data);
         console.log('Список объектов обновлён');
     } catch (err) {
         console.error('Error обновления списка объектов:', err);
+    } finally {
+        _refreshObjectsInProgress = false;
+        if (_refreshObjectsPending) {
+            _refreshObjectsPending = false;
+            refreshObjectsList();
+        }
     }
 }
 
@@ -12486,6 +13169,15 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
     // Используем CSS-безопасный ID (заменяем : на -)
     const safeVarName = varName.replace(/:/g, '-');
 
+    // Находим supplier из данных рендерера (если есть)
+    let supplierText = '';
+    if (tabState.renderer && tabState.renderer.allSensors) {
+        const sData = tabState.renderer.allSensors.find(s => s.id === sensor.id);
+        if (sData && sData.supplier) {
+            supplierText = sData.supplier;
+        }
+    }
+
     // Badge: SM для SharedMemory, MB для Modbus, или скрыт
     const badge = options.badge !== undefined ? options.badge : 'SM';
     const badgeHtml = badge ? `<span class="chart-panel-badge ${badge === 'SM' ? 'external-badge' : 'modbus-badge'}">${badge}</span>` : '';
@@ -12499,6 +13191,7 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
                 <span class="legend-color-picker" data-object="${tabKey}" data-variable="${varName}" style="background:${color}" title="Click to choose color"></span>
                 <span class="chart-panel-title">${escapeHtml(displayName)}</span>
                 <span class="chart-panel-value" id="legend-value-${objectName}-${safeVarName}">--</span>
+                <span class="chart-panel-supplier" id="legend-supplier-${objectName}-${safeVarName}">${escapeHtml(supplierText)}</span>
                 <span class="chart-panel-textname">${escapeHtml(sensor.name)}</span>
                 <span class="type-badge type-${sensor.iotype || 'unknown'}">${sensor.iotype || '?'}</span>
                 ${badgeHtml}
@@ -13033,7 +13726,7 @@ function renderObjectsList(data) {
         list.appendChild(group);
     });
 
-    // Рендерим секцию серверов и обновляем objects section
+    // Рендерим секцию серверов, обновляем objects section
     renderServersSection();
     updateObjectsSectionHeader();
 }
@@ -13118,15 +13811,12 @@ function renderServersSection() {
         header.dataset.listenerAdded = 'true';
     }
 
-    // Обновляем счётчик
-    if (countEl) {
-        countEl.textContent = state.servers.size;
-    }
-
-    // Рендерим список серверов
     list.innerHTML = '';
 
+    let serverCount = 0;
+
     state.servers.forEach((server, serverId) => {
+        serverCount++;
         const li = document.createElement('li');
         li.className = 'server-item' + (server.connected ? ' connected' : ' disconnected');
         li.dataset.serverId = serverId;
@@ -13171,6 +13861,11 @@ function renderServersSection() {
 
         list.appendChild(li);
     });
+
+    // Обновляем счётчик (только standalone серверы)
+    if (countEl) {
+        countEl.textContent = serverCount;
+    }
 }
 
 // Переключить свёрнутость секции "Servers"
@@ -13273,7 +13968,7 @@ function createTab(tabKey, displayName, rendererInfo, initialData, serverId, ser
     // Если SSE подключен, не запускаем polling (данные будут приходить через SSE)
     const updateInterval = state.sse.connected
         ? null
-        : setInterval(() => loadObjectData(displayName), state.sse.pollInterval);
+        : setInterval(() => loadObjectData(tabKey), state.sse.pollInterval);
 
     state.tabs.set(tabKey, {
         charts: new Map(),
@@ -13347,13 +14042,200 @@ function closeTab(name) {
     }
 }
 
-async function loadObjectData(name) {
+// ============================================================================
+// Launcher вкладки
+// ============================================================================
+
+function openLauncherTab(nodeId, nodeName, launcherUrl, hasControl) {
+    const tabKey = `launcher:${nodeId}`;
+
+    // Переключаемся на Objects view если сейчас на Dashboard
+    if (dashboardManager && dashboardState.currentView !== 'objects') {
+        dashboardManager.switchView('objects');
+    }
+
+    if (state.tabs.has(tabKey)) {
+        activateTab(tabKey);
+        return;
+    }
+
+    createLauncherTab(tabKey, nodeId, nodeName, launcherUrl, hasControl);
+    activateTab(tabKey);
+}
+
+function createLauncherTab(tabKey, nodeId, nodeName, launcherUrl, hasControl) {
+    const tabsHeader = document.getElementById('tabs-header');
+    const tabsContent = document.getElementById('tabs-content');
+
+    const placeholder = tabsContent.querySelector('.placeholder');
+    if (placeholder) placeholder.remove();
+
+    const renderer = new LauncherRenderer(nodeName, tabKey, nodeId, launcherUrl, hasControl);
+
+    // Кнопка вкладки
+    const tabBtn = document.createElement('button');
+    tabBtn.className = 'tab-btn';
+    tabBtn.dataset.name = tabKey;
+    tabBtn.dataset.objectType = 'Launcher';
+    tabBtn.innerHTML = `
+        <span class="tab-type-badge tab-badge-launcher">Launcher</span>
+        ${escapeHtml(nodeName)}
+        <span class="close">&times;</span>
+    `;
+    tabBtn.addEventListener('click', (e) => {
+        if (e.target.classList.contains('close')) {
+            closeTab(tabKey);
+        } else {
+            activateTab(tabKey);
+        }
+    });
+    tabsHeader.appendChild(tabBtn);
+
+    // Панель содержимого
+    const panel = document.createElement('div');
+    panel.className = 'tab-panel';
+    panel.dataset.name = tabKey;
+    panel.dataset.objectType = 'Launcher';
+    panel.innerHTML = renderer.createPanelHTML();
+    tabsContent.appendChild(panel);
+
+    // Сохраняем состояние
+    state.tabs.set(tabKey, {
+        charts: new Map(),
+        variables: {},
+        objectType: 'Launcher',
+        renderer: renderer,
+        updateInterval: null,
+        displayName: nodeName,
+        serverId: nodeId,
+        serverName: nodeName
+    });
+
+    renderer.initialize();
+}
+
+// ============================================================================
+// Секция Launchers (плоский список Launcher'ов)
+// ============================================================================
+
+// Рендеринг секции Launchers в sidebar
+function renderLaunchersSection(launchers) {
+    const section = document.getElementById('launchers-section');
+    if (!section) return;
+
+    if (!launchers || launchers.length === 0) {
+        section.style.display = 'none';
+        return;
+    }
+    section.style.display = '';
+
+    const list = document.getElementById('launchers-list');
+    const countEl = document.getElementById('launchers-count');
+    const header = document.getElementById('launchers-section-header');
+
+    if (countEl) {
+        countEl.textContent = launchers.length;
+    }
+
+    // Применяем сохранённое состояние свёрнутости
+    if (state.launchersSectionCollapsed) {
+        section.classList.add('collapsed');
+    } else {
+        section.classList.remove('collapsed');
+    }
+
+    // Обработчик клика на заголовок
+    if (header && !header.dataset.listenerAdded) {
+        header.addEventListener('click', toggleLaunchersSection);
+        header.dataset.listenerAdded = 'true';
+    }
+
+    if (!list) return;
+    list.innerHTML = '';
+
+    for (const launcher of launchers) {
+        // Сохраняем в state
+        state.nodes.set(launcher.id, {
+            id: launcher.id,
+            name: launcher.name,
+            launcherUrl: launcher.launcherUrl,
+            connected: launcher.connected ?? false,
+            hasControl: launcher.hasControl ?? false
+        });
+
+        const displayName = launcher.name || launcher.id;
+        const connected = launcher.connected ?? false;
+
+        let statusText = '';
+        if (launcher.status && launcher.status.processes) {
+            const total = launcher.status.processes.length;
+            const running = launcher.status.processes.filter(p => p.state === 'running').length;
+            statusText = `${running}/${total}`;
+        }
+
+        const li = document.createElement('li');
+        li.className = 'launcher-sidebar-item';
+        li.dataset.nodeId = launcher.id;
+        li.innerHTML = `
+            <span class="server-status-dot${connected ? '' : ' disconnected'}"></span>
+            <span class="launcher-sidebar-name">${escapeHtml(displayName)}</span>
+            ${statusText ? `<span class="launcher-sidebar-stats">${statusText}</span>` : ''}
+        `;
+        li.addEventListener('click', () => {
+            openLauncherTab(launcher.id, launcher.name, launcher.launcherUrl, launcher.hasControl);
+        });
+        list.appendChild(li);
+    }
+}
+
+function toggleLaunchersSection() {
+    const section = document.getElementById('launchers-section');
+    if (!section) return;
+
+    state.launchersSectionCollapsed = !state.launchersSectionCollapsed;
+    section.classList.toggle('collapsed', state.launchersSectionCollapsed);
+    saveSettings();
+}
+
+// Обновить статус Launcher'а в sidebar
+function updateLauncherNodeStatus(nodeId, connected) {
+    const nodeState = state.nodes.get(nodeId);
+    if (nodeState) {
+        nodeState.connected = connected;
+    }
+
+    const item = document.querySelector(`.launcher-sidebar-item[data-node-id="${nodeId}"]`);
+    if (!item) return;
+
+    const dot = item.querySelector('.server-status-dot');
+    if (dot) {
+        dot.className = `server-status-dot${connected ? '' : ' disconnected'}`;
+    }
+}
+
+// Загрузка списка Launcher'ов (вызывается при инициализации)
+async function loadLauncherNodes() {
     try {
-        const data = await fetchObjectData(name);
-        const tabState = state.tabs.get(name);
+        const resp = await fetch('/api/launchers');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (data.launchers && data.launchers.length > 0) {
+            renderLaunchersSection(data.launchers);
+        }
+    } catch (err) {
+        console.warn('Failed to load launchers:', err);
+    }
+}
+
+async function loadObjectData(tabKey) {
+    try {
+        const tabState = state.tabs.get(tabKey);
+        if (!tabState) return;
+
+        const data = await fetchObjectData(tabState.displayName, tabState.serverId);
 
         // Используем рендерер для обновления данных
-        if (tabState && tabState.renderer) {
+        if (tabState.renderer) {
             tabState.renderer.update(data);
         }
 
@@ -13362,7 +14244,7 @@ async function loadObjectData(name) {
             updateSSEStatus('polling', new Date());
         }
     } catch (err) {
-        console.error(`Error загрузки ${name}:`, err);
+        console.error(`Error загрузки ${tabKey}:`, err);
     }
 }
 
@@ -13582,6 +14464,15 @@ async function addChart(tabKey, varName, sensorId, passedTextname) {
     // textname: приоритет - справочник сенсоров, потом переданный параметр (comment из API)
     const textName = sensor?.textname || passedTextname || '';
 
+    // Находим supplier из данных рендерера (если есть)
+    let supplierText = '';
+    if (tabState.renderer && tabState.renderer.allSensors) {
+        const sData = tabState.renderer.allSensors.find(s => s.id === sensorId);
+        if (sData && sData.supplier) {
+            supplierText = sData.supplier;
+        }
+    }
+
     // Создаём панель графика
     const chartDiv = document.createElement('div');
     chartDiv.className = 'chart-panel';
@@ -13592,6 +14483,7 @@ async function addChart(tabKey, varName, sensorId, passedTextname) {
                 <span class="legend-color-picker" data-object="${tabKey}" data-variable="${varName}" style="background:${color}" title="Click to choose color"></span>
                 <span class="chart-panel-title">${sensorDisplayName}</span>
                 <span class="chart-panel-value" id="legend-value-${displayName}-${varName}">--</span>
+                <span class="chart-panel-supplier" id="legend-supplier-${displayName}-${varName}">${supplierText}</span>
                 <span class="chart-panel-textname">${textName}</span>
                 ${sensor?.iotype ? `<span class="type-badge type-${sensor.iotype}">${sensor.iotype}</span>` : ''}
             </div>
@@ -13889,13 +14781,17 @@ function updateChartLegends(tabKey, data) {
 
     const displayName = tabState.displayName || tabKey;
 
-    // Обновляем значения в таблицах
+    // Обновляем значения и supplier в таблицах
     if (data.io?.in) {
         Object.entries(data.io.in).forEach(([key, io]) => {
             const varName = `io.in.${key}`;
             const legendEl = getElementInTab(tabKey, `legend-value-${displayName}-${varName}`);
             if (legendEl) {
                 legendEl.textContent = formatValue(io.value);
+            }
+            if (io.supplier !== undefined) {
+                const supplierEl = getElementInTab(tabKey, `legend-supplier-${displayName}-${varName}`);
+                if (supplierEl) supplierEl.textContent = io.supplier || '';
             }
         });
     }
@@ -13906,6 +14802,10 @@ function updateChartLegends(tabKey, data) {
             const legendEl = getElementInTab(tabKey, `legend-value-${displayName}-${varName}`);
             if (legendEl) {
                 legendEl.textContent = formatValue(io.value);
+            }
+            if (io.supplier !== undefined) {
+                const supplierEl = getElementInTab(tabKey, `legend-supplier-${displayName}-${varName}`);
+                if (supplierEl) supplierEl.textContent = io.supplier || '';
             }
         });
     }
@@ -15217,7 +16117,8 @@ function saveSettings() {
         timeRange: state.timeRange,
         sidebarCollapsed: state.sidebarCollapsed,
         collapsedServerGroups: Array.from(state.collapsedServerGroups),
-        serversSectionCollapsed: state.serversSectionCollapsed
+        serversSectionCollapsed: state.serversSectionCollapsed,
+        launchersSectionCollapsed: state.launchersSectionCollapsed
     };
     localStorage.setItem('uniset-panel-settings', JSON.stringify(settings));
 }
@@ -15251,6 +16152,11 @@ function loadSettings() {
             // Восстановить состояние секции "Servers"
             if (settings.serversSectionCollapsed !== undefined) {
                 state.serversSectionCollapsed = settings.serversSectionCollapsed;
+            }
+
+            // Восстановить состояние секции "Launchers"
+            if (settings.launchersSectionCollapsed !== undefined) {
+                state.launchersSectionCollapsed = settings.launchersSectionCollapsed;
             }
         }
     } catch (err) {
@@ -21089,6 +21995,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Инициализация Dashboard Manager
     dashboardManager = window.dashboardManager = new DashboardManager();
+
+    // Загрузка Launcher нод (не блокируем)
+    loadLauncherNodes().catch(err => {
+        console.warn('Failed to load launcher nodes:', err);
+    });
 
     // Инициализация Journals (не блокируем)
     initJournals().catch(err => {

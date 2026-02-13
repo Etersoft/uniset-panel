@@ -2,6 +2,7 @@ package config
 
 import (
 	"log/slog"
+	"net/url"
 	"testing"
 	"time"
 )
@@ -531,6 +532,297 @@ func TestMergeAndSortServers(t *testing.T) {
 			for i, expected := range tt.expectedURLs {
 				if result[i].URL != expected {
 					t.Errorf("server[%d].URL = %q, want %q", i, result[i].URL, expected)
+				}
+			}
+		})
+	}
+}
+
+// ============================================================================
+// Тесты MergeAndSortLaunchers
+// ============================================================================
+
+func TestMergeAndSortLaunchers_OnlyCLI_SortedAlphabetically(t *testing.T) {
+	cliLaunchers := []LauncherConfig{
+		{URL: "http://zebra:8080"},
+		{URL: "http://alpha:8080"},
+		{URL: "http://beta:8080"},
+	}
+
+	result := MergeAndSortLaunchers(nil, cliLaunchers)
+
+	expectedURLs := []string{
+		"http://alpha:8080",
+		"http://beta:8080",
+		"http://zebra:8080",
+	}
+
+	if len(result) != len(expectedURLs) {
+		t.Fatalf("got %d launchers, want %d", len(result), len(expectedURLs))
+	}
+	for i, expected := range expectedURLs {
+		if result[i].URL != expected {
+			t.Errorf("launcher[%d].URL = %q, want %q", i, result[i].URL, expected)
+		}
+	}
+}
+
+func TestMergeAndSortLaunchers_OnlyConfig_PreserveOrder(t *testing.T) {
+	configLaunchers := []LauncherConfig{
+		{URL: "http://zebra:8080", Name: "Zebra"},
+		{URL: "http://alpha:8080", Name: "Alpha"},
+		{URL: "http://beta:8080", Name: "Beta"},
+	}
+
+	result := MergeAndSortLaunchers(configLaunchers, nil)
+
+	expectedURLs := []string{
+		"http://zebra:8080",
+		"http://alpha:8080",
+		"http://beta:8080",
+	}
+
+	if len(result) != len(expectedURLs) {
+		t.Fatalf("got %d launchers, want %d", len(result), len(expectedURLs))
+	}
+	for i, expected := range expectedURLs {
+		if result[i].URL != expected {
+			t.Errorf("launcher[%d].URL = %q, want %q", i, result[i].URL, expected)
+		}
+	}
+}
+
+func TestMergeAndSortLaunchers_ConfigAndCLI_ConfigFirstThenCLISorted(t *testing.T) {
+	configLaunchers := []LauncherConfig{
+		{URL: "http://prod-3:8080", Name: "Prod3"},
+		{URL: "http://prod-1:8080", Name: "Prod1"},
+	}
+	cliLaunchers := []LauncherConfig{
+		{URL: "http://dev-z:8080"},
+		{URL: "http://dev-a:8080"},
+	}
+
+	result := MergeAndSortLaunchers(configLaunchers, cliLaunchers)
+
+	expectedURLs := []string{
+		"http://prod-3:8080", // config первый (оригинальный порядок)
+		"http://prod-1:8080", // config второй (оригинальный порядок)
+		"http://dev-a:8080",  // CLI отсортирован
+		"http://dev-z:8080",  // CLI отсортирован
+	}
+
+	if len(result) != len(expectedURLs) {
+		t.Fatalf("got %d launchers, want %d", len(result), len(expectedURLs))
+	}
+	for i, expected := range expectedURLs {
+		if result[i].URL != expected {
+			t.Errorf("launcher[%d].URL = %q, want %q", i, result[i].URL, expected)
+		}
+	}
+}
+
+func TestMergeAndSortLaunchers_EmptyBoth(t *testing.T) {
+	result := MergeAndSortLaunchers(nil, nil)
+
+	if len(result) != 0 {
+		t.Errorf("expected 0 launchers, got %d", len(result))
+	}
+}
+
+func TestMergeAndSortLaunchers_SingleConfig(t *testing.T) {
+	configLaunchers := []LauncherConfig{
+		{URL: "http://single:8080", Name: "Single"},
+	}
+
+	result := MergeAndSortLaunchers(configLaunchers, nil)
+
+	if len(result) != 1 {
+		t.Fatalf("got %d launchers, want 1", len(result))
+	}
+	if result[0].URL != "http://single:8080" {
+		t.Errorf("launcher[0].URL = %q, want http://single:8080", result[0].URL)
+	}
+}
+
+func TestMergeAndSortLaunchers_SingleCLI(t *testing.T) {
+	cliLaunchers := []LauncherConfig{
+		{URL: "http://single:8080"},
+	}
+
+	result := MergeAndSortLaunchers(nil, cliLaunchers)
+
+	if len(result) != 1 {
+		t.Fatalf("got %d launchers, want 1", len(result))
+	}
+	if result[0].URL != "http://single:8080" {
+		t.Errorf("launcher[0].URL = %q, want http://single:8080", result[0].URL)
+	}
+}
+
+func TestMergeAndSortLaunchers_PreservesFields(t *testing.T) {
+	configLaunchers := []LauncherConfig{
+		{
+			URL:          "http://launcher1:8080",
+			Name:         "Launcher1",
+			ID:           "l1",
+			ReadToken:    "reader",
+			ControlToken: "controller",
+		},
+	}
+
+	result := MergeAndSortLaunchers(configLaunchers, nil)
+
+	if len(result) != 1 {
+		t.Fatalf("got %d launchers, want 1", len(result))
+	}
+	if result[0].Name != "Launcher1" {
+		t.Errorf("Name = %q, want Launcher1", result[0].Name)
+	}
+	if result[0].ID != "l1" {
+		t.Errorf("ID = %q, want l1", result[0].ID)
+	}
+	if result[0].ReadToken != "reader" {
+		t.Errorf("ReadToken = %q, want reader", result[0].ReadToken)
+	}
+	if result[0].ControlToken != "controller" {
+		t.Errorf("ControlToken = %q, want controller", result[0].ControlToken)
+	}
+}
+
+func TestMergeAndSortLaunchers_DoesNotModifyInput(t *testing.T) {
+	configLaunchers := []LauncherConfig{
+		{URL: "http://b:8080"},
+		{URL: "http://a:8080"},
+	}
+	cliLaunchers := []LauncherConfig{
+		{URL: "http://z:8080"},
+		{URL: "http://y:8080"},
+	}
+
+	// Копируем для сравнения
+	origConfig := make([]LauncherConfig, len(configLaunchers))
+	copy(origConfig, configLaunchers)
+	origCLI := make([]LauncherConfig, len(cliLaunchers))
+	copy(origCLI, cliLaunchers)
+
+	_ = MergeAndSortLaunchers(configLaunchers, cliLaunchers)
+
+	// Проверяем что входные данные не изменились
+	for i, l := range configLaunchers {
+		if l.URL != origConfig[i].URL {
+			t.Errorf("configLaunchers was modified: [%d].URL = %q, was %q", i, l.URL, origConfig[i].URL)
+		}
+	}
+	for i, l := range cliLaunchers {
+		if l.URL != origCLI[i].URL {
+			t.Errorf("cliLaunchers was modified: [%d].URL = %q, was %q", i, l.URL, origCLI[i].URL)
+		}
+	}
+}
+
+func TestParseLauncherURL(t *testing.T) {
+	tests := []struct {
+		name       string
+		rawURL     string
+		wantURL    string
+		wantToken  string
+	}{
+		{
+			name:      "token in userinfo",
+			rawURL:    "http://mytoken@localhost:9999",
+			wantURL:   "http://localhost:9999",
+			wantToken: "mytoken",
+		},
+		{
+			name:      "no token",
+			rawURL:    "http://localhost:9999",
+			wantURL:   "http://localhost:9999",
+			wantToken: "",
+		},
+		{
+			name:      "token with path",
+			rawURL:    "http://secret@host:8080/api",
+			wantURL:   "http://host:8080/api",
+			wantToken: "secret",
+		},
+		{
+			name:      "token with password ignored",
+			rawURL:    "http://user:pass@host:8080",
+			wantURL:   "http://host:8080",
+			wantToken: "user",
+		},
+		{
+			name:      "empty string",
+			rawURL:    "",
+			wantURL:   "",
+			wantToken: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotURL, gotToken := parseLauncherURL(tt.rawURL)
+			if gotURL != tt.wantURL {
+				t.Errorf("parseLauncherURL(%q) URL = %q, want %q", tt.rawURL, gotURL, tt.wantURL)
+			}
+			if gotToken != tt.wantToken {
+				t.Errorf("parseLauncherURL(%q) token = %q, want %q", tt.rawURL, gotToken, tt.wantToken)
+			}
+		})
+	}
+}
+
+func TestLauncherNameFallback(t *testing.T) {
+	tests := []struct {
+		name       string
+		launchers  []LauncherConfig
+		wantNames  []string
+	}{
+		{
+			name: "empty name gets host:port",
+			launchers: []LauncherConfig{
+				{URL: "http://localhost:9999", Name: ""},
+			},
+			wantNames: []string{"localhost:9999"},
+		},
+		{
+			name: "explicit name preserved",
+			launchers: []LauncherConfig{
+				{URL: "http://localhost:9999", Name: "My Launcher"},
+			},
+			wantNames: []string{"My Launcher"},
+		},
+		{
+			name: "host without port",
+			launchers: []LauncherConfig{
+				{URL: "http://myhost", Name: ""},
+			},
+			wantNames: []string{"myhost"},
+		},
+		{
+			name: "mixed",
+			launchers: []LauncherConfig{
+				{URL: "http://host1:8080", Name: ""},
+				{URL: "http://host2:9090", Name: "Named"},
+			},
+			wantNames: []string{"host1:8080", "Named"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Apply the same fallback logic as Parse()
+			for i := range tt.launchers {
+				if tt.launchers[i].Name == "" {
+					if u, err := url.Parse(tt.launchers[i].URL); err == nil {
+						tt.launchers[i].Name = u.Host
+					}
+				}
+			}
+
+			for i, wantName := range tt.wantNames {
+				if tt.launchers[i].Name != wantName {
+					t.Errorf("launcher[%d].Name = %q, want %q", i, tt.launchers[i].Name, wantName)
 				}
 			}
 		})

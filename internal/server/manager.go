@@ -337,23 +337,21 @@ func (m *Manager) GetAllObjectsGrouped() ([]ServerObjects, error) {
 			serverName = instance.Config.URL
 		}
 
-		status := instance.GetStatus()
 		serverObj := ServerObjects{
 			ServerID:   instance.Config.ID,
 			ServerName: serverName,
-			Connected:  status.Connected,
 			Objects:    []string{},
 		}
 
 		objects, err := instance.GetObjects()
 		if err != nil {
 			errors = append(errors, fmt.Errorf("server %s: %w", instance.Config.ID, err))
-			// Добавляем сервер в результат даже если не удалось получить объекты
-			result = append(result, serverObj)
-			continue
+		} else {
+			serverObj.Objects = objects
 		}
 
-		serverObj.Objects = objects
+		// Читаем статус ПОСЛЕ GetObjects() чтобы избежать TOCTOU
+		serverObj.Connected = instance.GetStatus().Connected
 		result = append(result, serverObj)
 	}
 

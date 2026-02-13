@@ -11,13 +11,15 @@ import (
 
 // OPCUASensor представляет датчик OPC UA
 type OPCUASensor struct {
-	ID     int64       `json:"id"`
-	Name   string      `json:"name"`
-	IOType string      `json:"iotype"`
-	Value  interface{} `json:"value"`
-	Tick   int64       `json:"tick"`
-	NodeID string      `json:"nodeId"`
-	Status string      `json:"status"`
+	ID        int64       `json:"id"`
+	Name      string      `json:"name"`
+	IOType    string      `json:"iotype"`
+	Value     interface{} `json:"value"`
+	Tick      int64       `json:"tick"`
+	NodeID    string      `json:"nodeId"`
+	Status    string      `json:"status"`
+	VType     interface{} `json:"vtype,omitempty"`
+	Precision int         `json:"precision,omitempty"`
 }
 
 // SensorUpdate обновление значения OPC UA датчика
@@ -57,11 +59,11 @@ func (f *opcuaFetcher) FetchItems(objectName string, ids []int64) ([]OPCUASensor
 	var resp *uniset.OPCUASensorsResponse
 	var err error
 
-	// OPCUAServer использует параметр id=, OPCUAExchange использует filter=
+	// OPCUAServer использует /get?id=, OPCUAExchange использует /sensors?filter=
 	if objectType == "OPCUAServer" {
 		resp, err = f.client.GetOPCUAServerSensorValues(objectName, query)
 	} else {
-		resp, err = f.client.GetOPCUASensorValues(objectName, query)
+		resp, err = f.client.GetOPCUASensorsByFilter(objectName, query)
 	}
 	if err != nil {
 		return nil, err
@@ -86,9 +88,17 @@ func (f *opcuaFetcher) FetchItems(objectName string, ids []int64) ([]OPCUASensor
 		}
 		if v, ok := sensorMap["nodeId"].(string); ok {
 			sensor.NodeID = v
+		} else if v, ok := sensorMap["nodeid"].(string); ok {
+			sensor.NodeID = v
 		}
 		if v, ok := sensorMap["status"].(string); ok {
 			sensor.Status = v
+		}
+		if v := sensorMap["vtype"]; v != nil {
+			sensor.VType = v
+		}
+		if v, ok := sensorMap["precision"].(float64); ok {
+			sensor.Precision = int(v)
 		}
 
 		sensors = append(sensors, sensor)
@@ -102,8 +112,8 @@ func (f *opcuaFetcher) GetItemID(sensor OPCUASensor) int64 {
 }
 
 func (f *opcuaFetcher) GetValueHash(sensor OPCUASensor) string {
-	// Создаём хеш из value + tick для определения изменений
-	return formatValueHash(sensor.Value, sensor.Tick)
+	// Хеш включает value, tick и status — чтобы обновлять при изменении статуса
+	return formatValueHash(sensor.Value, sensor.Tick) + "|" + sensor.Status
 }
 
 // NewPoller создает новый OPC UA poller

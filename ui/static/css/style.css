@@ -1375,6 +1375,16 @@ header h1 {
     margin-left: 0.5rem;
 }
 
+.chart-panel-supplier:not(:empty) {
+    font-size: 11px;
+    color: var(--text-secondary);
+    opacity: 0.7;
+}
+
+.chart-panel-supplier:not(:empty)::before {
+    content: "← ";
+}
+
 /* Fill toggle checkbox */
 .fill-toggle {
     display: flex;
@@ -7893,4 +7903,535 @@ button.rotate-quick-btn:active {
     color: inherit;
     padding: 0 2px;
     border-radius: 2px;
+}
+
+/* ============================================================================
+   Launcher Section (sidebar)
+   ============================================================================ */
+
+/* --- Launchers Section (flat list) --- */
+
+.launchers-section {
+    margin-top: 0;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.25rem;
+}
+
+.launchers-section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    user-select: none;
+}
+
+.launchers-section-header:hover {
+    background: var(--bg-hover);
+}
+
+.launchers-section-header .collapse-icon {
+    width: 14px;
+    height: 14px;
+    transition: transform 0.2s ease;
+}
+
+.launchers-section-title {
+    flex: 1;
+}
+
+.launchers-section-header .launchers-count {
+    background: var(--accent-purple, #9b59b6);
+    color: white;
+    font-size: 0.65rem;
+    border-radius: 50%;
+    min-width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+}
+
+.launchers-section.collapsed .launchers-section-header .collapse-icon {
+    transform: rotate(-90deg);
+}
+
+.launchers-section.collapsed .launchers-list {
+    display: none;
+}
+
+.launchers-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.launcher-sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.75rem 0.4rem 1.5rem;
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    user-select: none;
+    cursor: pointer;
+}
+
+.launcher-sidebar-item:hover {
+    background: var(--bg-hover);
+}
+
+.launcher-sidebar-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.launcher-sidebar-stats {
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    font-weight: 500;
+}
+
+/* Collapsed sidebar - hide launchers section details */
+.sidebar.collapsed .launchers-section-header .launchers-section-title,
+.sidebar.collapsed .launchers-section-header .launchers-count {
+    display: none;
+}
+
+.sidebar.collapsed .launchers-list {
+    display: none;
+}
+
+/* ============================================================================
+   Launcher Tab Panel
+   ============================================================================ */
+
+.launcher-panel {
+    max-width: 100%;
+}
+
+.launcher-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.launcher-header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.launcher-header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.launcher-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.launcher-status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.launcher-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+}
+
+.launcher-status-dot.connected {
+    background: var(--accent-green);
+}
+
+.launcher-status-dot.disconnected {
+    background: var(--accent-red);
+}
+
+.launcher-link {
+    color: var(--accent-blue);
+    text-decoration: none;
+    font-size: 0.8rem;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    transition: background 0.15s;
+}
+
+.launcher-link:hover {
+    background: var(--bg-hover);
+}
+
+.launcher-refresh-btn {
+    background: none;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.3rem;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+}
+
+.launcher-refresh-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.launcher-filter {
+    margin-bottom: 0.75rem;
+}
+
+.launcher-filter-input {
+    width: 100%;
+    padding: 0.4rem 0.6rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    box-sizing: border-box;
+}
+
+.launcher-filter-input:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+}
+
+.launcher-loading,
+.launcher-empty {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+/* Launcher Table */
+.launcher-table {
+    width: 100%;
+}
+
+.launcher-table th {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.launcher-actions-cell {
+    white-space: nowrap;
+}
+
+.launcher-error-cell {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--accent-red);
+    font-size: 0.75rem;
+}
+
+/* Launcher Groups */
+.launcher-group {
+    margin-bottom: 1rem;
+}
+
+.launcher-group-header {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding: 0.4rem 0.5rem;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    margin-bottom: 0.3rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+/* State Badges */
+.launcher-state-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.launcher-state-running {
+    background: rgba(46, 204, 113, 0.15);
+    color: var(--accent-green);
+}
+
+.launcher-state-failed {
+    background: rgba(231, 76, 60, 0.15);
+    color: var(--accent-red);
+}
+
+.launcher-state-stopped {
+    background: rgba(127, 140, 141, 0.15);
+    color: var(--text-muted);
+}
+
+.launcher-state-transitioning {
+    background: rgba(255, 152, 48, 0.15);
+    color: var(--accent-orange);
+    animation: launcher-blink 0.8s ease-in-out infinite;
+}
+
+.launcher-state-completed {
+    background: rgba(115, 191, 105, 0.15);
+    color: var(--accent-green);
+}
+
+@keyframes launcher-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+/* Status dot inside state badge */
+.launcher-state-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.launcher-state-running .launcher-state-dot {
+    background: var(--accent-green);
+    box-shadow: 0 0 4px var(--accent-green);
+}
+
+.launcher-state-failed .launcher-state-dot {
+    background: var(--accent-red);
+    box-shadow: 0 0 4px var(--accent-red);
+}
+
+.launcher-state-stopped .launcher-state-dot {
+    background: var(--text-muted);
+}
+
+.launcher-state-transitioning .launcher-state-dot {
+    background: var(--accent-orange);
+}
+
+.launcher-state-completed .launcher-state-dot {
+    background: var(--accent-green);
+}
+
+.launcher-state-unknown {
+    background: rgba(127, 140, 141, 0.15);
+    color: var(--text-muted);
+}
+
+/* Process Badges */
+.launcher-badge {
+    display: inline-block;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    font-size: 0.6rem;
+    font-weight: 500;
+    vertical-align: middle;
+    margin-left: 0.3rem;
+}
+
+.launcher-badge-critical {
+    background: rgba(231, 76, 60, 0.15);
+    color: var(--accent-red);
+}
+
+.launcher-badge-manual {
+    background: rgba(52, 152, 219, 0.15);
+    color: var(--accent-blue);
+}
+
+.launcher-badge-oneshot {
+    background: rgba(184, 119, 217, 0.15);
+    color: var(--accent-purple);
+}
+
+/* Control Buttons - filled style matching real Launcher */
+.launcher-ctrl-btn {
+    border: 1px solid transparent;
+    color: #fff;
+    cursor: pointer;
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.8rem;
+    margin-right: 0.2rem;
+    transition: background 0.15s, color 0.15s;
+}
+
+.launcher-ctrl-restart {
+    background: var(--accent-orange);
+    border-color: var(--accent-orange);
+}
+
+.launcher-ctrl-restart:hover:not(:disabled) {
+    background: #e08520;
+    border-color: #e08520;
+}
+
+.launcher-ctrl-stop {
+    background: var(--accent-red);
+    border-color: var(--accent-red);
+}
+
+.launcher-ctrl-stop:hover:not(:disabled) {
+    background: #d93d4f;
+    border-color: #d93d4f;
+}
+
+.launcher-ctrl-start {
+    background: var(--accent-green);
+    border-color: var(--accent-green);
+}
+
+.launcher-ctrl-start:hover:not(:disabled) {
+    background: #5fa855;
+    border-color: #5fa855;
+}
+
+.launcher-ctrl-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.launcher-ctrl-loading {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+/* Bulk action buttons in Actions header */
+.launcher-actions-header {
+    white-space: nowrap;
+}
+
+.launcher-bulk-btn {
+    display: inline-block;
+    padding: 2px 8px;
+    margin-left: 6px;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: #fff;
+    vertical-align: middle;
+}
+
+.launcher-bulk-restart {
+    background: var(--accent-orange);
+}
+
+.launcher-bulk-restart:hover {
+    background: #d97706;
+}
+
+.launcher-bulk-reload {
+    background: var(--accent-blue);
+}
+
+.launcher-bulk-reload:hover {
+    background: #2563eb;
+}
+
+.launcher-bulk-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Control active indicator in launcher header */
+.launcher-control-info {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 8px;
+}
+
+.launcher-control-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.launcher-control-badge.readonly {
+    color: #ffc107;
+    border: 1px solid rgba(255, 193, 7, 0.3);
+}
+
+.launcher-control-badge.active {
+    color: #4caf50;
+    border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+.launcher-control-icon {
+    font-size: 12px;
+}
+
+.launcher-control-text {
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.launcher-control-btn {
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    border: 1px solid currentColor;
+    border-radius: 3px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    margin-left: 4px;
+}
+
+.launcher-control-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Tab Badge for Launcher */
+.tab-badge-launcher,
+.tab-type-badge[class*="Launcher"],
+.tab-btn[data-object-type="Launcher"] .tab-type-badge {
+    background: #c4b5fd !important;
+    color: #1e1b4b !important;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+}
+
+.tab-btn.active .tab-badge-launcher {
+    background: #ddd6fe !important;
+    color: #1e1b4b !important;
 }

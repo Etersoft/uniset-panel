@@ -9,6 +9,7 @@ import (
 
 	"github.com/pv/uniset-panel/internal/ionc"
 	"github.com/pv/uniset-panel/internal/journal"
+	"github.com/pv/uniset-panel/internal/launcher"
 	"github.com/pv/uniset-panel/internal/logger"
 	"github.com/pv/uniset-panel/internal/modbus"
 	"github.com/pv/uniset-panel/internal/opcua"
@@ -27,6 +28,7 @@ type SSEHub struct {
 type sseClient struct {
 	objectName   string         // если пусто - получает все события
 	controlToken string         // токен контроля (если клиент контроллер)
+	connectedAt  time.Time      // время подключения (для логирования)
 	events       chan SSEEvent
 	done         chan struct{}
 }
@@ -65,7 +67,8 @@ func (h *SSEHub) AddClientWithToken(objectName, controlToken string) *sseClient 
 	client := &sseClient{
 		objectName:   objectName,
 		controlToken: controlToken,
-		events:       make(chan SSEEvent, 10),
+		connectedAt:  time.Now(),
+		events:       make(chan SSEEvent, 50),
 		done:         make(chan struct{}),
 	}
 
@@ -104,7 +107,8 @@ func (h *SSEHub) RemoveClient(client *sseClient) {
 		logger.Debug("SSE client disconnected, released control", "object", client.objectName)
 	}
 
-	logger.Debug("SSE client disconnected", "object", client.objectName, "total_clients", len(h.clients))
+	duration := time.Since(client.connectedAt).Round(time.Second)
+	logger.Debug("SSE client disconnected", "object", client.objectName, "duration", duration, "total_clients", len(h.clients))
 }
 
 // Broadcast отправляет событие всем подходящим клиентам
@@ -113,7 +117,8 @@ func (h *SSEHub) Broadcast(event SSEEvent) {
 	defer h.mu.RUnlock()
 
 	// Глобальные события отправляются всем клиентам
-	isGlobalEvent := event.Type == "server_status" || event.Type == "objects_list" || event.Type == "control_status"
+	isGlobalEvent := event.Type == "server_status" || event.Type == "objects_list" || event.Type == "control_status" ||
+		event.Type == "launcher_status" || event.Type == "launcher_connection"
 
 	for client := range h.clients {
 		// Отправляем если: глобальное событие ИЛИ клиент подписан на все объекты ИЛИ на конкретный
@@ -338,6 +343,31 @@ func (h *SSEHub) UpdateClientControlToken(client *sseClient, token string) {
 	}
 }
 
+// BroadcastLauncherStatus отправляет статус Launcher'а
+func (h *SSEHub) BroadcastLauncherStatus(nodeID, nodeName string, status *launcher.LauncherStatus) {
+	h.Broadcast(SSEEvent{
+		Type:       "launcher_status",
+		ServerID:   nodeID,
+		ServerName: nodeName,
+		Data:       status,
+		Timestamp:  time.Now(),
+	})
+}
+
+// BroadcastLauncherConnection отправляет изменение connectivity Launcher'а
+func (h *SSEHub) BroadcastLauncherConnection(nodeID, nodeName string, connected bool, lastError string) {
+	h.Broadcast(SSEEvent{
+		Type:       "launcher_connection",
+		ServerID:   nodeID,
+		ServerName: nodeName,
+		Data: map[string]interface{}{
+			"connected": connected,
+			"lastError": lastError,
+		},
+		Timestamp: time.Now(),
+	})
+}
+
 // BroadcastJournalMessages отправляет новые сообщения журнала
 func (h *SSEHub) BroadcastJournalMessages(journalID string, messages []journal.Message) {
 	if len(messages) == 0 {
@@ -406,6 +436,10 @@ func (h *Handlers) HandleSSE(w http.ResponseWriter, r *http.Request) {
 	})
 	flusher.Flush()
 
+	// Heartbeat для поддержания соединения (предотвращает разрыв прокси/балансировщиками)
+	heartbeat := time.NewTicker(25 * time.Second)
+	defer heartbeat.Stop()
+
 	// Слушаем события
 	for {
 		select {
@@ -413,6 +447,10 @@ func (h *Handlers) HandleSSE(w http.ResponseWriter, r *http.Request) {
 			return
 		case <-client.done:
 			return
+		case <-heartbeat.C:
+			// SSE комментарий для keep-alive (не является событием, игнорируется клиентом)
+			fmt.Fprintf(w, ": heartbeat\n\n")
+			flusher.Flush()
 		case event := <-client.events:
 			h.sendSSEEvent(w, event)
 			flusher.Flush()

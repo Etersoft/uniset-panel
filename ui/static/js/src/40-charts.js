@@ -61,13 +61,28 @@ async function fetchObjects() {
 }
 
 // Обновить список объектов (вызывается при восстановлении связи с сервером)
+// Защита от конкурентных вызовов: повторный вызов во время выполнения запланирует ещё одно обновление
+let _refreshObjectsInProgress = false;
+let _refreshObjectsPending = false;
+
 async function refreshObjectsList() {
+    if (_refreshObjectsInProgress) {
+        _refreshObjectsPending = true;
+        return;
+    }
+    _refreshObjectsInProgress = true;
     try {
         const data = await fetchObjects();
         renderObjectsList(data);
         console.log('Список объектов обновлён');
     } catch (err) {
         console.error('Error обновления списка объектов:', err);
+    } finally {
+        _refreshObjectsInProgress = false;
+        if (_refreshObjectsPending) {
+            _refreshObjectsPending = false;
+            refreshObjectsList();
+        }
     }
 }
 

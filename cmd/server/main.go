@@ -15,6 +15,7 @@ import (
 	"github.com/pv/uniset-panel/internal/dashboard"
 	"github.com/pv/uniset-panel/internal/ionc"
 	"github.com/pv/uniset-panel/internal/journal"
+	"github.com/pv/uniset-panel/internal/launcher"
 	"github.com/pv/uniset-panel/internal/logger"
 	"github.com/pv/uniset-panel/internal/logserver"
 	"github.com/pv/uniset-panel/internal/modbus"
@@ -31,7 +32,7 @@ import (
 )
 
 // Version is set at build time via ldflags
-var Version = "0.0.5"
+var Version = "0.0.6"
 
 func main() {
 	cfg := config.Parse()
@@ -183,6 +184,20 @@ func main() {
 		serverMgr.SetRecordingManager(recordingMgr)
 	}
 
+	// Create launcher manager if launchers configured
+	var launcherMgr *launcher.Manager
+	if len(cfg.Launchers) > 0 {
+		launcherMgr = launcher.NewManager()
+		for _, lcfg := range cfg.Launchers {
+			if err := launcherMgr.AddLauncher(lcfg); err != nil {
+				logger.Error("Failed to add launcher", "name", lcfg.Name, "url", lcfg.URL, "error", err)
+			}
+		}
+		launcherMgr.SetStatusCallback(sseHub.BroadcastLauncherStatus)
+		launcherMgr.SetConnectionCallback(sseHub.BroadcastLauncherConnection)
+		launcherMgr.StartAll()
+	}
+
 	// Add servers from configuration
 	for _, srvCfg := range cfg.Servers {
 		if err := serverMgr.AddServer(srvCfg); err != nil {
@@ -218,6 +233,9 @@ func main() {
 	}
 	if recordingMgr != nil {
 		handlers.SetRecordingManager(recordingMgr)
+	}
+	if launcherMgr != nil {
+		handlers.SetLauncherManager(launcherMgr)
 	}
 
 	// Create dashboard manager if directory specified
@@ -351,6 +369,11 @@ func main() {
 	}
 	if journalMgr != nil {
 		journalMgr.Close()
+	}
+
+	// Shutdown launcher manager
+	if launcherMgr != nil {
+		launcherMgr.Shutdown()
 	}
 
 	// Shutdown server manager

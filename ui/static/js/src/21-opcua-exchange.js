@@ -1149,20 +1149,19 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             updateMap.set(sensor.id, sensor);
         });
 
-        // Обновляем данные в allSensors
-        let hasChanges = false;
+        // Обновляем данные в allSensors (все поля)
         this.allSensors.forEach((sensor, index) => {
             const update = updateMap.get(sensor.id);
-            if (update && update.value !== sensor.value) {
-                this.allSensors[index] = { ...sensor, value: update.value, tick: update.tick };
-                hasChanges = true;
+            if (update) {
+                this.allSensors[index] = { ...sensor, ...update };
             }
         });
 
-        if (!hasChanges) return;
-
         // Обновляем видимые строки в DOM
-        const tbody = document.getElementById(`opcua-sensors-${this.objectName}`);
+        const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
+        if (!panel) return;
+
+        const tbody = panel.querySelector(`#opcua-sensors-${CSS.escape(this.objectName)}`);
         if (!tbody) return;
 
         const rows = tbody.querySelectorAll('tr');
@@ -1171,25 +1170,45 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             if (!sensorId) return;
 
             const update = updateMap.get(sensorId);
-            if (update && update.value !== undefined) {
-                // Value ячейка (class-based selector)
-                const valueCell = row.querySelector('.col-value');
-                if (valueCell) {
-                    const oldValue = valueCell.textContent;
-                    const newValue = String(update.value);
-                    if (oldValue !== newValue) {
-                        valueCell.textContent = newValue;
-                        // CSS анимация изменения
-                        valueCell.classList.remove('value-changed');
-                        void valueCell.offsetWidth; // force reflow
-                        valueCell.classList.add('value-changed');
-                    }
+            if (!update) return;
+
+            // Value
+            const valueCell = row.querySelector('.col-value');
+            if (valueCell && update.value !== undefined) {
+                const oldValue = valueCell.textContent;
+                const newValue = String(update.value);
+                if (oldValue !== newValue) {
+                    valueCell.textContent = newValue;
+                    valueCell.classList.remove('value-changed');
+                    void valueCell.offsetWidth;
+                    valueCell.classList.add('value-changed');
                 }
-                // Tick ячейка (class-based selector)
-                const tickCell = row.querySelector('.col-tick');
-                if (tickCell && update.tick !== undefined) {
-                    tickCell.textContent = String(update.tick);
+            }
+            // Tick
+            const tickCell = row.querySelector('.col-tick');
+            if (tickCell && update.tick !== undefined) {
+                tickCell.textContent = String(update.tick);
+            }
+            // Status
+            const statusCell = row.querySelector('.col-status');
+            if (statusCell && update.status !== undefined) {
+                statusCell.textContent = update.status || '—';
+                statusCell.title = update.status || '';
+                if (update.status && update.status.toLowerCase() !== 'ok') {
+                    statusCell.classList.add('status-bad');
+                } else {
+                    statusCell.classList.remove('status-bad');
                 }
+            }
+            // VType
+            const vtypeCell = row.querySelector('.col-vtype');
+            if (vtypeCell && update.vtype !== undefined) {
+                vtypeCell.textContent = update.vtype || '—';
+            }
+            // Precision
+            const precisionCell = row.querySelector('.col-precision');
+            if (precisionCell && update.precision !== undefined) {
+                precisionCell.textContent = update.precision ?? '—';
             }
         });
     }

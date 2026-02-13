@@ -101,6 +101,9 @@ type Config struct {
 	// Серверы UniSet2 (новый формат)
 	Servers []ServerConfig
 
+	// Launcher'ы
+	Launchers []LauncherConfig
+
 	// Настройки UI
 	UI *UIConfig
 
@@ -180,10 +183,12 @@ func Parse() *Config {
 	cfg := &Config{}
 
 	var unisetURLs stringSlice
+	var launcherURLs stringSlice
 	var controlTokens stringSlice
 	var journalURLs stringSlice
 
 	flag.Var(&unisetURLs, "uniset-url", "UniSet2 HTTP API URL (can be specified multiple times)")
+	flag.Var(&launcherURLs, "launcher-url", "Launcher HTTP API URL (can be specified multiple times)")
 	flag.Var(&journalURLs, "journal-url", "Journal ClickHouse URL (can be specified multiple times, format: clickhouse://host:port/db?table=xxx&name=Name)")
 	flag.StringVar(&cfg.Addr, "addr", ":8181", "Listen address (e.g. :8181 or 127.0.0.1:8181)")
 	flag.DurationVar(&cfg.PollInterval, "poll-interval", 1*time.Second, "UniSet2 polling interval")
@@ -232,6 +237,7 @@ func Parse() *Config {
 			slog.Error("Failed to load config file", "path", cfg.ConfigFile, "error", err)
 		} else {
 			cfg.Servers = yamlConfig.Servers
+			cfg.Launchers = yamlConfig.Launchers
 			cfg.UI = yamlConfig.UI
 			cfg.LogStream = yamlConfig.LogStream
 			if yamlConfig.SensorBatchSize > 0 {
@@ -277,7 +283,49 @@ func Parse() *Config {
 		}
 	}
 
+	// Добавление Launcher'ов из CLI флагов
+	var cliLaunchers []LauncherConfig
+	for _, rawURL := range launcherURLs {
+		cleanURL, token := parseLauncherURL(rawURL)
+		cliLaunchers = append(cliLaunchers, LauncherConfig{
+			URL:          cleanURL,
+			ControlToken: token,
+		})
+	}
+
+	// Объединяем и сортируем Launcher'ы
+	cfg.Launchers = MergeAndSortLaunchers(cfg.Launchers, cliLaunchers)
+
+	// Генерация ID для Launcher'ов без явного ID
+	for i := range cfg.Launchers {
+		if cfg.Launchers[i].ID == "" {
+			cfg.Launchers[i].ID = generateServerID(cfg.Launchers[i].URL)
+		}
+	}
+
+	// Fallback имени Launcher'а на host:port из URL
+	for i := range cfg.Launchers {
+		if cfg.Launchers[i].Name == "" {
+			if u, err := url.Parse(cfg.Launchers[i].URL); err == nil {
+				cfg.Launchers[i].Name = u.Host
+			}
+		}
+	}
+
 	return cfg
+}
+
+// parseLauncherURL извлекает токен из userinfo части URL.
+// Формат: http://token@host:port → cleanURL="http://host:port", token="token"
+// Если userinfo отсутствует, возвращает URL как есть и пустой токен.
+func parseLauncherURL(rawURL string) (cleanURL, token string) {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.User == nil {
+		return rawURL, ""
+	}
+	token = u.User.Username()
+	u.User = nil
+	return u.String(), token
 }
 
 // generateServerID генерирует короткий ID на основе URL
@@ -305,6 +353,30 @@ func MergeAndSortServers(configServers, cliServers []ServerConfig) []ServerConfi
 
 	// Если не было серверов из конфига, сортируем весь результат по алфавиту
 	if len(configServers) == 0 && len(result) > 1 {
+		sort.Slice(result, func(i, j int) bool {
+			return result[i].URL < result[j].URL
+		})
+	}
+
+	return result
+}
+
+// MergeAndSortLaunchers объединяет Launcher'ы из конфига и CLI с правильной сортировкой:
+// - Launcher'ы из конфига сохраняют оригинальный порядок
+// - CLI Launcher'ы сортируются по алфавиту и добавляются в конец
+// - Если нет Launcher'ов из конфига, все сортируются по алфавиту
+func MergeAndSortLaunchers(configLaunchers, cliLaunchers []LauncherConfig) []LauncherConfig {
+	sortedCLI := make([]LauncherConfig, len(cliLaunchers))
+	copy(sortedCLI, cliLaunchers)
+	sort.Slice(sortedCLI, func(i, j int) bool {
+		return sortedCLI[i].URL < sortedCLI[j].URL
+	})
+
+	result := make([]LauncherConfig, 0, len(configLaunchers)+len(sortedCLI))
+	result = append(result, configLaunchers...)
+	result = append(result, sortedCLI...)
+
+	if len(configLaunchers) == 0 && len(result) > 1 {
 		sort.Slice(result, func(i, j int) bool {
 			return result[i].URL < result[j].URL
 		})

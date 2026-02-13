@@ -692,30 +692,32 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         this.pendingUpdates.forEach(u => updateMap.set(u.id, u));
         this.pendingUpdates = [];
 
-        // Update allSensors array
-        this.allSensors.forEach(sensor => {
+        // Update allSensors array (все поля)
+        this.allSensors.forEach((sensor, index) => {
             const update = updateMap.get(sensor.id);
             if (update) {
-                sensor.value = update.value;
+                this.allSensors[index] = { ...sensor, ...update };
             }
         });
 
         // Update visible rows in DOM
-        const tbody = document.getElementById(`opcuasrv-sensors-${this.objectName}`);
+        const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
+        if (!panel) return;
+
+        const tbody = panel.querySelector(`#opcuasrv-sensors-${CSS.escape(this.objectName)}`);
         if (!tbody) return;
 
         tbody.querySelectorAll('tr[data-sensor-id]').forEach(row => {
             const sensorId = parseInt(row.dataset.sensorId, 10);
             const update = updateMap.get(sensorId);
-            if (update) {
-                const valueCell = row.querySelector('.sensor-value');
-                if (valueCell) {
-                    valueCell.textContent = formatValue(update.value);
-                    // CSS animation trigger via reflow
-                    valueCell.classList.remove('value-updated');
-                    void valueCell.offsetWidth;
-                    valueCell.classList.add('value-updated');
-                }
+            if (!update) return;
+
+            const valueCell = row.querySelector('.sensor-value');
+            if (valueCell && update.value !== undefined) {
+                valueCell.textContent = formatValue(update.value);
+                valueCell.classList.remove('value-updated');
+                void valueCell.offsetWidth;
+                valueCell.classList.add('value-updated');
             }
         });
     }

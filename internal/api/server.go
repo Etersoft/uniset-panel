@@ -169,6 +169,17 @@ func (s *Server) setupRoutes(staticFS fs.FS) {
 	s.mux.HandleFunc("POST /api/control/release", s.handlers.ReleaseControl)
 	s.mux.HandleFunc("POST /api/control/ping", s.handlers.PingControl)
 
+	// Launcher API
+	s.mux.HandleFunc("GET /api/launchers", s.handlers.GetLaunchers)
+	s.mux.HandleFunc("GET /api/launchers/{id}/status", s.handlers.GetLauncherStatus)
+	s.mux.HandleFunc("GET /api/launchers/{id}/processes", s.handlers.GetLauncherProcesses)
+	s.mux.HandleFunc("GET /api/launchers/{id}/groups", s.handlers.GetLauncherGroups)
+	s.mux.HandleFunc("POST /api/launchers/{id}/process/{name}/restart", s.handlers.RestartLauncherProcess)
+	s.mux.HandleFunc("POST /api/launchers/{id}/process/{name}/stop", s.handlers.StopLauncherProcess)
+	s.mux.HandleFunc("POST /api/launchers/{id}/process/{name}/start", s.handlers.StartLauncherProcess)
+	s.mux.HandleFunc("POST /api/launchers/{id}/restart-all", s.handlers.RestartAllLauncherProcesses)
+	s.mux.HandleFunc("POST /api/launchers/{id}/reload-all", s.handlers.ReloadAllLauncherProcesses)
+
 	// Recording API
 	s.mux.HandleFunc("GET /api/recording/status", s.handlers.GetRecordingStatus)
 	s.mux.HandleFunc("POST /api/recording/start", s.handlers.StartRecording)

@@ -15,9 +15,19 @@ type JournalConfig struct {
 	Database string `yaml:"database,omitempty"` // База данных (опционально, переопределяет URL)
 }
 
+// LauncherConfig описывает конфигурацию одного Launcher'а
+type LauncherConfig struct {
+	URL          string `yaml:"url"`
+	Name         string `yaml:"name,omitempty"`         // человекочитаемое имя (опционально)
+	ID           string `yaml:"id,omitempty"`           // уникальный идентификатор (генерируется если не указан)
+	ReadToken    string `yaml:"readToken,omitempty"`
+	ControlToken string `yaml:"controlToken,omitempty"`
+}
+
 // ConfigFile представляет структуру YAML файла конфигурации
 type ConfigFile struct {
 	Servers         []ServerConfig   `yaml:"servers"`
+	Launchers       []LauncherConfig `yaml:"launchers,omitempty"`       // Launcher'ы
 	UI              *UIConfig        `yaml:"ui,omitempty"`
 	LogStream       *LogStreamConfig `yaml:"logStream,omitempty"`
 	SensorBatchSize int              `yaml:"sensorBatchSize,omitempty"` // Макс. датчиков в одном запросе (default: 300)

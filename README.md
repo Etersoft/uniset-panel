@@ -12,6 +12,7 @@
 - Просмотр внутренних переменных объекта в реальном времени
 - Графики для аналоговых и дискретных величин (Chart.js)
 - **Dashboards** — настраиваемые панели мониторинга с виджетами (Gauge, Level, LED, Digital, Chart и др.)
+- **Launcher** — мониторинг и управление процессами через UniSet2 Launcher
 - **Journals** — интеграция с ClickHouse для просмотра журналов сообщений
 - Хранение истории: in-memory или SQLite
 - Единый исполняемый файл (веб-ресурсы встроены через go:embed)
@@ -47,6 +48,7 @@
 
 **Документация:**
 - [Dashboards](docs/dashboards.md) — настройка виджетов и панелей
+- [Launcher](docs/launcher.md) — мониторинг и управление Launcher'ами
 - [Journals](docs/journal.md) — подключение ClickHouse журналов
 - [Control mode](docs/control.md) — режим управления
 - [Recording](docs/recording.md) — запись истории
@@ -82,6 +84,7 @@ go build -o uniset-panel ./cmd/server
 | `--dashboards-dir` | - | Директория с серверными дашбордами |
 | `--journal-url` | - | ClickHouse URL для журналов (можно несколько раз) |
 | `--sm-url` | - | SharedMemory HTTP API URL |
+| `--launcher-url` | - | Launcher HTTP API URL (можно несколько) |
 | `--control-token` | - | Токен доступа для режима управления (можно несколько) |
 | `--control-timeout` | `60s` | Таймаут сессии управления |
 | `--recording-path` | `./recording.db` | Путь к файлу записи |
@@ -105,6 +108,9 @@ go build -o uniset-panel ./cmd/server
 
 # С журналами ClickHouse
 ./uniset-panel --uniset-url http://localhost:8080 --journal-url "clickhouse://localhost:9000/logs"
+
+# С Launcher'ом
+./uniset-panel --uniset-url http://localhost:8080 --launcher-url http://localhost:8111
 
 # С режимом управления
 ./uniset-panel --uniset-url http://localhost:8080 --control-token secret123
@@ -162,6 +168,7 @@ uniset-panel/
 │   ├── recording/           # система записи истории в SQLite
 │   ├── dashboard/           # серверные дашборды
 │   ├── journal/             # ClickHouse журналы
+│   ├── launcher/            # Launcher клиент и менеджер
 │   ├── ionc/                # IONC poller
 │   ├── modbus/              # Modbus poller
 │   ├── opcua/               # OPCUA poller
