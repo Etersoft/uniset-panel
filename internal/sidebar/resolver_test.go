@@ -188,18 +188,31 @@ func TestResolve_OtherGroupOmitted(t *testing.T) {
 func TestResolve_EmptyConfig(t *testing.T) {
 	entities := []SidebarItem{
 		{Type: "object", Name: "Obj1"},
+		{Type: "launcher", Name: "Node1"},
 	}
 
-	// nil config
+	// nil config → дефолтные группы по типам
 	result := Resolve(nil, entities)
-	if result != nil {
-		t.Errorf("nil config should return nil, got %v", result)
+	if len(result) != 2 { // Objects + Launchers
+		t.Fatalf("nil config should return 2 default groups, got %d", len(result))
+	}
+	if result[0].Name != "Objects" {
+		t.Errorf("first default group should be 'Objects', got %q", result[0].Name)
+	}
+	if result[1].Name != "Launchers" {
+		t.Errorf("second default group should be 'Launchers', got %q", result[1].Name)
 	}
 
-	// empty config
+	// empty config → дефолтные группы по типам
 	result = Resolve([]config.SidebarGroupConfig{}, entities)
-	if result != nil {
-		t.Errorf("empty config should return nil, got %v", result)
+	if len(result) != 2 {
+		t.Fatalf("empty config should return 2 default groups, got %d", len(result))
+	}
+
+	// nil entities → пустой slice
+	result = Resolve(nil, nil)
+	if result == nil || len(result) != 0 {
+		t.Errorf("nil entities should return empty slice, got %v", result)
 	}
 }
 

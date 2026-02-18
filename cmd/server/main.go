@@ -285,63 +285,67 @@ func main() {
 		handlers.SetOPCUAPoller(opcuaPollerInstance)
 	}
 
-	// Resolve sidebar groups if configured
-	if cfg.Sidebar != nil && len(cfg.Sidebar.Groups) > 0 {
-		var entities []sidebar.SidebarItem
+	// Сбор всех сущностей для sidebar
+	var sidebarEntities []sidebar.SidebarItem
 
-		// Collect objects from all servers
-		if allObjects, err := serverMgr.GetAllObjects(); err == nil {
-			for _, obj := range allObjects {
-				entities = append(entities, sidebar.SidebarItem{
-					Type:     "object",
-					Name:     obj.ObjectName,
-					ServerID: obj.ServerID,
-				})
-			}
-		}
-
-		// Collect servers
-		for _, srv := range cfg.Servers {
-			entities = append(entities, sidebar.SidebarItem{
-				Type: "server",
-				Name: srv.ID,
+	// Объекты со всех серверов
+	if allObjects, err := serverMgr.GetAllObjects(); err == nil {
+		for _, obj := range allObjects {
+			sidebarEntities = append(sidebarEntities, sidebar.SidebarItem{
+				Type:     "object",
+				Name:     obj.ObjectName,
+				ServerID: obj.ServerID,
 			})
 		}
-
-		// Collect launchers
-		if launcherMgr != nil {
-			for _, node := range launcherMgr.ListNodes() {
-				entities = append(entities, sidebar.SidebarItem{
-					Type: "launcher",
-					Name: node.Name,
-				})
-			}
-		}
-
-		// Collect dashboards
-		if dashboardMgr != nil {
-			for _, info := range dashboardMgr.ListInfo() {
-				entities = append(entities, sidebar.SidebarItem{
-					Type: "dashboard",
-					Name: info.Name,
-				})
-			}
-		}
-
-		// Collect journals
-		if journalMgr != nil {
-			for _, info := range journalMgr.GetAllInfos() {
-				entities = append(entities, sidebar.SidebarItem{
-					Type: "journal",
-					Name: info.Name,
-				})
-			}
-		}
-
-		groups := sidebar.Resolve(cfg.Sidebar.Groups, entities)
-		handlers.SetSidebarGroups(groups)
-		logger.Info("Sidebar groups configured", "groups", len(groups), "entities", len(entities))
 	}
+
+	// Серверы
+	for _, srv := range cfg.Servers {
+		sidebarEntities = append(sidebarEntities, sidebar.SidebarItem{
+			Type: "server",
+			Name: srv.ID,
+		})
+	}
+
+	// Launcher'ы
+	if launcherMgr != nil {
+		for _, node := range launcherMgr.ListNodes() {
+			sidebarEntities = append(sidebarEntities, sidebar.SidebarItem{
+				Type: "launcher",
+				Name: node.Name,
+			})
+		}
+	}
+
+	// Dashboard'ы (серверные)
+	if dashboardMgr != nil {
+		for _, info := range dashboardMgr.ListInfo() {
+			sidebarEntities = append(sidebarEntities, sidebar.SidebarItem{
+				Type: "dashboard",
+				Name: info.Name,
+			})
+		}
+	}
+
+	// Журналы
+	if journalMgr != nil {
+		for _, info := range journalMgr.GetAllInfos() {
+			sidebarEntities = append(sidebarEntities, sidebar.SidebarItem{
+				Type: "journal",
+				Name: info.Name,
+			})
+		}
+	}
+
+	// Резолвим sidebar: если группы сконфигурированы — по правилам, иначе — дефолт по типам
+	var sidebarConfig []config.SidebarGroupConfig
+	if cfg.Sidebar != nil {
+		sidebarConfig = cfg.Sidebar.Groups
+	}
+	sidebarGroups := sidebar.Resolve(sidebarConfig, sidebarEntities)
+	handlers.SetSidebarGroups(sidebarGroups)
+	logger.Info("Sidebar initialized", "groups", len(sidebarGroups), "entities", len(sidebarEntities),
+		"configured", cfg.Sidebar != nil && len(cfg.Sidebar.Groups) > 0)
 
 	// Create SM poller if configured
 	var smPoller *sm.Poller

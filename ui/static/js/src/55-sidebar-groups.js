@@ -1,0 +1,282 @@
+// Sidebar Groups — рендеринг сгруппированного sidebar
+// Загружается между UI-функциями (50-59 диапазон)
+
+const ENTITY_TYPE_ORDER = ['object', 'launcher', 'journal', 'dashboard', 'server'];
+
+const ENTITY_TYPE_LABELS = {
+    object: 'Objects',
+    launcher: 'Launchers',
+    journal: 'Journals',
+    dashboard: 'Dashboards',
+    server: 'Servers'
+};
+
+const ENTITY_TYPE_BADGE = {
+    object: 'Obj',
+    launcher: 'Lnc',
+    journal: 'Jrn',
+    dashboard: 'Dsh',
+    server: 'Srv'
+};
+
+// Загрузка sidebar конфигурации с сервера
+async function loadSidebar() {
+    try {
+        const response = await fetch('/api/sidebar');
+        if (!response.ok) {
+            console.warn('Sidebar API error:', response.status);
+            state.sidebarGroups = [];
+            return;
+        }
+        const data = await response.json();
+        state.sidebarGroups = Array.isArray(data.groups) ? data.groups : [];
+        console.log(`Sidebar: ${state.sidebarGroups.length} groups loaded`);
+    } catch (err) {
+        console.warn('Failed to load sidebar config:', err);
+        state.sidebarGroups = [];
+    }
+}
+
+// Загрузка collapse состояния групп из localStorage
+function loadGroupCollapseState() {
+    try {
+        const saved = localStorage.getItem('uniset-panel-group-collapse');
+        if (saved) {
+            state.groupCollapseState = JSON.parse(saved);
+        }
+    } catch (err) {
+        state.groupCollapseState = {};
+    }
+}
+
+// Сохранение collapse состояния групп в localStorage
+function saveGroupCollapseState() {
+    try {
+        localStorage.setItem('uniset-panel-group-collapse', JSON.stringify(state.groupCollapseState));
+    } catch (err) {
+        // ignore
+    }
+}
+
+// Основная функция рендеринга всех групп
+function renderSidebarGroups() {
+    const container = document.getElementById('sidebar-groups');
+    if (!container || !state.sidebarGroups) return;
+
+    container.innerHTML = '';
+    loadGroupCollapseState();
+
+    for (const group of state.sidebarGroups) {
+        renderSidebarGroup(group, container);
+    }
+
+    // Пользовательские dashboard'ы из localStorage
+    renderUserDashboardsGroup(container);
+}
+
+// Рендеринг одной группы
+function renderSidebarGroup(group, container) {
+    const groupDiv = document.createElement('div');
+    groupDiv.className = 'sidebar-group';
+    groupDiv.dataset.groupName = group.name;
+
+    const isCollapsed = state.groupCollapseState[group.name] === true;
+    if (isCollapsed) {
+        groupDiv.classList.add('collapsed');
+    }
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'sidebar-group-header';
+    header.innerHTML = `
+        <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 9l6 6 6-6"/>
+        </svg>
+        <span class="sidebar-group-title">${escapeHtml(group.name)}</span>
+        <span class="sidebar-group-count">${group.items ? group.items.length : 0}</span>
+    `;
+    header.addEventListener('click', () => {
+        groupDiv.classList.toggle('collapsed');
+        state.groupCollapseState[group.name] = groupDiv.classList.contains('collapsed');
+        saveGroupCollapseState();
+    });
+    groupDiv.appendChild(header);
+
+    // Items container
+    const itemsDiv = document.createElement('div');
+    itemsDiv.className = 'sidebar-group-items';
+
+    if (!group.items || group.items.length === 0) {
+        groupDiv.appendChild(itemsDiv);
+        container.appendChild(groupDiv);
+        return;
+    }
+
+    if (group.groupByType) {
+        renderGroupByType(group.items, itemsDiv);
+    } else {
+        renderGroupFlat(group.items, itemsDiv);
+    }
+
+    groupDiv.appendChild(itemsDiv);
+    container.appendChild(groupDiv);
+}
+
+// Рендеринг плоского списка (без разбивки по типам)
+function renderGroupFlat(items, container) {
+    const ul = document.createElement('ul');
+    ul.className = 'sidebar-group-list';
+
+    for (const item of items) {
+        const li = createSidebarGroupItem(item);
+        ul.appendChild(li);
+    }
+    container.appendChild(ul);
+}
+
+// Рендеринг с разбивкой по типам
+function renderGroupByType(items, container) {
+    // Группируем по типу
+    const byType = {};
+    for (const item of items) {
+        if (!byType[item.type]) byType[item.type] = [];
+        byType[item.type].push(item);
+    }
+
+    for (const type of ENTITY_TYPE_ORDER) {
+        if (!byType[type] || byType[type].length === 0) continue;
+
+        const section = document.createElement('div');
+        section.className = 'sidebar-type-section';
+
+        const typeHeader = document.createElement('div');
+        typeHeader.className = 'sidebar-type-header';
+        typeHeader.textContent = ENTITY_TYPE_LABELS[type] || type;
+        section.appendChild(typeHeader);
+
+        const ul = document.createElement('ul');
+        ul.className = 'sidebar-type-items';
+        for (const item of byType[type]) {
+            ul.appendChild(createSidebarGroupItem(item, true));
+        }
+        section.appendChild(ul);
+        container.appendChild(section);
+    }
+}
+
+// Создание одного элемента sidebar
+function createSidebarGroupItem(item, hideBadge) {
+    const li = document.createElement('li');
+    li.className = 'sidebar-group-item';
+    li.dataset.type = item.type;
+    li.dataset.name = item.name;
+    if (item.serverId) {
+        li.dataset.serverId = item.serverId;
+    }
+
+    // Status dot для объектов и серверов
+    if (item.type === 'object' || item.type === 'server') {
+        const dot = document.createElement('span');
+        dot.className = 'sidebar-group-status';
+        li.appendChild(dot);
+    }
+
+    // Type badge (только в плоском режиме)
+    if (!hideBadge) {
+        const badge = document.createElement('span');
+        badge.className = `entity-type-badge entity-type-${item.type}`;
+        badge.textContent = ENTITY_TYPE_BADGE[item.type] || item.type;
+        li.appendChild(badge);
+    }
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'sidebar-group-item-name';
+    nameSpan.textContent = item.name;
+    li.appendChild(nameSpan);
+
+    li.addEventListener('click', () => {
+        activateSidebarGroupItem(item.type, item.name, item.serverId);
+        // Подсветка активного элемента
+        document.querySelectorAll('.sidebar-group-item.active').forEach(el => el.classList.remove('active'));
+        li.classList.add('active');
+    });
+
+    return li;
+}
+
+// Активация элемента sidebar — открытие соответствующего таба
+function activateSidebarGroupItem(type, name, serverId) {
+    switch (type) {
+        case 'object': {
+            // Нужен serverName для openObjectTab — берём из state.servers
+            const serverInfo = state.servers.get(serverId);
+            const serverName = serverInfo ? serverInfo.name : (serverId || '');
+            openObjectTab(name, serverId, serverName);
+            break;
+        }
+        case 'launcher': {
+            // Ищем node по имени в state.nodes
+            for (const [nodeId, node] of state.nodes) {
+                if (node.name === name) {
+                    openLauncherTab(nodeId, node.name, node.launcherUrl, node.hasControl);
+                    return;
+                }
+            }
+            break;
+        }
+        case 'dashboard': {
+            if (dashboardManager) {
+                dashboardManager.loadDashboard(name);
+            }
+            break;
+        }
+        case 'journal': {
+            if (typeof journalManager !== 'undefined' && journalManager) {
+                // Ищем journal по имени
+                for (const [id, journal] of journalManager.journals) {
+                    if (journal.name === name) {
+                        journalManager.openJournal(id);
+                        return;
+                    }
+                }
+            }
+            break;
+        }
+        case 'server': {
+            // Скролл к серверной группе в объектах
+            for (const [serverId, server] of state.servers) {
+                if (server.id === name || server.name === name) {
+                    const group = document.querySelector(`.server-group[data-server-id="${serverId}"]`);
+                    if (group) {
+                        group.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                    return;
+                }
+            }
+            break;
+        }
+    }
+}
+
+// Рендеринг пользовательских dashboard'ов в отдельную группу
+function renderUserDashboardsGroup(container) {
+    try {
+        const saved = localStorage.getItem('user-dashboards');
+        if (!saved) return;
+
+        const userDashboards = JSON.parse(saved);
+        if (!Array.isArray(userDashboards) || userDashboards.length === 0) return;
+
+        const items = userDashboards.map(name => ({
+            type: 'dashboard',
+            name: name
+        }));
+
+        renderSidebarGroup({
+            name: 'Custom',
+            items: items
+        }, container);
+    } catch (err) {
+        // ignore
+    }
+}

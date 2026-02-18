@@ -40,6 +40,8 @@ const state = window.state = {
         reconnectTimerId: null,     // ID таймера переподключения (для очистки)
         statusSyncInterval: null    // ID интервала периодической синхронизации статуса серверов
     },
+    sidebarGroups: null,       // null = legacy mode, array = group mode
+    groupCollapseState: {},    // { groupName: boolean } — collapse состояние групп sidebar
     control: {
         enabled: false,       // включён ли контроль на сервере
         token: null,          // текущий токен (из localStorage или URL)

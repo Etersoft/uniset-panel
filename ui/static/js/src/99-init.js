@@ -15,7 +15,7 @@ async function loadAppVersion() {
 }
 
 // Инициализация
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     // Загружаем версию приложения
     loadAppVersion();
 
@@ -32,6 +32,9 @@ document.addEventListener('DOMContentLoaded', () => {
     loadSensorsConfig().catch(err => {
         console.warn('Не удалось загрузить конфигурацию сенсоров:', err);
     });
+
+    // Загружаем sidebar конфигурацию (группы)
+    await loadSidebar();
 
     // Загружаем список объектов
     fetchObjects()
@@ -86,6 +89,18 @@ document.addEventListener('DOMContentLoaded', () => {
     initJournals().catch(err => {
         console.warn('Failed to initialize journals:', err);
     });
+
+    // Показываем sidebar группы, скрываем hardcoded секции
+    const groupsContainer = document.getElementById('sidebar-groups');
+    if (groupsContainer) {
+        groupsContainer.style.display = '';
+    }
+    const legacySections = ['launchers-section', 'objects-section', 'journals-section', 'dashboards-section', 'servers-section'];
+    for (const id of legacySections) {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    }
+    renderSidebarGroups();
 });
 
 // Инициализация селектора интервала опроса

@@ -57,12 +57,24 @@ func MatchEntity(pattern, entityID string) bool {
 	return matched
 }
 
+// defaultTypeOrder задаёт порядок типов для дефолтной группировки
+var defaultTypeOrder = []struct {
+	Type string
+	Name string
+}{
+	{"object", "Objects"},
+	{"launcher", "Launchers"},
+	{"journal", "Journals"},
+	{"dashboard", "Dashboards"},
+	{"server", "Servers"},
+}
+
 // Resolve резолвит правила группировки из конфига против списка известных сущностей.
-// Возвращает nil если конфиг nil или пуст (legacy mode).
+// Если конфиг пуст — формирует дефолтные группы по типам.
 // Несовпавшие сущности попадают в автогруппу "Прочие".
 func Resolve(groups []config.SidebarGroupConfig, entities []SidebarItem) []SidebarGroup {
 	if len(groups) == 0 {
-		return nil
+		return resolveDefault(entities)
 	}
 
 	matched := make(map[string]bool)
@@ -103,6 +115,33 @@ func Resolve(groups []config.SidebarGroupConfig, entities []SidebarItem) []Sideb
 		result = append(result, SidebarGroup{
 			Name:  "Прочие",
 			Items: other,
+		})
+	}
+
+	return result
+}
+
+// resolveDefault формирует дефолтные группы по типам (когда конфиг не задан)
+func resolveDefault(entities []SidebarItem) []SidebarGroup {
+	if len(entities) == 0 {
+		return []SidebarGroup{}
+	}
+
+	// Группируем по типу
+	byType := make(map[string][]SidebarItem)
+	for _, entity := range entities {
+		byType[entity.Type] = append(byType[entity.Type], entity)
+	}
+
+	var result []SidebarGroup
+	for _, dt := range defaultTypeOrder {
+		items := byType[dt.Type]
+		if len(items) == 0 {
+			continue
+		}
+		result = append(result, SidebarGroup{
+			Name:  dt.Name,
+			Items: items,
 		})
 	}
 
