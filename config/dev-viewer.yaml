@@ -29,3 +29,21 @@ servers:
 journals:
   - url: "clickhouse://localhost:9000/uniset"
     name: "DevJournal"
+
+# ============================================================================
+# Sidebar groups
+# ============================================================================
+sidebar:
+  groups:
+    - name: "Управление"
+      patterns:
+        - "launcher:*"
+        - "dashboard:*"
+    - name: "Мониторинг"
+      patterns:
+        - "object:*"
+        - "journal:*"
+      group_by_type: true
+    - name: "Инфраструктура"
+      patterns:
+        - "server:*"
