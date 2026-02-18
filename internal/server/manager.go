@@ -290,8 +290,12 @@ func (m *Manager) GetAllObjects() ([]ObjectWithServer, error) {
 	for _, instance := range instances {
 		objects, err := instance.GetObjects()
 		if err != nil {
-			errors = append(errors, fmt.Errorf("server %s: %w", instance.Config.ID, err))
-			continue
+			// Сервер недоступен — используем кеш
+			objects = instance.GetCachedObjects()
+			if objects == nil {
+				errors = append(errors, fmt.Errorf("server %s: %w", instance.Config.ID, err))
+				continue
+			}
 		}
 
 		serverName := instance.Config.Name
@@ -345,8 +349,14 @@ func (m *Manager) GetAllObjectsGrouped() ([]ServerObjects, error) {
 
 		objects, err := instance.GetObjects()
 		if err != nil {
-			errors = append(errors, fmt.Errorf("server %s: %w", instance.Config.ID, err))
-		} else {
+			// Сервер недоступен — используем кеш
+			if cached := instance.GetCachedObjects(); cached != nil {
+				objects = cached
+			} else {
+				errors = append(errors, fmt.Errorf("server %s: %w", instance.Config.ID, err))
+			}
+		}
+		if objects != nil {
 			serverObj.Objects = objects
 		}
 

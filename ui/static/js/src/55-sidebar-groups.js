@@ -210,6 +210,18 @@ function updateGroupEntityStatus(type, name, connected) {
             dot.classList.toggle('disconnected', !connected);
         }
     });
+
+    // Объекты наследуют статус от своего сервера
+    if (type === 'server') {
+        const objSelector = `.sidebar-group-item[data-type="object"][data-server-id="${CSS.escape(name)}"]`;
+        container.querySelectorAll(objSelector).forEach(item => {
+            const dot = item.querySelector('.sidebar-group-status');
+            if (dot) {
+                dot.classList.toggle('connected', connected);
+                dot.classList.toggle('disconnected', !connected);
+            }
+        });
+    }
 }
 
 // Обновление sidebar при изменении списка объектов

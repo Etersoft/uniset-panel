@@ -52,6 +52,7 @@ type Instance struct {
 	lastPoll         time.Time
 	lastError        string
 	objectCount      int
+	cachedObjects    []string
 	statusCallback   StatusEventCallback
 	objectsCallback  ObjectsChangedCallback
 	healthInterval   time.Duration
@@ -342,8 +343,30 @@ func (i *Instance) GetObjects() ([]string, error) {
 		return nil, err
 	}
 
-	i.SetObjectCount(len(objects))
+	i.mu.Lock()
+	i.objectCount = len(objects)
+	i.cachedObjects = objects
+	i.mu.Unlock()
 	return objects, nil
+}
+
+// GetCachedObjects возвращает последний известный список объектов.
+// Если кеш пуст — делает запрос к серверу.
+func (i *Instance) GetCachedObjects() []string {
+	i.mu.RLock()
+	cached := i.cachedObjects
+	i.mu.RUnlock()
+
+	if cached != nil {
+		return cached
+	}
+
+	// Кеш пуст — пробуем получить с сервера
+	objects, err := i.GetObjects()
+	if err != nil {
+		return nil
+	}
+	return objects
 }
 
 // GetObjectData возвращает данные объекта
