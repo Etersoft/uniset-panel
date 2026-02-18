@@ -258,6 +258,47 @@ function activateSidebarGroupItem(type, name, serverId) {
     }
 }
 
+// Обновление статуса сущности в sidebar группах (вызывается из SSE хуков)
+// type: 'server'|'launcher'|'object', name: ID сущности, connected: boolean
+function updateGroupEntityStatus(type, name, connected) {
+    const container = document.getElementById('sidebar-groups');
+    if (!container) return;
+
+    const selector = `.sidebar-group-item[data-type="${type}"][data-name="${CSS.escape(name)}"]`;
+    const items = container.querySelectorAll(selector);
+    items.forEach(item => {
+        const dot = item.querySelector('.sidebar-group-status');
+        if (dot) {
+            dot.classList.toggle('connected', connected);
+            dot.classList.toggle('disconnected', !connected);
+        }
+    });
+}
+
+// Обновление sidebar при изменении списка объектов (новый сервер подключился и т.д.)
+async function refreshSidebarGroups() {
+    await loadSidebar();
+    renderSidebarGroups();
+    // Восстанавливаем статусы после перерисовки
+    applySidebarStatuses();
+}
+
+// Применяет текущие статусы из state к точкам в sidebar
+function applySidebarStatuses() {
+    // Серверы
+    for (const [serverId, server] of state.servers) {
+        if (server.connected !== undefined) {
+            updateGroupEntityStatus('server', serverId, server.connected);
+        }
+    }
+    // Лаунчеры — по имени через state.nodes
+    for (const [nodeId, node] of state.nodes) {
+        if (node.connected !== undefined) {
+            updateGroupEntityStatus('launcher', node.name, node.connected);
+        }
+    }
+}
+
 // Рендеринг пользовательских dashboard'ов в отдельную группу
 function renderUserDashboardsGroup(container) {
     try {

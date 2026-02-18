@@ -101,6 +101,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (el) el.style.display = 'none';
     }
     renderSidebarGroups();
+    applySidebarStatuses();
+    // SSE статусы серверов приходят асинхронно, повторно применяем после стабилизации
+    setTimeout(applySidebarStatuses, 3000);
 });
 
 // Инициализация селектора интервала опроса

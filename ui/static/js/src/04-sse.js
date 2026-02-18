@@ -58,6 +58,11 @@ function initSSE() {
             // Запускаем периодическую синхронизацию статуса серверов
             // (ловит пропущенные server_status SSE-события)
             startServerStatusSync();
+
+            // Обновляем статусы в sidebar группах
+            if (typeof applySidebarStatuses === 'function') {
+                applySidebarStatuses();
+            }
         } catch (err) {
             console.warn('SSE: Error парсинга connected:', err);
         }
@@ -512,6 +517,11 @@ function initSSE() {
 
             // Обновляем список объектов в sidebar
             refreshObjectsList();
+
+            // Обновляем sidebar группы (могли появиться новые объекты)
+            if (typeof refreshSidebarGroups === 'function') {
+                refreshSidebarGroups();
+            }
         } catch (err) {
             console.warn('SSE: Error обработки objects_list:', err);
         }

@@ -196,6 +196,11 @@ function updateServerStatus(serverId, connected) {
             panel.classList.add('server-disconnected');
         }
     });
+
+    // Обновляем статус в sidebar группах
+    if (typeof updateGroupEntityStatus === 'function') {
+        updateGroupEntityStatus('server', serverId, connected);
+    }
 }
 
 
@@ -724,6 +729,11 @@ function initSSE() {
             // Запускаем периодическую синхронизацию статуса серверов
             // (ловит пропущенные server_status SSE-события)
             startServerStatusSync();
+
+            // Обновляем статусы в sidebar группах
+            if (typeof applySidebarStatuses === 'function') {
+                applySidebarStatuses();
+            }
         } catch (err) {
             console.warn('SSE: Error парсинга connected:', err);
         }
@@ -1178,6 +1188,11 @@ function initSSE() {
 
             // Обновляем список объектов в sidebar
             refreshObjectsList();
+
+            // Обновляем sidebar группы (могли появиться новые объекты)
+            if (typeof refreshSidebarGroups === 'function') {
+                refreshSidebarGroups();
+            }
         } catch (err) {
             console.warn('SSE: Error обработки objects_list:', err);
         }
@@ -14211,11 +14226,16 @@ function updateLauncherNodeStatus(nodeId, connected) {
     }
 
     const item = document.querySelector(`.launcher-sidebar-item[data-node-id="${nodeId}"]`);
-    if (!item) return;
+    if (item) {
+        const dot = item.querySelector('.server-status-dot');
+        if (dot) {
+            dot.className = `server-status-dot${connected ? '' : ' disconnected'}`;
+        }
+    }
 
-    const dot = item.querySelector('.server-status-dot');
-    if (dot) {
-        dot.className = `server-status-dot${connected ? '' : ' disconnected'}`;
+    // Обновляем статус в sidebar группах (по имени ноды)
+    if (typeof updateGroupEntityStatus === 'function' && nodeState) {
+        updateGroupEntityStatus('launcher', nodeState.name, connected);
     }
 }
 
@@ -16443,6 +16463,47 @@ function activateSidebarGroupItem(type, name, serverId) {
                 }
             }
             break;
+        }
+    }
+}
+
+// Обновление статуса сущности в sidebar группах (вызывается из SSE хуков)
+// type: 'server'|'launcher'|'object', name: ID сущности, connected: boolean
+function updateGroupEntityStatus(type, name, connected) {
+    const container = document.getElementById('sidebar-groups');
+    if (!container) return;
+
+    const selector = `.sidebar-group-item[data-type="${type}"][data-name="${CSS.escape(name)}"]`;
+    const items = container.querySelectorAll(selector);
+    items.forEach(item => {
+        const dot = item.querySelector('.sidebar-group-status');
+        if (dot) {
+            dot.classList.toggle('connected', connected);
+            dot.classList.toggle('disconnected', !connected);
+        }
+    });
+}
+
+// Обновление sidebar при изменении списка объектов (новый сервер подключился и т.д.)
+async function refreshSidebarGroups() {
+    await loadSidebar();
+    renderSidebarGroups();
+    // Восстанавливаем статусы после перерисовки
+    applySidebarStatuses();
+}
+
+// Применяет текущие статусы из state к точкам в sidebar
+function applySidebarStatuses() {
+    // Серверы
+    for (const [serverId, server] of state.servers) {
+        if (server.connected !== undefined) {
+            updateGroupEntityStatus('server', serverId, server.connected);
+        }
+    }
+    // Лаунчеры — по имени через state.nodes
+    for (const [nodeId, node] of state.nodes) {
+        if (node.connected !== undefined) {
+            updateGroupEntityStatus('launcher', node.name, node.connected);
         }
     }
 }
@@ -22311,6 +22372,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (el) el.style.display = 'none';
     }
     renderSidebarGroups();
+    applySidebarStatuses();
+    // SSE статусы серверов приходят асинхронно, повторно применяем после стабилизации
+    setTimeout(applySidebarStatuses, 3000);
 });
 
 // Инициализация селектора интервала опроса

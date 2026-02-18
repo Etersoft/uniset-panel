@@ -8535,6 +8535,15 @@ button.rotate-quick-btn:active {
     border-radius: 50%;
     background: var(--text-muted);
     flex-shrink: 0;
+    transition: background 0.3s;
+}
+
+.sidebar-group-status.connected {
+    background: var(--accent-green, #4caf50);
+}
+
+.sidebar-group-status.disconnected {
+    background: var(--accent-red);
 }
 
 /* Entity type badges */

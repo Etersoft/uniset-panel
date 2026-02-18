@@ -589,11 +589,16 @@ function updateLauncherNodeStatus(nodeId, connected) {
     }
 
     const item = document.querySelector(`.launcher-sidebar-item[data-node-id="${nodeId}"]`);
-    if (!item) return;
+    if (item) {
+        const dot = item.querySelector('.server-status-dot');
+        if (dot) {
+            dot.className = `server-status-dot${connected ? '' : ' disconnected'}`;
+        }
+    }
 
-    const dot = item.querySelector('.server-status-dot');
-    if (dot) {
-        dot.className = `server-status-dot${connected ? '' : ' disconnected'}`;
+    // Обновляем статус в sidebar группах (по имени ноды)
+    if (typeof updateGroupEntityStatus === 'function' && nodeState) {
+        updateGroupEntityStatus('launcher', nodeState.name, connected);
     }
 }
 
