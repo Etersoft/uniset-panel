@@ -24,6 +24,20 @@ type LauncherConfig struct {
 	ControlToken string `yaml:"controlToken,omitempty"`
 }
 
+// SidebarGroupConfig описывает одну группу в sidebar
+type SidebarGroupConfig struct {
+	Name        string   `yaml:"name"`
+	Icon        string   `yaml:"icon,omitempty"`
+	Items       []string `yaml:"items,omitempty"`
+	Patterns    []string `yaml:"patterns,omitempty"`
+	GroupByType bool     `yaml:"group_by_type,omitempty"`
+}
+
+// SidebarConfig описывает конфигурацию sidebar
+type SidebarConfig struct {
+	Groups []SidebarGroupConfig `yaml:"groups,omitempty"`
+}
+
 // ConfigFile представляет структуру YAML файла конфигурации
 type ConfigFile struct {
 	Servers         []ServerConfig   `yaml:"servers"`
@@ -33,6 +47,7 @@ type ConfigFile struct {
 	SensorBatchSize int              `yaml:"sensorBatchSize,omitempty"` // Макс. датчиков в одном запросе (default: 300)
 	Control         *ControlConfig   `yaml:"control,omitempty"`         // Настройки контроля доступа
 	Journals        []JournalConfig  `yaml:"journals,omitempty"`        // Журналы сообщений (ClickHouse)
+	Sidebar         *SidebarConfig   `yaml:"sidebar,omitempty"`         // Конфигурация sidebar групп
 }
 
 // LoadFromYAML загружает полную конфигурацию из YAML файла
