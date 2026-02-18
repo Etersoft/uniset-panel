@@ -79,9 +79,10 @@ journals:
 #     - name: "Дизель"
 #       icon: "engine"               # иконка (зарезервировано)
 #       items:
-#         - "DieselLog"              # точное совпадение по имени (любой тип)
+#         - "DieselLog"              # точное совпадение по имени (любой тип и сервер)
 #       patterns:
 #         - "object:Diesel*@diesel"  # объекты Diesel* с сервера diesel
+#         - "object:MBSlave1@diesel" # конкретный объект на конкретном сервере
 #
 #     - name: "Мониторинг"
 #       patterns:
