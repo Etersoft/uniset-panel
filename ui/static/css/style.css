@@ -8473,6 +8473,12 @@ button.rotate-quick-btn:active {
     display: none;
 }
 
+.sidebar-group-icon {
+    font-size: 0.85rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
 .sidebar-group-title {
     flex: 1;
     overflow: hidden;

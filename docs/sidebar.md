@@ -39,13 +39,14 @@ sidebar:
   groups:
     # Группа с паттернами — все launcher'ы и dashboard'ы
     - name: "Управление"
+      icon: "⚙️"
       patterns:
         - "launcher:*"
         - "dashboard:*"
 
     # Группа с конкретными сущностями и паттернами
     - name: "Дизель"
-      icon: "engine"
+      icon: "🔧"
       items:
         - "DieselLog"                    # точное совпадение по имени (любой тип и сервер)
       patterns:
@@ -54,12 +55,14 @@ sidebar:
 
     # Все оставшиеся объекты и журналы
     - name: "Мониторинг"
+      icon: "📊"
       patterns:
         - "object:*"
         - "journal:*"
 
     # Серверы
     - name: "Инфраструктура"
+      icon: "🖥️"
       patterns:
         - "server:*"
 ```
@@ -75,7 +78,7 @@ sidebar:
 | `name` | да | Название группы в UI |
 | `patterns` | нет | Список glob-паттернов для матчинга сущностей |
 | `items` | нет | Список точных имён (совпадение по `name`, любой тип) |
-| `icon` | нет | Иконка группы (зарезервировано для будущего использования) |
+| `icon` | нет | Emoji-иконка, отображается перед названием группы (напр. `"⚙️"`, `"📊"`) |
 
 ## Паттерны
 
@@ -236,6 +239,7 @@ launchers:
   "groups": [
     {
       "name": "Управление",
+      "icon": "⚙️",
       "items": [
         {"type": "launcher", "name": "Основная нода"},
         {"type": "dashboard", "name": "System Overview"}
@@ -243,6 +247,7 @@ launchers:
     },
     {
       "name": "Мониторинг",
+      "icon": "📊",
       "items": [
         {"type": "object", "name": "SharedMemory", "serverId": "abc123"},
         {"type": "journal", "name": "Production"}

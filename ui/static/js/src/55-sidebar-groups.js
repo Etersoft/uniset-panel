@@ -79,10 +79,12 @@ function renderSidebarGroup(group, container) {
 
         const header = document.createElement('div');
         header.className = 'sidebar-group-header';
+        const iconHtml = group.icon ? `<span class="sidebar-group-icon">${escapeHtml(group.icon)}</span>` : '';
         header.innerHTML = `
             <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M6 9l6 6 6-6"/>
             </svg>
+            ${iconHtml}
             <span class="sidebar-group-title">${escapeHtml(group.name)}</span>
             <span class="sidebar-group-count">${group.items ? group.items.length : 0}</span>
         `;

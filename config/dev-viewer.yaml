@@ -36,13 +36,16 @@ journals:
 sidebar:
   groups:
     - name: "Управление"
+      icon: "⚙️"
       patterns:
         - "launcher:*"
         - "dashboard:*"
     - name: "Мониторинг"
+      icon: "📊"
       patterns:
         - "object:*"
         - "journal:*"
     - name: "Инфраструктура"
+      icon: "🖥️"
       patterns:
         - "server:*"

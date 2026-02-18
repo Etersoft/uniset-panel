@@ -72,12 +72,13 @@ journals:
 # sidebar:
 #   groups:
 #     - name: "Управление"
+#       icon: "⚙️"                   # emoji-иконка (отображается перед названием)
 #       patterns:
 #         - "launcher:*"             # все launcher'ы
 #         - "dashboard:*"            # все dashboard'ы
 #
 #     - name: "Дизель"
-#       icon: "engine"               # иконка (зарезервировано)
+#       icon: "🔧"                   # emoji-иконка
 #       items:
 #         - "DieselLog"              # точное совпадение по имени (любой тип и сервер)
 #       patterns:
@@ -85,11 +86,13 @@ journals:
 #         - "object:MBSlave1@diesel" # конкретный объект на конкретном сервере
 #
 #     - name: "Мониторинг"
+#       icon: "📊"
 #       patterns:
 #         - "object:*"               # все оставшиеся объекты
 #         - "journal:*"              # все журналы
 #
 #     - name: "Инфраструктура"
+#       icon: "🖥️"
 #       patterns:
 #         - "server:*"               # все серверы
 
