@@ -191,7 +191,7 @@ function createSidebarGroupItem(item, hideBadge) {
 
     const nameSpan = document.createElement('span');
     nameSpan.className = 'sidebar-group-item-name';
-    nameSpan.textContent = item.name;
+    nameSpan.textContent = item.displayName || item.name;
     li.appendChild(nameSpan);
 
     li.addEventListener('click', () => {

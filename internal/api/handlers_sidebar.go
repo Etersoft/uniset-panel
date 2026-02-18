@@ -41,9 +41,14 @@ func (h *Handlers) collectSidebarEntities() []sidebar.SidebarItem {
 	// Серверы
 	if h.serverManager != nil {
 		for _, inst := range h.serverManager.GetAllInstances() {
+			displayName := inst.Config.Name
+			if displayName == "" {
+				displayName = inst.Config.URL
+			}
 			entities = append(entities, sidebar.SidebarItem{
-				Type: "server",
-				Name: inst.Config.ID,
+				Type:        "server",
+				Name:        inst.Config.ID,
+				DisplayName: displayName,
 			})
 		}
 	}
