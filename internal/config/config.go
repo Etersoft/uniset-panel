@@ -281,10 +281,13 @@ func Parse() *Config {
 		}
 	}
 
-	// Генерация ID для серверов без явного ID
+	// Генерация ID для серверов без явного ID + подстановка плейсхолдеров в имени
 	for i := range cfg.Servers {
 		if cfg.Servers[i].ID == "" {
 			cfg.Servers[i].ID = generateServerID(cfg.Servers[i].URL)
+		}
+		if cfg.Servers[i].Name != "" {
+			cfg.Servers[i].Name = expandNamePlaceholders(cfg.Servers[i].Name, cfg.Servers[i].URL)
 		}
 	}
 
@@ -308,16 +311,41 @@ func Parse() *Config {
 		}
 	}
 
-	// Fallback имени Launcher'а на host:port из URL
+	// Fallback имени Launcher'а на host:port из URL + подстановка плейсхолдеров
 	for i := range cfg.Launchers {
 		if cfg.Launchers[i].Name == "" {
 			if u, err := url.Parse(cfg.Launchers[i].URL); err == nil {
 				cfg.Launchers[i].Name = u.Host
 			}
+		} else {
+			cfg.Launchers[i].Name = expandNamePlaceholders(cfg.Launchers[i].Name, cfg.Launchers[i].URL)
 		}
 	}
 
 	return cfg
+}
+
+// expandNamePlaceholders подставляет в name значения из URL:
+//   - {server} → полный URL (http://host:port)
+//   - {host} → hostname без порта
+//   - {port} → порт
+//
+// Если name не содержит плейсхолдеров, возвращается как есть.
+func expandNamePlaceholders(name, rawURL string) string {
+	if !strings.Contains(name, "{") {
+		return name
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return name
+	}
+	host := u.Hostname()
+	port := u.Port()
+
+	name = strings.ReplaceAll(name, "{server}", rawURL)
+	name = strings.ReplaceAll(name, "{host}", host)
+	name = strings.ReplaceAll(name, "{port}", port)
+	return name
 }
 
 // parseLauncherURL извлекает токен из userinfo части URL.
