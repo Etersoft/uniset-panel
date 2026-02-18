@@ -767,7 +767,8 @@ async function initJournals() {
     } else {
         // Show journals button and section, render the list
         if (journalsBtn) journalsBtn.style.display = '';
-        if (journalsSection) {
+        // В group mode секция скрыта — не показываем
+        if (journalsSection && (!state.sidebarGroups || state.sidebarGroups.length === 0)) {
             journalsSection.style.display = '';
             // Apply saved collapse state
             if (state.journalsSectionCollapsed) {

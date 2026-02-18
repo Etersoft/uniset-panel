@@ -12497,7 +12497,8 @@ async function initJournals() {
     } else {
         // Show journals button and section, render the list
         if (journalsBtn) journalsBtn.style.display = '';
-        if (journalsSection) {
+        // В group mode секция скрыта — не показываем
+        if (journalsSection && (!state.sidebarGroups || state.sidebarGroups.length === 0)) {
             journalsSection.style.display = '';
             // Apply saved collapse state
             if (state.journalsSectionCollapsed) {
@@ -14129,7 +14130,10 @@ function renderLaunchersSection(launchers) {
         section.style.display = 'none';
         return;
     }
-    section.style.display = '';
+    // В group mode секция скрыта — не показываем
+    if (!state.sidebarGroups || state.sidebarGroups.length === 0) {
+        section.style.display = '';
+    }
 
     const list = document.getElementById('launchers-list');
     const countEl = document.getElementById('launchers-count');
