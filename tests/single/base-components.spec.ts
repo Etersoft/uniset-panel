@@ -9,7 +9,7 @@ test.describe('Base Components', () => {
 
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
     // Clear localStorage for test isolation
     await page.evaluate(() => {
@@ -18,7 +18,7 @@ test.describe('Base Components', () => {
     });
 
     // Open SharedMemory (IONotifyController)
-    const sharedMemory = page.locator('#objects-list li', { hasText: 'SharedMemory' });
+    const sharedMemory = page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'SharedMemory' });
     const hasSharedMemory = await sharedMemory.isVisible().catch(() => false);
 
     if (!hasSharedMemory) {
@@ -346,10 +346,10 @@ test.describe('Cross-Renderer Consistency', () => {
 
   test('OPCUA should have filter bar with name, type and status filters', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
     // Check if OPCUAClient1 exists
-    const opcuaItem = page.locator('#objects-list li', { hasText: 'OPCUAClient1' });
+    const opcuaItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'OPCUAClient1' });
     const count = await opcuaItem.count();
 
     if (count === 0) {
@@ -372,9 +372,9 @@ test.describe('Cross-Renderer Consistency', () => {
 
   test('ModbusMaster should have filter bar', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
-    const mbItem = page.locator('#objects-list li', { hasText: 'MBTCPMaster1' });
+    const mbItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'MBTCPMaster1' });
     const count = await mbItem.count();
 
     if (count === 0) {
@@ -392,9 +392,9 @@ test.describe('Cross-Renderer Consistency', () => {
 
   test('ModbusSlave should have filter bar', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
-    const mbsItem = page.locator('#objects-list li', { hasText: 'MBTCPSlave1' });
+    const mbsItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'MBTCPSlave1' });
     await expect(mbsItem).toBeVisible({ timeout: 5000 });
 
     await mbsItem.click();
@@ -407,10 +407,10 @@ test.describe('Cross-Renderer Consistency', () => {
 
   test('all renderers should have resize handle', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
     // Open SharedMemory
-    const smItem = page.locator('#objects-list li', { hasText: 'SharedMemory' });
+    const smItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'SharedMemory' });
     if (await smItem.isVisible()) {
       await smItem.click();
       const ioncResize = page.locator('.ionc-sensors-section .resize-handle');
@@ -420,10 +420,10 @@ test.describe('Cross-Renderer Consistency', () => {
 
   test('all renderers should have sensor/register count badge', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
     // Check SharedMemory count badge
-    const smItem = page.locator('#objects-list li', { hasText: 'SharedMemory' });
+    const smItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'SharedMemory' });
     if (await smItem.isVisible()) {
       await smItem.click();
       await page.waitForSelector('.ionc-sensors-section', { timeout: 5000 });

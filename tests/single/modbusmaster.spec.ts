@@ -7,10 +7,10 @@ test.describe('ModbusMaster renderer', () => {
     await page.goto('/');
 
     // Wait for objects list
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
     // Check that MBTCPMaster1 exists
-    const mbItem = page.locator('#objects-list li', { hasText: MB_OBJECT });
+    const mbItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MB_OBJECT });
     await expect(mbItem).toBeVisible({ timeout: 10000 });
 
     // Click on MBTCPMaster1
@@ -26,9 +26,9 @@ test.describe('ModbusMaster renderer', () => {
 
   test('should have ModbusMaster-specific sections', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    const mbItem = page.locator('#objects-list li', { hasText: MB_OBJECT });
+    const mbItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MB_OBJECT });
     await mbItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -49,9 +49,9 @@ test.describe('ModbusMaster renderer', () => {
 
   test('should display status information', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    const mbItem = page.locator('#objects-list li', { hasText: MB_OBJECT });
+    const mbItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MB_OBJECT });
     await mbItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -66,9 +66,9 @@ test.describe('ModbusMaster renderer', () => {
 
   test('should display devices list', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    const mbItem = page.locator('#objects-list li', { hasText: MB_OBJECT });
+    const mbItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MB_OBJECT });
     await mbItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -87,9 +87,9 @@ test.describe('ModbusMaster renderer', () => {
 
   test('should display registers table', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    const mbItem = page.locator('#objects-list li', { hasText: MB_OBJECT });
+    const mbItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MB_OBJECT });
     await mbItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -108,9 +108,9 @@ test.describe('ModbusMaster renderer', () => {
 
   test('should have filter input for registers', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    const mbItem = page.locator('#objects-list li', { hasText: MB_OBJECT });
+    const mbItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MB_OBJECT });
     await mbItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -126,9 +126,9 @@ test.describe('ModbusMaster renderer', () => {
 
   test('should display register values for SSE updates', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    const mbItem = page.locator('#objects-list li', { hasText: MB_OBJECT });
+    const mbItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MB_OBJECT });
     await mbItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -151,9 +151,9 @@ test.describe('ModbusMaster renderer', () => {
 
   test('should filter registers by sensor name', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    const mbItem = page.locator('#objects-list li', { hasText: MB_OBJECT });
+    const mbItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MB_OBJECT });
     await mbItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -176,9 +176,9 @@ test.describe('ModbusMaster renderer', () => {
 
   test('should filter registers by mbreg number', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    const mbItem = page.locator('#objects-list li', { hasText: MB_OBJECT });
+    const mbItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MB_OBJECT });
     await mbItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -201,9 +201,9 @@ test.describe('ModbusMaster renderer', () => {
 
   test('should filter registers by type', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    const mbItem = page.locator('#objects-list li', { hasText: MB_OBJECT });
+    const mbItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MB_OBJECT });
     await mbItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -231,9 +231,9 @@ test.describe('ModbusMaster renderer', () => {
   test.describe('Chart Toggle', () => {
     test('should have chart toggle for each register row', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-      const mbItem = page.locator('#objects-list li', { hasText: MB_OBJECT });
+      const mbItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MB_OBJECT });
       await mbItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -254,9 +254,9 @@ test.describe('ModbusMaster renderer', () => {
 
     test('should add register to chart on checkbox click', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-      const mbItem = page.locator('#objects-list li', { hasText: MB_OBJECT });
+      const mbItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MB_OBJECT });
       await mbItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -282,9 +282,9 @@ test.describe('ModbusMaster renderer', () => {
 
     test('should remove register from chart on second click', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-      const mbItem = page.locator('#objects-list li', { hasText: MB_OBJECT });
+      const mbItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MB_OBJECT });
       await mbItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -305,9 +305,9 @@ test.describe('ModbusMaster renderer', () => {
 
     test('should create stepped chart for DI sensor', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-      const mbItem = page.locator('#objects-list li', { hasText: MB_OBJECT });
+      const mbItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MB_OBJECT });
       await mbItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -345,9 +345,9 @@ test.describe('ModbusMaster renderer', () => {
 
     test('should create smooth chart for AI sensor (not stepped)', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-      const mbItem = page.locator('#objects-list li', { hasText: MB_OBJECT });
+      const mbItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MB_OBJECT });
       await mbItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });

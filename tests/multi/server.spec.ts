@@ -15,10 +15,10 @@ test.describe('Multi-Server Support', () => {
     await page.goto('/');
 
     // Wait for objects list to load
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
     // Get all object items
-    const items = page.locator('#objects-list li');
+    const items = page.locator('.sidebar-group-item[data-type="object"]');
     const count = await items.count();
 
     // Should have objects from both servers
@@ -27,40 +27,40 @@ test.describe('Multi-Server Support', () => {
     expect(count).toBeGreaterThanOrEqual(5);
 
     // Check for objects from server 1
-    await expect(page.locator('#objects-list li', { hasText: 'TestProc' })).toBeVisible();
+    await expect(page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' })).toBeVisible();
 
     // Check for objects from server 2
-    await expect(page.locator('#objects-list li', { hasText: 'Server2Controller' })).toBeVisible();
-    await expect(page.locator('#objects-list li', { hasText: 'BackupProcess' })).toBeVisible();
+    await expect(page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'Server2Controller' })).toBeVisible();
+    await expect(page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'BackupProcess' })).toBeVisible();
   });
 
-  test('should display server groups with status indicators', async ({ page }) => {
+  test('should display server items with status indicators in sidebar', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
-    // Objects are now grouped by server with status indicators in group headers
-    const serverGroups = page.locator('.server-group');
-    const groupCount = await serverGroups.count();
+    // Servers are displayed as sidebar-group-item elements with data-type="server"
+    const serverItems = page.locator('.sidebar-group-item[data-type="server"]');
+    const serverCount = await serverItems.count();
 
-    // Should have at least 2 server groups (one for each server)
-    expect(groupCount).toBeGreaterThanOrEqual(2);
+    // Should have at least 2 server items (one for each server)
+    expect(serverCount).toBeGreaterThanOrEqual(2);
 
-    // Each group should have a status dot
-    const statusDots = page.locator('.server-group-header .server-status-dot');
+    // Each server item should have a status dot
+    const statusDots = page.locator('.sidebar-group-item[data-type="server"] .sidebar-group-status');
     const dotCount = await statusDots.count();
     expect(dotCount).toBeGreaterThanOrEqual(2);
   });
 
   test('should have different server IDs for objects from different servers', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
     // Get server ID from TestProc (server 1)
-    const testProcItem = page.locator('#objects-list li', { hasText: 'TestProc' });
+    const testProcItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' });
     const testProcServerId = await testProcItem.getAttribute('data-server-id');
 
     // Get server ID from Server2Controller (server 2)
-    const server2Item = page.locator('#objects-list li', { hasText: 'Server2Controller' });
+    const server2Item = page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'Server2Controller' });
     const server2ServerId = await server2Item.getAttribute('data-server-id');
 
     // Server IDs should be different
@@ -71,7 +71,7 @@ test.describe('Multi-Server Support', () => {
 
   test('should open object from server 1 with correct server context', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
     // Monitor network requests
     const requests: string[] = [];
@@ -82,7 +82,7 @@ test.describe('Multi-Server Support', () => {
     });
 
     // Click on TestProc (from server 1)
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     // Wait for tab to open
     await page.waitForSelector('.tab-btn[data-name*="TestProc"]', { timeout: 5000 });
@@ -95,7 +95,7 @@ test.describe('Multi-Server Support', () => {
 
   test('should open object from server 2 with correct server context', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
     // Monitor network requests
     const requests: string[] = [];
@@ -106,7 +106,7 @@ test.describe('Multi-Server Support', () => {
     });
 
     // Click on Server2Controller (from server 2)
-    await page.locator('#objects-list li', { hasText: 'Server2Controller' }).click();
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'Server2Controller' }).click();
 
     // Wait for tab to open
     await page.waitForSelector('.tab-btn[data-name*="Server2Controller"]', { timeout: 5000 });
@@ -121,10 +121,10 @@ test.describe('Multi-Server Support', () => {
     // This test verifies that if two servers have objects with the same name,
     // they are handled correctly with unique tab keys (serverID:objectName)
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
     // Open TestProc from server 1
-    const testProcItem = page.locator('#objects-list li', { hasText: 'TestProc' }).first();
+    const testProcItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).first();
     const testProcServerId = await testProcItem.getAttribute('data-server-id');
     await testProcItem.click();
 
@@ -141,7 +141,7 @@ test.describe('Multi-Server Support', () => {
 
   test('should pass server parameter to LogServer stream endpoint', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
     // Monitor EventSource connections
     const eventSourceUrls: string[] = [];
@@ -155,7 +155,7 @@ test.describe('Multi-Server Support', () => {
     });
 
     // Click on TestProc which has LogServer
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     // Wait for LogViewer section to appear
     await page.waitForSelector('.logviewer-section', { timeout: 5000 });
@@ -183,7 +183,7 @@ test.describe('Multi-Server Support', () => {
 
   test('should show server status for each server', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
     // Call servers API to check status
     const response = await page.request.get('/api/servers');
@@ -204,23 +204,23 @@ test.describe('Multi-Server Support', () => {
 
   test('should handle disconnected server gracefully', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
-    // Objects from disconnected servers should show disconnected badge
-    const disconnectedBadges = page.locator('.server-badge.disconnected');
+    // Disconnected servers/objects show .sidebar-group-status.disconnected in sidebar
+    const disconnectedDots = page.locator('.sidebar-group-status.disconnected');
 
-    // Initially both servers should be connected, so no disconnected badges
-    const disconnectedCount = await disconnectedBadges.count();
+    // Initially both servers should be connected, so no disconnected status dots
+    const disconnectedCount = await disconnectedDots.count();
 
     // This is a check that the UI properly shows connected state
-    // In a real scenario with a down server, this would show disconnected badges
+    // In a real scenario with a down server, this would show disconnected status dots
     expect(disconnectedCount).toBeGreaterThanOrEqual(0);
   });
 
   test.describe('IONotifyController Multi-Server', () => {
     test('should load IONC sensors from server 2 with server parameter', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
       // Monitor network requests
       const requests: string[] = [];
@@ -231,7 +231,7 @@ test.describe('Multi-Server Support', () => {
       });
 
       // Click on SM2 (IONotifyController from server 2)
-      await page.locator('#objects-list li', { hasText: 'SM2' }).click();
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'SM2' }).click();
 
       // Wait for tab to open
       await page.waitForSelector('.tab-btn[data-name*="SM2"]', { timeout: 5000 });
@@ -252,7 +252,7 @@ test.describe('Multi-Server Support', () => {
 
     test('should include server parameter in IONC value requests', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
       // Monitor network requests
       const requests: string[] = [];
@@ -263,7 +263,7 @@ test.describe('Multi-Server Support', () => {
       });
 
       // Click on SM2
-      await page.locator('#objects-list li', { hasText: 'SM2' }).click();
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'SM2' }).click();
       await page.waitForSelector('.tab-btn[data-name*="SM2"]', { timeout: 5000 });
       await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
 
@@ -283,10 +283,10 @@ test.describe('Multi-Server Support', () => {
 
     test('should display sensors from different servers independently', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
       // Open SharedMemory (from server 1)
-      await page.locator('#objects-list li', { hasText: 'SharedMemory' }).click();
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'SharedMemory' }).click();
       await page.waitForSelector('.tab-btn[data-name*="SharedMemory"]', { timeout: 5000 });
       await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
 
@@ -294,7 +294,7 @@ test.describe('Multi-Server Support', () => {
       const server1SensorCount = await page.locator('.tab-panel.active .ionc-sensors-tbody tr.ionc-sensor-row').count();
 
       // Open SM2 (from server 2)
-      await page.locator('#objects-list li', { hasText: 'SM2' }).click();
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'SM2' }).click();
       await page.waitForSelector('.tab-btn[data-name*="SM2"]', { timeout: 5000 });
       await page.waitForSelector('.tab-panel.active .ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
 
@@ -313,7 +313,7 @@ test.describe('Multi-Server Support', () => {
   test.describe('OPCUAExchange Multi-Server', () => {
     test('should load OPCUA sensors from server 2 with server parameter', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
       // Monitor network requests
       const requests: string[] = [];
@@ -324,7 +324,7 @@ test.describe('Multi-Server Support', () => {
       });
 
       // Click on OPCUAClient2 (OPCUAExchange from server 2)
-      await page.locator('#objects-list li', { hasText: 'OPCUAClient2' }).click();
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'OPCUAClient2' }).click();
 
       // Wait for tab to open
       await page.waitForSelector('.tab-btn[data-name*="OPCUAClient2"]', { timeout: 5000 });
@@ -346,7 +346,7 @@ test.describe('Multi-Server Support', () => {
 
     test('should include server parameter in OPCUA params request', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
       // Monitor network requests
       const requests: string[] = [];
@@ -357,7 +357,7 @@ test.describe('Multi-Server Support', () => {
       });
 
       // Click on OPCUAClient2
-      await page.locator('#objects-list li', { hasText: 'OPCUAClient2' }).click();
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'OPCUAClient2' }).click();
       await page.waitForSelector('.tab-btn[data-name*="OPCUAClient2"]', { timeout: 5000 });
 
       // Wait for params to load
@@ -371,15 +371,15 @@ test.describe('Multi-Server Support', () => {
 
     test('should display OPCUA objects from different servers independently', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
       // Check both OPCUA objects are visible in the list
-      await expect(page.locator('#objects-list li', { hasText: 'OPCUAClient1' })).toBeVisible();
-      await expect(page.locator('#objects-list li', { hasText: 'OPCUAClient2' })).toBeVisible();
+      await expect(page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'OPCUAClient1' })).toBeVisible();
+      await expect(page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'OPCUAClient2' })).toBeVisible();
 
       // Get server IDs
-      const opcua1Item = page.locator('#objects-list li', { hasText: 'OPCUAClient1' });
-      const opcua2Item = page.locator('#objects-list li', { hasText: 'OPCUAClient2' });
+      const opcua1Item = page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'OPCUAClient1' });
+      const opcua2Item = page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'OPCUAClient2' });
 
       const opcua1ServerId = await opcua1Item.getAttribute('data-server-id');
       const opcua2ServerId = await opcua2Item.getAttribute('data-server-id');

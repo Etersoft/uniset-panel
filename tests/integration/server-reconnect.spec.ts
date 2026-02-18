@@ -40,10 +40,10 @@ test.describe('Server Disconnect/Reconnect', () => {
   test('sidebar должен показать disconnect и автоматически восстановиться при reconnect', async ({ page }) => {
     // 1. Загружаем страницу, ждём появления списка объектов
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
     // 2. Сервер изначально подключён (зелёная точка — нет класса .disconnected)
-    const serverDot = page.locator('.server-group-header .server-status-dot').first();
+    const serverDot = page.locator('.sidebar-group-item[data-type="server"] .sidebar-group-status').first();
     await expect(serverDot).toBeVisible({ timeout: 10000 });
     await expect(serverDot).not.toHaveClass(/disconnected/, { timeout: 5000 });
 
@@ -61,12 +61,12 @@ test.describe('Server Disconnect/Reconnect', () => {
     await expect(serverDot).not.toHaveClass(/disconnected/, { timeout: 15000 });
   });
 
-  test('секция Servers должна отражать disconnect/reconnect', async ({ page }) => {
+  test('элемент сервера в sidebar должен отражать disconnect/reconnect', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    // Точка статуса сервера в секции Servers
-    const serverItemDot = page.locator('.server-item .server-status-dot').first();
+    // Точка статуса сервера в sidebar (server item)
+    const serverItemDot = page.locator('.sidebar-group-item[data-type="server"] .sidebar-group-status').first();
     await expect(serverItemDot).toBeVisible({ timeout: 10000 });
     await expect(serverItemDot).not.toHaveClass(/disconnected/, { timeout: 5000 });
 

@@ -6,8 +6,8 @@ test.describe('OPCUAServer renderer', () => {
   test('shows OPCUAServer sections', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: OPCUA_SERVER_OBJECT }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_SERVER_OBJECT }).click();
 
     const panel = page.locator('.tab-panel.active');
     await panel.waitFor({ timeout: 10000 });
@@ -29,8 +29,8 @@ test.describe('OPCUAServer renderer', () => {
 
   test('shows endpoints and config in status', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: OPCUA_SERVER_OBJECT }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_SERVER_OBJECT }).click();
 
     const panel = page.locator('.tab-panel.active');
     await panel.waitFor({ timeout: 10000 });
@@ -49,8 +49,8 @@ test.describe('OPCUAServer renderer', () => {
 
   test('should display sensor values for SSE updates', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: OPCUA_SERVER_OBJECT }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_SERVER_OBJECT }).click();
 
     const panel = page.locator('.tab-panel.active');
     await panel.waitFor({ timeout: 10000 });
@@ -74,8 +74,8 @@ test.describe('OPCUAServer renderer', () => {
   test.describe('Variable Filtering', () => {
     test('should filter variables by name', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_SERVER_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_SERVER_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -101,8 +101,8 @@ test.describe('OPCUAServer renderer', () => {
 
     test('should filter variables by type using dropdown', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_SERVER_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_SERVER_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -131,8 +131,8 @@ test.describe('OPCUAServer renderer', () => {
 
     test('should reset filter on ESC key', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_SERVER_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_SERVER_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -153,8 +153,8 @@ test.describe('OPCUAServer renderer', () => {
 
     test('should show "no variables" message when filter returns empty', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_SERVER_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_SERVER_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -172,8 +172,8 @@ test.describe('OPCUAServer renderer', () => {
   test.describe('UI Consistency', () => {
     test('should have type filter dropdown', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_SERVER_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_SERVER_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -192,8 +192,8 @@ test.describe('OPCUAServer renderer', () => {
 
     test('should display variable count badge', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_SERVER_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_SERVER_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -208,8 +208,8 @@ test.describe('OPCUAServer renderer', () => {
 
     test('should have resize handle for variables section', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_SERVER_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_SERVER_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -222,8 +222,8 @@ test.describe('OPCUAServer renderer', () => {
   test.describe('Parameters Section', () => {
     test('should display parameter values', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_SERVER_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_SERVER_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -238,8 +238,8 @@ test.describe('OPCUAServer renderer', () => {
 
     test('should have refresh and save buttons', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_SERVER_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_SERVER_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -255,8 +255,8 @@ test.describe('OPCUAServer renderer', () => {
   test.describe('Chart Toggle', () => {
     test('should have chart toggle for each variable row', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_SERVER_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_SERVER_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -275,8 +275,8 @@ test.describe('OPCUAServer renderer', () => {
 
     test('should add variable to chart on checkbox click', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_SERVER_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_SERVER_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -302,8 +302,8 @@ test.describe('OPCUAServer renderer', () => {
 
     test('should remove variable from chart on second click', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_SERVER_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_SERVER_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });

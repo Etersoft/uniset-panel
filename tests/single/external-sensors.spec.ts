@@ -4,8 +4,8 @@ test.describe('External Sensors (SM Integration)', () => {
 
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
     await expect(page.locator('.tab-btn', { hasText: 'TestProc' })).toBeVisible();
   });
 
@@ -275,8 +275,8 @@ test.describe('External Sensors (SM Integration)', () => {
     await page.reload();
 
     // Заново открываем вкладку TestProc
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     await page.waitForSelector('[data-section^="charts-"]', { timeout: 10000 });
 
@@ -330,8 +330,8 @@ test.describe('External Sensors (SM Integration)', () => {
     await page.reload();
 
     // Заново открываем вкладку TestProc
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     // Ждём загрузки секции графиков
     await page.waitForSelector('[data-section^="charts-"]', { timeout: 10000 });
@@ -391,8 +391,8 @@ test.describe('External Sensors (SM Integration)', () => {
     await page.reload();
 
     // Заново открываем вкладку TestProc
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     await page.waitForSelector('[data-section^="charts-"]', { timeout: 10000 });
     await page.waitForTimeout(500);

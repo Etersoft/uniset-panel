@@ -5,10 +5,10 @@ test.describe('IONC Value Generator', () => {
         await page.goto('/');
 
         // Wait for objects to load
-        await page.waitForSelector('#objects-list li', { timeout: 10000 });
+        await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
         // Click on SharedMemory (IONotifyController)
-        const smObject = page.locator('#objects-list li', { hasText: 'SharedMemory' });
+        const smObject = page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'SharedMemory' });
         const hasSM = await smObject.isVisible().catch(() => false);
 
         if (!hasSM) {

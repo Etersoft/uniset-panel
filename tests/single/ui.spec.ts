@@ -13,14 +13,14 @@ test.describe('UniSet Panel UI', () => {
     await page.goto('/');
 
     // Ждём загрузки списка объектов (не должен быть пустым)
-    await expect(page.locator('#objects-list li')).not.toHaveCount(0, { timeout: 10000 });
+    await expect(page.locator('.sidebar-group-item[data-type="object"]')).not.toHaveCount(0, { timeout: 10000 });
 
     // Должно быть минимум 3 объекта (UniSetActivator, TestProc, SharedMemory, OPCUAClient1)
-    const count = await page.locator('#objects-list li').count();
+    const count = await page.locator('.sidebar-group-item[data-type="object"]').count();
     expect(count).toBeGreaterThanOrEqual(3);
 
     // Проверяем что TestProc в списке
-    await expect(page.locator('#objects-list')).toContainText('TestProc');
+    await expect(page.locator('#sidebar-groups')).toContainText('TestProc');
   });
 
   test('should show placeholder when no object selected', async ({ page }) => {
@@ -35,10 +35,10 @@ test.describe('UniSet Panel UI', () => {
     await page.goto('/');
 
     // Ждём загрузки списка
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
     // Кликаем на TestProc
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     // Проверяем что открылась вкладка
     await expect(page.locator('.tab-btn', { hasText: 'TestProc' })).toBeVisible();
@@ -51,8 +51,8 @@ test.describe('UniSet Panel UI', () => {
   test('should display variables table', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     // Ждём загрузки переменных (в collapsible секции)
     await page.waitForSelector('[data-section^="variables-"] tbody tr', { timeout: 10000 });
@@ -65,8 +65,8 @@ test.describe('UniSet Panel UI', () => {
   test('should display inputs and outputs sections', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     // Ждём загрузки данных (в io-section внутри io-grid)
     await page.waitForSelector('.io-grid .io-section', { timeout: 10000 });
@@ -79,8 +79,8 @@ test.describe('UniSet Panel UI', () => {
   test('should close tab on close button click', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     // Ждём появления вкладки
     await expect(page.locator('.tab-btn', { hasText: 'TestProc' })).toBeVisible();
@@ -96,21 +96,21 @@ test.describe('UniSet Panel UI', () => {
   test('should refresh objects list on button click', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    const initialCount = await page.locator('#objects-list li').count();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    const initialCount = await page.locator('.sidebar-group-item[data-type="object"]').count();
 
     // Кликаем Refresh
     await page.locator('#refresh-objects').click();
 
     // После рефреша количество объектов должно остаться тем же
-    await expect(page.locator('#objects-list li')).toHaveCount(initialCount);
+    await expect(page.locator('.sidebar-group-item[data-type="object"]')).toHaveCount(initialCount);
   });
 
   test('should enable chart for IO variable', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     // Ждём загрузки IO (в io-section внутри io-grid)
     await page.waitForSelector('.io-grid .io-section tbody tr', { timeout: 10000 });
@@ -126,14 +126,14 @@ test.describe('UniSet Panel UI', () => {
   test('should switch between multiple tabs', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
     // Открываем TestProc
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
     await expect(page.locator('.tab-btn', { hasText: 'TestProc' })).toHaveClass(/active/);
 
     // Открываем UniSetActivator
-    const activator = page.locator('#objects-list li', { hasText: 'UniSetActivator' });
+    const activator = page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'UniSetActivator' });
     if (await activator.isVisible()) {
       await activator.click();
 
@@ -151,8 +151,8 @@ test.describe('UniSet Panel UI', () => {
     await page.goto('/');
 
     // Открываем объект чтобы появилась секция Графики
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     // Ждём загрузки секции графиков в активной вкладке
     const activePanel = page.locator('.tab-panel.active');
@@ -174,8 +174,8 @@ test.describe('UniSet Panel UI', () => {
     await page.goto('/');
 
     // Открываем объект
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     const activePanel = page.locator('.tab-panel.active');
     await activePanel.waitFor({ timeout: 10000 });
@@ -194,14 +194,14 @@ test.describe('UniSet Panel UI', () => {
   test('should sync time range across multiple tabs', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
     // Открываем TestProc
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
     await page.locator('.tab-panel.active').waitFor({ timeout: 10000 });
 
     // Открываем SharedMemory (или другой объект если есть)
-    const smObject = page.locator('#objects-list li', { hasText: 'SharedMemory' });
+    const smObject = page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'SharedMemory' });
     if (await smObject.isVisible()) {
       await smObject.click();
       await page.waitForSelector('.tab-btn.active', { hasText: 'SharedMemory' });
@@ -222,10 +222,10 @@ test.describe('UniSet Panel UI', () => {
   test('should show fallback renderer for unsupported object types', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
     // UniSetActivator имеет тип который не поддерживается явно (не UniSetManager/UniSetObject)
-    const activator = page.locator('#objects-list li', { hasText: 'UniSetActivator' });
+    const activator = page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'UniSetActivator' });
     if (await activator.isVisible()) {
       await activator.click();
 
@@ -249,9 +249,9 @@ test.describe('UniSet Panel UI', () => {
   test('should display object type badge in fallback renderer', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
-    const activator = page.locator('#objects-list li', { hasText: 'UniSetActivator' });
+    const activator = page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'UniSetActivator' });
     if (await activator.isVisible()) {
       await activator.click();
 
@@ -268,8 +268,8 @@ test.describe('UniSet Panel UI', () => {
   test('should display LogViewer section for objects with LogServer', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     // Ждём загрузки данных объекта
     await page.waitForSelector('.logviewer-section', { timeout: 10000 });
@@ -282,8 +282,8 @@ test.describe('UniSet Panel UI', () => {
   test('should have log level dropdown with pills', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     await page.waitForSelector('.logviewer-section', { timeout: 10000 });
 
@@ -318,8 +318,8 @@ test.describe('UniSet Panel UI', () => {
   test('should show connect button in LogViewer', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     await page.waitForSelector('.logviewer-section', { timeout: 10000 });
 
@@ -332,8 +332,8 @@ test.describe('UniSet Panel UI', () => {
   test('should show placeholder before connecting', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     await page.waitForSelector('.logviewer-section', { timeout: 10000 });
 
@@ -346,8 +346,8 @@ test.describe('UniSet Panel UI', () => {
   test('should toggle LogViewer section collapse', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     await page.waitForSelector('.logviewer-section', { timeout: 10000 });
 
@@ -369,8 +369,8 @@ test.describe('UniSet Panel UI', () => {
   test('should have resize handle in LogViewer', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     await page.waitForSelector('.logviewer-section', { timeout: 10000 });
 
@@ -381,8 +381,8 @@ test.describe('UniSet Panel UI', () => {
   test('should show Stop button during reconnection on connection failure', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     await page.waitForSelector('.logviewer-section', { timeout: 10000 });
 
@@ -414,8 +414,8 @@ test.describe('UniSet Panel UI', () => {
   test('should toggle level pills in dropdown', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     await page.waitForSelector('.logviewer-section', { timeout: 10000 });
 
@@ -445,8 +445,8 @@ test.describe('UniSet Panel UI', () => {
   test('should apply level presets', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     await page.waitForSelector('.logviewer-section', { timeout: 10000 });
 
@@ -473,8 +473,8 @@ test.describe('UniSet Panel UI', () => {
   test('should have filter options (Regex, Case, Only)', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     await page.waitForSelector('.logviewer-section', { timeout: 10000 });
 
@@ -502,8 +502,8 @@ test.describe('UniSet Panel UI', () => {
   test('should have buffer size selector', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     await page.waitForSelector('.logviewer-section', { timeout: 10000 });
 
@@ -526,8 +526,8 @@ test.describe('UniSet Panel UI', () => {
   test('should have download button', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     await page.waitForSelector('.logviewer-section', { timeout: 10000 });
 
@@ -540,8 +540,8 @@ test.describe('UniSet Panel UI', () => {
   test('should have stats display', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     await page.waitForSelector('.logviewer-section', { timeout: 10000 });
 
@@ -558,8 +558,8 @@ test.describe('UniSet Panel UI', () => {
   test('should show match count when filtering', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     await page.waitForSelector('.logviewer-section', { timeout: 10000 });
 
@@ -581,8 +581,8 @@ test.describe('UniSet Panel UI', () => {
   test('should reorder sections with up/down buttons', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     // Ждём загрузки секций
     await page.waitForSelector('.reorderable-section[data-section-id]', { timeout: 10000 });
@@ -627,8 +627,8 @@ test.describe('UniSet Panel UI', () => {
   test('should persist section order in localStorage', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     await page.waitForSelector('.reorderable-section[data-section-id]', { timeout: 10000 });
 
@@ -651,8 +651,8 @@ test.describe('UniSet Panel UI', () => {
     // Перезагружаем страницу
     await page.reload();
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'TestProc' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'TestProc' }).click();
 
     await page.waitForSelector('.reorderable-section[data-section-id]', { timeout: 10000 });
 
@@ -664,26 +664,43 @@ test.describe('UniSet Panel UI', () => {
 
   // === Тесты на группы серверов ===
 
-  test('should display server groups for connected servers with green status dot', async ({ page }) => {
+  test('should display server items for connected servers with green status dot', async ({ page }) => {
     await page.goto('/');
 
-    // Ждём загрузки списка объектов
-    await page.waitForSelector('.server-group', { timeout: 10000 });
+    // Ждём загрузки sidebar
+    await page.waitForSelector('.sidebar-group-item[data-type="server"]', { timeout: 10000 });
 
-    // Проверяем что есть группы серверов
-    const groupHeaders = page.locator('.server-group-header');
-    await expect(groupHeaders.first()).toBeVisible();
+    // Проверяем что есть серверы в sidebar
+    const serverItems = page.locator('.sidebar-group-item[data-type="server"]');
+    await expect(serverItems.first()).toBeVisible();
 
     // Все status dots должны быть без класса disconnected (сервер подключён)
-    const statusDots = page.locator('.server-group-header .server-status-dot');
+    const statusDots = page.locator('.sidebar-group-item[data-type="server"] .sidebar-group-status');
     const allDots = await statusDots.all();
     for (const dot of allDots) {
       await expect(dot).not.toHaveClass(/disconnected/);
     }
   });
 
-  test('should display server group with disconnected status when server is down', async ({ page }) => {
-    // Мокаем ответ API чтобы симулировать отключённый сервер
+  test('should display server items with disconnected status when server is down', async ({ page }) => {
+    // Мокаем ответ sidebar API чтобы симулировать два сервера
+    await page.route('**/api/sidebar', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          groups: [{
+            items: [
+              { type: 'server', name: 'test-server-1', displayName: 'Connected Server' },
+              { type: 'server', name: 'test-server-2', displayName: 'Disconnected Server' },
+              { type: 'object', name: 'TestObj1', serverId: 'test-server-1' },
+              { type: 'object', name: 'TestObj2', serverId: 'test-server-2' }
+            ]
+          }]
+        })
+      });
+    });
+
     await page.route('**/api/all-objects', async route => {
       await route.fulfill({
         status: 200,
@@ -724,19 +741,19 @@ test.describe('UniSet Panel UI', () => {
 
     await page.goto('/');
 
-    // Ждём загрузки списка объектов
-    await page.waitForSelector('.server-group', { timeout: 10000 });
+    // Ждём загрузки sidebar
+    await page.waitForSelector('.sidebar-group-item[data-type="server"]', { timeout: 10000 });
 
-    // Находим заголовок группы подключённого сервера
-    const connectedGroup = page.locator('.server-group[data-server-id="test-server-1"] .server-group-header');
-    await expect(connectedGroup).toBeVisible();
-    const connectedDot = connectedGroup.locator('.server-status-dot');
+    // Находим подключённый сервер в sidebar
+    const connectedItem = page.locator('.sidebar-group-item[data-type="server"][data-name="test-server-1"]');
+    await expect(connectedItem).toBeVisible();
+    const connectedDot = connectedItem.locator('.sidebar-group-status');
     await expect(connectedDot).not.toHaveClass(/disconnected/);
 
-    // Находим заголовок группы отключённого сервера
-    const disconnectedGroup = page.locator('.server-group[data-server-id="test-server-2"] .server-group-header');
-    await expect(disconnectedGroup).toBeVisible();
-    const disconnectedDot = disconnectedGroup.locator('.server-status-dot');
+    // Находим отключённый сервер в sidebar
+    const disconnectedItem = page.locator('.sidebar-group-item[data-type="server"][data-name="test-server-2"]');
+    await expect(disconnectedItem).toBeVisible();
+    const disconnectedDot = disconnectedItem.locator('.sidebar-group-status');
     await expect(disconnectedDot).toHaveClass(/disconnected/);
   });
 
@@ -780,7 +797,24 @@ test.describe('UniSet Panel UI', () => {
   });
 
   test('should display server status indicators in sidebar for multi-server setup', async ({ page }) => {
-    // Мокаем ответ API с несколькими серверами
+    // Мокаем ответ sidebar API с несколькими серверами
+    await page.route('**/api/sidebar', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          groups: [{
+            items: [
+              { type: 'server', name: 'srv1', displayName: 'Server1' },
+              { type: 'server', name: 'srv2', displayName: 'Server2' },
+              { type: 'object', name: 'Obj1', serverId: 'srv1' },
+              { type: 'object', name: 'Obj2', serverId: 'srv2' }
+            ]
+          }]
+        })
+      });
+    });
+
     await page.route('**/api/all-objects', async route => {
       await route.fulfill({
         status: 200,
@@ -810,32 +844,41 @@ test.describe('UniSet Panel UI', () => {
     });
 
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="server"]', { timeout: 10000 });
 
-    // Проверяем что секция серверов в sidebar появилась
-    const serversSection = page.locator('#servers-section');
-    await expect(serversSection).toBeVisible();
-
-    // Проверяем счётчик серверов
-    const serversCount = page.locator('#servers-count');
-    await expect(serversCount).toHaveText('2');
-
-    // Проверяем индикаторы серверов
-    const connectedItem = page.locator('.server-item[data-server-id="srv1"]');
+    // Проверяем индикаторы серверов в sidebar
+    const connectedItem = page.locator('.sidebar-group-item[data-type="server"][data-name="srv1"]');
     await expect(connectedItem).toBeVisible();
-    await expect(connectedItem).toHaveClass(/connected/);
+    const connectedDot = connectedItem.locator('.sidebar-group-status');
+    await expect(connectedDot).not.toHaveClass(/disconnected/);
 
-    const disconnectedItem = page.locator('.server-item[data-server-id="srv2"]');
+    const disconnectedItem = page.locator('.sidebar-group-item[data-type="server"][data-name="srv2"]');
     await expect(disconnectedItem).toBeVisible();
-    await expect(disconnectedItem).toHaveClass(/disconnected/);
+    const disconnectedDot = disconnectedItem.locator('.sidebar-group-status');
+    await expect(disconnectedDot).toHaveClass(/disconnected/);
 
     // Проверяем имена серверов
-    await expect(connectedItem.locator('.server-name')).toHaveText('Server1');
-    await expect(disconnectedItem.locator('.server-name')).toHaveText('Server2');
+    await expect(connectedItem.locator('.sidebar-group-item-name')).toHaveText('Server1');
+    await expect(disconnectedItem.locator('.sidebar-group-item-name')).toHaveText('Server2');
   });
 
   test('should display server status in sidebar for single server setup', async ({ page }) => {
-    // Мокаем ответ API с одним сервером
+    // Мокаем ответ sidebar API с одним сервером
+    await page.route('**/api/sidebar', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          groups: [{
+            items: [
+              { type: 'server', name: 'srv1', displayName: 'Server1' },
+              { type: 'object', name: 'Obj1', serverId: 'srv1' }
+            ]
+          }]
+        })
+      });
+    });
+
     await page.route('**/api/all-objects', async route => {
       await route.fulfill({
         status: 200,
@@ -861,23 +904,32 @@ test.describe('UniSet Panel UI', () => {
     });
 
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="server"]', { timeout: 10000 });
 
-    // Секция серверов должна быть видна даже для одного сервера
-    const serversSection = page.locator('#servers-section');
-    await expect(serversSection).toBeVisible();
-
-    // Счётчик показывает 1
-    const serversCount = page.locator('#servers-count');
-    await expect(serversCount).toHaveText('1');
-
-    // Сервер должен отображаться
-    const serverItem = page.locator('.server-item[data-server-id="srv1"]');
+    // Сервер должен отображаться в sidebar
+    const serverItem = page.locator('.sidebar-group-item[data-type="server"][data-name="srv1"]');
     await expect(serverItem).toBeVisible();
   });
 
-  test('should show correct tooltip for server items in sidebar', async ({ page }) => {
-    // Мокаем ответ API
+  test('should show server items in sidebar with display names', async ({ page }) => {
+    // Мокаем ответ sidebar API
+    await page.route('**/api/sidebar', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          groups: [{
+            items: [
+              { type: 'server', name: 'srv1', displayName: 'Server1' },
+              { type: 'server', name: 'srv2', displayName: 'Server2' },
+              { type: 'object', name: 'Obj1', serverId: 'srv1' },
+              { type: 'object', name: 'Obj2', serverId: 'srv2' }
+            ]
+          }]
+        })
+      });
+    });
+
     await page.route('**/api/all-objects', async route => {
       await route.fulfill({
         status: 200,
@@ -918,17 +970,33 @@ test.describe('UniSet Panel UI', () => {
 
     await page.goto('/');
 
-    await page.waitForSelector('.server-item', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="server"]', { timeout: 10000 });
 
-    // Проверяем title для сервера (показывает URL)
-    const server1Name = page.locator('.server-item[data-server-id="srv1"] .server-name');
-    await expect(server1Name).toHaveAttribute('title', 'http://server1');
+    // Проверяем имена серверов в sidebar
+    const server1Name = page.locator('.sidebar-group-item[data-type="server"][data-name="srv1"] .sidebar-group-item-name');
+    await expect(server1Name).toHaveText('Server1');
 
-    const server2Name = page.locator('.server-item[data-server-id="srv2"] .server-name');
-    await expect(server2Name).toHaveAttribute('title', 'http://server2');
+    const server2Name = page.locator('.sidebar-group-item[data-type="server"][data-name="srv2"] .sidebar-group-item-name');
+    await expect(server2Name).toHaveText('Server2');
   });
 
   test('should disable tab panel when server disconnects', async ({ page }) => {
+    // Мокаем sidebar API
+    await page.route('**/api/sidebar', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          groups: [{
+            items: [
+              { type: 'server', name: 'srv1', displayName: 'Server1' },
+              { type: 'object', name: 'TestProc', serverId: 'srv1' }
+            ]
+          }]
+        })
+      });
+    });
+
     // Мокаем API для получения списка объектов
     await page.route('**/api/all-objects', async route => {
       await route.fulfill({
@@ -977,10 +1045,10 @@ test.describe('UniSet Panel UI', () => {
     });
 
     await page.goto('/');
-    await page.waitForSelector('#objects-list li');
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]');
 
     // Открываем таб
-    await page.click('#objects-list li');
+    await page.click('.sidebar-group-item[data-type="object"]');
     await page.waitForSelector('.tab-panel.active');
 
     // Проверяем что таб активен и не имеет класса server-disconnected
@@ -1006,6 +1074,22 @@ test.describe('UniSet Panel UI', () => {
   });
 
   test('should re-enable tab panel when server reconnects', async ({ page }) => {
+    // Мокаем sidebar API
+    await page.route('**/api/sidebar', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          groups: [{
+            items: [
+              { type: 'server', name: 'srv1', displayName: 'Server1' },
+              { type: 'object', name: 'TestProc', serverId: 'srv1' }
+            ]
+          }]
+        })
+      });
+    });
+
     // Мокаем API для получения списка объектов
     await page.route('**/api/all-objects', async route => {
       await route.fulfill({
@@ -1054,10 +1138,10 @@ test.describe('UniSet Panel UI', () => {
     });
 
     await page.goto('/');
-    await page.waitForSelector('#objects-list li');
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]');
 
     // Открываем таб
-    await page.click('#objects-list li');
+    await page.click('.sidebar-group-item[data-type="object"]');
     await page.waitForSelector('.tab-panel.active');
 
     const tabPanel = page.locator('.tab-panel.active');
@@ -1085,6 +1169,22 @@ test.describe('UniSet Panel UI', () => {
   });
 
   test('should show overlay message when tab is disabled', async ({ page }) => {
+    // Мокаем sidebar API
+    await page.route('**/api/sidebar', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          groups: [{
+            items: [
+              { type: 'server', name: 'srv1', displayName: 'Server1' },
+              { type: 'object', name: 'TestProc', serverId: 'srv1' }
+            ]
+          }]
+        })
+      });
+    });
+
     // Мокаем API для получения списка объектов
     await page.route('**/api/all-objects', async route => {
       await route.fulfill({
@@ -1133,10 +1233,10 @@ test.describe('UniSet Panel UI', () => {
     });
 
     await page.goto('/');
-    await page.waitForSelector('#objects-list li');
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]');
 
     // Открываем таб
-    await page.click('#objects-list li');
+    await page.click('.sidebar-group-item[data-type="object"]');
     await page.waitForSelector('.tab-panel.active');
 
     const tabPanel = page.locator('.tab-panel.active');

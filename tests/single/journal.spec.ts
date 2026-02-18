@@ -214,64 +214,26 @@ test.describe('Journal API Tests', () => {
 
 test.describe('Journal UI Tests', () => {
 
-  test('should display Journals view switcher', async ({ page }) => {
+  test('should display journal items in sidebar', async ({ page }) => {
     await page.goto('/');
 
-    // Wait for the page to load
-    await page.waitForSelector('.view-switcher');
+    // Wait for sidebar to load
+    await page.waitForSelector('.sidebar-group-item', { timeout: 10000 });
 
-    // Check that Journals button exists
-    const journalsBtn = page.locator('.view-btn[data-view="journals"]');
-    await expect(journalsBtn).toBeVisible();
-  });
-
-  test('should switch to Journals view', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForSelector('.view-switcher');
-
-    // Click on Journals button
-    await page.click('.view-btn[data-view="journals"]');
-
-    // Wait for journals view to appear
-    await page.waitForSelector('#journals-view.active', { state: 'visible' });
-
-    // Check that journals list is visible
-    const journalsList = page.locator('#journals-list');
-    await expect(journalsList).toBeVisible();
-  });
-
-  test('should display journal in sidebar', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForSelector('.view-switcher');
-
-    // Switch to Journals view
-    await page.click('.view-btn[data-view="journals"]');
-    await page.waitForSelector('#journals-view.active', { state: 'visible' });
-
-    // Wait for journals to load
-    await page.waitForTimeout(1000);
-
-    // Check that there is at least one journal item
-    const journalItems = page.locator('#journals-list .journal-item');
+    // Check that there is at least one journal item in the sidebar
+    const journalItems = page.locator('.sidebar-group-item[data-type="journal"]');
     const count = await journalItems.count();
     expect(count).toBeGreaterThan(0);
   });
 
-  test('should open journal tab on click', async ({ page }) => {
+  test('should open journal on sidebar item click', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('.view-switcher');
+    await page.waitForSelector('.sidebar-group-item[data-type="journal"]', { timeout: 10000 });
 
-    // Switch to Journals view
-    await page.click('.view-btn[data-view="journals"]');
-    await page.waitForSelector('#journals-view.active', { state: 'visible' });
+    // Click on first journal item in sidebar
+    await page.locator('.sidebar-group-item[data-type="journal"]').first().click();
 
-    // Wait for journals to load
-    await page.waitForTimeout(1000);
-
-    // Click on first journal
-    await page.click('#journals-list .journal-item:first-child');
-
-    // Wait for journal panel to appear
+    // Wait for journal panel to appear (openJournal switches to journals view automatically)
     await page.waitForSelector('.journal-panel', { state: 'visible', timeout: 5000 });
 
     // Check that journal table is visible
@@ -281,13 +243,10 @@ test.describe('Journal UI Tests', () => {
 
   test('should display messages in journal table', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('.view-switcher');
+    await page.waitForSelector('.sidebar-group-item[data-type="journal"]', { timeout: 10000 });
 
-    // Switch to Journals view and open first journal
-    await page.click('.view-btn[data-view="journals"]');
-    await page.waitForSelector('#journals-view.active', { state: 'visible' });
-    await page.waitForTimeout(1000);
-    await page.click('#journals-list .journal-item:first-child');
+    // Open first journal via sidebar
+    await page.locator('.sidebar-group-item[data-type="journal"]').first().click();
 
     // Wait for messages to load
     await page.waitForSelector('.journal-table tbody tr', { timeout: 10000 });
@@ -300,13 +259,10 @@ test.describe('Journal UI Tests', () => {
 
   test('should have filter controls', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('.view-switcher');
+    await page.waitForSelector('.sidebar-group-item[data-type="journal"]', { timeout: 10000 });
 
-    // Open journal
-    await page.click('.view-btn[data-view="journals"]');
-    await page.waitForSelector('#journals-view.active', { state: 'visible' });
-    await page.waitForTimeout(1000);
-    await page.click('#journals-list .journal-item:first-child');
+    // Open journal via sidebar
+    await page.locator('.sidebar-group-item[data-type="journal"]').first().click();
     await page.waitForSelector('.journal-panel', { state: 'visible' });
 
     // Check filter controls exist
@@ -317,13 +273,10 @@ test.describe('Journal UI Tests', () => {
 
   test('should filter messages by type', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('.view-switcher');
+    await page.waitForSelector('.sidebar-group-item[data-type="journal"]', { timeout: 10000 });
 
-    // Open journal
-    await page.click('.view-btn[data-view="journals"]');
-    await page.waitForSelector('#journals-view.active', { state: 'visible' });
-    await page.waitForTimeout(1000);
-    await page.click('#journals-list .journal-item:first-child');
+    // Open journal via sidebar
+    await page.locator('.sidebar-group-item[data-type="journal"]').first().click();
     await page.waitForSelector('.journal-table tbody tr', { timeout: 10000 });
 
     // Select "Alarm" filter from first select (mtype) - filters apply immediately on change
@@ -345,13 +298,10 @@ test.describe('Journal UI Tests', () => {
 
   test('should have pause/resume button', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('.view-switcher');
+    await page.waitForSelector('.sidebar-group-item[data-type="journal"]', { timeout: 10000 });
 
-    // Open journal
-    await page.click('.view-btn[data-view="journals"]');
-    await page.waitForSelector('#journals-view.active', { state: 'visible' });
-    await page.waitForTimeout(1000);
-    await page.click('#journals-list .journal-item:first-child');
+    // Open journal via sidebar
+    await page.locator('.sidebar-group-item[data-type="journal"]').first().click();
     await page.waitForSelector('.journal-panel', { state: 'visible' });
 
     // Check pause button exists

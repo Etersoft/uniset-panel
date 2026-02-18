@@ -13,10 +13,10 @@ test.describe('IONotifyController (SharedMemory)', () => {
     });
     await page.reload();
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
     // Проверяем есть ли SharedMemory в списке
-    const sharedMemory = page.locator('#objects-list li', { hasText: 'SharedMemory' });
+    const sharedMemory = page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'SharedMemory' });
     const hasSharedMemory = await sharedMemory.isVisible().catch(() => false);
 
     if (!hasSharedMemory) {
@@ -975,10 +975,10 @@ test.describe('IONotifyController (SharedMemory)', () => {
     await page.reload();
 
     // Ждём загрузки объектов
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
     // Открываем SharedMemory заново
-    const sharedMemory = page.locator('#objects-list li', { hasText: 'SharedMemory' });
+    const sharedMemory = page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'SharedMemory' });
     await sharedMemory.click();
     await expect(page.locator('.tab-btn', { hasText: 'SharedMemory' })).toBeVisible();
 
@@ -1039,8 +1039,8 @@ test.describe('IONotifyController (SharedMemory)', () => {
     await page.reload();
 
     // Заново открываем SharedMemory
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'SharedMemory' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'SharedMemory' }).click();
     await expect(page.locator('.tab-btn', { hasText: 'SharedMemory' })).toBeVisible();
 
     // Ждём загрузки
@@ -1137,8 +1137,8 @@ test.describe('IONotifyController (SharedMemory)', () => {
     await page.reload();
 
     // Заново открываем SharedMemory
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: 'SharedMemory' }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'SharedMemory' }).click();
 
     await page.waitForSelector('[data-section-id="charts"]', { timeout: 10000 });
 
