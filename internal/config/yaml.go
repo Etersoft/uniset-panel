@@ -26,11 +26,10 @@ type LauncherConfig struct {
 
 // SidebarGroupConfig описывает одну группу в sidebar
 type SidebarGroupConfig struct {
-	Name        string   `yaml:"name"`
-	Icon        string   `yaml:"icon,omitempty"`
-	Items       []string `yaml:"items,omitempty"`
-	Patterns    []string `yaml:"patterns,omitempty"`
-	GroupByType bool     `yaml:"group_by_type,omitempty"`
+	Name     string   `yaml:"name"`
+	Icon     string   `yaml:"icon,omitempty"`
+	Items    []string `yaml:"items,omitempty"`
+	Patterns []string `yaml:"patterns,omitempty"`
 }
 
 // SidebarConfig описывает конфигурацию sidebar

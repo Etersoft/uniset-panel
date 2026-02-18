@@ -191,42 +191,28 @@ func TestResolve_EmptyConfig(t *testing.T) {
 		{Type: "launcher", Name: "Node1"},
 	}
 
-	// nil config → дефолтные группы по типам
+	// nil config → одна группа без имени со всеми сущностями
 	result := Resolve(nil, entities)
-	if len(result) != 2 { // Objects + Launchers
-		t.Fatalf("nil config should return 2 default groups, got %d", len(result))
+	if len(result) != 1 {
+		t.Fatalf("nil config should return 1 group, got %d", len(result))
 	}
-	if result[0].Name != "Objects" {
-		t.Errorf("first default group should be 'Objects', got %q", result[0].Name)
+	if result[0].Name != "" {
+		t.Errorf("default group should have empty name, got %q", result[0].Name)
 	}
-	if result[1].Name != "Launchers" {
-		t.Errorf("second default group should be 'Launchers', got %q", result[1].Name)
+	if len(result[0].Items) != 2 {
+		t.Errorf("default group should have 2 items, got %d", len(result[0].Items))
 	}
 
-	// empty config → дефолтные группы по типам
+	// empty config → одна группа без имени
 	result = Resolve([]config.SidebarGroupConfig{}, entities)
-	if len(result) != 2 {
-		t.Fatalf("empty config should return 2 default groups, got %d", len(result))
+	if len(result) != 1 {
+		t.Fatalf("empty config should return 1 group, got %d", len(result))
 	}
 
 	// nil entities → пустой slice
 	result = Resolve(nil, nil)
 	if result == nil || len(result) != 0 {
 		t.Errorf("nil entities should return empty slice, got %v", result)
-	}
-}
-
-func TestResolve_GroupByType(t *testing.T) {
-	groups := []config.SidebarGroupConfig{
-		{Name: "Diesel", GroupByType: true, Patterns: []string{"*"}},
-	}
-	entities := []SidebarItem{
-		{Type: "object", Name: "DieselGen1"},
-	}
-
-	result := Resolve(groups, entities)
-	if !result[0].GroupByType {
-		t.Error("GroupByType should be true")
 	}
 }
 

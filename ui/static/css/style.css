@@ -8581,29 +8581,6 @@ button.rotate-quick-btn:active {
     color: #8a8aaa;
 }
 
-/* Type sub-sections (groupByType mode) */
-.sidebar-type-section {
-    margin-bottom: 2px;
-}
-
-.sidebar-type-header {
-    font-size: 0.65rem;
-    font-weight: 600;
-    color: var(--text-muted);
-    padding: 0.3rem 0.75rem 0.15rem 1.2rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.sidebar-type-items {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-
-.sidebar-type-items .sidebar-group-item {
-    padding-left: 1.8rem;
-}
 
 /* Sidebar collapsed — скрываем группы */
 .sidebar.collapsed #sidebar-groups {

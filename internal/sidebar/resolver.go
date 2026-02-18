@@ -19,10 +19,9 @@ type SidebarItem struct {
 
 // SidebarGroup представляет резолвленную группу sidebar
 type SidebarGroup struct {
-	Name        string        `json:"name"`
-	Icon        string        `json:"icon,omitempty"`
-	GroupByType bool          `json:"groupByType"`
-	Items       []SidebarItem `json:"items"`
+	Name  string        `json:"name"`
+	Icon  string        `json:"icon,omitempty"`
+	Items []SidebarItem `json:"items"`
 }
 
 // BuildEntityID формирует идентификатор сущности в формате {type}:{name}@{serverId}
@@ -58,20 +57,8 @@ func MatchEntity(pattern, entityID string) bool {
 	return matched
 }
 
-// defaultTypeOrder задаёт порядок типов для дефолтной группировки
-var defaultTypeOrder = []struct {
-	Type string
-	Name string
-}{
-	{"object", "Objects"},
-	{"launcher", "Launchers"},
-	{"journal", "Journals"},
-	{"dashboard", "Dashboards"},
-	{"server", "Servers"},
-}
-
 // Resolve резолвит правила группировки из конфига против списка известных сущностей.
-// Если конфиг пуст — формирует дефолтные группы по типам.
+// Если конфиг пуст — возвращает одну группу без имени со всеми сущностями.
 // Несовпавшие сущности попадают в автогруппу "Прочие".
 func Resolve(groups []config.SidebarGroupConfig, entities []SidebarItem) []SidebarGroup {
 	if len(groups) == 0 {
@@ -83,10 +70,9 @@ func Resolve(groups []config.SidebarGroupConfig, entities []SidebarItem) []Sideb
 
 	for _, gc := range groups {
 		sg := SidebarGroup{
-			Name:        gc.Name,
-			Icon:        gc.Icon,
-			GroupByType: gc.GroupByType,
-			Items:       []SidebarItem{},
+			Name:  gc.Name,
+			Icon:  gc.Icon,
+			Items: []SidebarItem{},
 		}
 
 		for _, entity := range entities {
@@ -122,31 +108,15 @@ func Resolve(groups []config.SidebarGroupConfig, entities []SidebarItem) []Sideb
 	return result
 }
 
-// resolveDefault формирует дефолтные группы по типам (когда конфиг не задан)
+// resolveDefault формирует одну группу без имени со всеми сущностями (когда конфиг не задан)
 func resolveDefault(entities []SidebarItem) []SidebarGroup {
 	if len(entities) == 0 {
 		return []SidebarGroup{}
 	}
 
-	// Группируем по типу
-	byType := make(map[string][]SidebarItem)
-	for _, entity := range entities {
-		byType[entity.Type] = append(byType[entity.Type], entity)
-	}
-
-	var result []SidebarGroup
-	for _, dt := range defaultTypeOrder {
-		items := byType[dt.Type]
-		if len(items) == 0 {
-			continue
-		}
-		result = append(result, SidebarGroup{
-			Name:  dt.Name,
-			Items: items,
-		})
-	}
-
-	return result
+	return []SidebarGroup{{
+		Items: entities,
+	}}
 }
 
 // matchGroup проверяет соответствие сущности правилам группы

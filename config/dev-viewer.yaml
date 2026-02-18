@@ -43,7 +43,6 @@ sidebar:
       patterns:
         - "object:*"
         - "journal:*"
-      group_by_type: true
     - name: "Инфраструктура"
       patterns:
         - "server:*"

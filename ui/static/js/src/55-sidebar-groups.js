@@ -1,16 +1,6 @@
 // Sidebar Groups — рендеринг сгруппированного sidebar
 // Загружается между UI-функциями (50-59 диапазон)
 
-const ENTITY_TYPE_ORDER = ['object', 'launcher', 'journal', 'dashboard', 'server'];
-
-const ENTITY_TYPE_LABELS = {
-    object: 'Objects',
-    launcher: 'Launchers',
-    journal: 'Journals',
-    dashboard: 'Dashboards',
-    server: 'Servers'
-};
-
 const ENTITY_TYPE_BADGE = {
     object: 'Obj',
     launcher: 'Lnc',
@@ -78,94 +68,48 @@ function renderSidebarGroups() {
 function renderSidebarGroup(group, container) {
     const groupDiv = document.createElement('div');
     groupDiv.className = 'sidebar-group';
-    groupDiv.dataset.groupName = group.name;
+    groupDiv.dataset.groupName = group.name || '';
 
-    const isCollapsed = state.groupCollapseState[group.name] === true;
-    if (isCollapsed) {
-        groupDiv.classList.add('collapsed');
+    // Группа без имени — без заголовка (дефолтный режим без конфига)
+    if (group.name) {
+        const isCollapsed = state.groupCollapseState[group.name] === true;
+        if (isCollapsed) {
+            groupDiv.classList.add('collapsed');
+        }
+
+        const header = document.createElement('div');
+        header.className = 'sidebar-group-header';
+        header.innerHTML = `
+            <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M6 9l6 6 6-6"/>
+            </svg>
+            <span class="sidebar-group-title">${escapeHtml(group.name)}</span>
+            <span class="sidebar-group-count">${group.items ? group.items.length : 0}</span>
+        `;
+        header.addEventListener('click', () => {
+            groupDiv.classList.toggle('collapsed');
+            state.groupCollapseState[group.name] = groupDiv.classList.contains('collapsed');
+            saveGroupCollapseState();
+        });
+        groupDiv.appendChild(header);
     }
 
-    // Header
-    const header = document.createElement('div');
-    header.className = 'sidebar-group-header';
-    header.innerHTML = `
-        <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M6 9l6 6 6-6"/>
-        </svg>
-        <span class="sidebar-group-title">${escapeHtml(group.name)}</span>
-        <span class="sidebar-group-count">${group.items ? group.items.length : 0}</span>
-    `;
-    header.addEventListener('click', () => {
-        groupDiv.classList.toggle('collapsed');
-        state.groupCollapseState[group.name] = groupDiv.classList.contains('collapsed');
-        saveGroupCollapseState();
-    });
-    groupDiv.appendChild(header);
-
-    // Items container
-    const itemsDiv = document.createElement('div');
-    itemsDiv.className = 'sidebar-group-items';
-
-    if (!group.items || group.items.length === 0) {
-        groupDiv.appendChild(itemsDiv);
-        container.appendChild(groupDiv);
-        return;
-    }
-
-    if (group.groupByType) {
-        renderGroupByType(group.items, itemsDiv);
-    } else {
-        renderGroupFlat(group.items, itemsDiv);
-    }
-
-    groupDiv.appendChild(itemsDiv);
-    container.appendChild(groupDiv);
-}
-
-// Рендеринг плоского списка (без разбивки по типам)
-function renderGroupFlat(items, container) {
+    // Items — всегда плоский список с бейджами
     const ul = document.createElement('ul');
     ul.className = 'sidebar-group-list';
 
-    for (const item of items) {
-        const li = createSidebarGroupItem(item);
-        ul.appendChild(li);
-    }
-    container.appendChild(ul);
-}
-
-// Рендеринг с разбивкой по типам
-function renderGroupByType(items, container) {
-    // Группируем по типу
-    const byType = {};
-    for (const item of items) {
-        if (!byType[item.type]) byType[item.type] = [];
-        byType[item.type].push(item);
-    }
-
-    for (const type of ENTITY_TYPE_ORDER) {
-        if (!byType[type] || byType[type].length === 0) continue;
-
-        const section = document.createElement('div');
-        section.className = 'sidebar-type-section';
-
-        const typeHeader = document.createElement('div');
-        typeHeader.className = 'sidebar-type-header';
-        typeHeader.textContent = ENTITY_TYPE_LABELS[type] || type;
-        section.appendChild(typeHeader);
-
-        const ul = document.createElement('ul');
-        ul.className = 'sidebar-type-items';
-        for (const item of byType[type]) {
-            ul.appendChild(createSidebarGroupItem(item, true));
+    if (group.items) {
+        for (const item of group.items) {
+            ul.appendChild(createSidebarGroupItem(item));
         }
-        section.appendChild(ul);
-        container.appendChild(section);
     }
+
+    groupDiv.appendChild(ul);
+    container.appendChild(groupDiv);
 }
 
 // Создание одного элемента sidebar
-function createSidebarGroupItem(item, hideBadge) {
+function createSidebarGroupItem(item) {
     const li = document.createElement('li');
     li.className = 'sidebar-group-item';
     li.dataset.type = item.type;
@@ -181,13 +125,11 @@ function createSidebarGroupItem(item, hideBadge) {
         li.appendChild(dot);
     }
 
-    // Type badge (только в плоском режиме)
-    if (!hideBadge) {
-        const badge = document.createElement('span');
-        badge.className = `entity-type-badge entity-type-${item.type}`;
-        badge.textContent = ENTITY_TYPE_BADGE[item.type] || item.type;
-        li.appendChild(badge);
-    }
+    // Type badge
+    const badge = document.createElement('span');
+    badge.className = `entity-type-badge entity-type-${item.type}`;
+    badge.textContent = ENTITY_TYPE_BADGE[item.type] || item.type;
+    li.appendChild(badge);
 
     const nameSpan = document.createElement('span');
     nameSpan.className = 'sidebar-group-item-name';
@@ -208,14 +150,12 @@ function createSidebarGroupItem(item, hideBadge) {
 function activateSidebarGroupItem(type, name, serverId) {
     switch (type) {
         case 'object': {
-            // Нужен serverName для openObjectTab — берём из state.servers
             const serverInfo = state.servers.get(serverId);
             const serverName = serverInfo ? serverInfo.name : (serverId || '');
             openObjectTab(name, serverId, serverName);
             break;
         }
         case 'launcher': {
-            // Ищем node по имени в state.nodes
             for (const [nodeId, node] of state.nodes) {
                 if (node.name === name) {
                     openLauncherTab(nodeId, node.name, node.launcherUrl, node.hasControl);
@@ -232,7 +172,6 @@ function activateSidebarGroupItem(type, name, serverId) {
         }
         case 'journal': {
             if (typeof journalManager !== 'undefined' && journalManager) {
-                // Ищем journal по имени
                 for (const [id, journal] of journalManager.journals) {
                     if (journal.name === name) {
                         journalManager.openJournal(id);
@@ -243,7 +182,6 @@ function activateSidebarGroupItem(type, name, serverId) {
             break;
         }
         case 'server': {
-            // Скролл к серверной группе в объектах
             for (const [serverId, server] of state.servers) {
                 if (server.id === name || server.name === name) {
                     const group = document.querySelector(`.server-group[data-server-id="${serverId}"]`);
@@ -259,7 +197,6 @@ function activateSidebarGroupItem(type, name, serverId) {
 }
 
 // Обновление статуса сущности в sidebar группах (вызывается из SSE хуков)
-// type: 'server'|'launcher'|'object', name: ID сущности, connected: boolean
 function updateGroupEntityStatus(type, name, connected) {
     const container = document.getElementById('sidebar-groups');
     if (!container) return;
@@ -275,23 +212,20 @@ function updateGroupEntityStatus(type, name, connected) {
     });
 }
 
-// Обновление sidebar при изменении списка объектов (новый сервер подключился и т.д.)
+// Обновление sidebar при изменении списка объектов
 async function refreshSidebarGroups() {
     await loadSidebar();
     renderSidebarGroups();
-    // Восстанавливаем статусы после перерисовки
     applySidebarStatuses();
 }
 
 // Применяет текущие статусы из state к точкам в sidebar
 function applySidebarStatuses() {
-    // Серверы
     for (const [serverId, server] of state.servers) {
         if (server.connected !== undefined) {
             updateGroupEntityStatus('server', serverId, server.connected);
         }
     }
-    // Лаунчеры — по имени через state.nodes
     for (const [nodeId, node] of state.nodes) {
         if (node.connected !== undefined) {
             updateGroupEntityStatus('launcher', node.name, node.connected);
