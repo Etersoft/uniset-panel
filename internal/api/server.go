@@ -180,6 +180,9 @@ func (s *Server) setupRoutes(staticFS fs.FS) {
 	s.mux.HandleFunc("POST /api/launchers/{id}/restart-all", s.handlers.RestartAllLauncherProcesses)
 	s.mux.HandleFunc("POST /api/launchers/{id}/reload-all", s.handlers.ReloadAllLauncherProcesses)
 
+	// Sidebar API
+	s.mux.HandleFunc("GET /api/sidebar", s.handlers.GetSidebar)
+
 	// Recording API
 	s.mux.HandleFunc("GET /api/recording/status", s.handlers.GetRecordingStatus)
 	s.mux.HandleFunc("POST /api/recording/start", s.handlers.StartRecording)

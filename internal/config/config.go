@@ -137,6 +137,9 @@ type Config struct {
 	// Journal settings
 	JournalURLs []string // URL подключений к журналам (ClickHouse)
 
+	// Sidebar settings
+	Sidebar *SidebarConfig // Конфигурация sidebar групп (nil = legacy mode)
+
 	// Development settings
 	JSFile  string // Внешний файл app.js для разработки (вместо встроенного)
 	CSSFile string // Внешний файл style.css для разработки (вместо встроенного)
@@ -250,6 +253,8 @@ func Parse() *Config {
 					cfg.ControlTimeout = yamlConfig.Control.Timeout
 				}
 			}
+			// Sidebar из YAML
+			cfg.Sidebar = yamlConfig.Sidebar
 			// Журналы из YAML (конвертируем в URL формат)
 			for _, j := range yamlConfig.Journals {
 				journalURL := buildJournalURL(j)

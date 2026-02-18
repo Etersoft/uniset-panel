@@ -24,6 +24,7 @@ import (
 	"github.com/pv/uniset-panel/internal/recording"
 	"github.com/pv/uniset-panel/internal/sensorconfig"
 	"github.com/pv/uniset-panel/internal/server"
+	"github.com/pv/uniset-panel/internal/sidebar"
 	"github.com/pv/uniset-panel/internal/sm"
 	"github.com/pv/uniset-panel/internal/storage"
 	"github.com/pv/uniset-panel/internal/uniset"
@@ -239,8 +240,9 @@ func main() {
 	}
 
 	// Create dashboard manager if directory specified
+	var dashboardMgr *dashboard.Manager
 	if cfg.DashboardsDir != "" {
-		dashboardMgr := dashboard.NewManager(cfg.DashboardsDir)
+		dashboardMgr = dashboard.NewManager(cfg.DashboardsDir)
 		if err := dashboardMgr.Load(); err != nil {
 			logger.Error("Failed to load dashboards", "dir", cfg.DashboardsDir, "error", err)
 		} else {
@@ -281,6 +283,64 @@ func main() {
 	}
 	if opcuaPollerInstance != nil {
 		handlers.SetOPCUAPoller(opcuaPollerInstance)
+	}
+
+	// Resolve sidebar groups if configured
+	if cfg.Sidebar != nil && len(cfg.Sidebar.Groups) > 0 {
+		var entities []sidebar.SidebarItem
+
+		// Collect objects from all servers
+		if allObjects, err := serverMgr.GetAllObjects(); err == nil {
+			for _, obj := range allObjects {
+				entities = append(entities, sidebar.SidebarItem{
+					Type:     "object",
+					Name:     obj.ObjectName,
+					ServerID: obj.ServerID,
+				})
+			}
+		}
+
+		// Collect servers
+		for _, srv := range cfg.Servers {
+			entities = append(entities, sidebar.SidebarItem{
+				Type: "server",
+				Name: srv.ID,
+			})
+		}
+
+		// Collect launchers
+		if launcherMgr != nil {
+			for _, node := range launcherMgr.ListNodes() {
+				entities = append(entities, sidebar.SidebarItem{
+					Type: "launcher",
+					Name: node.Name,
+				})
+			}
+		}
+
+		// Collect dashboards
+		if dashboardMgr != nil {
+			for _, info := range dashboardMgr.ListInfo() {
+				entities = append(entities, sidebar.SidebarItem{
+					Type: "dashboard",
+					Name: info.Name,
+				})
+			}
+		}
+
+		// Collect journals
+		if journalMgr != nil {
+			for _, info := range journalMgr.GetAllInfos() {
+				entities = append(entities, sidebar.SidebarItem{
+					Type: "journal",
+					Name: info.Name,
+				})
+			}
+		}
+
+		groups := sidebar.Resolve(cfg.Sidebar.Groups, entities)
+		handlers.SetSidebarGroups(groups)
+		logger.Info("Sidebar groups configured", "groups", len(groups), "entities", len(entities))
 	}
 
 	// Create SM poller if configured
