@@ -125,7 +125,7 @@ func TestResolve_PatternsMatching(t *testing.T) {
 		{Type: "object", Name: "DieselGen2", ServerID: "diesel-srv"},
 		{Type: "object", Name: "DieselGen3", ServerID: "hvac-srv"}, // wrong server
 		{Type: "launcher", Name: "Node1"},
-		{Type: "server", Name: "diesel-srv"},
+		{Type: "server", Name: "diesel-srv"}, // no server: pattern → filtered out
 	}
 
 	result := Resolve(groups, entities)
@@ -138,8 +138,51 @@ func TestResolve_PatternsMatching(t *testing.T) {
 	if len(result[1].Items) != 1 {
 		t.Errorf("AllLaunchers should have 1 item, got %d", len(result[1].Items))
 	}
-	if len(result[2].Items) != 2 { // DieselGen3@hvac-srv + server:diesel-srv
-		t.Errorf("Прочие should have 2 items, got %d", len(result[2].Items))
+	// server:diesel-srv filtered out (no server: pattern), only DieselGen3 in Прочие
+	if len(result[2].Items) != 1 {
+		t.Errorf("Прочие should have 1 item (DieselGen3), got %d", len(result[2].Items))
+	}
+}
+
+func TestResolve_ServersIncludedWithExplicitPattern(t *testing.T) {
+	groups := []config.SidebarGroupConfig{
+		{Name: "Objects", Patterns: []string{"object:*"}},
+		{Name: "Infra", Patterns: []string{"server:*"}},
+	}
+	entities := []SidebarItem{
+		{Type: "object", Name: "Obj1"},
+		{Type: "server", Name: "srv1"},
+	}
+
+	result := Resolve(groups, entities)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 groups, got %d", len(result))
+	}
+	if len(result[1].Items) != 1 {
+		t.Errorf("Infra should have 1 server, got %d", len(result[1].Items))
+	}
+	if result[1].Items[0].Type != "server" {
+		t.Errorf("expected server type, got %q", result[1].Items[0].Type)
+	}
+}
+
+func TestResolve_ServersExcludedByDefault(t *testing.T) {
+	// No server: pattern → servers filtered out
+	groups := []config.SidebarGroupConfig{
+		{Name: "All", Patterns: []string{"object:*", "launcher:*"}},
+	}
+	entities := []SidebarItem{
+		{Type: "object", Name: "Obj1"},
+		{Type: "launcher", Name: "Node1"},
+		{Type: "server", Name: "srv1"},
+	}
+
+	result := Resolve(groups, entities)
+	if len(result) != 1 { // All, no Прочие (server filtered)
+		t.Fatalf("expected 1 group, got %d", len(result))
+	}
+	if len(result[0].Items) != 2 {
+		t.Errorf("All should have 2 items (no server), got %d", len(result[0].Items))
 	}
 }
 

@@ -60,9 +60,14 @@ func MatchEntity(pattern, entityID string) bool {
 // Resolve резолвит правила группировки из конфига против списка известных сущностей.
 // Если конфиг пуст — возвращает одну группу без имени со всеми сущностями.
 // Несовпавшие сущности попадают в автогруппу "Прочие".
+// Серверы включаются только если конфиг явно содержит паттерн "server:".
 func Resolve(groups []config.SidebarGroupConfig, entities []SidebarItem) []SidebarGroup {
 	if len(groups) == 0 {
 		return resolveDefault(entities)
+	}
+
+	if !hasServerPatterns(groups) {
+		entities = filterOutType(entities, "server")
 	}
 
 	matched := make(map[string]bool)
@@ -108,8 +113,10 @@ func Resolve(groups []config.SidebarGroupConfig, entities []SidebarItem) []Sideb
 	return result
 }
 
-// resolveDefault формирует одну группу без имени со всеми сущностями (когда конфиг не задан)
+// resolveDefault формирует одну группу без имени со всеми сущностями (когда конфиг не задан).
+// Серверы исключаются — их статус виден на объектах через точки подключения.
 func resolveDefault(entities []SidebarItem) []SidebarGroup {
+	entities = filterOutType(entities, "server")
 	if len(entities) == 0 {
 		return []SidebarGroup{}
 	}
@@ -117,6 +124,29 @@ func resolveDefault(entities []SidebarItem) []SidebarGroup {
 	return []SidebarGroup{{
 		Items: entities,
 	}}
+}
+
+// hasServerPatterns проверяет, есть ли в конфиге паттерны, явно ссылающиеся на серверы
+func hasServerPatterns(groups []config.SidebarGroupConfig) bool {
+	for _, g := range groups {
+		for _, p := range g.Patterns {
+			if strings.HasPrefix(p, "server:") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// filterOutType удаляет сущности заданного типа из списка
+func filterOutType(entities []SidebarItem, entityType string) []SidebarItem {
+	filtered := make([]SidebarItem, 0, len(entities))
+	for _, e := range entities {
+		if e.Type != entityType {
+			filtered = append(filtered, e)
+		}
+	}
+	return filtered
 }
 
 // matchGroup проверяет соответствие сущности правилам группы

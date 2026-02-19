@@ -45,7 +45,3 @@ sidebar:
       patterns:
         - "object:*"
         - "journal:*"
-    - name: "Инфраструктура"
-      icon: "🖥️"
-      patterns:
-        - "server:*"
