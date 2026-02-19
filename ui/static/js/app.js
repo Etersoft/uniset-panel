@@ -16377,6 +16377,7 @@ function activateSidebarGroupItem(type, name, serverId) {
         }
         case 'dashboard': {
             if (dashboardManager) {
+                dashboardManager.switchView('dashboard');
                 dashboardManager.loadDashboard(name);
             }
             break;
