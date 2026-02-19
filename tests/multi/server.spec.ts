@@ -34,21 +34,19 @@ test.describe('Multi-Server Support', () => {
     await expect(page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'BackupProcess' })).toBeVisible();
   });
 
-  test('should display server items with status indicators in sidebar', async ({ page }) => {
+  test('should display object items with status indicators in sidebar', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
 
-    // Servers are displayed as sidebar-group-item elements with data-type="server"
-    const serverItems = page.locator('.sidebar-group-item[data-type="server"]');
-    const serverCount = await serverItems.count();
+    // Objects should have status dots (inherited from server connection status)
+    const objectItems = page.locator('.sidebar-group-item[data-type="object"]');
+    const objectCount = await objectItems.count();
+    expect(objectCount).toBeGreaterThanOrEqual(2);
 
-    // Should have at least 2 server items (one for each server)
-    expect(serverCount).toBeGreaterThanOrEqual(2);
-
-    // Each server item should have a status dot
-    const statusDots = page.locator('.sidebar-group-item[data-type="server"] .sidebar-group-status');
+    // Each object item should have a status dot
+    const statusDots = page.locator('.sidebar-group-item[data-type="object"] .sidebar-group-status');
     const dotCount = await statusDots.count();
-    expect(dotCount).toBeGreaterThanOrEqual(2);
+    expect(dotCount).toBe(objectCount);
   });
 
   test('should have different server IDs for objects from different servers', async ({ page }) => {

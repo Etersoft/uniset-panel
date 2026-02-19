@@ -37,49 +37,48 @@ test.describe('Server Disconnect/Reconnect', () => {
     await mockReconnect();
   });
 
-  test('sidebar должен показать disconnect и автоматически восстановиться при reconnect', async ({ page }) => {
+  test('sidebar должен показать disconnect на объектах и восстановиться при reconnect', async ({ page }) => {
     // 1. Загружаем страницу, ждём появления списка объектов
     await page.goto('/');
     await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    // 2. Сервер изначально подключён (зелёная точка — нет класса .disconnected)
-    const serverDot = page.locator('.sidebar-group-item[data-type="server"] .sidebar-group-status').first();
-    await expect(serverDot).toBeVisible({ timeout: 10000 });
-    await expect(serverDot).not.toHaveClass(/disconnected/, { timeout: 5000 });
+    // 2. Объекты изначально подключены (зелёная точка — нет класса .disconnected)
+    const objectDot = page.locator('.sidebar-group-item[data-type="object"] .sidebar-group-status').first();
+    await expect(objectDot).toBeVisible({ timeout: 10000 });
+    await expect(objectDot).not.toHaveClass(/disconnected/, { timeout: 5000 });
 
     // 3. Имитируем падение сервера
     await mockDisconnect();
 
     // 4. Ждём, пока backend health check обнаружит сбой и обновит sidebar через SSE
-    // Backend poll interval = 1s (default), через ~5с статус должен измениться
-    await expect(serverDot).toHaveClass(/disconnected/, { timeout: 10000 });
+    await expect(objectDot).toHaveClass(/disconnected/, { timeout: 10000 });
 
     // 5. Имитируем восстановление сервера
     await mockReconnect();
 
     // 6. Ждём автоматического восстановления sidebar БЕЗ ручного refresh
-    await expect(serverDot).not.toHaveClass(/disconnected/, { timeout: 15000 });
+    await expect(objectDot).not.toHaveClass(/disconnected/, { timeout: 15000 });
   });
 
-  test('элемент сервера в sidebar должен отражать disconnect/reconnect', async ({ page }) => {
+  test('статус объектов в sidebar должен отражать disconnect/reconnect сервера', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    // Точка статуса сервера в sidebar (server item)
-    const serverItemDot = page.locator('.sidebar-group-item[data-type="server"] .sidebar-group-status').first();
-    await expect(serverItemDot).toBeVisible({ timeout: 10000 });
-    await expect(serverItemDot).not.toHaveClass(/disconnected/, { timeout: 5000 });
+    // Точка статуса объекта в sidebar
+    const objectDot = page.locator('.sidebar-group-item[data-type="object"] .sidebar-group-status').first();
+    await expect(objectDot).toBeVisible({ timeout: 10000 });
+    await expect(objectDot).not.toHaveClass(/disconnected/, { timeout: 5000 });
 
     // Disconnect
     await mockDisconnect();
 
-    // Сервер должен показать disconnected
-    await expect(serverItemDot).toHaveClass(/disconnected/, { timeout: 10000 });
+    // Объекты должны показать disconnected
+    await expect(objectDot).toHaveClass(/disconnected/, { timeout: 10000 });
 
     // Reconnect
     await mockReconnect();
 
-    // Сервер должен автоматически восстановиться
-    await expect(serverItemDot).not.toHaveClass(/disconnected/, { timeout: 15000 });
+    // Объекты должны автоматически восстановиться
+    await expect(objectDot).not.toHaveClass(/disconnected/, { timeout: 15000 });
   });
 });

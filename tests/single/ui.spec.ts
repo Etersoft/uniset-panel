@@ -664,24 +664,6 @@ test.describe('UniSet Panel UI', () => {
 
   // === Тесты на группы серверов ===
 
-  test('should display server items for connected servers with green status dot', async ({ page }) => {
-    await page.goto('/');
-
-    // Ждём загрузки sidebar
-    await page.waitForSelector('.sidebar-group-item[data-type="server"]', { timeout: 10000 });
-
-    // Проверяем что есть серверы в sidebar
-    const serverItems = page.locator('.sidebar-group-item[data-type="server"]');
-    await expect(serverItems.first()).toBeVisible();
-
-    // Все status dots должны быть без класса disconnected (сервер подключён)
-    const statusDots = page.locator('.sidebar-group-item[data-type="server"] .sidebar-group-status');
-    const allDots = await statusDots.all();
-    for (const dot of allDots) {
-      await expect(dot).not.toHaveClass(/disconnected/);
-    }
-  });
-
   test('should display server items with disconnected status when server is down', async ({ page }) => {
     // Мокаем ответ sidebar API чтобы симулировать два сервера
     await page.route('**/api/sidebar', async route => {
