@@ -61,7 +61,12 @@ func MatchEntity(pattern, entityID string) bool {
 // Если конфиг пуст — возвращает одну группу без имени со всеми сущностями.
 // Несовпавшие сущности попадают в автогруппу "Прочие".
 // Серверы включаются только если конфиг явно содержит паттерн "server:".
-func Resolve(groups []config.SidebarGroupConfig, entities []SidebarItem) []SidebarGroup {
+// exclude — глобальные паттерны исключения (сущности удаляются до обработки групп).
+func Resolve(groups []config.SidebarGroupConfig, exclude []string, entities []SidebarItem) []SidebarGroup {
+	if len(exclude) > 0 {
+		entities = filterByExclude(entities, exclude)
+	}
+
 	if len(groups) == 0 {
 		return resolveDefault(entities)
 	}
@@ -149,21 +154,51 @@ func filterOutType(entities []SidebarItem, entityType string) []SidebarItem {
 	return filtered
 }
 
-// matchGroup проверяет соответствие сущности правилам группы
+// matchGroup проверяет соответствие сущности правилам группы.
+// Паттерны с префиксом "!" исключают сущность из группы.
+// Логика: (совпал items ИЛИ совпал позитивный паттерн) И (не совпал ни один !-паттерн).
 func matchGroup(gc config.SidebarGroupConfig, entity SidebarItem, entityID string) bool {
 	// Проверяем items (exact match по имени, любой тип)
+	itemMatch := false
 	for _, item := range gc.Items {
 		if entity.Name == item {
-			return true
+			itemMatch = true
+			break
 		}
 	}
 
-	// Проверяем patterns (glob match по entityID)
+	// Проверяем patterns — разделяем на позитивные и негативные
+	var positiveMatch, negativeMatch bool
 	for _, pattern := range gc.Patterns {
-		if MatchEntity(pattern, entityID) {
-			return true
+		if strings.HasPrefix(pattern, "!") {
+			if MatchEntity(pattern[1:], entityID) {
+				negativeMatch = true
+			}
+		} else {
+			if MatchEntity(pattern, entityID) {
+				positiveMatch = true
+			}
 		}
 	}
 
-	return false
+	return (itemMatch || positiveMatch) && !negativeMatch
+}
+
+// filterByExclude удаляет сущности, совпавшие с exclude-паттернами
+func filterByExclude(entities []SidebarItem, exclude []string) []SidebarItem {
+	filtered := make([]SidebarItem, 0, len(entities))
+	for _, entity := range entities {
+		entityID := BuildEntityID(entity.Type, entity.Name, entity.ServerID)
+		excluded := false
+		for _, pattern := range exclude {
+			if MatchEntity(pattern, entityID) {
+				excluded = true
+				break
+			}
+		}
+		if !excluded {
+			filtered = append(filtered, entity)
+		}
+	}
+	return filtered
 }

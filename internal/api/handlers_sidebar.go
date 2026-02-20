@@ -7,9 +7,9 @@ import (
 	"github.com/pv/uniset-panel/internal/sidebar"
 )
 
-// SetSidebarConfig устанавливает конфигурацию групп sidebar
-func (h *Handlers) SetSidebarConfig(groups []config.SidebarGroupConfig) {
-	h.sidebarConfig = groups
+// SetSidebarConfig устанавливает конфигурацию sidebar
+func (h *Handlers) SetSidebarConfig(cfg *config.SidebarConfig) {
+	h.sidebarConfig = cfg
 }
 
 // GetSidebar возвращает резолвленное дерево sidebar групп
@@ -17,8 +17,16 @@ func (h *Handlers) SetSidebarConfig(groups []config.SidebarGroupConfig) {
 // GET /api/sidebar
 func (h *Handlers) GetSidebar(w http.ResponseWriter, r *http.Request) {
 	entities := h.collectSidebarEntities()
-	groups := sidebar.Resolve(h.sidebarConfig, entities)
-	h.writeJSON(w, map[string]interface{}{"groups": groups})
+
+	var groups []config.SidebarGroupConfig
+	var exclude []string
+	if h.sidebarConfig != nil {
+		groups = h.sidebarConfig.Groups
+		exclude = h.sidebarConfig.Exclude
+	}
+
+	result := sidebar.Resolve(groups, exclude, entities)
+	h.writeJSON(w, map[string]interface{}{"groups": result})
 }
 
 // collectSidebarEntities собирает все известные сущности из менеджеров

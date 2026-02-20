@@ -286,7 +286,7 @@ func main() {
 
 	// Передаём конфиг sidebar в handler (резолв динамический при каждом запросе)
 	if cfg.Sidebar != nil {
-		handlers.SetSidebarConfig(cfg.Sidebar.Groups)
+		handlers.SetSidebarConfig(cfg.Sidebar)
 	}
 
 	// Create SM poller if configured

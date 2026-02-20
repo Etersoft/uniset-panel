@@ -47,7 +47,7 @@ type Handlers struct {
 	dashboardMgr    *dashboard.Manager   // менеджер серверных dashboard'ов
 	journalMgr      *journal.Manager     // менеджер журналов сообщений
 	launcherMgr     *launcher.Manager              // менеджер Launcher'ов
-	sidebarConfig   []config.SidebarGroupConfig   // конфиг групп sidebar (nil = дефолт по типам)
+	sidebarConfig   *config.SidebarConfig          // конфиг sidebar (nil = дефолт по типам)
 }
 
 func NewHandlers(client *uniset.Client, store storage.Storage, p *poller.Poller, sensorCfg *sensorconfig.SensorConfig, pollInterval time.Duration) *Handlers {

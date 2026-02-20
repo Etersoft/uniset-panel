@@ -34,7 +34,8 @@ type SidebarGroupConfig struct {
 
 // SidebarConfig описывает конфигурацию sidebar
 type SidebarConfig struct {
-	Groups []SidebarGroupConfig `yaml:"groups,omitempty"`
+	Exclude []string             `yaml:"exclude,omitempty"`
+	Groups  []SidebarGroupConfig `yaml:"groups,omitempty"`
 }
 
 // ConfigFile представляет структуру YAML файла конфигурации
