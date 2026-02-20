@@ -8498,10 +8498,6 @@ button.rotate-quick-btn:active {
 }
 
 .sidebar-group-items {
-    padding: 0;
-}
-
-.sidebar-group-list {
     list-style: none;
     padding: 0;
     margin: 0;
