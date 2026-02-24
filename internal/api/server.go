@@ -177,6 +177,8 @@ func (s *Server) setupRoutes(staticFS fs.FS) {
 	s.mux.HandleFunc("POST /api/launchers/{id}/process/{name}/restart", s.handlers.RestartLauncherProcess)
 	s.mux.HandleFunc("POST /api/launchers/{id}/process/{name}/stop", s.handlers.StopLauncherProcess)
 	s.mux.HandleFunc("POST /api/launchers/{id}/process/{name}/start", s.handlers.StartLauncherProcess)
+	s.mux.HandleFunc("POST /api/launchers/{id}/stop-all", s.handlers.StopAllLauncherProcesses)
+	s.mux.HandleFunc("POST /api/launchers/{id}/start-all", s.handlers.StartAllLauncherProcesses)
 	s.mux.HandleFunc("POST /api/launchers/{id}/restart-all", s.handlers.RestartAllLauncherProcesses)
 	s.mux.HandleFunc("POST /api/launchers/{id}/reload-all", s.handlers.ReloadAllLauncherProcesses)
 

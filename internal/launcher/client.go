@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -86,6 +87,28 @@ func (c *Client) StopProcess(ctx context.Context, name string) error {
 // POST /api/v2/launcher/process/{name}/start
 func (c *Client) StartProcess(ctx context.Context, name string) error {
 	return c.doPost(ctx, fmt.Sprintf("/api/v2/launcher/process/%s/start", name))
+}
+
+// StopAll останавливает указанные процессы по одному
+func (c *Client) StopAll(ctx context.Context, names []string) error {
+	var errs []error
+	for _, name := range names {
+		if err := c.StopProcess(ctx, name); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", name, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// StartAll запускает указанные процессы по одному
+func (c *Client) StartAll(ctx context.Context, names []string) error {
+	var errs []error
+	for _, name := range names {
+		if err := c.StartProcess(ctx, name); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", name, err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // RestartAll перезапускает все запущенные процессы

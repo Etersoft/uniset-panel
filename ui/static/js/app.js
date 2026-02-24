@@ -10371,6 +10371,8 @@ class LauncherRenderer {
 
             if (showActions) {
                 html += `<th class="launcher-actions-header">Actions
+                    <button class="launcher-bulk-btn launcher-bulk-stop" data-node="${this.nodeId}" data-bulk="stop-all" title="Stop all running processes">Stop</button>
+                    <button class="launcher-bulk-btn launcher-bulk-start" data-node="${this.nodeId}" data-bulk="start-all" title="Start all stopped processes">Start</button>
                     <button class="launcher-bulk-btn launcher-bulk-restart" data-node="${this.nodeId}" data-bulk="restart-all" title="Restart all processes">Restart</button>
                     <button class="launcher-bulk-btn launcher-bulk-reload" data-node="${this.nodeId}" data-bulk="reload-all" title="Reload all processes">Reload</button>
                 </th>`;
@@ -10546,7 +10548,8 @@ class LauncherRenderer {
             btn.addEventListener('click', async (e) => {
                 const bulkAction = e.currentTarget.dataset.bulk;
                 const nodeId = e.currentTarget.dataset.node;
-                const label = bulkAction === 'restart-all' ? 'Restart' : 'Reload';
+                const labels = { 'stop-all': 'Stop', 'start-all': 'Start', 'restart-all': 'Restart', 'reload-all': 'Reload' };
+                const label = labels[bulkAction] || bulkAction;
 
                 const confirmed = await showConfirmDialog(
                     `${label} All`,

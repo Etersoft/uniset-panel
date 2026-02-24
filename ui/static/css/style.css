@@ -8345,6 +8345,22 @@ button.rotate-quick-btn:active {
     vertical-align: middle;
 }
 
+.launcher-bulk-stop {
+    background: var(--accent-red);
+}
+
+.launcher-bulk-stop:hover {
+    background: #dc2626;
+}
+
+.launcher-bulk-start {
+    background: var(--accent-green);
+}
+
+.launcher-bulk-start:hover {
+    background: #16a34a;
+}
+
 .launcher-bulk-restart {
     background: var(--accent-orange);
 }

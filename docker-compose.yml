@@ -99,6 +99,24 @@ services:
     profiles:
       - dev
 
+  # Mock Launcher for testing (stop-all, start-all, etc.)
+  mock-launcher:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./tests/mock-launcher:/app:ro
+    environment:
+      - PORT=8111
+      - NODE_NAME=TestLauncher
+    command: node server.js
+    expose:
+      - "8111"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8111/api/v2/launcher/health"]
+      interval: 2s
+      timeout: 5s
+      retries: 5
+
   # Mock uniset2 server for testing
   mock-uniset:
     image: node:20-alpine
@@ -127,6 +145,7 @@ services:
       --uniset-config /app/config/test.xml
       --sm-url http://mock-uniset:9393
       --journal-url "clickhouse://clickhouse:9000/uniset?name=TestJournal"
+      --launcher-url http://admin@mock-launcher:8111
       --js /app/ext/app.js
       --css /app/ext/style.css
     volumes:
@@ -137,6 +156,8 @@ services:
       - "8000:8000"
     depends_on:
       mock-uniset:
+        condition: service_healthy
+      mock-launcher:
         condition: service_healthy
       clickhouse:
         condition: service_healthy

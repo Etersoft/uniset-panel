@@ -16,6 +16,8 @@ const processes = [
     { name: 'LogDB', state: 'stopped', pid: 0, uptime: 0, restartCount: 3, lastError: 'ClickHouse connection refused', group: 'logging', critical: false },
     { name: 'BackupService', state: 'completed', pid: 0, uptime: 0, restartCount: 0, group: 'maintenance', critical: false, oneshot: true },
     { name: 'Watchdog', state: 'running', pid: 1010, uptime: 86400, restartCount: 0, group: 'core', critical: true, manual: false },
+    { name: 'ManualService', state: 'running', pid: 1011, uptime: 50000, restartCount: 0, group: 'maintenance', critical: false, manual: true },
+    { name: 'SkippedService', state: 'stopped', pid: 0, uptime: 0, restartCount: 0, group: 'maintenance', critical: false, skip: true },
 ];
 
 const groups = [
@@ -23,7 +25,7 @@ const groups = [
     { name: 'io', order: 2, dependsOn: ['core'], processes: ['MBTCPMaster1', 'MBTCPSlave1', 'OPCUAExchange', 'OPCUAServer'] },
     { name: 'network', order: 3, dependsOn: ['core'], processes: ['UNetExchange', 'UWebSocketGate'] },
     { name: 'logging', order: 4, dependsOn: ['core'], processes: ['LogDB'] },
-    { name: 'maintenance', order: 5, processes: ['BackupService'] },
+    { name: 'maintenance', order: 5, processes: ['BackupService', 'ManualService', 'SkippedService'] },
 ];
 
 // Имитация живых данных — uptime растёт
@@ -126,7 +128,7 @@ const server = http.createServer((req, res) => {
     }
 
     // Process actions: restart/stop/start
-    const actionMatch = path.match(/^\/api\/v2\/launcher\/processes\/([^/]+)\/(restart|stop|start)$/);
+    const actionMatch = path.match(/^\/api\/v2\/launcher\/process\/([^/]+)\/(restart|stop|start)$/);
     if (req.method === 'POST' && actionMatch) {
         const [, procName, action] = actionMatch;
         const proc = findProcess(procName);

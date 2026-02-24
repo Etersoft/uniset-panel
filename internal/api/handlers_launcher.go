@@ -218,6 +218,80 @@ func (h *Handlers) ReloadAllLauncherProcesses(w http.ResponseWriter, r *http.Req
 	h.writeJSON(w, map[string]string{"status": "ok", "action": "reload-all"})
 }
 
+// StopAllLauncherProcesses останавливает все running-процессы
+// POST /api/launchers/{id}/stop-all
+func (h *Handlers) StopAllLauncherProcesses(w http.ResponseWriter, r *http.Request) {
+	node, ok := h.getLauncher(w, r)
+	if !ok {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	processes, err := node.Client.GetProcesses(ctx)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	var names []string
+	for _, p := range processes {
+		if p.State == "running" && !p.Manual && !p.Oneshot && !p.Skip {
+			names = append(names, p.Name)
+		}
+	}
+
+	if len(names) == 0 {
+		h.writeJSON(w, map[string]string{"status": "ok", "action": "stop-all", "detail": "no running processes"})
+		return
+	}
+
+	if err := node.Client.StopAll(ctx, names); err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, map[string]string{"status": "ok", "action": "stop-all"})
+}
+
+// StartAllLauncherProcesses запускает все не-running процессы (кроме manual, oneshot, skip)
+// POST /api/launchers/{id}/start-all
+func (h *Handlers) StartAllLauncherProcesses(w http.ResponseWriter, r *http.Request) {
+	node, ok := h.getLauncher(w, r)
+	if !ok {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	processes, err := node.Client.GetProcesses(ctx)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	var names []string
+	for _, p := range processes {
+		if p.State != "running" && !p.Manual && !p.Oneshot && !p.Skip {
+			names = append(names, p.Name)
+		}
+	}
+
+	if len(names) == 0 {
+		h.writeJSON(w, map[string]string{"status": "ok", "action": "start-all", "detail": "all processes running"})
+		return
+	}
+
+	if err := node.Client.StartAll(ctx, names); err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	h.writeJSON(w, map[string]string{"status": "ok", "action": "start-all"})
+}
+
 // getLauncher извлекает Launcher из запроса
 func (h *Handlers) getLauncher(w http.ResponseWriter, r *http.Request) (*launcher.Node, bool) {
 	if h.launcherMgr == nil {

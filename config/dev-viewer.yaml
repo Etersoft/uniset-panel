@@ -7,8 +7,10 @@
 launchers:
   - url: http://localhost:8111
     name: "Основная нода"
+    controlToken: "admin"
   - url: http://localhost:8222
     name: "Резервная нода"
+    controlToken: "admin"
 
 # ============================================================================
 # Серверы UniSet2

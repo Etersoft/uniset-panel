@@ -12,6 +12,7 @@ type Process struct {
 	Critical     bool   `json:"critical,omitempty"`
 	Manual       bool   `json:"manual,omitempty"`
 	Oneshot      bool   `json:"oneshot,omitempty"`
+	Skip         bool   `json:"skip,omitempty"`
 }
 
 // ProcessGroup описывает группу процессов
