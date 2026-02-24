@@ -460,3 +460,41 @@ func TestResolve_NegativePatternBlocksItems(t *testing.T) {
 		t.Errorf("Прочие should have 1 item, got %d", len(result[1].Items))
 	}
 }
+
+func TestResolve_SingleGroupWithExcludeAndNegative(t *testing.T) {
+	// User config: one group with global exclude + same !-pattern in group
+	groups := []config.SidebarGroupConfig{
+		{Name: "Server236", Patterns: []string{
+			"launcher:*",
+			"object:*",
+			"dashboard:*",
+			"!object:UniSetActivator",
+		}},
+	}
+	exclude := []string{"object:UniSetActivator"}
+	entities := []SidebarItem{
+		{Type: "object", Name: "SharedMemory", ServerID: "srv1"},
+		{Type: "object", Name: "MBSlave1", ServerID: "srv1"},
+		{Type: "object", Name: "UniSetActivator", ServerID: "srv1"},
+		{Type: "launcher", Name: "Node1"},
+		{Type: "dashboard", Name: "Overview"},
+	}
+
+	result := Resolve(groups, exclude, entities)
+	// UniSetActivator removed globally, 4 entities remain
+	// All 4 match positive patterns, !object:UniSetActivator matches nothing remaining
+	if len(result) != 1 {
+		t.Fatalf("expected 1 group, got %d", len(result))
+	}
+	if result[0].Name != "Server236" {
+		t.Errorf("expected Server236, got %q", result[0].Name)
+	}
+	if len(result[0].Items) != 4 {
+		t.Errorf("Server236 should have 4 items, got %d", len(result[0].Items))
+	}
+	for _, item := range result[0].Items {
+		if item.Name == "UniSetActivator" {
+			t.Error("UniSetActivator should not appear")
+		}
+	}
+}
