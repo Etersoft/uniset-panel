@@ -256,7 +256,10 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         if (this.allSensorsCache) return this.allSensorsCache;
 
         try {
-            const response = await fetch('/api/sensors');
+            const tabState = state.tabs.get(this.tabKey);
+            const serverId = tabState?.serverId || '';
+            const param = serverId ? `?server=${encodeURIComponent(serverId)}` : '';
+            const response = await fetch(`/api/sensors${param}`);
             if (!response.ok) return [];
             const data = await response.json();
             this.allSensorsCache = data.sensors || [];

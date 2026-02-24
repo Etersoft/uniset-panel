@@ -44,21 +44,25 @@ func (c *Client) GetStatus(ctx context.Context) (*LauncherStatus, error) {
 // GetProcesses возвращает список процессов
 // GET /api/v2/launcher/processes
 func (c *Client) GetProcesses(ctx context.Context) ([]Process, error) {
-	var processes []Process
-	if err := c.doGet(ctx, "/api/v2/launcher/processes", &processes); err != nil {
+	var resp struct {
+		Processes []Process `json:"processes"`
+	}
+	if err := c.doGet(ctx, "/api/v2/launcher/processes", &resp); err != nil {
 		return nil, err
 	}
-	return processes, nil
+	return resp.Processes, nil
 }
 
 // GetGroups возвращает группы процессов
 // GET /api/v2/launcher/groups
 func (c *Client) GetGroups(ctx context.Context) ([]ProcessGroup, error) {
-	var groups []ProcessGroup
-	if err := c.doGet(ctx, "/api/v2/launcher/groups", &groups); err != nil {
+	var resp struct {
+		Groups []ProcessGroup `json:"groups"`
+	}
+	if err := c.doGet(ctx, "/api/v2/launcher/groups", &resp); err != nil {
 		return nil, err
 	}
-	return groups, nil
+	return resp.Groups, nil
 }
 
 // Health возвращает статус здоровья

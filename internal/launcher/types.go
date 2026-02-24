@@ -19,13 +19,14 @@ type Process struct {
 type ProcessGroup struct {
 	Name      string   `json:"name"`
 	Order     int      `json:"order,omitempty"`
-	DependsOn []string `json:"dependsOn,omitempty"`
+	DependsOn []string `json:"depends,omitempty"`
 	Processes []string `json:"processes,omitempty"`
 }
 
 // LauncherStatus описывает полный статус Launcher'а
 type LauncherStatus struct {
 	Node              string         `json:"node,omitempty"`
+	Version           string         `json:"version,omitempty"`
 	Processes         []Process      `json:"processes"`
 	Groups            []ProcessGroup `json:"groups,omitempty"`
 	AllRunning        bool           `json:"allRunning"`

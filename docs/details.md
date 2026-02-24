@@ -85,7 +85,7 @@ UniSet2 Processes (/api/v2/...) — https://etersoft.github.io/uniset2/
 --history-ttl      Время жизни истории (default: 1h)
 --log-format       Формат логов: text | json (default: text)
 --log-level        Уровень логов: debug | info | warn | error (default: warn)
---uniset-config    Путь к XML-конфигурации датчиков
+--uniset-config    Путь к XML-конфигурации датчиков (глобальный fallback)
 --dashboards-dir   Директория с серверными дашбордами
 --journal-url      ClickHouse URL для журналов (можно несколько раз)
 --control-token    Токен доступа для режима управления (можно несколько)
@@ -108,9 +108,10 @@ UniSet2 Processes (/api/v2/...) — https://etersoft.github.io/uniset2/
 - `GET /api/objects/{name}/variables/{variable}/history/range?from=...&to=...` — диапазон времени
 
 ### Конфигурация датчиков
-- `GET /api/sensors` — список всех датчиков
-- `GET /api/sensors/{id}` — датчик по ID
-- `GET /api/sensors/by-name/{name}` — датчик по имени
+- `GET /api/sensors?server={serverId}` — список датчиков сервера (параметр `server` обязателен)
+- `GET /api/sensors/by-name/{name}?server={serverId}` — датчик по имени (параметр `server` обязателен)
+
+Каждый сервер может иметь свой XML конфиг (`unisetConfig` в YAML). Глобальный `--uniset-config` — fallback для серверов без собственного конфига.
 
 ### Статические ресурсы
 - `GET /static/...` — CSS/JS файлы

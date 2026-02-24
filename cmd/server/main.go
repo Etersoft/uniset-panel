@@ -58,7 +58,7 @@ func main() {
 	}
 	defer store.Close()
 
-	// Load sensor configuration if provided
+	// Load global sensor configuration if provided (fallback for servers without per-server config)
 	var sensorCfg *sensorconfig.SensorConfig
 	if cfg.ConFile != "" {
 		var err error
@@ -67,7 +67,7 @@ func main() {
 			logger.Error("Failed to load sensor config", "file", cfg.ConFile, "error", err)
 			os.Exit(1)
 		}
-		logger.Info("Loaded sensor configuration", "file", cfg.ConFile, "sensors", sensorCfg.Count(),
+		logger.Info("Loaded global sensor configuration", "file", cfg.ConFile, "sensors", sensorCfg.Count(),
 			"objects", sensorCfg.ObjectCount(), "services", sensorCfg.ServiceCount())
 
 		// Validate that supplier exists in config (objects or services)
@@ -80,6 +80,45 @@ func main() {
 		}
 		logger.Info("Validated supplier", "supplier", cfg.UnisetSupplier)
 	}
+
+	// Load per-server sensor configurations
+	// serverID → *sensorconfig.SensorConfig
+	perServerSensorConfigs := make(map[string]*sensorconfig.SensorConfig)
+	for _, srvCfg := range cfg.Servers {
+		conFile := srvCfg.UnisetConfig
+		if conFile == "" {
+			conFile = cfg.ConFile // fallback на глобальный
+		}
+		if conFile == "" {
+			continue
+		}
+
+		// Если совпадает с глобальным конфигом — переиспользуем объект
+		if conFile == cfg.ConFile && sensorCfg != nil {
+			perServerSensorConfigs[srvCfg.ID] = sensorCfg
+			continue
+		}
+
+		sc, err := sensorconfig.LoadFromFile(conFile)
+		if err != nil {
+			logger.Error("Failed to load per-server sensor config",
+				"server", srvCfg.ID, "file", conFile, "error", err)
+			continue
+		}
+		logger.Info("Loaded per-server sensor configuration",
+			"server", srvCfg.ID, "file", conFile, "sensors", sc.Count())
+
+		// Validate supplier against per-server config
+		if !sc.HasObjectOrService(cfg.UnisetSupplier) {
+			logger.Warn("Supplier not found in per-server configuration",
+				"server", srvCfg.ID, "supplier", cfg.UnisetSupplier)
+		}
+
+		perServerSensorConfigs[srvCfg.ID] = sc
+	}
+
+	// controlsEnabled = true если ХОТЯ БЫ один сервер имеет конфиг
+	controlsEnabled := sensorCfg != nil || len(perServerSensorConfigs) > 0
 
 	// Create LogServer manager
 	logServerMgr := logserver.NewManager(slog.Default())
@@ -198,9 +237,10 @@ func main() {
 		launcherMgr.StartAll()
 	}
 
-	// Add servers from configuration
+	// Add servers from configuration (with per-server SensorConfig)
 	for _, srvCfg := range cfg.Servers {
-		if err := serverMgr.AddServer(srvCfg); err != nil {
+		sc := perServerSensorConfigs[srvCfg.ID]
+		if err := serverMgr.AddServerWithSensorConfig(srvCfg, sc); err != nil {
 			logger.Error("Failed to add server", "url", srvCfg.URL, "error", err)
 		}
 	}
@@ -225,7 +265,12 @@ func main() {
 	handlers.SetLogServerManager(logServerMgr)
 	handlers.SetServerManager(serverMgr)
 	handlers.SetSSEHub(sseHub)
-	handlers.SetControlsEnabled(cfg.ConFile != "") // Controls visible only if uniset-config specified
+	handlers.SetControlsEnabled(controlsEnabled) // Controls visible if any uniset-config specified
+
+	// Передаём per-server sensor конфиги в handlers
+	for serverID, sc := range perServerSensorConfigs {
+		handlers.SetPerServerSensorConfig(serverID, sc)
+	}
 	handlers.SetUIConfig(cfg.UI)
 	handlers.SetLogStreamConfig(cfg.LogStream)
 	if controlMgr != nil {

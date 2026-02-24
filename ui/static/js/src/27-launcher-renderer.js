@@ -151,6 +151,9 @@ class LauncherRenderer {
         if (text) {
             text.textContent = connected ? 'Connected' : 'Disconnected';
         }
+
+        // Обновляем state.nodes и CSS-классы вкладки (sidebar dot, tab button, tab panel)
+        updateLauncherNodeStatus(this.nodeId, connected);
     }
 
     updateSummary(data) {
@@ -369,6 +372,14 @@ class LauncherRenderer {
                     if (!resp.ok) {
                         const data = await resp.json().catch(() => ({}));
                         await showConfirmDialog('Error', data.error || resp.statusText, 'OK');
+                    } else {
+                        // Оптимистично обновляем статус процесса для мигающей анимации
+                        const transitionStates = { stop: 'stopping', start: 'starting', restart: 'restarting' };
+                        const proc = this.processes.find(p => p.name === processName);
+                        if (proc && transitionStates[action]) {
+                            proc.state = transitionStates[action];
+                            this.renderProcessTable();
+                        }
                     }
 
                     setTimeout(() => this.loadStatus(), 1000);
@@ -413,6 +424,24 @@ class LauncherRenderer {
                     if (!resp.ok) {
                         const data = await resp.json().catch(() => ({}));
                         await showConfirmDialog('Error', `${label} failed: ${data.error || resp.statusText}`, 'OK');
+                    } else {
+                        // Оптимистично обновляем статусы для мигающей анимации
+                        const bulkTransitions = {
+                            'stop-all': { from: 'running', to: 'stopping', skipFlags: true },
+                            'start-all': { from: null, to: 'starting', skipFlags: true },
+                            'restart-all': { from: null, to: 'restarting', skipFlags: false },
+                            'reload-all': { from: null, to: 'stopping', skipFlags: false },
+                        };
+                        const transition = bulkTransitions[bulkAction];
+                        if (transition) {
+                            for (const proc of this.processes) {
+                                if (transition.skipFlags && (proc.manual || proc.oneshot || proc.skip)) continue;
+                                if (transition.from && proc.state !== transition.from) continue;
+                                if (!transition.from && bulkAction === 'start-all' && proc.state === 'running') continue;
+                                proc.state = transition.to;
+                            }
+                            this.renderProcessTable();
+                        }
                     }
 
                     setTimeout(() => this.loadStatus(), 1500);

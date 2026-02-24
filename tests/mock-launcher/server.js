@@ -22,9 +22,9 @@ const processes = [
 
 const groups = [
     { name: 'core', order: 1, processes: ['SharedMemory', 'IONotifyController', 'Watchdog'] },
-    { name: 'io', order: 2, dependsOn: ['core'], processes: ['MBTCPMaster1', 'MBTCPSlave1', 'OPCUAExchange', 'OPCUAServer'] },
-    { name: 'network', order: 3, dependsOn: ['core'], processes: ['UNetExchange', 'UWebSocketGate'] },
-    { name: 'logging', order: 4, dependsOn: ['core'], processes: ['LogDB'] },
+    { name: 'io', order: 2, depends: ['core'], processes: ['MBTCPMaster1', 'MBTCPSlave1', 'OPCUAExchange', 'OPCUAServer'] },
+    { name: 'network', order: 3, depends: ['core'], processes: ['UNetExchange', 'UWebSocketGate'] },
+    { name: 'logging', order: 4, depends: ['core'], processes: ['LogDB'] },
     { name: 'maintenance', order: 5, processes: ['BackupService', 'ManualService', 'SkippedService'] },
 ];
 
@@ -42,8 +42,8 @@ function getStatus() {
     const anyCriticalFailed = processes.some(p => p.critical && (p.state === 'failed' || p.state === 'stopped'));
     return {
         node: NODE_NAME,
+        version: '2.44.0-mock',
         processes,
-        groups,
         allRunning,
         anyCriticalFailed,
     };
@@ -79,13 +79,13 @@ const server = http.createServer((req, res) => {
 
     // Processes list
     if (req.method === 'GET' && path === '/api/v2/launcher/processes') {
-        res.end(JSON.stringify(processes));
+        res.end(JSON.stringify({ count: processes.length, processes }));
         return;
     }
 
     // Groups list
     if (req.method === 'GET' && path === '/api/v2/launcher/groups') {
-        res.end(JSON.stringify(groups));
+        res.end(JSON.stringify({ count: groups.length, groups }));
         return;
     }
 

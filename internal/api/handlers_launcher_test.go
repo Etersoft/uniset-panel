@@ -22,7 +22,10 @@ func mockLauncherServer(processes []launcher.Process) (*httptest.Server, func() 
 		w.Header().Set("Content-Type", "application/json")
 
 		if r.Method == "GET" && r.URL.Path == "/api/v2/launcher/processes" {
-			json.NewEncoder(w).Encode(processes)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"count":     len(processes),
+				"processes": processes,
+			})
 			return
 		}
 

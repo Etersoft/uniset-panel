@@ -28,7 +28,8 @@ type Handlers struct {
 	client          *uniset.Client
 	storage         storage.Storage
 	poller          *poller.Poller
-	sensorConfig    *sensorconfig.SensorConfig
+	sensorConfig    *sensorconfig.SensorConfig            // deprecated: глобальный конфиг (backward compat)
+	sensorConfigs   map[string]*sensorconfig.SensorConfig // serverID → per-server config
 	sseHub          *SSEHub
 	pollInterval    time.Duration
 	logServerMgr    *logserver.Manager
@@ -52,12 +53,20 @@ type Handlers struct {
 
 func NewHandlers(client *uniset.Client, store storage.Storage, p *poller.Poller, sensorCfg *sensorconfig.SensorConfig, pollInterval time.Duration) *Handlers {
 	return &Handlers{
-		client:       client,
-		storage:      store,
-		poller:       p,
-		sensorConfig: sensorCfg,
-		sseHub:       NewSSEHub(),
-		pollInterval: pollInterval,
+		client:        client,
+		storage:       store,
+		poller:        p,
+		sensorConfig:  sensorCfg,
+		sensorConfigs: make(map[string]*sensorconfig.SensorConfig),
+		sseHub:        NewSSEHub(),
+		pollInterval:  pollInterval,
+	}
+}
+
+// SetPerServerSensorConfig устанавливает SensorConfig для конкретного сервера
+func (h *Handlers) SetPerServerSensorConfig(serverID string, cfg *sensorconfig.SensorConfig) {
+	if cfg != nil {
+		h.sensorConfigs[serverID] = cfg
 	}
 }
 
@@ -395,10 +404,26 @@ func (h *Handlers) GetVariableHistoryRange(w http.ResponseWriter, r *http.Reques
 	h.writeJSON(w, history)
 }
 
+// getSensorConfig возвращает SensorConfig для указанного сервера.
+func (h *Handlers) getSensorConfig(serverID string) *sensorconfig.SensorConfig {
+	if cfg, ok := h.sensorConfigs[serverID]; ok {
+		return cfg
+	}
+	// Fallback на глобальный
+	return h.sensorConfig
+}
+
 // GetSensors возвращает список всех датчиков из конфигурации
-// GET /api/sensors
+// GET /api/sensors?server=serverID (параметр server обязателен)
 func (h *Handlers) GetSensors(w http.ResponseWriter, r *http.Request) {
-	if h.sensorConfig == nil {
+	serverID := r.URL.Query().Get("server")
+	if serverID == "" {
+		h.writeError(w, http.StatusBadRequest, "server parameter is required")
+		return
+	}
+
+	cfg := h.getSensorConfig(serverID)
+	if cfg == nil {
 		h.writeJSON(w, map[string]interface{}{
 			"sensors": []interface{}{},
 			"count":   0,
@@ -407,13 +432,13 @@ func (h *Handlers) GetSensors(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.writeJSON(w, map[string]interface{}{
-		"sensors": h.sensorConfig.GetAllInfo(),
-		"count":   h.sensorConfig.Count(),
+		"sensors": cfg.GetAllInfo(),
+		"count":   cfg.Count(),
 	})
 }
 
 // GetSensorByName возвращает информацию о датчике по имени
-// GET /api/sensors/by-name/{name}
+// GET /api/sensors/by-name/{name}?server=serverID (параметр server обязателен)
 func (h *Handlers) GetSensorByName(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
@@ -421,12 +446,19 @@ func (h *Handlers) GetSensorByName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.sensorConfig == nil {
+	serverID := r.URL.Query().Get("server")
+	if serverID == "" {
+		h.writeError(w, http.StatusBadRequest, "server parameter is required")
+		return
+	}
+
+	cfg := h.getSensorConfig(serverID)
+	if cfg == nil {
 		h.writeError(w, http.StatusNotFound, "sensor configuration not loaded")
 		return
 	}
 
-	sensor := h.sensorConfig.GetByName(name)
+	sensor := cfg.GetByName(name)
 	if sensor == nil {
 		h.writeError(w, http.StatusNotFound, "sensor not found")
 		return

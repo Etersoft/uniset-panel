@@ -78,7 +78,7 @@ go build -o uniset-panel ./cmd/server
 | `--history-ttl` | `1h` | Время хранения истории |
 | `--log-format` | `text` | Формат логов: `text` или `json` |
 | `--log-level` | `warn` | Уровень логирования: `debug`, `info`, `warn`, `error` |
-| `--uniset-config` | - | Путь к XML конфигурации uniset (для имён датчиков) |
+| `--uniset-config` | - | Путь к XML конфигурации uniset (глобальный fallback, см. `unisetConfig` в YAML) |
 | `--uniset-supplier` | `TestProc` | Имя supplier для set/freeze/unfreeze операций |
 | `--sensor-batch-size` | `300` | Макс. датчиков в одном запросе к UniSet2 |
 | `--dashboards-dir` | - | Директория с серверными дашбордами |
@@ -114,6 +114,23 @@ go build -o uniset-panel ./cmd/server
 
 # С режимом управления
 ./uniset-panel --uniset-url http://localhost:8080 --control-token secret123
+
+# С XML конфигурацией датчиков (глобальный для всех серверов)
+./uniset-panel --config config.yaml --uniset-config /path/to/configure.xml
+```
+
+### Per-server XML конфигурация
+
+Каждый сервер может иметь свой XML конфиг датчиков (`unisetConfig` в YAML). Глобальный `--uniset-config` используется как fallback для серверов без собственного конфига. При старте **все серверы** получают конфиг — либо свой, либо глобальный.
+
+```yaml
+servers:
+  - url: http://server1:8080
+    unisetConfig: /path/to/server1-configure.xml  # свой конфиг
+  - url: http://server2:8080
+    unisetConfig: /path/to/server2-configure.xml  # свой конфиг
+  - url: http://server3:8080
+    # нет unisetConfig → используется --uniset-config (глобальный fallback)
 ```
 
 Пример YAML конфигурации: [config/config.example.yaml](config/config.example.yaml)

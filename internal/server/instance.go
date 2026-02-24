@@ -11,6 +11,7 @@ import (
 	"github.com/pv/uniset-panel/internal/modbus"
 	"github.com/pv/uniset-panel/internal/opcua"
 	"github.com/pv/uniset-panel/internal/poller"
+	"github.com/pv/uniset-panel/internal/sensorconfig"
 	"github.com/pv/uniset-panel/internal/storage"
 	"github.com/pv/uniset-panel/internal/uniset"
 	"github.com/pv/uniset-panel/internal/uwsgate"
@@ -40,6 +41,7 @@ type ObjectsChangedCallback func(serverID, serverName string, objects []string)
 // Instance представляет подключение к одному UniSet2 серверу
 type Instance struct {
 	Config        config.ServerConfig
+	SensorConfig  *sensorconfig.SensorConfig // per-server sensor configuration (может быть nil)
 	Client        *uniset.Client
 	Poller        *poller.Poller
 	IONCPoller    *ionc.Poller

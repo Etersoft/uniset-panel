@@ -126,8 +126,9 @@ async function fetchVariableHistory(objectName, variableName, count = 100, serve
     return response.json();
 }
 
-async function fetchSensors() {
-    const response = await fetch('/api/sensors');
+async function fetchSensors(serverId) {
+    const param = serverId ? `?server=${encodeURIComponent(serverId)}` : '';
+    const response = await fetch(`/api/sensors${param}`);
     if (!response.ok) return { sensors: [], count: 0 };
     return response.json();
 }
@@ -138,27 +139,38 @@ async function fetchSMSensors() {
     return response.json();
 }
 
-// Loading конфигурации сенсоров
+// Loading конфигурации сенсоров (per-server, вызывается после заполнения state.servers)
 async function loadSensorsConfig() {
     try {
-        // Сначала пробуем загрузить из конфига
-        let data = await fetchSensors();
-        let source = 'config';
+        let totalLoaded = 0;
 
-        // Если конфиг пуст, пробуем загрузить из SharedMemory
-        if (!data.sensors || data.sensors.length === 0) {
+        // Загружаем сенсоры для каждого известного сервера
+        for (const [serverId] of state.servers) {
+            const data = await fetchSensors(serverId);
+            if (data.sensors && data.sensors.length > 0) {
+                data.sensors.forEach(sensor => {
+                    if (!state.sensorsByName.has(sensor.name)) {
+                        state.sensors.set(sensor.id, sensor);
+                        state.sensorsByName.set(sensor.name, sensor);
+                        totalLoaded++;
+                    }
+                });
+            }
+        }
+
+        // Если ничего не загрузилось, пробуем SharedMemory как fallback
+        if (totalLoaded === 0) {
             console.log('Конфиг датчиков пуст, загружаю из SharedMemory...');
-            data = await fetchSMSensors();
-            source = 'sm';
+            const data = await fetchSMSensors();
+            if (data.sensors) {
+                data.sensors.forEach(sensor => {
+                    state.sensors.set(sensor.id, sensor);
+                    state.sensorsByName.set(sensor.name, sensor);
+                });
+            }
         }
 
-        if (data.sensors) {
-            data.sensors.forEach(sensor => {
-                state.sensors.set(sensor.id, sensor);
-                state.sensorsByName.set(sensor.name, sensor);
-            });
-        }
-        console.log(`Загружено ${state.sensors.size} сенсоров из ${source}`);
+        console.log(`Загружено ${state.sensors.size} сенсоров`);
     } catch (err) {
         console.error('Error загрузки конфигурации сенсоров:', err);
     }

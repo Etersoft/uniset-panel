@@ -8978,7 +8978,10 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         if (this.allSensorsCache) return this.allSensorsCache;
 
         try {
-            const response = await fetch('/api/sensors');
+            const tabState = state.tabs.get(this.tabKey);
+            const serverId = tabState?.serverId || '';
+            const param = serverId ? `?server=${encodeURIComponent(serverId)}` : '';
+            const response = await fetch(`/api/sensors${param}`);
             if (!response.ok) return [];
             const data = await response.json();
             this.allSensorsCache = data.sensors || [];
@@ -10309,6 +10312,9 @@ class LauncherRenderer {
         if (text) {
             text.textContent = connected ? 'Connected' : 'Disconnected';
         }
+
+        // Обновляем state.nodes и CSS-классы вкладки (sidebar dot, tab button, tab panel)
+        updateLauncherNodeStatus(this.nodeId, connected);
     }
 
     updateSummary(data) {
@@ -10527,6 +10533,14 @@ class LauncherRenderer {
                     if (!resp.ok) {
                         const data = await resp.json().catch(() => ({}));
                         await showConfirmDialog('Error', data.error || resp.statusText, 'OK');
+                    } else {
+                        // Оптимистично обновляем статус процесса для мигающей анимации
+                        const transitionStates = { stop: 'stopping', start: 'starting', restart: 'restarting' };
+                        const proc = this.processes.find(p => p.name === processName);
+                        if (proc && transitionStates[action]) {
+                            proc.state = transitionStates[action];
+                            this.renderProcessTable();
+                        }
                     }
 
                     setTimeout(() => this.loadStatus(), 1000);
@@ -10571,6 +10585,24 @@ class LauncherRenderer {
                     if (!resp.ok) {
                         const data = await resp.json().catch(() => ({}));
                         await showConfirmDialog('Error', `${label} failed: ${data.error || resp.statusText}`, 'OK');
+                    } else {
+                        // Оптимистично обновляем статусы для мигающей анимации
+                        const bulkTransitions = {
+                            'stop-all': { from: 'running', to: 'stopping', skipFlags: true },
+                            'start-all': { from: null, to: 'starting', skipFlags: true },
+                            'restart-all': { from: null, to: 'restarting', skipFlags: false },
+                            'reload-all': { from: null, to: 'stopping', skipFlags: false },
+                        };
+                        const transition = bulkTransitions[bulkAction];
+                        if (transition) {
+                            for (const proc of this.processes) {
+                                if (transition.skipFlags && (proc.manual || proc.oneshot || proc.skip)) continue;
+                                if (transition.from && proc.state !== transition.from) continue;
+                                if (!transition.from && bulkAction === 'start-all' && proc.state === 'running') continue;
+                                proc.state = transition.to;
+                            }
+                            this.renderProcessTable();
+                        }
                     }
 
                     setTimeout(() => this.loadStatus(), 1500);
@@ -12670,8 +12702,9 @@ async function fetchVariableHistory(objectName, variableName, count = 100, serve
     return response.json();
 }
 
-async function fetchSensors() {
-    const response = await fetch('/api/sensors');
+async function fetchSensors(serverId) {
+    const param = serverId ? `?server=${encodeURIComponent(serverId)}` : '';
+    const response = await fetch(`/api/sensors${param}`);
     if (!response.ok) return { sensors: [], count: 0 };
     return response.json();
 }
@@ -12682,27 +12715,38 @@ async function fetchSMSensors() {
     return response.json();
 }
 
-// Loading конфигурации сенсоров
+// Loading конфигурации сенсоров (per-server, вызывается после заполнения state.servers)
 async function loadSensorsConfig() {
     try {
-        // Сначала пробуем загрузить из конфига
-        let data = await fetchSensors();
-        let source = 'config';
+        let totalLoaded = 0;
 
-        // Если конфиг пуст, пробуем загрузить из SharedMemory
-        if (!data.sensors || data.sensors.length === 0) {
+        // Загружаем сенсоры для каждого известного сервера
+        for (const [serverId] of state.servers) {
+            const data = await fetchSensors(serverId);
+            if (data.sensors && data.sensors.length > 0) {
+                data.sensors.forEach(sensor => {
+                    if (!state.sensorsByName.has(sensor.name)) {
+                        state.sensors.set(sensor.id, sensor);
+                        state.sensorsByName.set(sensor.name, sensor);
+                        totalLoaded++;
+                    }
+                });
+            }
+        }
+
+        // Если ничего не загрузилось, пробуем SharedMemory как fallback
+        if (totalLoaded === 0) {
             console.log('Конфиг датчиков пуст, загружаю из SharedMemory...');
-            data = await fetchSMSensors();
-            source = 'sm';
+            const data = await fetchSMSensors();
+            if (data.sensors) {
+                data.sensors.forEach(sensor => {
+                    state.sensors.set(sensor.id, sensor);
+                    state.sensorsByName.set(sensor.name, sensor);
+                });
+            }
         }
 
-        if (data.sensors) {
-            data.sensors.forEach(sensor => {
-                state.sensors.set(sensor.id, sensor);
-                state.sensorsByName.set(sensor.name, sensor);
-            });
-        }
-        console.log(`Загружено ${state.sensors.size} сенсоров из ${source}`);
+        console.log(`Загружено ${state.sensors.size} сенсоров`);
     } catch (err) {
         console.error('Error загрузки конфигурации сенсоров:', err);
     }
@@ -12836,21 +12880,20 @@ function openSensorDialog(tabKey) {
     filterInput.value = '';
     filterInput.focus();
 
+    // Определяем serverId текущей вкладки для per-server загрузки
+    const serverId = tabState?.serverId || '';
+
     // Определяем источник датчиков в зависимости от smEnabled
     if (state.capabilities.smEnabled) {
-        // SM включен - загружаем датчики из XML конфига
-        if (state.sensors.size === 0) {
-            renderSensorDialogContent('<div class="sensor-dialog-loading">Loading sensor list...</div>');
-            loadSensorsConfig().then(() => {
-                prepareSensorList();
-                renderSensorTable();
-            }).catch(err => {
-                renderSensorDialogContent('<div class="sensor-dialog-empty">Error loading sensors</div>');
-            });
-        } else {
-            prepareSensorList();
+        // SM включен - загружаем датчики из XML конфига (per-server)
+        renderSensorDialogContent('<div class="sensor-dialog-loading">Loading sensor list...</div>');
+        fetchSensorsForServer(serverId).then(sensors => {
+            sensorDialogState.allSensors = sensors;
+            sensorDialogState.filteredSensors = [...sensors];
             renderSensorTable();
-        }
+        }).catch(err => {
+            renderSensorDialogContent('<div class="sensor-dialog-empty">Error loading sensors</div>');
+        });
     } else {
         // SM не настроен - показываем датчики из IONC таблицы
         const ioncTabState = state.tabs.get(tabKey);
@@ -13634,6 +13677,15 @@ function restoreExternalSensors(tabKey, displayName) {
     setTimeout(restoreSensors, 200);
 }
 
+// Загрузка сенсоров для конкретного сервера
+async function fetchSensorsForServer(serverId) {
+    const param = serverId ? `?server=${encodeURIComponent(serverId)}` : '';
+    const response = await fetch(`/api/sensors${param}`);
+    if (!response.ok) return [];
+    const data = await response.json();
+    return data.sensors || [];
+}
+
 // UI функции
 
 
@@ -14093,9 +14145,13 @@ function createLauncherTab(tabKey, nodeId, nodeName, launcherUrl, hasControl) {
 
     const renderer = new LauncherRenderer(nodeName, tabKey, nodeId, launcherUrl, hasControl);
 
+    // Проверяем начальный статус подключения
+    const nodeState = state.nodes.get(nodeId);
+    const nodeConnected = nodeState?.connected !== false;
+
     // Кнопка вкладки
     const tabBtn = document.createElement('button');
-    tabBtn.className = 'tab-btn';
+    tabBtn.className = 'tab-btn' + (nodeConnected ? '' : ' server-disconnected');
     tabBtn.dataset.name = tabKey;
     tabBtn.dataset.objectType = 'Launcher';
     tabBtn.innerHTML = `
@@ -14114,7 +14170,7 @@ function createLauncherTab(tabKey, nodeId, nodeName, launcherUrl, hasControl) {
 
     // Панель содержимого
     const panel = document.createElement('div');
-    panel.className = 'tab-panel';
+    panel.className = 'tab-panel' + (nodeConnected ? '' : ' server-disconnected');
     panel.dataset.name = tabKey;
     panel.dataset.objectType = 'Launcher';
     panel.innerHTML = renderer.createPanelHTML();
@@ -14234,6 +14290,17 @@ function updateLauncherNodeStatus(nodeId, connected) {
         if (dot) {
             dot.className = `server-status-dot${connected ? '' : ' disconnected'}`;
         }
+    }
+
+    // Обновляем CSS-класс tab-кнопки и панели (аналогично updateServerStatus)
+    const tabKey = `launcher:${nodeId}`;
+    const tabBtn = document.querySelector(`.tab-btn[data-name="${CSS.escape(tabKey)}"]`);
+    if (tabBtn) {
+        tabBtn.classList.toggle('server-disconnected', !connected);
+    }
+    const tabPanel = document.querySelector(`.tab-panel[data-name="${CSS.escape(tabKey)}"]`);
+    if (tabPanel) {
+        tabPanel.classList.toggle('server-disconnected', !connected);
     }
 
     // Обновляем статус в sidebar группах (по имени ноды)
@@ -22250,17 +22317,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Инициализация SSE для realtime обновлений (получаем capabilities при подключении)
     initSSE();
 
-    // Загружаем конфигурацию сенсоров (не блокируем загрузку объектов)
-    loadSensorsConfig().catch(err => {
-        console.warn('Не удалось загрузить конфигурацию сенсоров:', err);
-    });
-
     // Загружаем sidebar конфигурацию (группы)
     await loadSidebar();
 
-    // Загружаем список объектов
+    // Загружаем список объектов (заполняет state.servers)
     fetchObjects()
-        .then(renderObjectsList)
+        .then(data => {
+            renderObjectsList(data);
+            // Загружаем конфигурацию сенсоров per-server (после того как state.servers заполнен)
+            loadSensorsConfig().catch(err => {
+                console.warn('Не удалось загрузить конфигурацию сенсоров:', err);
+            });
+        })
         .catch(err => {
             console.error('Error загрузки объектов:', err);
             document.getElementById('objects-list').innerHTML =

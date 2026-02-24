@@ -28,17 +28,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Инициализация SSE для realtime обновлений (получаем capabilities при подключении)
     initSSE();
 
-    // Загружаем конфигурацию сенсоров (не блокируем загрузку объектов)
-    loadSensorsConfig().catch(err => {
-        console.warn('Не удалось загрузить конфигурацию сенсоров:', err);
-    });
-
     // Загружаем sidebar конфигурацию (группы)
     await loadSidebar();
 
-    // Загружаем список объектов
+    // Загружаем список объектов (заполняет state.servers)
     fetchObjects()
-        .then(renderObjectsList)
+        .then(data => {
+            renderObjectsList(data);
+            // Загружаем конфигурацию сенсоров per-server (после того как state.servers заполнен)
+            loadSensorsConfig().catch(err => {
+                console.warn('Не удалось загрузить конфигурацию сенсоров:', err);
+            });
+        })
         .catch(err => {
             console.error('Error загрузки объектов:', err);
             document.getElementById('objects-list').innerHTML =

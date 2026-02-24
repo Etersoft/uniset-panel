@@ -12,6 +12,7 @@ import (
 	"github.com/pv/uniset-panel/internal/modbus"
 	"github.com/pv/uniset-panel/internal/opcua"
 	"github.com/pv/uniset-panel/internal/recording"
+	"github.com/pv/uniset-panel/internal/sensorconfig"
 	"github.com/pv/uniset-panel/internal/storage"
 	"github.com/pv/uniset-panel/internal/uniset"
 	"github.com/pv/uniset-panel/internal/uwsgate"
@@ -142,6 +143,11 @@ func (m *Manager) SetRecordingManager(mgr *recording.Manager) {
 
 // AddServer добавляет новый сервер
 func (m *Manager) AddServer(cfg config.ServerConfig) error {
+	return m.AddServerWithSensorConfig(cfg, nil)
+}
+
+// AddServerWithSensorConfig добавляет новый сервер с per-server SensorConfig
+func (m *Manager) AddServerWithSensorConfig(cfg config.ServerConfig, sensorCfg *sensorconfig.SensorConfig) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -169,6 +175,9 @@ func (m *Manager) AddServer(cfg config.ServerConfig) error {
 		m.statusCallback,
 		m.objectsCallback,
 	)
+
+	// Сохраняем per-server SensorConfig
+	instance.SensorConfig = sensorCfg
 
 	// Set recording manager on all pollers if configured
 	if m.recordingMgr != nil {
@@ -540,6 +549,15 @@ func (m *Manager) GetAllInstances() []*Instance {
 		}
 	}
 	return result
+}
+
+// GetSensorConfig возвращает SensorConfig для указанного сервера
+func (m *Manager) GetSensorConfig(serverID string) *sensorconfig.SensorConfig {
+	instance, exists := m.GetServer(serverID)
+	if !exists {
+		return nil
+	}
+	return instance.SensorConfig
 }
 
 // ForceEmitAllPollers принудительно отправляет текущие значения со всех pollers

@@ -20,9 +20,10 @@ const (
 
 // ServerConfig описывает конфигурацию одного UniSet2 сервера
 type ServerConfig struct {
-	ID   string `yaml:"id,omitempty"`   // уникальный идентификатор (генерируется если не указан)
-	URL  string `yaml:"url"`            // URL UniSet2 HTTP API
-	Name string `yaml:"name,omitempty"` // человекочитаемое имя (опционально)
+	ID           string `yaml:"id,omitempty"`           // уникальный идентификатор (генерируется если не указан)
+	URL          string `yaml:"url"`                    // URL UniSet2 HTTP API
+	Name         string `yaml:"name,omitempty"`         // человекочитаемое имя (опционально)
+	UnisetConfig string `yaml:"unisetConfig,omitempty"` // per-server XML config path (опционально)
 }
 
 // UIConfig описывает настройки UI

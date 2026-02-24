@@ -674,13 +674,29 @@ func TestGetVariableHistoryRange_MissingParams(t *testing.T) {
 
 // === GetSensors Tests ===
 
+func TestGetSensors_NoServer(t *testing.T) {
+	unisetServer := mockUnisetServer()
+	defer unisetServer.Close()
+
+	handlers := setupTestHandlers(unisetServer)
+
+	req := httptest.NewRequest("GET", "/api/sensors", nil)
+	w := httptest.NewRecorder()
+
+	handlers.GetSensors(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400, got %d", w.Code)
+	}
+}
+
 func TestGetSensors_NoConfig(t *testing.T) {
 	unisetServer := mockUnisetServer()
 	defer unisetServer.Close()
 
 	handlers := setupTestHandlers(unisetServer) // No sensor config
 
-	req := httptest.NewRequest("GET", "/api/sensors", nil)
+	req := httptest.NewRequest("GET", "/api/sensors?server=test123", nil)
 	w := httptest.NewRecorder()
 
 	handlers.GetSensors(w, req)
@@ -708,8 +724,9 @@ func TestGetSensors_WithConfig(t *testing.T) {
 	// Create a mock sensor config
 	sensorCfg := createMockSensorConfig()
 	handlers := NewHandlers(client, store, p, sensorCfg, 5*time.Second)
+	handlers.SetPerServerSensorConfig("srv1", sensorCfg)
 
-	req := httptest.NewRequest("GET", "/api/sensors", nil)
+	req := httptest.NewRequest("GET", "/api/sensors?server=srv1", nil)
 	w := httptest.NewRecorder()
 
 	handlers.GetSensors(w, req)
@@ -726,7 +743,53 @@ func TestGetSensors_WithConfig(t *testing.T) {
 	}
 }
 
+func TestGetSensors_WithGlobalFallback(t *testing.T) {
+	unisetServer := mockUnisetServer()
+	defer unisetServer.Close()
+
+	client := uniset.NewClient(unisetServer.URL)
+	store := storage.NewMemoryStorage()
+	p := poller.New(client, store, 5*time.Second, time.Hour)
+
+	// Глобальный конфиг, без per-server — используется как fallback
+	sensorCfg := createMockSensorConfig()
+	handlers := NewHandlers(client, store, p, sensorCfg, 5*time.Second)
+
+	req := httptest.NewRequest("GET", "/api/sensors?server=unknown", nil)
+	w := httptest.NewRecorder()
+
+	handlers.GetSensors(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+
+	var response map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &response)
+
+	if response["count"].(float64) == 0 {
+		t.Error("expected sensors in response (global fallback)")
+	}
+}
+
 // === GetSensorByName Tests ===
+
+func TestGetSensorByName_NoServer(t *testing.T) {
+	unisetServer := mockUnisetServer()
+	defer unisetServer.Close()
+
+	handlers := setupTestHandlers(unisetServer)
+
+	req := httptest.NewRequest("GET", "/api/sensors/by-name/AI100_AS", nil)
+	req.SetPathValue("name", "AI100_AS")
+	w := httptest.NewRecorder()
+
+	handlers.GetSensorByName(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400, got %d", w.Code)
+	}
+}
 
 func TestGetSensorByName_NoConfig(t *testing.T) {
 	unisetServer := mockUnisetServer()
@@ -734,7 +797,7 @@ func TestGetSensorByName_NoConfig(t *testing.T) {
 
 	handlers := setupTestHandlers(unisetServer)
 
-	req := httptest.NewRequest("GET", "/api/sensors/by-name/AI100_AS", nil)
+	req := httptest.NewRequest("GET", "/api/sensors/by-name/AI100_AS?server=test123", nil)
 	req.SetPathValue("name", "AI100_AS")
 	w := httptest.NewRecorder()
 
@@ -751,7 +814,7 @@ func TestGetSensorByName_EmptyName(t *testing.T) {
 
 	handlers := setupTestHandlers(unisetServer)
 
-	req := httptest.NewRequest("GET", "/api/sensors/by-name/", nil)
+	req := httptest.NewRequest("GET", "/api/sensors/by-name/?server=test123", nil)
 	req.SetPathValue("name", "")
 	w := httptest.NewRecorder()
 
@@ -899,8 +962,9 @@ func TestGetSensorByName_WithConfig(t *testing.T) {
 	p := poller.New(client, store, 5*time.Second, time.Hour)
 	sensorCfg := createMockSensorConfig()
 	handlers := NewHandlers(client, store, p, sensorCfg, 5*time.Second)
+	handlers.SetPerServerSensorConfig("srv1", sensorCfg)
 
-	req := httptest.NewRequest("GET", "/api/sensors/name/AI100_AS", nil)
+	req := httptest.NewRequest("GET", "/api/sensors/name/AI100_AS?server=srv1", nil)
 	req.SetPathValue("name", "AI100_AS")
 	w := httptest.NewRecorder()
 
@@ -927,8 +991,9 @@ func TestGetSensorByName_NotFound(t *testing.T) {
 	p := poller.New(client, store, 5*time.Second, time.Hour)
 	sensorCfg := createMockSensorConfig()
 	handlers := NewHandlers(client, store, p, sensorCfg, 5*time.Second)
+	handlers.SetPerServerSensorConfig("srv1", sensorCfg)
 
-	req := httptest.NewRequest("GET", "/api/sensors/name/NonExistent", nil)
+	req := httptest.NewRequest("GET", "/api/sensors/name/NonExistent?server=srv1", nil)
 	req.SetPathValue("name", "NonExistent")
 	w := httptest.NewRecorder()
 

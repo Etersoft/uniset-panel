@@ -276,9 +276,11 @@ sidebar:
 servers:
   - url: http://192.168.1.100:9090
     name: "{host}: Основной"          # → "192.168.1.100: Основной"
+    unisetConfig: /path/to/configure1.xml  # per-server XML конфиг датчиков
 
   - url: http://192.168.1.200:9191
     name: "Сервер на порту {port}"    # → "Сервер на порту 9191"
+    # unisetConfig не указан → используется --uniset-config (глобальный fallback)
 
 launchers:
   - url: http://192.168.1.100:8111

@@ -23,13 +23,16 @@
 servers:
   - url: http://localhost:8080
     name: "Основной сервер"
+    unisetConfig: /path/to/server1-configure.xml  # per-server XML конфиг датчиков
 
   - url: http://192.168.1.100:8080
     id: backup
     name: "Резервный сервер"
+    unisetConfig: /path/to/server2-configure.xml  # свой конфиг для этого сервера
 
   - url: http://192.168.1.101:8080
     # name и id опциональны - будет сгенерирован ID из URL
+    # unisetConfig не указан → используется глобальный --uniset-config как fallback
 
   # Плейсхолдеры в name: {host}, {port}, {server}
   # - url: http://192.168.1.200:9090
