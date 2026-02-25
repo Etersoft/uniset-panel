@@ -28,11 +28,12 @@ type QueryParams struct {
 
 // JournalInfo информация о журнале для API
 type JournalInfo struct {
-	ID       string `json:"id"`       // уникальный ID (hash от URL)
-	Name     string `json:"name"`     // человекочитаемое имя
-	Database string `json:"database"` // база данных
-	Table    string `json:"table"`    // таблица
-	Status   string `json:"status"`   // connected, error, connecting
+	ID        string `json:"id"`        // уникальный ID (hash от URL)
+	Name      string `json:"name"`      // человекочитаемое имя
+	Database  string `json:"database"`  // база данных
+	Table     string `json:"table"`     // таблица
+	Status    string `json:"status"`    // connected, error, connecting
+	Connected bool   `json:"connected"` // фактическое состояние подключения от poller
 }
 
 // MessagesResponse ответ API со списком сообщений

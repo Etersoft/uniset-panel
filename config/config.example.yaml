@@ -22,16 +22,17 @@
 # ============================================================================
 servers:
   - url: http://localhost:8080
-    name: "Основной сервер"
+    id: main                        # явный ID — используется в паттернах (@main)
+    name: "Основной сервер"         # отображаемое имя в UI (НЕ для паттернов)
     unisetConfig: /path/to/server1-configure.xml  # per-server XML конфиг датчиков
 
   - url: http://192.168.1.100:8080
-    id: backup
+    id: backup                      # ID для паттернов (@backup)
     name: "Резервный сервер"
     unisetConfig: /path/to/server2-configure.xml  # свой конфиг для этого сервера
 
   - url: http://192.168.1.101:8080
-    # name и id опциональны - будет сгенерирован ID из URL
+    # name и id опциональны — без id будет сгенерирован 8-символьный хеш из URL
     # unisetConfig не указан → используется глобальный --uniset-config как fallback
 
   # Плейсхолдеры в name: {host}, {port}, {server}
@@ -80,27 +81,35 @@ journals:
 #
 #   groups:
 #     - name: "Управление"
-#       icon: "⚙️"                   # emoji-иконка (отображается перед названием)
+#       icon: "⚙️"                   # emoji-символ перед названием группы
 #       patterns:
 #         - "launcher:*"             # все launcher'ы
 #         - "dashboard:*"            # все dashboard'ы
 #
-#     - name: "Дизель"
-#       icon: "🔧"                   # emoji-иконка
+#     # Паттерн name@id: после @ указывается server id (НЕ name!)
+#     # Если id не задан явно, используется автохеш — лучше задавать id в servers
+#     - name: "Основной"
+#       icon: "🏭"                   # emoji: 🔧 ⚡ 🏭 🌡️ 💧 📊 🖥️ и т.д.
+#       patterns:
+#         - "object:*@main"          # все объекты с сервера id=main
+#         - "journal:*"              # все журналы
+#
+#     - name: "Резерв"
+#       icon: "🔧"
 #       items:
 #         - "DieselLog"              # точное совпадение по имени (любой тип и сервер)
 #       patterns:
-#         - "object:Diesel*@diesel"  # объекты Diesel* с сервера diesel
-#         - "object:MBSlave1@diesel" # конкретный объект на конкретном сервере
+#         - "object:*@backup"        # все объекты с сервера id=backup
+#         - "object:MBSlave1@backup" # конкретный объект на конкретном сервере
 #
 #     - name: "Мониторинг"
 #       icon: "📊"
 #       patterns:
-#         - "object:*"               # все оставшиеся объекты
+#         - "object:*"               # все оставшиеся объекты (с любого сервера)
 #         - "!object:SharedMemory"   # кроме SharedMemory (попадёт в другую группу)
-#         - "journal:*"              # все журналы
 #
 #     - name: "Инфраструктура"
+#       icon: "🖥️"
 #       patterns:
 #         - "object:SharedMemory"    # SharedMemory из предыдущей группы
 #

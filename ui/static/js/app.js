@@ -1261,6 +1261,20 @@ function initSSE() {
         }
     });
 
+    // Обработка изменения connectivity журнала
+    eventSource.addEventListener('journal_connection', (e) => {
+        try {
+            const event = JSON.parse(e.data);
+            const journalId = event.data?.journalId;
+            const connected = event.data?.connected ?? false;
+            if (journalId && typeof updateJournalConnectionStatus === 'function') {
+                updateJournalConnectionStatus(journalId, connected);
+            }
+        } catch (err) {
+            console.warn('SSE: Error обработки journal_connection:', err);
+        }
+    });
+
     // Обработка сообщений журнала
     eventSource.addEventListener('journal_messages', (e) => {
         try {
@@ -1402,14 +1416,35 @@ function startSSERecoveryProbe() {
     }, probeInterval);
 }
 
-// Периодическая синхронизация статуса серверов (гарантирует актуальность каждые 30с)
+// Периодическая синхронизация статуса серверов, launcher'ов и журналов (каждые 30с)
 function startServerStatusSync() {
     stopServerStatusSync();
     state.sse.statusSyncInterval = setInterval(async () => {
+        // Серверы
         try {
             const resp = await fetchServers();
             if (resp?.servers) {
                 resp.servers.forEach(s => updateServerStatus(s.id, s.connected));
+            }
+        } catch (err) { /* фоновая синхронизация */ }
+
+        // Launcher'ы
+        try {
+            const lr = await fetch('/api/launchers');
+            if (lr.ok) {
+                const data = await lr.json();
+                (data?.launchers || []).forEach(l => updateLauncherNodeStatus(l.id, l.connected));
+            }
+        } catch (err) { /* фоновая синхронизация */ }
+
+        // Журналы
+        try {
+            const jr = await fetch('/api/journals');
+            if (jr.ok) {
+                const data = await jr.json();
+                if (typeof updateJournalConnectionStatus === 'function') {
+                    (data || []).forEach(j => updateJournalConnectionStatus(j.id, j.connected));
+                }
             }
         } catch (err) { /* фоновая синхронизация */ }
     }, 30000);
@@ -12471,6 +12506,42 @@ class JournalManager {
 // Global journal manager instance
 let journalManager = null;
 
+// Обновление статуса подключения журнала (sidebar, panel, groups)
+function updateJournalConnectionStatus(journalId, connected) {
+    // 1. Обновляем данные в journalManager
+    if (journalManager) {
+        const journal = journalManager.journals.get(journalId);
+        if (journal) {
+            journal.connected = connected;
+            journal.status = connected ? 'connected' : 'error';
+        }
+    }
+
+    // 2. Sidebar: обновляем .journal-item-status
+    const item = document.querySelector(`.journal-item[data-id="${journalId}"]`);
+    if (item) {
+        const statusEl = item.querySelector('.journal-item-status');
+        if (statusEl) {
+            statusEl.className = `journal-item-status ${connected ? 'connected' : 'error'}`;
+            statusEl.textContent = connected ? 'connected' : 'error';
+        }
+    }
+
+    // 3. Panel: toggle .server-disconnected на .journal-panel
+    const panel = document.getElementById(`journal-${journalId}`);
+    if (panel) {
+        panel.classList.toggle('server-disconnected', !connected);
+    }
+
+    // 4. Sidebar groups: обновляем статус точки
+    if (typeof updateGroupEntityStatus === 'function' && journalManager) {
+        const journal = journalManager.journals.get(journalId);
+        if (journal) {
+            updateGroupEntityStatus('journal', journal.name, connected);
+        }
+    }
+}
+
 // Global View Switcher
 // All sidebar sections (Objects, Dashboards, Journals) are always visible
 // Only the main content view changes
@@ -16522,6 +16593,11 @@ function applySidebarStatuses() {
     for (const [nodeId, node] of state.nodes) {
         if (node.connected !== undefined) {
             updateGroupEntityStatus('launcher', node.name, node.connected);
+        }
+    }
+    if (typeof journalManager !== 'undefined' && journalManager?.journals) {
+        for (const [journalId, journal] of journalManager.journals) {
+            updateGroupEntityStatus('journal', journal.name, journal.connected !== false);
         }
     }
 }

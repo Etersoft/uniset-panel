@@ -1270,6 +1270,41 @@ header h1 {
     color: #e8a8a8;
 }
 
+.journal-panel.server-disconnected {
+    position: relative;
+    pointer-events: none;
+    opacity: 0.5;
+}
+
+.journal-panel.server-disconnected::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 100;
+    pointer-events: none;
+}
+
+.journal-panel.server-disconnected::after {
+    content: 'Журнал недоступен';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(139, 58, 58, 0.95);
+    color: #f0b8b8;
+    padding: 1rem 2rem;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 101;
+    border: 1px solid #a04040;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
 .placeholder {
     text-align: center;
     color: var(--text-muted);

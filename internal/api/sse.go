@@ -118,7 +118,7 @@ func (h *SSEHub) Broadcast(event SSEEvent) {
 
 	// Глобальные события отправляются всем клиентам
 	isGlobalEvent := event.Type == "server_status" || event.Type == "objects_list" || event.Type == "control_status" ||
-		event.Type == "launcher_status" || event.Type == "launcher_connection"
+		event.Type == "launcher_status" || event.Type == "launcher_connection" || event.Type == "journal_connection"
 
 	for client := range h.clients {
 		// Отправляем если: глобальное событие ИЛИ клиент подписан на все объекты ИЛИ на конкретный
@@ -378,6 +378,19 @@ func (h *SSEHub) BroadcastJournalMessages(journalID string, messages []journal.M
 		Data: map[string]interface{}{
 			"journalId": journalID,
 			"messages":  messages,
+		},
+		Timestamp: time.Now(),
+	})
+}
+
+// BroadcastJournalConnection отправляет изменение connectivity журнала
+func (h *SSEHub) BroadcastJournalConnection(journalID string, connected bool, lastError string) {
+	h.Broadcast(SSEEvent{
+		Type: "journal_connection",
+		Data: map[string]interface{}{
+			"journalId": journalID,
+			"connected": connected,
+			"lastError": lastError,
 		},
 		Timestamp: time.Now(),
 	})

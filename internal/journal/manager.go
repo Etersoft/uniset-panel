@@ -8,9 +8,10 @@ import (
 
 // Manager управляет несколькими журналами
 type Manager struct {
-	clients map[string]*Client // id -> client
-	mu      sync.RWMutex
-	logger  *slog.Logger
+	clients    map[string]*Client // id -> client
+	connStatus map[string]bool    // id -> connected
+	mu         sync.RWMutex
+	logger     *slog.Logger
 }
 
 // NewManager создаёт нового менеджера журналов
@@ -19,8 +20,9 @@ func NewManager(logger *slog.Logger) *Manager {
 		logger = slog.Default()
 	}
 	return &Manager{
-		clients: make(map[string]*Client),
-		logger:  logger,
+		clients:    make(map[string]*Client),
+		connStatus: make(map[string]bool),
+		logger:     logger,
 	}
 }
 
@@ -52,6 +54,13 @@ func (m *Manager) GetClient(id string) *Client {
 	return m.clients[id]
 }
 
+// UpdateConnectionStatus обновляет статус подключения журнала
+func (m *Manager) UpdateConnectionStatus(id string, connected bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.connStatus[id] = connected
+}
+
 // GetAllInfos возвращает информацию о всех журналах
 func (m *Manager) GetAllInfos() []JournalInfo {
 	m.mu.RLock()
@@ -59,7 +68,16 @@ func (m *Manager) GetAllInfos() []JournalInfo {
 
 	infos := make([]JournalInfo, 0, len(m.clients))
 	for _, client := range m.clients {
-		infos = append(infos, client.Info())
+		info := client.Info()
+		if connected, ok := m.connStatus[info.ID]; ok {
+			info.Connected = connected
+			if connected {
+				info.Status = "connected"
+			} else {
+				info.Status = "error"
+			}
+		}
+		infos = append(infos, info)
 	}
 	return infos
 }

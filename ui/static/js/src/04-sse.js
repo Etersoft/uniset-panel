@@ -590,6 +590,20 @@ function initSSE() {
         }
     });
 
+    // Обработка изменения connectivity журнала
+    eventSource.addEventListener('journal_connection', (e) => {
+        try {
+            const event = JSON.parse(e.data);
+            const journalId = event.data?.journalId;
+            const connected = event.data?.connected ?? false;
+            if (journalId && typeof updateJournalConnectionStatus === 'function') {
+                updateJournalConnectionStatus(journalId, connected);
+            }
+        } catch (err) {
+            console.warn('SSE: Error обработки journal_connection:', err);
+        }
+    });
+
     // Обработка сообщений журнала
     eventSource.addEventListener('journal_messages', (e) => {
         try {
@@ -731,14 +745,35 @@ function startSSERecoveryProbe() {
     }, probeInterval);
 }
 
-// Периодическая синхронизация статуса серверов (гарантирует актуальность каждые 30с)
+// Периодическая синхронизация статуса серверов, launcher'ов и журналов (каждые 30с)
 function startServerStatusSync() {
     stopServerStatusSync();
     state.sse.statusSyncInterval = setInterval(async () => {
+        // Серверы
         try {
             const resp = await fetchServers();
             if (resp?.servers) {
                 resp.servers.forEach(s => updateServerStatus(s.id, s.connected));
+            }
+        } catch (err) { /* фоновая синхронизация */ }
+
+        // Launcher'ы
+        try {
+            const lr = await fetch('/api/launchers');
+            if (lr.ok) {
+                const data = await lr.json();
+                (data?.launchers || []).forEach(l => updateLauncherNodeStatus(l.id, l.connected));
+            }
+        } catch (err) { /* фоновая синхронизация */ }
+
+        // Журналы
+        try {
+            const jr = await fetch('/api/journals');
+            if (jr.ok) {
+                const data = await jr.json();
+                if (typeof updateJournalConnectionStatus === 'function') {
+                    (data || []).forEach(j => updateJournalConnectionStatus(j.id, j.connected));
+                }
             }
         } catch (err) { /* фоновая синхронизация */ }
     }, 30000);

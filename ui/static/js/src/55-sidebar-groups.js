@@ -245,6 +245,11 @@ function applySidebarStatuses() {
             updateGroupEntityStatus('launcher', node.name, node.connected);
         }
     }
+    if (typeof journalManager !== 'undefined' && journalManager?.journals) {
+        for (const [journalId, journal] of journalManager.journals) {
+            updateGroupEntityStatus('journal', journal.name, journal.connected !== false);
+        }
+    }
 }
 
 // Рендеринг пользовательских dashboard'ов в отдельную группу

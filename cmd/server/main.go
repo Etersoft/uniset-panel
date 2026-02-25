@@ -314,6 +314,10 @@ func main() {
 			poller := journal.NewPoller(client, 2*time.Second, func(journalID string, messages []journal.Message) {
 				sseHub.BroadcastJournalMessages(journalID, messages)
 			}, slog.Default())
+			poller.SetConnectionCallback(func(journalID string, connected bool, lastError string) {
+				journalMgr.UpdateConnectionStatus(journalID, connected)
+				sseHub.BroadcastJournalConnection(journalID, connected, lastError)
+			})
 			journalPollers = append(journalPollers, poller)
 		}
 	}

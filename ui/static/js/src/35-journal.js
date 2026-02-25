@@ -691,6 +691,42 @@ class JournalManager {
 // Global journal manager instance
 let journalManager = null;
 
+// Обновление статуса подключения журнала (sidebar, panel, groups)
+function updateJournalConnectionStatus(journalId, connected) {
+    // 1. Обновляем данные в journalManager
+    if (journalManager) {
+        const journal = journalManager.journals.get(journalId);
+        if (journal) {
+            journal.connected = connected;
+            journal.status = connected ? 'connected' : 'error';
+        }
+    }
+
+    // 2. Sidebar: обновляем .journal-item-status
+    const item = document.querySelector(`.journal-item[data-id="${journalId}"]`);
+    if (item) {
+        const statusEl = item.querySelector('.journal-item-status');
+        if (statusEl) {
+            statusEl.className = `journal-item-status ${connected ? 'connected' : 'error'}`;
+            statusEl.textContent = connected ? 'connected' : 'error';
+        }
+    }
+
+    // 3. Panel: toggle .server-disconnected на .journal-panel
+    const panel = document.getElementById(`journal-${journalId}`);
+    if (panel) {
+        panel.classList.toggle('server-disconnected', !connected);
+    }
+
+    // 4. Sidebar groups: обновляем статус точки
+    if (typeof updateGroupEntityStatus === 'function' && journalManager) {
+        const journal = journalManager.journals.get(journalId);
+        if (journal) {
+            updateGroupEntityStatus('journal', journal.name, connected);
+        }
+    }
+}
+
 // Global View Switcher
 // All sidebar sections (Objects, Dashboards, Journals) are always visible
 // Only the main content view changes
