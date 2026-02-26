@@ -22,7 +22,7 @@
 ```
 Browser (HTML/JS/Charts)
     ↓ (REST API calls)
-Go HTTP Server (Port 8000)
+Go HTTP Server (default :8181)
     ├→ UniSet Client (polls /api/v2/{object})
     ├→ Poller (periodic data collection)
     ├→ Storage (memory or SQLite)
@@ -126,8 +126,8 @@ UniSet2 Processes (/api/v2/...) — https://etersoft.github.io/uniset2/
 - Данные теряются при перезапуске
 
 ### SQLite Storage
-- Таблица `history`: id, object_name, variable_name, value (JSON), timestamp
-- Индекс на (object_name, variable_name, timestamp)
+- Таблица `history`: id, server_id, object_name, variable_name, value (JSON), timestamp
+- Индекс на (server_id, object_name, variable_name, timestamp)
 - Персистентное хранение
 
 ## Тестирование
@@ -170,13 +170,13 @@ make js-tests   # запуск в Docker (single + multi-server)
 ### Локальная сборка
 ```bash
 go build -mod=vendor -o uniset-panel ./cmd/server
-./uniset-panel --uniset-url http://localhost:8080 --port 8000
+./uniset-panel --uniset-url http://localhost:8080 --addr :8181
 ```
 
 ### Docker
 ```bash
 docker build -t uniset-panel .
-docker run -p 8000:8000 -e UNISET_URL=http://host:8080 uniset-panel
+docker run -p 8181:8181 uniset-panel --uniset-url http://host:8080 --addr :8181
 ```
 
 ### Makefile targets

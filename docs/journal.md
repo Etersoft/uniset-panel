@@ -213,7 +213,7 @@ services:
   uniset-panel:
     image: uniset-panel
     ports:
-      - "8000:8000"
+      - "8181:8181"
     environment:
       - JOURNAL_URL=clickhouse://clickhouse:9000/uniset
     depends_on:

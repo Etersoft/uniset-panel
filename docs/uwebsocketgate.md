@@ -92,7 +92,7 @@ ws://host:port/wsgate/
 
 ```bash
 # Подписаться на датчики
-curl -X POST http://localhost:8000/api/objects/UWebSocketGate1/uwsgate/subscribe \
+curl -X POST http://localhost:8181/api/objects/UWebSocketGate1/uwsgate/subscribe \
   -H "Content-Type: application/json" \
   -d '{"sensors": ["Temperature", "Pressure"]}'
 
@@ -103,7 +103,7 @@ curl -X POST http://localhost:8000/api/objects/UWebSocketGate1/uwsgate/subscribe
 }
 
 # Получить список подписок
-curl http://localhost:8000/api/objects/UWebSocketGate1/uwsgate/subscriptions
+curl http://localhost:8181/api/objects/UWebSocketGate1/uwsgate/subscriptions
 
 # Ответ:
 {
@@ -112,7 +112,7 @@ curl http://localhost:8000/api/objects/UWebSocketGate1/uwsgate/subscriptions
 }
 
 # Получить текущие значения
-curl http://localhost:8000/api/objects/UWebSocketGate1/uwsgate/sensors
+curl http://localhost:8181/api/objects/UWebSocketGate1/uwsgate/sensors
 
 # Ответ:
 {
@@ -124,7 +124,7 @@ curl http://localhost:8000/api/objects/UWebSocketGate1/uwsgate/sensors
 }
 
 # Отписаться от датчика
-curl -X POST http://localhost:8000/api/objects/UWebSocketGate1/uwsgate/unsubscribe \
+curl -X POST http://localhost:8181/api/objects/UWebSocketGate1/uwsgate/unsubscribe \
   -H "Content-Type: application/json" \
   -d '{"sensors": ["Pressure"]}'
 ```

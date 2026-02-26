@@ -2,14 +2,14 @@
 
 ## Testing
 
-E2E тесты (Playwright) запускаются через docker-compose:
+E2E тесты (Playwright) запускаются через docker compose:
 
 ```bash
 # Запуск всех тестов
 make js-tests
 
 # Перед запуском остановить dev-профиль (если запущен)
-docker-compose --profile dev down
+docker compose --profile dev down
 ```
 
 Не запускать тесты напрямую через `npx playwright test` — это может вызвать проблемы с окружением и портами.
@@ -18,19 +18,19 @@ docker-compose --profile dev down
 
 ```bash
 # Запуск dev-сервера
-docker-compose up dev-viewer -d --build
+docker compose up dev-viewer -d --build
 
 # Dev-сервер доступен на http://localhost:8000
-# Подключается к реальным UniSet2 серверам на портах 9090, 9191, 9292, 9393, 9494, 9595, 9696
+# Подключается к реальным UniSet2 серверам на портах 9090, 9191, 9292, 9393, 9494, 9595
 ```
 
-ВАЖНО: Запускать именно `docker-compose up dev-viewer`, а не `docker-compose --profile dev up`, чтобы избежать конфликта портов между сервисами dev-viewer и viewer (оба используют порт 8000).
+ВАЖНО: Запускать именно `docker compose up dev-viewer`, а не `docker compose --profile dev up`, чтобы избежать конфликта портов между сервисами dev-viewer и viewer (оба используют порт 8000).
 
 ## Build
 
 ```bash
 # Сборка бинарника
-go build -o uniset-panel ./cmd/server
+go build -mod=vendor -o uniset-panel ./cmd/server
 
 # Сборка через make
 make build
@@ -61,13 +61,14 @@ make build
 | 20-29 | Specific renderers | IONC, OPCUA, Modbus, UWSGate рендереры |
 | 30-39 | Components | LogViewer и другие самостоятельные компоненты |
 | 40-49 | Charts/Dialogs | Графики, модальные окна |
-| 50-59 | UI functions | Табы, секции, настройки, render-функции |
+| 50-59 | UI functions | Табы, секции, настройки, render-функции, sidebar groups |
+| 60-69 | Dashboard | Dashboard base, widgets, manager, dialogs |
 | 99 | Init | DOMContentLoaded, инициализация |
 
 ### Правила размещения кода
 
 - **Новый рендерер** → `2X-renderer-name.js`
-- **Новая утилита** → `01-utils.js` или создать `0X-name.js`
+- **Новая утилита** → создать `0X-name.js` в диапазоне 00-09
 - **Изменение SSE** → `04-sse.js`
 - **Новый UI компонент** → `5X-ui-name.js`
 
@@ -222,6 +223,8 @@ node debug-something.js
 | ModbusMaster, ModbusSlave | `mb` | `mb:AI70_S` |
 | OPCUAExchange, OPCUAServer | `ext` | `ext:Temperature` |
 | IONotifyController | `io` | `io:AI_Temp_S` |
+| UWebSocketGate | `ws` | `ws:SensorName` |
+| UNetExchange | `unet` | `unet:SensorName` |
 
 **При обработке SSE событий для обновления графиков:**
 ```javascript
@@ -273,10 +276,11 @@ getElementsInTab(tabKey, selector)
 
 | Элемент | CSS класс | HTML структура |
 |---------|-----------|----------------|
-| Pin toggle | `pin-toggle`, `pin-toggle.pinned` | `<span class="pin-toggle" data-name="...">○/📌</span>` |
+| Pin toggle | `pin-toggle`, `pin-toggle.pinned` | `<span class="pin-toggle" data-id="...">○/📌</span>` |
 | Pin column | `col-pin` | `<th class="col-pin">...</th>` |
 | Chart toggle | `chart-toggle`, `chart-toggle-input`, `chart-toggle-label` | Input + Label с SVG иконкой |
-| Pinned row | `*-sensor-pinned` или `*-register-pinned` | Class на `<tr>` |
+
+> **Примечание:** IONC использует `ionc-col-pin` вместо `col-pin`, IO-таблицы используют `io-pin-toggle` вместо `pin-toggle`. Это исторические расхождения.
 
 **Правило:** При добавлении нового рендерера или нового UI элемента проверь существующие рендереры и используй те же классы и структуру.
 

@@ -119,7 +119,7 @@ document.addEventListener('visibilitychange', () => {
 docker-compose up viewer -d
 
 # Проверить что сервер работает
-curl http://localhost:8000/api/objects
+curl http://localhost:8181/api/objects
 
 # Запустить тест графиков
 cd tests && node debug/test-chart-visibility.js
