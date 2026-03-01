@@ -127,7 +127,9 @@ cd tests && node debug/test-chart-visibility.js
 
 ## Статус
 
-**РЕШЕНО**: Реализован fix в `ui/static/js/app.js` (ветка story/fix-hidden-update)
+**РЕШЕНО**: Реализован fix в `ui/static/js/src/04-sse.js` (handler `visibilitychange`).
+
+> **Регрессия:** При рефакторинге JS (коммит `dfb3918`) handler был потерян. Восстановлен в ветке `story/groups`.
 
 ### Что было сделано
 

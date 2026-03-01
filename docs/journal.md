@@ -146,6 +146,9 @@ id,sensorname,value,message,mtype,mgroup,mcode
   {
     "id": "b7cf98ab",
     "name": "Production",
+    "database": "uniset",
+    "table": "main_messages_src",
+    "connected": true,
     "status": "connected"
   }
 ]
@@ -192,9 +195,12 @@ id,sensorname,value,message,mtype,mgroup,mcode
 
 ```json
 {
-  "type": "journal_message",
-  "journalId": "b7cf98ab",
-  "messages": [...]
+  "type": "journal_messages",
+  "data": {
+    "journalId": "b7cf98ab",
+    "messages": [...]
+  },
+  "timestamp": "2025-12-20T14:25:37Z"
 }
 ```
 
@@ -214,8 +220,7 @@ services:
     image: uniset-panel
     ports:
       - "8181:8181"
-    environment:
-      - JOURNAL_URL=clickhouse://clickhouse:9000/uniset
+    command: --journal-url clickhouse://clickhouse:9000/uniset
     depends_on:
       - clickhouse
 ```
@@ -239,9 +244,11 @@ journals:
 
 | Тип | Описание | Цвет |
 |-----|----------|------|
-| Alarm | Аварийное сообщение | Красный |
-| Emergancy | Экстренное сообщение | Тёмно-красный |
-| Warning | Предупреждение | Оранжевый |
-| Cauton | Внимание | Жёлтый |
-| Normal | Нормальное состояние | Зелёный |
-| Blocking | Блокировка | Синий |
+| Alarm | Аварийное сообщение | Красный (`#f2495c`) |
+| Emergancy | Экстренное сообщение | Красный (`#f2495c`) — тот же стиль что Alarm |
+| Warning | Предупреждение | Оранжевый (`#ff9830`) |
+| Cauton | Внимание | Оранжевый (`#ff9830`) — тот же стиль что Warning |
+| Normal | Нормальное состояние | Зелёный (`#73bf69`) |
+| Blocking | Блокировка | Синий (`#5794f2`) |
+
+> **Примечание:** `Emergancy` и `Cauton` — исторические написания из протокола UniSet2. Поля `mgroup` и `mcode` помечены `omitempty` (отсутствуют если пустые).

@@ -98,8 +98,8 @@ curl -X POST http://localhost:8181/api/objects/UWebSocketGate1/uwsgate/subscribe
 
 # Ответ:
 {
-  "success": true,
-  "subscribed": ["Temperature", "Pressure"]
+  "status": "ok",
+  "message": "subscribed"
 }
 
 # Получить список подписок
@@ -107,7 +107,6 @@ curl http://localhost:8181/api/objects/UWebSocketGate1/uwsgate/subscriptions
 
 # Ответ:
 {
-  "objectName": "UWebSocketGate1",
   "sensors": ["Temperature", "Pressure"]
 }
 
@@ -116,10 +115,9 @@ curl http://localhost:8181/api/objects/UWebSocketGate1/uwsgate/sensors
 
 # Ответ:
 {
-  "objectName": "UWebSocketGate1",
   "sensors": [
-    {"id": 10, "name": "Temperature", "value": 25, "error": 0},
-    {"id": 11, "name": "Pressure", "value": 101, "error": 0}
+    {"id": 10, "name": "Temperature", "iotype": "AI", "textname": "", "value": 25, "error": 0, "timestamp": 0, "isDiscrete": false, "isInput": true, "supplier_id": 0, "supplier": ""},
+    {"id": 11, "name": "Pressure", "iotype": "AI", "textname": "", "value": 101, "error": 0, "timestamp": 0, "isDiscrete": false, "isInput": true, "supplier_id": 0, "supplier": ""}
   ]
 }
 
@@ -197,11 +195,15 @@ curl -X POST http://localhost:8181/api/objects/UWebSocketGate1/uwsgate/unsubscri
 
 | Колонка | Описание |
 |---------|----------|
+| Pin | Закрепление датчика |
 | Chart | Checkbox для добавления на график |
 | ID | Идентификатор датчика |
 | Name | Имя датчика |
+| Type | Тип датчика (AI/DI/AO/DO) |
 | Value | Текущее значение |
+| Supplier | Поставщик значения |
 | Status | OK или Error |
+| Dashboard | Кнопка добавления на дашборд |
 | Actions | Кнопка удаления (×) |
 
 ### Persistence

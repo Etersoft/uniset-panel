@@ -53,7 +53,8 @@ make build
 | Паттерн | Пример | Правило |
 |---------|--------|---------|
 | Поля менеджеров в `Handlers` | `serverMgr`, `launcherMgr`, `journalMgr`, `dashboardMgr`, `recordingMgr`, `logServerMgr`, `controlMgr` | Суффикс `Mgr`, camelCase |
-| Публичные сеттеры | `SetServerManager(mgr)`, `SetLauncherManager(mgr)` | Полное имя `Manager` (публичный API) |
+| Конфиг-поля в `Handlers` | `sidebarConfig *config.SidebarConfig` | camelCase, nil = дефолт |
+| Публичные сеттеры | `SetServerManager(mgr)`, `SetLauncherManager(mgr)`, `SetSidebarConfig(cfg)` | Полное имя `Manager` / `Config` (публичный API) |
 | SSE event types | `EventObjectData`, `EventServerStatus` | Константы `Event*` в `sse.go` |
 
 ### Паттерны handler'ов (`internal/api/`)
@@ -74,12 +75,15 @@ var req MyStruct
 if !h.decodeJSONBody(w, r, &req) { return }  // false при ошибке
 
 // Получение poller'а (отдельные функции по типу)
-ioncPoller := h.requireIONCPoller(w, name)      // nil при ошибке
-modbusPoller := h.requireModbusPoller(w, name)   // nil при ошибке
-opcuaPoller := h.requireOPCUAPoller(w, name)     // nil при ошибке
+ioncPoller, ok := h.requireIONCPoller(w, r)        // (*ionc.Poller, bool)
+modbusPoller, ok := h.requireModbusPoller(w, r)    // (*modbus.Poller, bool)
+opcuaPoller, ok := h.requireOPCUAPoller(w, r)      // (*opcua.Poller, bool)
+uwsgatePoller, ok := h.requireUWSGatePoller(w, r)  // (*uwsgate.Poller, bool)
 ```
 
 **НЕ** использовать `http.Error()` — он возвращает `text/plain`, а `h.writeError()` возвращает JSON `{"error": "..."}`.
+
+> **Примечание:** Некоторые handler'ы ещё используют `json.NewDecoder` напрямую (5 мест) и `r.PathValue("name")` напрямую (16 мест) вместо `decodeJSONBody` / `requireObjectName`. Миграция — отдельная задача.
 
 ### SSE event types
 
@@ -115,6 +119,8 @@ DefaultPollInterval           // 1s — интервал опроса серве
 DefaultControlTimeout         // 60s — таймаут неактивности контроллера
 DefaultSensorBatchSize        // 300 — макс. датчиков в запросе
 DefaultMaxRecords             // 1000000 — макс. записей recording
+DefaultAddr                   // ":8181" — адрес веб-сервера
+DefaultRecordingPath          // "./recording.db" — путь к файлу записи
 DefaultLogStreamBufferSize    // 5000
 DefaultLogStreamBatchSize     // 500
 DefaultLogStreamBatchInterval // 100ms
@@ -400,7 +406,7 @@ node debug-something.js
 | OPCUAExchange, OPCUAServer | `ext` | `ext:Temperature` |
 | IONotifyController | `io` | `io:AI_Temp_S` |
 | UWebSocketGate | `ws` | `ws:SensorName` |
-| UNetExchange | `unet` | `unet:SensorName` |
+| UNetExchange | `unet` | `unet:recv:42`, `unet:send:7` |
 
 **При обработке SSE событий для обновления графиков:**
 ```javascript

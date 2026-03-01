@@ -114,6 +114,7 @@ These functions operate within a single object's context:
 | `uniset-panel-opcuasrv-pinned` | `{objectName: [ids]}` | Pinned OPCUA Server sensors |
 | `uniset-panel-io-pinned` | `{objectName: [ids]}` | Pinned IO variables |
 | `uwsgate-pinned-${tabKey}` | `[names]` | Pinned UWebSocketGate sensors (по именам) |
+| `uwsgate-subscriptions-${tabKey}` | `[names]` | UWebSocketGate subscriptions (по именам) |
 
 ## SSE Events and Charts
 
@@ -130,7 +131,7 @@ Charts are identified by `varName` which combines a prefix and sensor name:
 | OPCUAServer | `ext` | `ext:Temperature` |
 | IONotifyController | `io` | `io:AI_Temperature_S` |
 | UWebSocketGate | `ws` | `ws:SensorName` |
-| UNetExchange | `unet` | `unet:SensorName` |
+| UNetExchange | `unet` | `unet:recv:42`, `unet:send:7` |
 
 **Important:** Both ModbusMaster and ModbusSlave use the same prefix `mb`. Both OPCUAExchange and OPCUAServer use `ext`.
 

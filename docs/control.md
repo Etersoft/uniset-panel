@@ -25,6 +25,11 @@
 - Управлять freeze/unfreeze
 - Запускать генераторы
 - Отправлять команды LogServer
+- Добавлять/удалять серверы, менять poll interval
+- Управлять Modbus режимами (mode/control)
+- Управлять OPCUA (control)
+
+> **Примечание:** Launcher использует собственную аутентификацию (`controlToken` в YAML), не зависящую от Control Token панели.
 
 ## Конфигурация
 
@@ -123,7 +128,7 @@ ui:
 | GET | `/api/control/status` | Получить текущий статус контроля |
 | POST | `/api/control/take` | Взять контроль |
 | POST | `/api/control/release` | Освободить контроль |
-| POST | `/api/control/ping` | Keep-alive (продлить сессию) |
+| POST | `/api/control/ping` | Keep-alive (продлить сессию, токен в `X-Control-Token` header) |
 
 ### Пример: взятие контроля
 

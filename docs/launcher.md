@@ -62,9 +62,9 @@ launchers:
 В боковой панели появляется секция **Launchers** со списком настроенных Launcher'ов. При клике открывается вкладка с таблицей процессов:
 
 - Процессы сгруппированы по группам (core, io, network и т.д.)
-- Цветовая индикация состояний: RUNNING (зелёный), STOPPED (красный), RESTARTING (жёлтый)
+- Цветовая индикация состояний: RUNNING (зелёный), STOPPED (серый), FAILED (красный), RESTARTING/STARTING/STOPPING (оранжевый)
 - Кнопки управления: restart (↻), stop (■), start (▶)
-- Массовые операции Restart / Reload в заголовке каждой группы
+- Массовые операции Stop / Start / Restart / Reload в заголовке каждой группы
 - Фильтр процессов по имени
 - Ссылка **Open Launcher UI** на веб-интерфейс самого Launcher'а
 
@@ -79,6 +79,8 @@ launchers:
 | POST | `/api/launchers/{id}/process/{name}/restart` | Перезапуск процесса |
 | POST | `/api/launchers/{id}/process/{name}/stop` | Остановка процесса |
 | POST | `/api/launchers/{id}/process/{name}/start` | Запуск процесса |
+| POST | `/api/launchers/{id}/stop-all` | Остановка всех |
+| POST | `/api/launchers/{id}/start-all` | Запуск всех |
 | POST | `/api/launchers/{id}/restart-all` | Перезапуск всех |
 | POST | `/api/launchers/{id}/reload-all` | Reload всех |
 

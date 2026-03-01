@@ -53,6 +53,7 @@ UniSet2 Processes (/api/v2/...) — https://etersoft.github.io/uniset2/
 | `internal/opcua` | `poller.go` | OPCUA poller |
 | `internal/uwsgate` | `client.go`, `poller.go` | UWebSocketGate WebSocket клиент |
 | `internal/sm` | `poller.go` | SharedMemory интеграция |
+| `internal/sidebar` | `resolver.go` | Резолвер sidebar-групп из YAML конфигурации |
 | `ui/` | `embed.go`, `concat.go`, `templates/`, `static/` | Встроенный фронтенд |
 
 ## Стек технологий
@@ -151,16 +152,30 @@ make js-tests   # запуск в Docker (single + multi-server)
 ```
 
 Файлы:
-- `tests/single/` — тесты одного сервера (197 тестов)
+- `tests/single/` — тесты одного сервера (22 spec файла)
   - `ui.spec.ts` — базовый UI
   - `ionotifycontroller.spec.ts` — IONotifyController рендерер
   - `opcuaexchange.spec.ts` — OPCUAExchange рендерер
   - `modbusmaster.spec.ts` — ModbusMaster рендерер
   - `modbusslave.spec.ts` — ModbusSlave рендерер
   - `opcuaserver.spec.ts` — OPCUAServer рендерер
+  - `unetexchange.spec.ts` — UNetExchange рендерер
   - `base-components.spec.ts` — общие компоненты (filter, resize, chart toggle)
   - `external-sensors.spec.ts` — внешние датчики
-- `tests/multi/` — тесты мульти-сервера (15 тестов)
+  - `charts.spec.ts` — графики
+  - `control.spec.ts` — управление доступом
+  - `dashboard.spec.ts` — дашборды
+  - `dashboard-sse.spec.ts` — SSE обновления дашбордов
+  - `dashboard-widgets.spec.ts` — виджеты дашбордов
+  - `generator.spec.ts` — генератор значений
+  - `journal.spec.ts` — журналы
+  - `launcher.spec.ts` — Launcher
+  - `modbus-control.spec.ts` — управление Modbus
+  - `recording.spec.ts` — запись истории
+  - `sections.spec.ts` — секции и порядок
+  - `sensors.spec.ts` — датчики
+  - `status-autorefresh.spec.ts` — автообновление статуса
+- `tests/multi/` — тесты мульти-сервера
   - `server.spec.ts` — multi-server поддержка
 - `tests/mock-server/server.js` — mock UniSet2 API
 - `tests/playwright.config.ts` — конфигурация Playwright
@@ -219,8 +234,8 @@ uniset-panel/
 ├── ui/
 │   ├── embed.go             # go:embed директива
 │   ├── static/
-│   │   ├── css/style.css    # стили (~1400 строк)
-│   │   └── js/app.js        # фронтенд (~9150 строк, 5 рендереров + миксины)
+│   │   ├── css/style.css    # стили (~8600 строк)
+│   │   └── js/app.js        # фронтенд (~22200 строк, 9 рендереров + миксины)
 │   └── templates/
 │       └── index.html       # главная страница
 ├── tests/
@@ -246,14 +261,16 @@ uniset-panel/
 
 ```javascript
 objectRenderers (Map)
-  ├── 'IONotifyController' → IONCRenderer
+  ├── 'IONotifyController' → IONotifyControllerRenderer
   ├── 'OPCUAExchange' → OPCUAExchangeRenderer
   ├── 'ModbusMaster' → ModbusMasterRenderer
   ├── 'ModbusSlave' → ModbusSlaveRenderer
   ├── 'OPCUAServer' → OPCUAServerRenderer
   ├── 'UWebSocketGate' → UWebSocketGateRenderer
   ├── 'UNetExchange' → UNetExchangeRenderer
-  └── default → DefaultObjectRenderer
+  ├── 'UniSetManager' → UniSetManagerRenderer
+  ├── 'UniSetObject' → UniSetObjectRenderer
+  └── default → FallbackRenderer
 ```
 
 ### Миксины (переиспользуемый код)
@@ -265,20 +282,27 @@ objectRenderers (Map)
 | **ResizableSectionMixin** | `loadSectionHeight()`, `saveSectionHeight()`, `setupSectionResize()` | Изменяемые по высоте секции с сохранением в localStorage |
 | **FilterMixin** | `setupFilterListeners()`, `setupContainerEscHandler()`, `applyFilters()` | Фильтрация списков по имени и типу |
 | **ParamsAccessibilityMixin** | `updateParamsAccessibility(prefix)` | Управление доступностью секции параметров на основе `httpEnabledSetParams` |
+| **ParamsManagerMixin** | `renderParamsSection()`, `updateParamsValues()` | Рендеринг и обновление секции параметров объекта |
+| **ItemCounterMixin** | `updateItemCount()` | Счётчик элементов в секциях (показывает общее/отфильтрованное количество) |
+| **SectionHeightMixin** | `initSectionHeight()`, `applySectionHeight()` | Управление высотой секций |
+| **PinManagementMixin** | `loadPinnedItems()`, `savePinnedItems()`, `togglePin()` | Закрепление элементов в таблицах |
+| **TableSortMixin** | `setupTableSort()`, `sortTable()` | Сортировка таблиц по колонкам |
 
 ### Классы рендереров
 
 | Класс | Секции |
 |-------|--------|
 | **BaseObjectRenderer** | Базовый класс с методами создания секций, collapsible sections |
-| **IONCRenderer** | Датчики (виртуальный скролл), Графики, LogServer, Потерянные подписчики |
+| **IONotifyControllerRenderer** | Датчики (виртуальный скролл), Графики, LogServer, Потерянные подписчики |
 | **OPCUAExchangeRenderer** | Статус OPC UA, Каналы, Датчики, Параметры, Диагностика, Графики |
 | **ModbusMasterRenderer** | Статус Modbus, Устройства, Регистры (виртуальный скролл), Параметры, Графики |
 | **ModbusSlaveRenderer** | Статус ModbusSlave, Регистры (виртуальный скролл), Параметры, Графики |
 | **OPCUAServerRenderer** | Статус OPC UA Server, Endpoints, Config, Переменные, Параметры, Графики |
 | **UWebSocketGateRenderer** | WebSocket датчики с autocomplete, Графики, LogServer |
 | **UNetExchangeRenderer** | UNet каналы, Входящие/Исходящие датчики, Графики |
-| **DefaultObjectRenderer** | Fallback для неизвестных типов |
+| **UniSetManagerRenderer** | Рендерер для объектов типа UniSetManager |
+| **UniSetObjectRenderer** | Рендерер для объектов типа UniSetObject |
+| **FallbackRenderer** | Fallback для неизвестных типов |
 
 ### Добавление нового типа
 
