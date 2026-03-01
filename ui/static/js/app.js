@@ -1373,6 +1373,26 @@ function closeSSE() {
     }
 }
 
+// Обновление графиков при возврате на вкладку браузера
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        state.tabs.forEach((tabState, tabKey) => {
+            if (tabState.charts && tabState.charts.size > 0) {
+                tabState.charts.forEach((chartData, varName) => {
+                    if (chartData.chart) {
+                        try {
+                            syncAllChartsTimeRange(tabKey);
+                            chartData.chart.update();
+                        } catch (err) {
+                            console.warn('Chart visibility update error:', varName, err);
+                        }
+                    }
+                });
+            }
+        });
+    }
+});
+
 
 
 // === 06-utils.js ===
