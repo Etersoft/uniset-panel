@@ -11,6 +11,19 @@ import (
 	"time"
 )
 
+// Default values for configuration parameters
+const (
+	DefaultLogStreamBufferSize  = 5000                  // размер буфера LogStream
+	DefaultLogStreamBatchSize   = 500                   // макс. строк в батче LogStream
+	DefaultLogStreamBatchInterval = 100 * time.Millisecond // интервал отправки батча LogStream
+	DefaultControlTimeout       = 60 * time.Second      // таймаут неактивности контроллера
+	DefaultSensorBatchSize      = 300                   // макс. датчиков в одном запросе
+	DefaultMaxRecords           = int64(1000000)        // макс. записей в циклическом буфере
+	DefaultRecordingPath        = "./recording.db"      // путь к файлу записи
+	DefaultPollInterval         = time.Second            // интервал опроса серверов
+	DefaultAddr                 = ":8181"               // адрес по умолчанию
+)
+
 type StorageType string
 
 const (
@@ -59,7 +72,7 @@ type LogStreamConfig struct {
 // GetBufferSize возвращает размер буфера с default
 func (l *LogStreamConfig) GetBufferSize() int {
 	if l == nil || l.BufferSize <= 0 {
-		return 5000
+		return DefaultLogStreamBufferSize
 	}
 	return l.BufferSize
 }
@@ -67,7 +80,7 @@ func (l *LogStreamConfig) GetBufferSize() int {
 // GetBatchSize возвращает размер батча с default
 func (l *LogStreamConfig) GetBatchSize() int {
 	if l == nil || l.BatchSize <= 0 {
-		return 500
+		return DefaultLogStreamBatchSize
 	}
 	return l.BatchSize
 }
@@ -75,7 +88,7 @@ func (l *LogStreamConfig) GetBatchSize() int {
 // GetBatchInterval возвращает интервал батча с default
 func (l *LogStreamConfig) GetBatchInterval() time.Duration {
 	if l == nil || l.BatchInterval <= 0 {
-		return 100 * time.Millisecond
+		return DefaultLogStreamBatchInterval
 	}
 	return l.BatchInterval
 }
@@ -154,7 +167,7 @@ func (c *Config) IsControlEnabled() bool {
 // GetControlTimeout возвращает таймаут с default
 func (c *Config) GetControlTimeout() time.Duration {
 	if c.ControlTimeout <= 0 {
-		return 60 * time.Second
+		return DefaultControlTimeout
 	}
 	return c.ControlTimeout
 }
@@ -162,7 +175,7 @@ func (c *Config) GetControlTimeout() time.Duration {
 // GetSensorBatchSize возвращает размер батча датчиков с default
 func (c *Config) GetSensorBatchSize() int {
 	if c.SensorBatchSize <= 0 {
-		return 300
+		return DefaultSensorBatchSize
 	}
 	return c.SensorBatchSize
 }
@@ -170,7 +183,7 @@ func (c *Config) GetSensorBatchSize() int {
 // GetMaxRecords возвращает максимальное количество записей с default
 func (c *Config) GetMaxRecords() int64 {
 	if c.MaxRecords <= 0 {
-		return 1000000
+		return DefaultMaxRecords
 	}
 	return c.MaxRecords
 }
@@ -178,7 +191,7 @@ func (c *Config) GetMaxRecords() int64 {
 // GetRecordingPath возвращает путь к файлу записи с default
 func (c *Config) GetRecordingPath() string {
 	if c.RecordingPath == "" {
-		return "./recording.db"
+		return DefaultRecordingPath
 	}
 	return c.RecordingPath
 }
@@ -194,8 +207,8 @@ func Parse() *Config {
 	flag.Var(&unisetURLs, "uniset-url", "UniSet2 HTTP API URL (can be specified multiple times)")
 	flag.Var(&launcherURLs, "launcher-url", "Launcher HTTP API URL (can be specified multiple times)")
 	flag.Var(&journalURLs, "journal-url", "Journal ClickHouse URL (can be specified multiple times, format: clickhouse://host:port/db?table=xxx&name=Name)")
-	flag.StringVar(&cfg.Addr, "addr", ":8181", "Listen address (e.g. :8181 or 127.0.0.1:8181)")
-	flag.DurationVar(&cfg.PollInterval, "poll-interval", 1*time.Second, "UniSet2 polling interval")
+	flag.StringVar(&cfg.Addr, "addr", DefaultAddr, "Listen address (e.g. :8181 or 127.0.0.1:8181)")
+	flag.DurationVar(&cfg.PollInterval, "poll-interval", DefaultPollInterval, "UniSet2 polling interval")
 
 	var storageStr string
 	flag.StringVar(&storageStr, "storage", "memory", "Storage type: memory or sqlite")
@@ -209,14 +222,14 @@ func Parse() *Config {
 	flag.StringVar(&cfg.SMURL, "sm-url", "", "SharedMemory HTTP API URL (empty = disabled)")
 	flag.DurationVar(&cfg.SMPollInterval, "sm-poll-interval", 0, "SharedMemory polling interval (0 = use poll-interval)")
 	flag.StringVar(&cfg.UnisetSupplier, "uniset-supplier", "TestProc", "UniSet2 supplier name for set/freeze/unfreeze operations")
-	flag.IntVar(&cfg.SensorBatchSize, "sensor-batch-size", 300, "Max sensors per request to UniSet2 (default: 300)")
+	flag.IntVar(&cfg.SensorBatchSize, "sensor-batch-size", DefaultSensorBatchSize, "Max sensors per request to UniSet2")
 	flag.Var(&controlTokens, "control-token", "Control token for write access (can be specified multiple times, empty = allow all)")
-	flag.DurationVar(&cfg.ControlTimeout, "control-timeout", 60*time.Second, "Control session timeout (default: 60s)")
+	flag.DurationVar(&cfg.ControlTimeout, "control-timeout", DefaultControlTimeout, "Control session timeout")
 
 	// Recording flags
-	flag.StringVar(&cfg.RecordingPath, "recording-path", "./recording.db", "Recording SQLite database path")
+	flag.StringVar(&cfg.RecordingPath, "recording-path", DefaultRecordingPath, "Recording SQLite database path")
 	flag.BoolVar(&cfg.RecordingEnabled, "recording-enabled", false, "Start recording on startup")
-	flag.Int64Var(&cfg.MaxRecords, "max-records", 1000000, "Max records in recording database (circular buffer)")
+	flag.Int64Var(&cfg.MaxRecords, "max-records", DefaultMaxRecords, "Max records in recording database (circular buffer)")
 
 	// Dashboard flags
 	flag.StringVar(&cfg.DashboardsDir, "dashboards-dir", "", "Directory with server dashboards (optional)")

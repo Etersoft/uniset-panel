@@ -34,8 +34,8 @@ func (h *Handlers) collectSidebarEntities() []sidebar.SidebarItem {
 	var entities []sidebar.SidebarItem
 
 	// Объекты со всех серверов
-	if h.serverManager != nil {
-		if allObjects, err := h.serverManager.GetAllObjects(); err == nil {
+	if h.serverMgr != nil {
+		if allObjects, err := h.serverMgr.GetAllObjects(); err == nil {
 			for _, obj := range allObjects {
 				entities = append(entities, sidebar.SidebarItem{
 					Type:     "object",
@@ -47,8 +47,8 @@ func (h *Handlers) collectSidebarEntities() []sidebar.SidebarItem {
 	}
 
 	// Серверы
-	if h.serverManager != nil {
-		for _, inst := range h.serverManager.GetAllInstances() {
+	if h.serverMgr != nil {
+		for _, inst := range h.serverMgr.GetAllInstances() {
 			displayName := inst.Config.Name
 			if displayName == "" {
 				displayName = inst.Config.URL

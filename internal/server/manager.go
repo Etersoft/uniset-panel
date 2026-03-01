@@ -161,20 +161,20 @@ func (m *Manager) AddServerWithSensorConfig(cfg config.ServerConfig, sensorCfg *
 		return fmt.Errorf("server URL is required")
 	}
 
-	instance := NewInstance(
-		cfg,
-		m.storage,
-		m.pollInterval,
-		m.historyTTL,
-		m.supplier,
-		m.sensorBatchSize,
-		m.objectCallback,
-		m.ioncCallback,
-		m.modbusCallback,
-		m.opcuaCallback,
-		m.statusCallback,
-		m.objectsCallback,
-	)
+	instance := NewInstance(AppConfig{
+		Server:          cfg,
+		Storage:         m.storage,
+		PollInterval:    m.pollInterval,
+		HistoryTTL:      m.historyTTL,
+		Supplier:        m.supplier,
+		SensorBatchSize: m.sensorBatchSize,
+		ObjectCallback:  m.objectCallback,
+		IONCCallback:    m.ioncCallback,
+		ModbusCallback:  m.modbusCallback,
+		OPCUACallback:   m.opcuaCallback,
+		StatusCallback:  m.statusCallback,
+		ObjectsCallback: m.objectsCallback,
+	})
 
 	// Сохраняем per-server SensorConfig
 	instance.SensorConfig = sensorCfg

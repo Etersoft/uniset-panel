@@ -36,6 +36,156 @@ go build -mod=vendor -o uniset-panel ./cmd/server
 make build
 ```
 
+## Go Backend Conventions
+
+### Именование полей и переменных
+
+| Паттерн | Пример | Правило |
+|---------|--------|---------|
+| Поля менеджеров в `Handlers` | `serverMgr`, `launcherMgr`, `journalMgr`, `dashboardMgr`, `recordingMgr`, `logServerMgr`, `controlMgr` | Суффикс `Mgr`, camelCase |
+| Публичные сеттеры | `SetServerManager(mgr)`, `SetLauncherManager(mgr)` | Полное имя `Manager` (публичный API) |
+| SSE event types | `EventObjectData`, `EventServerStatus` | Константы `Event*` в `sse.go` |
+
+### Паттерны handler'ов (`internal/api/`)
+
+Все HTTP handler'ы должны использовать общие хелперы:
+
+```go
+// Ответы
+h.writeJSON(w, data)              // НЕ json.NewEncoder(w).Encode(data)
+h.writeError(w, status, message)  // НЕ http.Error(w, message, status)
+
+// Валидация
+name, ok := h.requireObjectName(w, r)  // возвращает ("", false) при ошибке (ответ уже отправлен)
+if !ok { return }
+
+// Декодирование
+var req MyStruct
+if !h.decodeJSONBody(w, r, &req) { return }  // false при ошибке
+
+// Получение poller'а (отдельные функции по типу)
+ioncPoller := h.requireIONCPoller(w, name)      // nil при ошибке
+modbusPoller := h.requireModbusPoller(w, name)   // nil при ошибке
+opcuaPoller := h.requireOPCUAPoller(w, name)     // nil при ошибке
+```
+
+**НЕ** использовать `http.Error()` — он возвращает `text/plain`, а `h.writeError()` возвращает JSON `{"error": "..."}`.
+
+### SSE event types
+
+Все SSE event types объявлены как константы в `internal/api/sse.go`:
+
+```go
+EventObjectData           // "object_data"
+EventObjectsList          // "objects_list"
+EventServerStatus         // "server_status"
+EventSensorData           // "sensor_data"
+EventControlStatus        // "control_status"
+EventConnected            // "connected"
+EventIONCSensorBatch      // "ionc_sensor_batch"
+EventModbusRegisterBatch  // "modbus_register_batch"
+EventOPCUASensorBatch     // "opcua_sensor_batch"
+EventUWSGateSensorBatch   // "uwsgate_sensor_batch"
+EventLauncherStatus       // "launcher_status"
+EventLauncherConnection   // "launcher_connection"
+EventJournalMessages      // "journal_messages"
+EventJournalConnection    // "journal_connection"
+```
+
+При добавлении нового SSE event type — добавить константу `Event*` и использовать её везде (включая тесты). Не использовать строковые литералы.
+
+### Константы вместо магических чисел
+
+Все числовые значения для таймаутов, лимитов, размеров буферов, интервалов и портов должны быть именованными константами. Не допускать inline числовых литералов в логике.
+
+**Defaults конфигурации** — экспортированные константы `Default*` в `config/config.go`:
+
+```go
+DefaultPollInterval           // 1s — интервал опроса серверов
+DefaultControlTimeout         // 60s — таймаут неактивности контроллера
+DefaultSensorBatchSize        // 300 — макс. датчиков в запросе
+DefaultMaxRecords             // 1000000 — макс. записей recording
+DefaultLogStreamBufferSize    // 5000
+DefaultLogStreamBatchSize     // 500
+DefaultLogStreamBatchInterval // 100ms
+```
+
+**Локальные константы** — unexported, в файле где используются:
+
+```go
+// api/sse.go
+sseEventBufferSize    // 50 — буфер канала SSE событий
+sseHeartbeatInterval  // 25s — heartbeat для keep-alive
+
+// api/control.go
+controlReleaseGracePeriod  // 3s — задержка перед освобождением контроля при disconnect
+
+// api/handlers_server.go
+minPollIntervalMs, maxPollIntervalMs  // 1000, 300000 — границы poll interval
+
+// api/handlers.go
+defaultHistoryCount  // 100 — кол-во записей истории переменной
+
+// api/handlers_ionc.go
+defaultIONCPageLimit  // 100 — лимит пагинации IONC датчиков
+
+// api/handlers_journal.go
+defaultJournalLimit, maxJournalLimit  // 100, 1000 — пагинация журнала
+
+// api/handlers_logserver.go
+defaultLogServerHost, defaultLogServerPort  // "localhost", 3333 — fallback LogServer
+
+// uwsgate/client.go
+wsHandshakeTimeout, wsReconnectBase, wsReconnectMax  // 10s, 1s, 30s
+```
+
+**Правила:**
+- `Default*` (exported) — для значений из `config.go`, которые могут использоваться в других пакетах и CLI флагах
+- `camelCase` (unexported) — для локальных констант конкретного файла
+- Константа должна быть в том же файле, где используется
+- Сообщения об ошибках могут ссылаться на константы: `fmt.Sprintf("must be between %d and %d", min, max)`
+
+### Структура `cmd/server/main.go`
+
+Функция `main()` вызывает `setup*()` хелперы, каждый из которых отвечает за инициализацию одной подсистемы:
+
+```
+setupStorage()           → storage.Storage
+setupControl()           → *ControlManager
+setupRecording()         → *recording.Manager
+setupServerCallbacks()   → wiring SSE + recording callbacks
+setupLauncher()          → *launcher.Manager
+setupHandlers()          → *Handlers
+setupDashboards()        → *dashboard.Manager
+setupJournals()          → *journal.Manager + pollers
+setupSMPoller()          → *sm.Poller
+```
+
+При добавлении новой подсистемы — создать `setup*()` функцию, не раздувать `main()`.
+
+### Конструкторы с конфиг-структурой
+
+Конструкторы с 4+ параметрами используют config struct:
+
+```go
+// ДА — именованные поля
+instance := server.NewInstance(server.AppConfig{
+    Server:       cfg,
+    Storage:      store,
+    PollInterval: interval,
+})
+
+// НЕТ — позиционные параметры
+instance := server.NewInstance(cfg, store, interval, ttl, supplier, batchSize, cb1, cb2, cb3, ...)
+```
+
+### Тесты
+
+- Табличные тесты (`tests := []struct{...}`) для проверки нескольких вариантов входных данных
+- `httptest.NewServer` + `httptest.NewRecorder` для handler тестов
+- Mock-серверы через `httptest.NewServer` с `http.ServeMux` для имитации UniSet2 API
+- Файлы тестов: `*_test.go` в том же пакете, именование `Test<Function>_<Scenario>`
+
 ## JavaScript модули
 
 **ВАЖНО:** Файл `ui/static/js/app.js` генерируется автоматически из модулей в `ui/static/js/src/`. НЕ редактировать app.js напрямую!
@@ -58,8 +208,8 @@ make build
 |----------|-----------|---------------|
 | 00-09 | Core | Глобальный state, константы, SSE, control token, recording |
 | 10-19 | Base renderers | BaseObjectRenderer, mixins, простые рендереры |
-| 20-29 | Specific renderers | IONC, OPCUA, Modbus, UWSGate рендереры |
-| 30-39 | Components | LogViewer и другие самостоятельные компоненты |
+| 20-29 | Specific renderers | IONC, OPCUA, Modbus, UWSGate, UNetExchange, Launcher рендереры |
+| 30-39 | Components | LogViewer, Journal и другие самостоятельные компоненты |
 | 40-49 | Charts/Dialogs | Графики, модальные окна |
 | 50-59 | UI functions | Табы, секции, настройки, render-функции, sidebar groups |
 | 60-69 | Dashboard | Dashboard base, widgets, manager, dialogs |

@@ -21,7 +21,10 @@ import (
 	"github.com/pv/uniset-panel/internal/sm"
 	"github.com/pv/uniset-panel/internal/storage"
 	"github.com/pv/uniset-panel/internal/uniset"
-	"github.com/pv/uniset-panel/internal/uwsgate"
+)
+
+const (
+	defaultHistoryCount = 100 // кол-во записей истории переменной по умолчанию
 )
 
 type Handlers struct {
@@ -37,14 +40,13 @@ type Handlers struct {
 	ioncPoller      *ionc.Poller
 	modbusPoller    *modbus.Poller
 	opcuaPoller     *opcua.Poller
-	serverManager   *server.Manager  // менеджер нескольких серверов
+	serverMgr   *server.Manager  // менеджер нескольких серверов
 	controlsEnabled bool             // true if uniset-config was specified (IONC controls visible)
 	uiConfig        *config.UIConfig
 	logStreamConfig *config.LogStreamConfig
 	controlMgr      *ControlManager      // менеджер сессий контроля
 	recordingMgr    *recording.Manager   // менеджер записи истории
 	version         string               // версия приложения
-	uwsgatePoller   *uwsgate.Poller      // поллер UWebSocketGate
 	dashboardMgr    *dashboard.Manager   // менеджер серверных dashboard'ов
 	journalMgr      *journal.Manager     // менеджер журналов сообщений
 	launcherMgr     *launcher.Manager              // менеджер Launcher'ов
@@ -95,11 +97,6 @@ func (h *Handlers) SetOPCUAPoller(p *opcua.Poller) {
 	h.opcuaPoller = p
 }
 
-// SetUWSGatePoller устанавливает UWebSocketGate poller
-func (h *Handlers) SetUWSGatePoller(p *uwsgate.Poller) {
-	h.uwsgatePoller = p
-}
-
 // SetDashboardManager устанавливает менеджер dashboard'ов
 func (h *Handlers) SetDashboardManager(mgr *dashboard.Manager) {
 	h.dashboardMgr = mgr
@@ -112,7 +109,7 @@ func (h *Handlers) SetJournalManager(mgr *journal.Manager) {
 
 // SetServerManager устанавливает менеджер серверов
 func (h *Handlers) SetServerManager(mgr *server.Manager) {
-	h.serverManager = mgr
+	h.serverMgr = mgr
 }
 
 // SetControlsEnabled устанавливает доступность элементов управления IONC
@@ -174,11 +171,11 @@ func (h *Handlers) GetVersion(w http.ResponseWriter, r *http.Request) {
 // getUniSetClient возвращает UniSet2 client с учётом serverID (multi-server)
 // В multi-server режиме параметр serverID обязателен
 func (h *Handlers) getUniSetClient(serverID string) (*uniset.Client, int, string) {
-	if h.serverManager != nil {
+	if h.serverMgr != nil {
 		if serverID == "" {
 			return nil, http.StatusBadRequest, "server parameter is required"
 		}
-		if instance, ok := h.serverManager.GetServer(serverID); ok {
+		if instance, ok := h.serverMgr.GetServer(serverID); ok {
 			return instance.Client, 0, ""
 		}
 		return nil, http.StatusNotFound, "server not found"
@@ -247,12 +244,12 @@ func (h *Handlers) GetObjectData(w http.ResponseWriter, r *http.Request) {
 	var data *uniset.ObjectData
 	var err error
 
-	if h.serverManager != nil {
+	if h.serverMgr != nil {
 		if serverID == "" {
 			h.writeError(w, http.StatusBadRequest, "server parameter is required")
 			return
 		}
-		data, err = h.serverManager.GetObjectData(serverID, name)
+		data, err = h.serverMgr.GetObjectData(serverID, name)
 	} else if h.client != nil {
 		// Fallback на старый клиент (для совместимости)
 		data, err = h.client.GetObjectData(name)
@@ -301,8 +298,8 @@ func (h *Handlers) WatchObject(w http.ResponseWriter, r *http.Request) {
 
 	serverID := r.URL.Query().Get("server")
 
-	if h.serverManager != nil && serverID != "" {
-		if err := h.serverManager.Watch(serverID, name); err != nil {
+	if h.serverMgr != nil && serverID != "" {
+		if err := h.serverMgr.Watch(serverID, name); err != nil {
 			h.writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -324,8 +321,8 @@ func (h *Handlers) UnwatchObject(w http.ResponseWriter, r *http.Request) {
 
 	serverID := r.URL.Query().Get("server")
 
-	if h.serverManager != nil && serverID != "" {
-		if err := h.serverManager.Unwatch(serverID, name); err != nil {
+	if h.serverMgr != nil && serverID != "" {
+		if err := h.serverMgr.Unwatch(serverID, name); err != nil {
 			h.writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -347,7 +344,7 @@ func (h *Handlers) GetVariableHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	count := 100
+	count := defaultHistoryCount
 	if countStr := r.URL.Query().Get("count"); countStr != "" {
 		if c, err := strconv.Atoi(countStr); err == nil && c > 0 {
 			count = c

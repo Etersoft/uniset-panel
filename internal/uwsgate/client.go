@@ -13,6 +13,12 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const (
+	wsHandshakeTimeout  = 10 * time.Second // таймаут WebSocket handshake
+	wsReconnectBase     = time.Second      // начальный интервал reconnect
+	wsReconnectMax      = 30 * time.Second // максимальный интервал reconnect (exponential backoff cap)
+)
+
 // DataCallback функция обратного вызова для входящих данных
 type DataCallback func(data []SensorData)
 
@@ -64,9 +70,9 @@ func NewClient(baseURL string, logger *slog.Logger) *Client {
 	return &Client{
 		baseURL:              baseURL,
 		wsURL:                wsURL,
-		reconnectInterval:    time.Second,
-		maxReconnectInterval: 30 * time.Second,
-		currentReconnectInterval: time.Second,
+		reconnectInterval:    wsReconnectBase,
+		maxReconnectInterval: wsReconnectMax,
+		currentReconnectInterval: wsReconnectBase,
 		pendingSubscriptions: make([]string, 0),
 		logger:               logger.With("component", "uwsgate-client"),
 	}
@@ -116,7 +122,7 @@ func (c *Client) connect() error {
 	c.logger.Info("connecting to UWebSocketGate", "url", c.wsURL)
 
 	dialer := websocket.Dialer{
-		HandshakeTimeout: 10 * time.Second,
+		HandshakeTimeout: wsHandshakeTimeout,
 	}
 
 	conn, _, err := dialer.DialContext(c.ctx, u.String(), nil)

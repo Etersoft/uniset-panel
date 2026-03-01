@@ -9,17 +9,22 @@ import (
 	"github.com/pv/uniset-panel/internal/config"
 )
 
+const (
+	minPollIntervalMs = 1000   // минимальный интервал опроса (1 секунда)
+	maxPollIntervalMs = 300000 // максимальный интервал опроса (5 минут)
+)
+
 // ================== Server Management API ==================
 
 // GetServers возвращает список всех серверов со статусами
 // GET /api/servers
 func (h *Handlers) GetServers(w http.ResponseWriter, r *http.Request) {
-	if h.serverManager == nil {
+	if h.serverMgr == nil {
 		h.writeError(w, http.StatusServiceUnavailable, "server manager not initialized")
 		return
 	}
 
-	servers := h.serverManager.ListServers()
+	servers := h.serverMgr.ListServers()
 	h.writeJSON(w, map[string]interface{}{
 		"servers": servers,
 		"count":   len(servers),
@@ -33,7 +38,7 @@ func (h *Handlers) AddServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.serverManager == nil {
+	if h.serverMgr == nil {
 		h.writeError(w, http.StatusServiceUnavailable, "server manager not initialized")
 		return
 	}
@@ -65,7 +70,7 @@ func (h *Handlers) AddServer(w http.ResponseWriter, r *http.Request) {
 		cfg.ID = generateServerID(cfg.URL)
 	}
 
-	if err := h.serverManager.AddServer(cfg); err != nil {
+	if err := h.serverMgr.AddServer(cfg); err != nil {
 		h.writeError(w, http.StatusConflict, err.Error())
 		return
 	}
@@ -88,7 +93,7 @@ func (h *Handlers) RemoveServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.serverManager == nil {
+	if h.serverMgr == nil {
 		h.writeError(w, http.StatusServiceUnavailable, "server manager not initialized")
 		return
 	}
@@ -99,7 +104,7 @@ func (h *Handlers) RemoveServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.serverManager.RemoveServer(serverID); err != nil {
+	if err := h.serverMgr.RemoveServer(serverID); err != nil {
 		h.writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
@@ -113,7 +118,7 @@ func (h *Handlers) RemoveServer(w http.ResponseWriter, r *http.Request) {
 // GetServerStatus возвращает статус конкретного сервера
 // GET /api/servers/{id}/status
 func (h *Handlers) GetServerStatus(w http.ResponseWriter, r *http.Request) {
-	if h.serverManager == nil {
+	if h.serverMgr == nil {
 		h.writeError(w, http.StatusServiceUnavailable, "server manager not initialized")
 		return
 	}
@@ -124,7 +129,7 @@ func (h *Handlers) GetServerStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	instance, exists := h.serverManager.GetServer(serverID)
+	instance, exists := h.serverMgr.GetServer(serverID)
 	if !exists {
 		h.writeError(w, http.StatusNotFound, "server not found")
 		return
@@ -136,12 +141,12 @@ func (h *Handlers) GetServerStatus(w http.ResponseWriter, r *http.Request) {
 // GetAllObjectsWithServers возвращает объекты со всех серверов, сгруппированные по серверам
 // GET /api/all-objects
 func (h *Handlers) GetAllObjectsWithServers(w http.ResponseWriter, r *http.Request) {
-	if h.serverManager == nil {
+	if h.serverMgr == nil {
 		h.writeError(w, http.StatusServiceUnavailable, "server manager not initialized")
 		return
 	}
 
-	grouped, err := h.serverManager.GetAllObjectsGrouped()
+	grouped, err := h.serverMgr.GetAllObjectsGrouped()
 	if err != nil {
 		h.writeError(w, http.StatusBadGateway, err.Error())
 		return
@@ -162,7 +167,7 @@ func (h *Handlers) GetAllObjectsWithServers(w http.ResponseWriter, r *http.Reque
 // GetPollInterval возвращает текущий интервал опроса
 // GET /api/settings/poll-interval
 func (h *Handlers) GetPollInterval(w http.ResponseWriter, r *http.Request) {
-	if h.serverManager == nil {
+	if h.serverMgr == nil {
 		h.writeJSON(w, map[string]interface{}{
 			"interval": h.pollInterval.Milliseconds(),
 		})
@@ -170,7 +175,7 @@ func (h *Handlers) GetPollInterval(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.writeJSON(w, map[string]interface{}{
-		"interval": h.serverManager.GetPollInterval().Milliseconds(),
+		"interval": h.serverMgr.GetPollInterval().Milliseconds(),
 	})
 }
 
@@ -191,15 +196,15 @@ func (h *Handlers) SetPollInterval(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Валидация: минимум 1 секунда, максимум 5 минут
-	if req.Interval < 1000 || req.Interval > 300000 {
-		h.writeError(w, http.StatusBadRequest, "interval must be between 1000ms and 300000ms")
+	if req.Interval < minPollIntervalMs || req.Interval > maxPollIntervalMs {
+		h.writeError(w, http.StatusBadRequest, fmt.Sprintf("interval must be between %dms and %dms", minPollIntervalMs, maxPollIntervalMs))
 		return
 	}
 
 	interval := time.Duration(req.Interval) * time.Millisecond
 
-	if h.serverManager != nil {
-		h.serverManager.SetPollInterval(interval)
+	if h.serverMgr != nil {
+		h.serverMgr.SetPollInterval(interval)
 	}
 
 	h.pollInterval = interval

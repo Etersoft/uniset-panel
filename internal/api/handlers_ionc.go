@@ -6,6 +6,10 @@ import (
 	"strings"
 )
 
+const (
+	defaultIONCPageLimit = 100 // лимит пагинации IONC датчиков по умолчанию
+)
+
 // === IONC Request Types ===
 
 // IONCSetRequest запрос на установку значения датчика
@@ -40,7 +44,7 @@ func (h *Handlers) GetIONCSensors(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	offset, limit := getPagination(r, 100)
+	offset, limit := getPagination(r, defaultIONCPageLimit)
 	search := r.URL.Query().Get("search")
 	iotype := r.URL.Query().Get("iotype")
 

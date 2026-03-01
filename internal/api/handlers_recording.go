@@ -27,8 +27,8 @@ func (h *Handlers) StartRecording(w http.ResponseWriter, r *http.Request) {
 
 	// Принудительно сохраняем начальные значения всех подписанных датчиков
 	// (чтобы получить первую точку даже если значения не меняются)
-	if h.serverManager != nil {
-		go h.serverManager.ForceEmitAllPollers()
+	if h.serverMgr != nil {
+		go h.serverMgr.ForceEmitAllPollers()
 	}
 
 	h.writeJSON(w, map[string]interface{}{

@@ -53,7 +53,11 @@ func TestNewInstance(t *testing.T) {
 	}
 
 	store := storage.NewMemoryStorage()
-	instance := NewInstance(cfg, store, time.Second, time.Hour, "TestSupplier", 0, nil, nil, nil, nil, nil, nil)
+	instance := NewInstance(AppConfig{
+		Server: cfg, Storage: store,
+		PollInterval: time.Second, HistoryTTL: time.Hour,
+		Supplier: "TestSupplier",
+	})
 
 	if instance == nil {
 		t.Fatal("NewInstance returned nil")
@@ -87,7 +91,10 @@ func TestInstanceGetStatus(t *testing.T) {
 	}
 
 	store := storage.NewMemoryStorage()
-	instance := NewInstance(cfg, store, time.Second, time.Hour, "", 0, nil, nil, nil, nil, nil, nil)
+	instance := NewInstance(AppConfig{
+		Server: cfg, Storage: store,
+		PollInterval: time.Second, HistoryTTL: time.Hour,
+	})
 
 	status := instance.GetStatus()
 
@@ -119,7 +126,10 @@ func TestInstanceGetStatusWithEmptyName(t *testing.T) {
 	}
 
 	store := storage.NewMemoryStorage()
-	instance := NewInstance(cfg, store, time.Second, time.Hour, "", 0, nil, nil, nil, nil, nil, nil)
+	instance := NewInstance(AppConfig{
+		Server: cfg, Storage: store,
+		PollInterval: time.Second, HistoryTTL: time.Hour,
+	})
 
 	status := instance.GetStatus()
 
@@ -152,7 +162,11 @@ func TestInstanceUpdateStatus(t *testing.T) {
 		mu.Unlock()
 	}
 
-	instance := NewInstance(cfg, store, time.Second, time.Hour, "", 0, nil, nil, nil, nil, statusCallback, nil)
+	instance := NewInstance(AppConfig{
+		Server: cfg, Storage: store,
+		PollInterval: time.Second, HistoryTTL: time.Hour,
+		StatusCallback: statusCallback,
+	})
 
 	// Update status to connected
 	instance.UpdateStatus(true, nil)
@@ -187,7 +201,10 @@ func TestInstanceUpdateStatusWithError(t *testing.T) {
 	}
 
 	store := storage.NewMemoryStorage()
-	instance := NewInstance(cfg, store, time.Second, time.Hour, "", 0, nil, nil, nil, nil, nil, nil)
+	instance := NewInstance(AppConfig{
+		Server: cfg, Storage: store,
+		PollInterval: time.Second, HistoryTTL: time.Hour,
+	})
 
 	// First set connected
 	instance.UpdateStatus(true, nil)
@@ -217,7 +234,10 @@ func TestInstanceSetHealthInterval(t *testing.T) {
 	}
 
 	store := storage.NewMemoryStorage()
-	instance := NewInstance(cfg, store, time.Second, time.Hour, "", 0, nil, nil, nil, nil, nil, nil)
+	instance := NewInstance(AppConfig{
+		Server: cfg, Storage: store,
+		PollInterval: time.Second, HistoryTTL: time.Hour,
+	})
 
 	// Change health interval
 	instance.SetHealthInterval(5 * time.Second)
@@ -243,7 +263,10 @@ func TestInstanceSetObjectCount(t *testing.T) {
 	}
 
 	store := storage.NewMemoryStorage()
-	instance := NewInstance(cfg, store, time.Second, time.Hour, "", 0, nil, nil, nil, nil, nil, nil)
+	instance := NewInstance(AppConfig{
+		Server: cfg, Storage: store,
+		PollInterval: time.Second, HistoryTTL: time.Hour,
+	})
 
 	instance.SetObjectCount(42)
 
@@ -264,7 +287,10 @@ func TestInstanceGetObjects(t *testing.T) {
 	}
 
 	store := storage.NewMemoryStorage()
-	instance := NewInstance(cfg, store, time.Second, time.Hour, "", 0, nil, nil, nil, nil, nil, nil)
+	instance := NewInstance(AppConfig{
+		Server: cfg, Storage: store,
+		PollInterval: time.Second, HistoryTTL: time.Hour,
+	})
 
 	objects, err := instance.GetObjects()
 	if err != nil {
@@ -294,7 +320,10 @@ func TestInstanceGetObjectsError(t *testing.T) {
 	}
 
 	store := storage.NewMemoryStorage()
-	instance := NewInstance(cfg, store, time.Second, time.Hour, "", 0, nil, nil, nil, nil, nil, nil)
+	instance := NewInstance(AppConfig{
+		Server: cfg, Storage: store,
+		PollInterval: time.Second, HistoryTTL: time.Hour,
+	})
 
 	// First mark as connected
 	instance.UpdateStatus(true, nil)
@@ -322,7 +351,10 @@ func TestInstanceGetObjectData(t *testing.T) {
 	}
 
 	store := storage.NewMemoryStorage()
-	instance := NewInstance(cfg, store, time.Second, time.Hour, "", 0, nil, nil, nil, nil, nil, nil)
+	instance := NewInstance(AppConfig{
+		Server: cfg, Storage: store,
+		PollInterval: time.Second, HistoryTTL: time.Hour,
+	})
 
 	data, err := instance.GetObjectData("TestProc")
 	if err != nil {
@@ -351,7 +383,10 @@ func TestInstanceWatchUnwatch(t *testing.T) {
 	}
 
 	store := storage.NewMemoryStorage()
-	instance := NewInstance(cfg, store, time.Second, time.Hour, "", 0, nil, nil, nil, nil, nil, nil)
+	instance := NewInstance(AppConfig{
+		Server: cfg, Storage: store,
+		PollInterval: time.Second, HistoryTTL: time.Hour,
+	})
 
 	// Watch should not panic
 	instance.Watch("TestProc")
@@ -371,7 +406,10 @@ func TestInstanceStartStop(t *testing.T) {
 	}
 
 	store := storage.NewMemoryStorage()
-	instance := NewInstance(cfg, store, 100*time.Millisecond, time.Hour, "", 0, nil, nil, nil, nil, nil, nil)
+	instance := NewInstance(AppConfig{
+		Server: cfg, Storage: store,
+		PollInterval: 100 * time.Millisecond, HistoryTTL: time.Hour,
+	})
 
 	// Start should not panic
 	instance.Start()
@@ -415,7 +453,11 @@ func TestInstanceHealthCheckUpdatesStatus(t *testing.T) {
 		mu.Unlock()
 	}
 
-	instance := NewInstance(cfg, store, 50*time.Millisecond, time.Hour, "", 0, nil, nil, nil, nil, statusCallback, nil)
+	instance := NewInstance(AppConfig{
+		Server: cfg, Storage: store,
+		PollInterval: 50 * time.Millisecond, HistoryTTL: time.Hour,
+		StatusCallback: statusCallback,
+	})
 
 	// Start instance to run health check
 	instance.Start()
@@ -462,7 +504,11 @@ func TestInstanceObjectsCallbackOnReconnect(t *testing.T) {
 		mu.Unlock()
 	}
 
-	instance := NewInstance(cfg, store, 50*time.Millisecond, time.Hour, "", 0, nil, nil, nil, nil, nil, objectsCallback)
+	instance := NewInstance(AppConfig{
+		Server: cfg, Storage: store,
+		PollInterval: 50 * time.Millisecond, HistoryTTL: time.Hour,
+		ObjectsCallback: objectsCallback,
+	})
 
 	// Start instance - this triggers health check which should call objectsCallback on first connect
 	instance.Start()
@@ -505,7 +551,11 @@ func TestInstanceStatusCallbackOnlyOnChange(t *testing.T) {
 		mu.Unlock()
 	}
 
-	instance := NewInstance(cfg, store, time.Second, time.Hour, "", 0, nil, nil, nil, nil, statusCallback, nil)
+	instance := NewInstance(AppConfig{
+		Server: cfg, Storage: store,
+		PollInterval: time.Second, HistoryTTL: time.Hour,
+		StatusCallback: statusCallback,
+	})
 
 	// Update status multiple times with same value
 	instance.UpdateStatus(true, nil)
@@ -580,7 +630,11 @@ func TestInstanceDisconnectReconnectEvents(t *testing.T) {
 	}
 
 	healthInterval := 50 * time.Millisecond
-	instance := NewInstance(cfg, store, healthInterval, time.Hour, "", 0, nil, nil, nil, nil, statusCallback, nil)
+	instance := NewInstance(AppConfig{
+		Server: cfg, Storage: store,
+		PollInterval: healthInterval, HistoryTTL: time.Hour,
+		StatusCallback: statusCallback,
+	})
 
 	instance.Start()
 	defer instance.Stop()
@@ -620,7 +674,11 @@ func TestInstanceDisconnectEventContainsError(t *testing.T) {
 		events <- statusEvent{connected: connected, lastError: lastError}
 	}
 
-	instance := NewInstance(cfg, store, 50*time.Millisecond, time.Hour, "", 0, nil, nil, nil, nil, statusCallback, nil)
+	instance := NewInstance(AppConfig{
+		Server: cfg, Storage: store,
+		PollInterval: 50 * time.Millisecond, HistoryTTL: time.Hour,
+		StatusCallback: statusCallback,
+	})
 
 	instance.Start()
 	defer instance.Stop()
@@ -658,7 +716,11 @@ func TestInstanceNoSpuriousEventsWhileStable(t *testing.T) {
 		callCount.Add(1)
 	}
 
-	instance := NewInstance(cfg, store, 50*time.Millisecond, time.Hour, "", 0, nil, nil, nil, nil, statusCallback, nil)
+	instance := NewInstance(AppConfig{
+		Server: cfg, Storage: store,
+		PollInterval: 50 * time.Millisecond, HistoryTTL: time.Hour,
+		StatusCallback: statusCallback,
+	})
 
 	instance.Start()
 

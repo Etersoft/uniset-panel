@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/pv/uniset-panel/internal/logger"
+	"log/slog"
 )
 
 type Server struct {
@@ -203,11 +203,11 @@ func (s *Server) setupRoutes(staticFS fs.FS) {
 	hasExternalFiles := s.jsFile != "" || s.cssFile != ""
 
 	if s.jsFile != "" {
-		logger.Info("Using external JS file", "path", s.jsFile)
+		slog.Info("Using external JS file", "path", s.jsFile)
 		s.mux.HandleFunc("GET /static/js/app.js", func(w http.ResponseWriter, r *http.Request) {
 			content, err := os.ReadFile(s.jsFile)
 			if err != nil {
-				logger.Error("Failed to read external JS file", "path", s.jsFile, "error", err)
+				slog.Error("Failed to read external JS file", "path", s.jsFile, "error", err)
 				http.Error(w, "JS file not found", http.StatusInternalServerError)
 				return
 			}
@@ -218,11 +218,11 @@ func (s *Server) setupRoutes(staticFS fs.FS) {
 	}
 
 	if s.cssFile != "" {
-		logger.Info("Using external CSS file", "path", s.cssFile)
+		slog.Info("Using external CSS file", "path", s.cssFile)
 		s.mux.HandleFunc("GET /static/css/style.css", func(w http.ResponseWriter, r *http.Request) {
 			content, err := os.ReadFile(s.cssFile)
 			if err != nil {
-				logger.Error("Failed to read external CSS file", "path", s.cssFile, "error", err)
+				slog.Error("Failed to read external CSS file", "path", s.cssFile, "error", err)
 				http.Error(w, "CSS file not found", http.StatusInternalServerError)
 				return
 			}

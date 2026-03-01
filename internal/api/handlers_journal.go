@@ -1,42 +1,55 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"log/slog"
+
 	"github.com/pv/uniset-panel/internal/journal"
-	"github.com/pv/uniset-panel/internal/logger"
+)
+
+const (
+	defaultJournalLimit = 100  // лимит записей журнала по умолчанию
+	maxJournalLimit     = 1000 // максимальный лимит записей журнала
 )
 
 // GetJournals возвращает список подключенных журналов
 // GET /api/journals
 func (h *Handlers) GetJournals(w http.ResponseWriter, r *http.Request) {
 	if h.journalMgr == nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]journal.JournalInfo{})
+		h.writeJSON(w, []journal.JournalInfo{})
 		return
 	}
 
-	infos := h.journalMgr.GetAllInfos()
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(infos)
+	h.writeJSON(w, h.journalMgr.GetAllInfos())
 }
 
-// GetJournalMessages возвращает сообщения из журнала с пагинацией и фильтрами
-// GET /api/journals/{id}/messages
-func (h *Handlers) GetJournalMessages(w http.ResponseWriter, r *http.Request) {
+// requireJournalClient returns journal client for the request.
+// Returns nil and false if unavailable (error already written).
+func (h *Handlers) requireJournalClient(w http.ResponseWriter, r *http.Request) (*journal.Client, string, bool) {
 	if h.journalMgr == nil {
-		http.Error(w, "journals not configured", http.StatusNotFound)
-		return
+		h.writeError(w, http.StatusNotFound, "journals not configured")
+		return nil, "", false
 	}
 
 	id := r.PathValue("id")
 	client := h.journalMgr.GetClient(id)
 	if client == nil {
-		http.Error(w, "journal not found", http.StatusNotFound)
+		h.writeError(w, http.StatusNotFound, "journal not found")
+		return nil, "", false
+	}
+
+	return client, id, true
+}
+
+// GetJournalMessages возвращает сообщения из журнала с пагинацией и фильтрами
+// GET /api/journals/{id}/messages
+func (h *Handlers) GetJournalMessages(w http.ResponseWriter, r *http.Request) {
+	client, id, ok := h.requireJournalClient(w, r)
+	if !ok {
 		return
 	}
 
@@ -75,10 +88,10 @@ func (h *Handlers) GetJournalMessages(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if params.Limit == 0 {
-		params.Limit = 100 // default
+		params.Limit = defaultJournalLimit
 	}
-	if params.Limit > 1000 {
-		params.Limit = 1000 // max
+	if params.Limit > maxJournalLimit {
+		params.Limit = maxJournalLimit
 	}
 
 	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
@@ -90,67 +103,50 @@ func (h *Handlers) GetJournalMessages(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	resp, err := client.Query(ctx, params)
 	if err != nil {
-		logger.Error("failed to query journal", "id", id, "error", err)
-		http.Error(w, "query failed: "+err.Error(), http.StatusInternalServerError)
+		slog.Error("failed to query journal", "id", id, "error", err)
+		h.writeError(w, http.StatusInternalServerError, "query failed: "+err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	h.writeJSON(w, resp)
 }
 
 // GetJournalMTypes возвращает список уникальных типов сообщений
 // GET /api/journals/{id}/mtypes
 func (h *Handlers) GetJournalMTypes(w http.ResponseWriter, r *http.Request) {
-	if h.journalMgr == nil {
-		http.Error(w, "journals not configured", http.StatusNotFound)
-		return
-	}
-
-	id := r.PathValue("id")
-	client := h.journalMgr.GetClient(id)
-	if client == nil {
-		http.Error(w, "journal not found", http.StatusNotFound)
+	client, id, ok := h.requireJournalClient(w, r)
+	if !ok {
 		return
 	}
 
 	ctx := r.Context()
 	types, err := client.GetMTypes(ctx)
 	if err != nil {
-		logger.Error("failed to get mtypes", "id", id, "error", err)
-		http.Error(w, "query failed: "+err.Error(), http.StatusInternalServerError)
+		slog.Error("failed to get mtypes", "id", id, "error", err)
+		h.writeError(w, http.StatusInternalServerError, "query failed: "+err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(types)
+	h.writeJSON(w, types)
 }
 
 // GetJournalMGroups возвращает список уникальных групп сообщений
 // GET /api/journals/{id}/mgroups
 func (h *Handlers) GetJournalMGroups(w http.ResponseWriter, r *http.Request) {
-	if h.journalMgr == nil {
-		http.Error(w, "journals not configured", http.StatusNotFound)
-		return
-	}
-
-	id := r.PathValue("id")
-	client := h.journalMgr.GetClient(id)
-	if client == nil {
-		http.Error(w, "journal not found", http.StatusNotFound)
+	client, id, ok := h.requireJournalClient(w, r)
+	if !ok {
 		return
 	}
 
 	ctx := r.Context()
 	groups, err := client.GetMGroups(ctx)
 	if err != nil {
-		logger.Error("failed to get mgroups", "id", id, "error", err)
-		http.Error(w, "query failed: "+err.Error(), http.StatusInternalServerError)
+		slog.Error("failed to get mgroups", "id", id, "error", err)
+		h.writeError(w, http.StatusInternalServerError, "query failed: "+err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(groups)
+	h.writeJSON(w, groups)
 }
 
 // parseTime парсит время из строки (RFC3339 или Unix timestamp)

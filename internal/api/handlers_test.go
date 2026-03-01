@@ -899,7 +899,7 @@ func TestBroadcastSensorUpdate(t *testing.T) {
 	// Check that client received the event
 	select {
 	case event := <-client.events:
-		if event.Type != "sensor_data" {
+		if event.Type != EventSensorData {
 			t.Errorf("expected event type sensor_data, got %s", event.Type)
 		}
 		if event.ObjectName != "TestProc" {
@@ -1447,7 +1447,7 @@ func createMockSensorConfig() *sensorconfig.SensorConfig {
 }
 
 // === Multi-Server LogServer Tests ===
-// These tests verify that HandleLogServerStream correctly uses serverManager
+// These tests verify that HandleLogServerStream correctly uses serverMgr
 // to fetch object data from the specified server when ?server= parameter is provided.
 
 // createMockServerWithLogServer creates a mock UniSet server that returns
@@ -1478,8 +1478,8 @@ func createMockServerWithLogServer(logServerHost string, logServerPort int) *htt
 }
 
 // TestHandleLogServerStream_WithServerManager_UsesCorrectServer verifies that
-// HandleLogServerStream uses serverManager to get object data when server param is provided.
-// This test would have caught the bug where h.client was used instead of serverManager.
+// HandleLogServerStream uses serverMgr to get object data when server param is provided.
+// This test would have caught the bug where h.client was used instead of serverMgr.
 func TestHandleLogServerStream_WithServerManager_UsesCorrectServer(t *testing.T) {
 	// Create two mock servers with different LogServer configurations
 	server1 := createMockServerWithLogServer("logserver1.example.com", 5001)
