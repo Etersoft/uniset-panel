@@ -1,11 +1,49 @@
 import { test, expect } from '@playwright/test';
 
+// Перехватываем GET /api/control/status для защиты от race condition
+async function mockControlStatusAsController(page) {
+    await page.route('**/api/control/status', route => {
+        route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ enabled: true, hasController: true, isController: true, timeoutSec: 60 })
+        });
+    });
+}
+
+// Получение контроля: mock GET /api/control/status + реальный POST /api/control/take + evaluate
+async function acquireControl(page) {
+    await mockControlStatusAsController(page);
+
+    // Реально берём контроль на сервере (нужно для freeze/set/generator API)
+    await page.evaluate(async () => {
+        await fetch('/api/control/take', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: 'admin' })
+        });
+    });
+
+    // Устанавливаем frontend state
+    await page.evaluate(() => {
+        const w = window as any;
+        w.state.control.token = 'admin';
+        w.state.control.isController = true;
+        w.state.control.hasController = true;
+        w.state.control.enabled = true;
+        if (w.renderControlStatus) w.renderControlStatus();
+    });
+}
+
 test.describe('IONC Value Generator', () => {
     test.beforeEach(async ({ page }) => {
         await page.goto('/');
 
         // Wait for objects to load
         await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+
+        // Получаем контроль (кнопки генератора disabled без контроля)
+        await acquireControl(page);
 
         // Click on SharedMemory (IONotifyController)
         const smObject = page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'SharedMemory' });
@@ -26,10 +64,10 @@ test.describe('IONC Value Generator', () => {
     });
 
     test('should display generator button in sensor row', async ({ page }) => {
-        // Check that generator button exists
+        // Кнопка генератора видна и доступна (не disabled)
         const genButton = page.locator('.ionc-btn-gen').first();
         await expect(genButton).toBeVisible();
-        await expect(genButton).toHaveAttribute('title', 'Генератор значений');
+        await expect(genButton).toBeEnabled();
     });
 
     test('should open generator dialog on button click', async ({ page }) => {

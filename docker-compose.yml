@@ -148,10 +148,14 @@ services:
       --launcher-url http://admin@mock-launcher:8111
       --js /app/ext/app.js
       --css /app/ext/style.css
+      --control-token admin
+      --recording-path /tmp/recording.db
+      --dashboards-dir /app/dashboards
     volumes:
       - ./config:/app/config:ro
       - ./ui/static/js/app.js:/app/ext/app.js:ro
       - ./ui/static/css/style.css:/app/ext/style.css:ro
+      - ./examples/dashboards:/app/dashboards:ro
     ports:
       - "8000:8000"
     depends_on:

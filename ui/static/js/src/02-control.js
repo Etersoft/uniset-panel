@@ -84,7 +84,7 @@ function updateAllControlButtons() {
     // IONC кнопки
     document.querySelectorAll('.ionc-btn-set, .ionc-btn-freeze, .ionc-btn-unfreeze, .ionc-btn-gen, .ionc-btn-gen-stop').forEach(btn => {
         // Не трогаем readonly сенсоры - они всегда disabled
-        if (btn.closest('tr')?.classList.contains('readonly')) return;
+        if (btn.closest('tr')?.classList.contains('ionc-sensor-readonly')) return;
         btn.disabled = !canCtrl;
         if (!canCtrl) {
             btn.title = 'Read-only mode - take control first';

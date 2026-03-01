@@ -1,5 +1,40 @@
 import { test, expect } from '@playwright/test';
 
+// Перехватываем GET /api/control/status для защиты от race condition
+async function mockControlStatusAsController(page) {
+    await page.route('**/api/control/status', route => {
+        route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ enabled: true, hasController: true, isController: true, timeoutSec: 60 })
+        });
+    });
+}
+
+// Получение контроля: mock GET /api/control/status + реальный POST /api/control/take + evaluate
+async function acquireControl(page) {
+    await mockControlStatusAsController(page);
+
+    // Реально берём контроль на сервере (нужно для freeze/set/unfreeze API)
+    await page.evaluate(async () => {
+        await fetch('/api/control/take', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: 'admin' })
+        });
+    });
+
+    // Устанавливаем frontend state
+    await page.evaluate(() => {
+        const w = window as any;
+        w.state.control.token = 'admin';
+        w.state.control.isController = true;
+        w.state.control.hasController = true;
+        w.state.control.enabled = true;
+        if (w.renderControlStatus) w.renderControlStatus();
+    });
+}
+
 test.describe('IONotifyController (SharedMemory)', () => {
 
   // Проверяем наличие SharedMemory и пропускаем тесты если его нет
@@ -14,6 +49,9 @@ test.describe('IONotifyController (SharedMemory)', () => {
     await page.reload();
 
     await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+
+    // Получаем контроль (freeze/set/unfreeze кнопки disabled без контроля)
+    await acquireControl(page);
 
     // Проверяем есть ли SharedMemory в списке
     const sharedMemory = page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'SharedMemory' });
@@ -1190,13 +1228,14 @@ test.describe('IONotifyController (SharedMemory)', () => {
     const updatedRow = page.locator(`tr[data-sensor-id="${sensorId}"]`);
     const frozenValueEl = updatedRow.locator('.ionc-frozen-value');
 
-    // Если real_value отличается от frozen value, должен показываться формат
-    const hasFrozenFormat = await frozenValueEl.count() > 0;
+    // Ждём появления frozen-value элемента (SSE обновление может прийти с задержкой)
+    const hasFrozenFormat = await frozenValueEl.count({ timeout: 5000 }).catch(() => 0) > 0
+      || await frozenValueEl.isVisible({ timeout: 5000 }).catch(() => false);
 
     if (hasFrozenFormat) {
-      // Проверяем что замороженное значение отображается
-      await expect(frozenValueEl).toContainText(freezeValue);
-      await expect(frozenValueEl).toContainText('❄');
+      // Проверяем что замороженное значение отображается (с timeout для SSE)
+      await expect(frozenValueEl).toContainText(freezeValue, { timeout: 10000 });
+      await expect(frozenValueEl).toContainText('❄', { timeout: 5000 });
 
       // Проверяем наличие стрелки
       const arrow = updatedRow.locator('.ionc-frozen-arrow');

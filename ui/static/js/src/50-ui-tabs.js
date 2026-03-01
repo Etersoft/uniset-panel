@@ -376,6 +376,10 @@ function createTab(tabKey, displayName, rendererInfo, initialData, serverId, ser
     if (initialData) {
         renderer.update(initialData);
     }
+
+    // Обновляем состояние кнопок контроля (disabled/enabled)
+    // для только что созданных элементов
+    updateAllControlButtons();
 }
 
 function activateTab(name) {

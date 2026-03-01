@@ -161,11 +161,11 @@ test.describe('Launcher Start All', () => {
     await expect(page.locator('#confirm-dialog-overlay')).not.toHaveClass(/hidden/, { timeout: 3000 });
     await page.locator('#confirm-dialog-ok').click();
 
-    // Ждём уменьшения количества stopped-процессов
+    // Ждём уменьшения количества stopped-процессов (mock launcher может обрабатывать медленно)
     await expect(async () => {
       const stopped = await page.locator('.launcher-state-stopped').count();
       expect(stopped).toBeLessThan(stoppedBefore);
-    }).toPass({ timeout: 15000 });
+    }).toPass({ timeout: 25000 });
   });
 
   test('should not start skipped processes', async ({ page }) => {

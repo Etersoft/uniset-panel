@@ -353,7 +353,7 @@ function updateAllControlButtons() {
     // IONC кнопки
     document.querySelectorAll('.ionc-btn-set, .ionc-btn-freeze, .ionc-btn-unfreeze, .ionc-btn-gen, .ionc-btn-gen-stop').forEach(btn => {
         // Не трогаем readonly сенсоры - они всегда disabled
-        if (btn.closest('tr')?.classList.contains('readonly')) return;
+        if (btn.closest('tr')?.classList.contains('ionc-sensor-readonly')) return;
         btn.disabled = !canCtrl;
         if (!canCtrl) {
             btn.title = 'Read-only mode - take control first';
@@ -1813,11 +1813,18 @@ const ParamsAccessibilityMixin = {
         const enabled = val === true || val === 1 || val === undefined;
         const explicitlyDisabled = val === false || val === 0;
 
-        // Заблокировать кнопку "Apply"
+        // Заблокировать кнопку "Apply" (учитываем и httpEnabledSetParams, и control token)
         const saveBtn = document.getElementById(`${prefix}-params-save-${this.objectName}`);
         if (saveBtn) {
-            saveBtn.disabled = explicitlyDisabled;
-            saveBtn.title = explicitlyDisabled ? 'Parameter modification disabled' : '';
+            const blocked = explicitlyDisabled || !canControl();
+            saveBtn.disabled = blocked;
+            if (explicitlyDisabled) {
+                saveBtn.title = 'Parameter modification disabled';
+            } else if (!canControl()) {
+                saveBtn.title = 'Read-only mode - take control first';
+            } else {
+                saveBtn.title = '';
+            }
         }
 
         // Заблокировать все input в таблице параметров
@@ -1825,7 +1832,7 @@ const ParamsAccessibilityMixin = {
         if (paramsTable) {
             const inputs = paramsTable.querySelectorAll('input, select');
             inputs.forEach(input => {
-                input.disabled = explicitlyDisabled;
+                input.disabled = explicitlyDisabled || !canControl();
             });
         }
 
@@ -13800,6 +13807,10 @@ function createTab(tabKey, displayName, rendererInfo, initialData, serverId, ser
     if (initialData) {
         renderer.update(initialData);
     }
+
+    // Обновляем состояние кнопок контроля (disabled/enabled)
+    // для только что созданных элементов
+    updateAllControlButtons();
 }
 
 function activateTab(name) {
