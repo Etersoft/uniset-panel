@@ -65,7 +65,7 @@ class LauncherRenderer {
         this.loadStatus();
 
         // Авто-обновление каждые 5 секунд
-        this.autoRefreshInterval = setInterval(() => this.loadStatus(), 5000);
+        this.autoRefreshInterval = setInterval(() => this.loadStatus(), LAUNCHER_AUTO_REFRESH_INTERVAL);
     }
 
     attachTakeHandler() {
@@ -382,7 +382,7 @@ class LauncherRenderer {
                         }
                     }
 
-                    setTimeout(() => this.loadStatus(), 1000);
+                    setTimeout(() => this.loadStatus(), LAUNCHER_ACTION_REFRESH_DELAY);
                 } catch (err) {
                     console.error(`Launcher action ${action} failed:`, err);
                     await showConfirmDialog('Error', err.message, 'OK');
@@ -444,7 +444,7 @@ class LauncherRenderer {
                         }
                     }
 
-                    setTimeout(() => this.loadStatus(), 1500);
+                    setTimeout(() => this.loadStatus(), LAUNCHER_BULK_ACTION_REFRESH_DELAY);
                 } catch (err) {
                     console.error(`Launcher bulk ${bulkAction} failed:`, err);
                     await showConfirmDialog('Error', `${label} failed: ${err.message}`, 'OK');

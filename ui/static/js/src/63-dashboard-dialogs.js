@@ -470,7 +470,7 @@ function addSensorToDashboard(sensorName, sensorLabel, dashboardName, widgetType
         const newDashboard = {
             version: DASHBOARD_VERSION,
             meta: { name: dashboardName, description: '' },
-            grid: { cols: GRID_COLS, rowHeight: GRID_ROW_HEIGHT, gap: GRID_GAP },
+            grid: { cols: DASHBOARD_GRID_COLS, rowHeight: DASHBOARD_GRID_ROW_HEIGHT, gap: DASHBOARD_GRID_GAP },
             widgets: []
         };
         dashboardState.dashboards.set(dashboardName, newDashboard);

@@ -258,12 +258,7 @@ function renderSensorTable() {
 }
 
 // Экранирование HTML
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
+// escapeHtml() определена в 06-utils.js
 
 // Подписаться на внешние датчики через API
 // tabKey - ключ вкладки (serverId:objectName)

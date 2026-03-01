@@ -36,7 +36,7 @@ class LogViewer {
         this.connected = false;
         this.isActive = false; // true если идёт попытка подключения или переподключения
         this.lines = [];
-        this.maxLines = 10000;
+        this.maxLines = MAX_LOG_LINES;
         this.autoScroll = true;
         this.currentLevel = 0; // 0 = по умолчанию (не отправлять setLevel)
         this.selectedLevels = new Set(); // выбранные уровни логов
@@ -45,7 +45,7 @@ class LogViewer {
         this.filterRegex = true; // использовать regexp
         this.filterCase = false; // учитывать регистр
         this.filterOnlyMatches = false; // показывать только совпадения
-        this.height = 200;
+        this.height = LOGVIEWER_DEFAULT_HEIGHT;
         this.hasReceivedLogs = false; // Получали ли логи
         this.matchCount = 0; // количество совпадений
         this.paused = false; // пауза автопрокрутки
@@ -520,7 +520,7 @@ class LogViewer {
         const onMouseMove = (e) => {
             if (!isResizing) return;
             const delta = e.clientY - startY;
-            const newHeight = Math.max(100, Math.min(600, startHeight + delta));
+            const newHeight = Math.max(LOGVIEWER_MIN_HEIGHT, Math.min(LOGVIEWER_MAX_HEIGHT, startHeight + delta));
             logContainer.style.height = `${newHeight}px`;
             this.height = newHeight;
         };

@@ -25,13 +25,13 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         // Virtual scroll properties (как в OPCUA)
         this.allSensors = [];           // Все загруженные сенсоры
-        this.rowHeight = 32;            // Высота строки (px)
-        this.bufferRows = 10;           // Буфер строк выше/ниже viewport
+        this.rowHeight = DEFAULT_ROW_HEIGHT; // Высота строки (px)
+        this.bufferRows = DEFAULT_BUFFER_ROWS; // Буфер строк выше/ниже viewport
         this.startIndex = 0;            // Первая видимая строка
         this.endIndex = 0;              // Последняя видимая строка
 
         // Infinite scroll properties
-        this.chunkSize = 200;           // Сенсоров за запрос
+        this.chunkSize = VIRTUAL_SCROLL_CHUNK_SIZE; // Сенсоров за запрос
         this.hasMore = true;            // Есть ли ещё данные
         this.isLoadingChunk = false;    // Идёт загрузка
 
@@ -478,7 +478,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                     clickTimer = setTimeout(() => {
                         clickTimer = null;
                         this.showFreezeDialog(sensorId);
-                    }, 250);
+                    }, DOUBLE_CLICK_THRESHOLD);
                 }
             });
         });
@@ -495,7 +495,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                     clickTimer = setTimeout(() => {
                         clickTimer = null;
                         this.showUnfreezeDialog(sensorId);
-                    }, 250);
+                    }, DOUBLE_CLICK_THRESHOLD);
                 }
             });
         });
@@ -1596,7 +1596,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                     clickTimer = setTimeout(() => {
                         clickTimer = null;
                         this.showFreezeDialog(sensorId);
-                    }, 250);
+                    }, DOUBLE_CLICK_THRESHOLD);
                 }
             });
         }
@@ -1616,7 +1616,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                     clickTimer = setTimeout(() => {
                         clickTimer = null;
                         this.showUnfreezeDialog(sensorId);
-                    }, 250);
+                    }, DOUBLE_CLICK_THRESHOLD);
                 }
             });
         }
@@ -1819,13 +1819,13 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         // Очищаем очередь
         this.pendingUpdates.clear();
 
-        // Убираем анимацию через 500ms
+        // Убираем анимацию через ANIMATION_REMOVAL_DELAY
         setTimeout(() => {
             const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
             if (panel) {
                 panel.querySelectorAll('.ionc-value-updated').forEach(el => el.classList.remove('ionc-value-updated'));
             }
-        }, 500);
+        }, ANIMATION_REMOVAL_DELAY);
     }
 
     // Подписка на SSE обновления для видимых датчиков (использует SSESubscriptionMixin)

@@ -7,6 +7,8 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         super(objectName, tabKey);
         this.status = null;
         this.params = {};
+        this.paramsApiPath = 'opcua';
+        this.paramsPrefix = 'opcuasrv';
         this.paramNames = [
             'updateTime_msec',
             'httpEnabledSetParams'
@@ -36,6 +38,10 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         this.filter = '';
         this.typeFilter = 'all';
         this.filterDebounce = null;
+
+        // Pin management
+        this.pinStorageKey = 'uniset-panel-opcuasrv-pinned';
+        this.renderAfterPinChange = this.renderVisibleSensors;
 
         // Sensor map for chart support
         this.sensorMap = new Map();
@@ -89,15 +95,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     bindEvents() {
-        const refreshParams = document.getElementById(`opcuasrv-params-refresh-${this.objectName}`);
-        if (refreshParams) {
-            refreshParams.addEventListener('click', () => this.loadParams());
-        }
-
-        const saveParams = document.getElementById(`opcuasrv-params-save-${this.objectName}`);
-        if (saveParams) {
-            saveParams.addEventListener('click', () => this.saveParams());
-        }
+        this.setupParamsListeners();
 
         // Используем методы из FilterMixin
         this.setupFilterListeners(
@@ -291,19 +289,6 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         this.handleLogServer(status.LogServer);
     }
 
-    async loadParams() {
-        try {
-            const query = this.paramNames.map(n => `name=${encodeURIComponent(n)}`).join('&');
-            const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/opcua/params?${query}`);
-            this.params = data.params || {};
-            this.renderParams();
-            this.updateParamsAccessibility('opcuasrv');
-            this.setNote(`opcuasrv-params-note-${this.objectName}`, '');
-        } catch (err) {
-            this.setNote(`opcuasrv-params-note-${this.objectName}`, err.message, true);
-        }
-    }
-
     renderParams() {
         const tbody = document.getElementById(`opcuasrv-params-${this.objectName}`);
         if (!tbody) return;
@@ -324,45 +309,6 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
             `;
             tbody.appendChild(tr);
         });
-    }
-
-    async saveParams() {
-        const tbody = document.getElementById(`opcuasrv-params-${this.objectName}`);
-        if (!tbody) return;
-
-        const inputs = tbody.querySelectorAll('.opcua-param-input');
-        const changed = {};
-        inputs.forEach(input => {
-            const name = input.dataset.name;
-            const current = this.params[name];
-            const newValue = input.value;
-            if (newValue === '' || newValue === null) return;
-            if (String(current) !== newValue) {
-                changed[name] = newValue;
-            }
-        });
-
-        if (Object.keys(changed).length === 0) {
-            this.setNote(`opcuasrv-params-note-${this.objectName}`, 'No changes');
-            return;
-        }
-
-        try {
-            const data = await this.fetchJSON(
-                `/api/objects/${encodeURIComponent(this.objectName)}/opcua/params`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ params: changed })
-                }
-            );
-            this.params = { ...this.params, ...(data.updated || {}) };
-            this.renderParams();
-            this.setNote(`opcuasrv-params-note-${this.objectName}`, 'Parameters applied');
-            this.loadStatus();
-        } catch (err) {
-            this.setNote(`opcuasrv-params-note-${this.objectName}`, err.message, true);
-        }
     }
 
     async loadSensors() {
@@ -420,7 +366,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
     // Загружает закреплённые датчики, если они не в текущем списке
     async loadPinnedSensors() {
-        const pinnedIds = this.getPinnedSensors();
+        const pinnedIds = this.getPinned();
         if (pinnedIds.size === 0) return;
 
         // Найти ID, которых нет в загруженных датчиках
@@ -527,7 +473,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         if (!tbody || !spacer) return;
 
         // Получаем закрепленные датчики
-        const pinnedSensors = this.getPinnedSensors();
+        const pinnedSensors = this.getPinned();
         const hasPinned = pinnedSensors.size > 0;
 
         // Показываем/скрываем кнопку "снять все"
@@ -602,12 +548,12 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
         // Bind pin toggle events
         tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => this.toggleSensorPin(parseInt(toggle.dataset.id)));
+            toggle.addEventListener('click', () => this.togglePin(parseInt(toggle.dataset.id)));
         });
 
         // Обработчик кнопки "снять все"
         if (unpinBtn) {
-            unpinBtn.onclick = () => this.unpinAllSensors();
+            unpinBtn.onclick = () => this.unpinAll();
         }
     }
 
@@ -723,21 +669,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     // Pin management для датчиков
-    getPinnedSensors() {
-        return this.getPinnedItems('uniset-panel-opcuasrv-pinned');
-    }
-
-    savePinnedSensors(pinnedSet) {
-        this.savePinnedItems('uniset-panel-opcuasrv-pinned', pinnedSet);
-    }
-
-    toggleSensorPin(sensorId) {
-        this.toggleItemPin('uniset-panel-opcuasrv-pinned', sensorId, this.renderVisibleSensors);
-    }
-
-    unpinAllSensors() {
-        this.unpinAllItems('uniset-panel-opcuasrv-pinned', this.renderVisibleSensors);
-    }
+    // Pin management: pinStorageKey и renderAfterPinChange заданы в конструкторе
 
     // Перерисовка после смены сортировки
     renderAfterSort() {
@@ -771,6 +703,7 @@ applyMixin(OPCUAServerRenderer, SSESubscriptionMixin);
 applyMixin(OPCUAServerRenderer, ResizableSectionMixin);
 applyMixin(OPCUAServerRenderer, FilterMixin);
 applyMixin(OPCUAServerRenderer, ParamsAccessibilityMixin);
+applyMixin(OPCUAServerRenderer, ParamsManagerMixin);
 applyMixin(OPCUAServerRenderer, ItemCounterMixin);
 applyMixin(OPCUAServerRenderer, SectionHeightMixin);
 applyMixin(OPCUAServerRenderer, PinManagementMixin);

@@ -16,11 +16,11 @@ const objectRenderers = new Map();
 const VirtualScrollMixin = {
     // Инициализация свойств виртуального скролла
     initVirtualScrollProps() {
-        this.rowHeight = 32;
-        this.bufferRows = 10;
+        this.rowHeight = DEFAULT_ROW_HEIGHT;
+        this.bufferRows = DEFAULT_BUFFER_ROWS;
         this.startIndex = 0;
         this.endIndex = 0;
-        this.chunkSize = 200;
+        this.chunkSize = VIRTUAL_SCROLL_CHUNK_SIZE;
         this.hasMore = true;
         this.isLoadingChunk = false;
     },
@@ -67,9 +67,7 @@ const VirtualScrollMixin = {
         const scrollBottom = viewport.scrollTop + viewport.clientHeight;
         const items = this.getVirtualScrollItems();
         const totalHeight = items.length * this.rowHeight;
-        const threshold = 200;
-
-        if (totalHeight - scrollBottom < threshold) {
+        if (totalHeight - scrollBottom < VIRTUAL_SCROLL_LOAD_THRESHOLD) {
             this.loadMoreItems();
         }
     },
@@ -185,7 +183,7 @@ const SSESubscriptionMixin = {
  */
 const ResizableSectionMixin = {
     // Loading сохранённой высоты
-    loadSectionHeight(storageKey, defaultHeight = 320) {
+    loadSectionHeight(storageKey, defaultHeight = DEFAULT_SECTION_HEIGHT) {
         try {
             const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
             const value = saved[this.objectName];
@@ -220,8 +218,8 @@ const ResizableSectionMixin = {
         const container = document.getElementById(containerId);
         if (!handle || !container) return;
 
-        const minHeight = options.minHeight || 100;
-        const maxHeight = options.maxHeight || 800;
+        const minHeight = options.minHeight || MIN_SECTION_HEIGHT;
+        const maxHeight = options.maxHeight || MAX_SECTION_HEIGHT;
 
         container.style.height = `${this[heightProp]}px`;
 
@@ -311,7 +309,7 @@ const FilterMixin = {
     },
 
     // Настройка debounced фильтра
-    setupFilterInput(inputId, onFilter, delay = 300) {
+    setupFilterInput(inputId, onFilter, delay = FILTER_DEBOUNCE_DELAY) {
         const input = document.getElementById(inputId);
         if (!input) return;
 
@@ -325,10 +323,12 @@ const FilterMixin = {
     },
 
     // Полная настройка фильтров с ESC, type filter и опциональным status filter
-    setupFilterListeners(filterInputId, typeFilterId, onFilter, delay = 300, statusFilterId = null) {
+    // onTextFilter — опциональный отдельный callback для текстового фильтра (если отличается от onFilter)
+    setupFilterListeners(filterInputId, typeFilterId, onFilter, delay = FILTER_DEBOUNCE_DELAY, statusFilterId = null, onTextFilter = null) {
         const filterInput = document.getElementById(filterInputId);
         const typeFilter = document.getElementById(typeFilterId);
         const statusFilter = statusFilterId ? document.getElementById(statusFilterId) : null;
+        const textCallback = onTextFilter || onFilter;
 
         if (filterInput) {
             // Debounced input
@@ -336,7 +336,7 @@ const FilterMixin = {
                 clearTimeout(this.filterDebounce);
                 this.filterDebounce = setTimeout(() => {
                     this.filter = e.target.value.trim();
-                    onFilter();
+                    textCallback();
                 }, delay);
             });
 
@@ -346,7 +346,7 @@ const FilterMixin = {
                     if (filterInput.value) {
                         filterInput.value = '';
                         this.filter = '';
-                        onFilter();
+                        textCallback();
                     }
                     filterInput.blur();
                     e.preventDefault();
@@ -443,6 +443,102 @@ const ParamsAccessibilityMixin = {
 };
 
 /**
+ * Миксин для загрузки/сохранения параметров объекта через API
+ * Требует: this.paramsApiPath ('modbus' или 'opcua'), this.paramsPrefix ('mb', 'mbs', 'opcua', 'opcuasrv'),
+ *          this.paramNames (массив имён), this.renderParams() (метод рендеринга)
+ */
+const ParamsManagerMixin = {
+    // Загрузка параметров с сервера
+    async loadParams() {
+        try {
+            const query = this.paramNames.map(n => `name=${encodeURIComponent(n)}`).join('&');
+            const data = await this.fetchJSON(
+                `/api/objects/${encodeURIComponent(this.objectName)}/${this.paramsApiPath}/params?${query}`
+            );
+            this.params = data.params || {};
+            this.renderParams();
+            this.updateParamsAccessibility(this.paramsPrefix);
+            this.setNote(`${this.paramsPrefix}-params-note-${this.objectName}`, '');
+        } catch (err) {
+            this.setNote(`${this.paramsPrefix}-params-note-${this.objectName}`, err.message, true);
+        }
+    },
+
+    // Сохранение изменённых параметров на сервер
+    async saveParams() {
+        // Контейнер: ${prefix}-params-${obj} или ${prefix}-params-writable-${obj} (OPCUA Exchange)
+        const container = document.getElementById(`${this.paramsPrefix}-params-${this.objectName}`)
+            || document.getElementById(`${this.paramsPrefix}-params-writable-${this.objectName}`);
+        if (!container) return;
+
+        const changed = {};
+
+        // Текстовые и числовые inputs
+        container.querySelectorAll('input[data-param], input[data-name]').forEach(input => {
+            if (input.type === 'checkbox') return;
+            const name = input.dataset.param || input.dataset.name;
+            const val = input.value.trim();
+            if (val === '') return;
+            if (String(this.params[name]) !== val) {
+                changed[name] = val;
+            }
+        });
+
+        // Selects (exchangeMode и др.)
+        container.querySelectorAll('select[data-param], select[data-name]').forEach(select => {
+            const name = select.dataset.param || select.dataset.name;
+            const newValue = parseInt(select.value);
+            if (this.params[name] !== newValue) {
+                changed[name] = newValue;
+            }
+        });
+
+        // Чекбоксы (writeToAllChannels и др.)
+        container.querySelectorAll('input[type="checkbox"][data-param], input[type="checkbox"][data-name]').forEach(cb => {
+            const name = cb.dataset.param || cb.dataset.name;
+            const newValue = cb.checked ? 1 : 0;
+            if (this.params[name] !== newValue) {
+                changed[name] = newValue;
+            }
+        });
+
+        if (Object.keys(changed).length === 0) {
+            this.setNote(`${this.paramsPrefix}-params-note-${this.objectName}`, 'No changes');
+            return;
+        }
+
+        try {
+            const data = await this.fetchJSON(
+                `/api/objects/${encodeURIComponent(this.objectName)}/${this.paramsApiPath}/params`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ params: changed })
+                }
+            );
+            this.params = { ...this.params, ...(data.updated || {}) };
+            this.renderParams();
+            this.setNote(`${this.paramsPrefix}-params-note-${this.objectName}`, 'Parameters applied');
+            this.loadStatus();
+        } catch (err) {
+            this.setNote(`${this.paramsPrefix}-params-note-${this.objectName}`, err.message, true);
+        }
+    },
+
+    // Подключение кнопок Refresh и Apply
+    setupParamsListeners() {
+        const refreshBtn = document.getElementById(`${this.paramsPrefix}-params-refresh-${this.objectName}`);
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => this.loadParams());
+        }
+        const saveBtn = document.getElementById(`${this.paramsPrefix}-params-save-${this.objectName}`);
+        if (saveBtn) {
+            saveBtn.addEventListener('click', () => this.saveParams());
+        }
+    }
+};
+
+/**
  * Миксин для отображения счётчика загруженных/всего элементов
  * Показывает "loaded / total" или просто "total" когда всё загружено
  */
@@ -471,7 +567,7 @@ const SectionHeightMixin = {
      * @param {number} defaultHeight - Value по умолчанию
      * @returns {number}
      */
-    loadSectionHeight(storageKey, defaultHeight = 300) {
+    loadSectionHeight(storageKey, defaultHeight = DEFAULT_SECTION_HEIGHT) {
         try {
             const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
             const value = saved[this.objectName];
@@ -562,7 +658,13 @@ const PinManagementMixin = {
         if (renderCallback) {
             renderCallback.call(this);
         }
-    }
+    },
+
+    // Сокращённые методы, использующие this.pinStorageKey и this.renderAfterPinChange
+    getPinned()    { return this.getPinnedItems(this.pinStorageKey); },
+    savePinned(s)  { this.savePinnedItems(this.pinStorageKey, s); },
+    togglePin(id)  { this.toggleItemPin(this.pinStorageKey, id, this.renderAfterPinChange); },
+    unpinAll()     { this.unpinAllItems(this.pinStorageKey, this.renderAfterPinChange); }
 };
 
 /**
@@ -798,9 +900,12 @@ class BaseObjectRenderer {
         // Переопределяется в наследниках
     }
 
-    // Обновить данные
+    // Обновить данные (default: renderObjectInfo + updateChartLegends + handleLogServer)
+    // Переопределяется в наследниках с уникальной логикой
     update(data) {
-        // Переопределяется в наследниках
+        renderObjectInfo(this.tabKey, data.object);
+        updateChartLegends(this.tabKey, data);
+        this.handleLogServer(data.LogServer);
     }
 
     // Очистка при закрытии
@@ -813,8 +918,8 @@ class BaseObjectRenderer {
     formatTimeAgo(timestamp) {
         if (!timestamp) return '';
         const seconds = Math.floor((Date.now() - timestamp) / 1000);
-        if (seconds < 5) return '';
-        if (seconds < 60) return `Updated ${seconds}s ago`;
+        if (seconds < TIME_AGO_MIN_SECONDS) return '';
+        if (seconds < TIME_AGO_MINUTES_THRESHOLD) return `Updated ${seconds}s ago`;
         const minutes = Math.floor(seconds / 60);
         if (minutes < 60) return `Updated ${minutes}m ago`;
         const hours = Math.floor(minutes / 60);
@@ -824,7 +929,7 @@ class BaseObjectRenderer {
     // Запуск таймера обновления отображения относительного времени
     startStatusDisplayTimer() {
         this.stopStatusDisplayTimer();
-        this.statusDisplayTimer = setInterval(() => this.updateStatusDisplay(), 1000);
+        this.statusDisplayTimer = setInterval(() => this.updateStatusDisplay(), STATUS_DISPLAY_UPDATE_INTERVAL);
     }
 
     // Остановка таймера обновления отображения

@@ -11,6 +11,8 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         super(objectName, tabKey);
         this.status = null;
         this.params = {};
+        this.paramsApiPath = 'modbus';
+        this.paramsPrefix = 'mbs';
         // Параметры ModbusSlave отличаются от ModbusMaster
         this.paramNames = [
             'force',
@@ -43,6 +45,10 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         this.filter = '';
         this.typeFilter = 'all';
         this.filterDebounce = null;
+
+        // Pin management
+        this.pinStorageKey = 'uniset-panel-mbs-pinned';
+        this.renderAfterPinChange = this.renderRegisters;
 
         // Register map for chart support
         this.registerMap = new Map();
@@ -107,57 +113,18 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     }
 
     bindEvents() {
-        const refreshParams = document.getElementById(`mbs-params-refresh-${this.objectName}`);
-        if (refreshParams) {
-            refreshParams.addEventListener('click', () => this.loadParams());
-        }
-
-        const saveParams = document.getElementById(`mbs-params-save-${this.objectName}`);
-        if (saveParams) {
-            saveParams.addEventListener('click', () => this.saveParams());
-        }
+        this.setupParamsListeners();
 
         // Используем методы из FilterMixin
-        this.setupMBSFilterListeners(
+        this.setupFilterListeners(
             `mbs-registers-filter-${this.objectName}`,
-            `mbs-type-filter-${this.objectName}`
+            `mbs-type-filter-${this.objectName}`,
+            () => this.loadRegisters(),       // type filter → серверная фильтрация
+            FILTER_DEBOUNCE_DELAY, null,
+            () => this.renderRegisters()      // text filter → локальная фильтрация
         );
     }
 
-    // Настройка фильтров для ModbusSlave
-    setupMBSFilterListeners(filterInputId, typeFilterId) {
-        const filterInput = document.getElementById(filterInputId);
-        const typeFilter = document.getElementById(typeFilterId);
-
-        if (filterInput) {
-            filterInput.addEventListener('input', (e) => {
-                clearTimeout(this.filterDebounce);
-                this.filterDebounce = setTimeout(() => {
-                    this.filter = e.target.value.trim();
-                    this.renderRegisters(); // Локальная фильтрация по mbreg и имени
-                }, 300);
-            });
-
-            filterInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') {
-                    if (filterInput.value) {
-                        filterInput.value = '';
-                        this.filter = '';
-                        this.renderRegisters();
-                    }
-                    filterInput.blur();
-                    e.preventDefault();
-                }
-            });
-        }
-
-        if (typeFilter) {
-            typeFilter.addEventListener('change', (e) => {
-                this.typeFilter = e.target.value;
-                this.loadRegisters();
-            });
-        }
-    }
 
     createMBSStatusSection() {
         return this.createCollapsibleSection('mbs-status', 'ModbusSlave Status', `
@@ -338,19 +305,6 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         }
     }
 
-    async loadParams() {
-        try {
-            const query = this.paramNames.map(n => `name=${encodeURIComponent(n)}`).join('&');
-            const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/params?${query}`);
-            this.params = data.params || {};
-            this.renderParams();
-            this.updateParamsAccessibility('mbs');
-            this.setNote(`mbs-params-note-${this.objectName}`, '');
-        } catch (err) {
-            this.setNote(`mbs-params-note-${this.objectName}`, err.message, true);
-        }
-    }
-
     renderParams() {
         const tbody = document.getElementById(`mbs-params-${this.objectName}`);
         if (!tbody) return;
@@ -369,36 +323,6 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             `;
             tbody.appendChild(tr);
         });
-    }
-
-    async saveParams() {
-        const inputs = document.querySelectorAll(`#mbs-params-${this.objectName} input.param-field`);
-        const params = {};
-
-        inputs.forEach(input => {
-            const name = input.dataset.param;
-            const val = input.value.trim();
-            if (val !== '') {
-                params[name] = val;
-            }
-        });
-
-        if (Object.keys(params).length === 0) {
-            this.setNote(`mbs-params-note-${this.objectName}`, 'No changes');
-            return;
-        }
-
-        try {
-            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/params`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ params })
-            });
-            this.setNote(`mbs-params-note-${this.objectName}`, 'Saved');
-            this.loadParams();
-        } catch (err) {
-            this.setNote(`mbs-params-note-${this.objectName}`, err.message, true);
-        }
     }
 
     async loadRegisters() {
@@ -472,7 +396,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
 
     // Загружает закреплённые регистры, если они не в текущем списке
     async loadPinnedRegisters() {
-        const pinnedIds = this.getPinnedRegisters();
+        const pinnedIds = this.getPinned();
         if (pinnedIds.size === 0) return;
 
         // Найти ID, которых нет в загруженных регистрах
@@ -510,7 +434,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         if (!tbody) return;
 
         // Получаем закрепленные регистры
-        const pinnedRegisters = this.getPinnedRegisters();
+        const pinnedRegisters = this.getPinned();
         const hasPinned = pinnedRegisters.size > 0;
 
         // Показываем/скрываем кнопку "снять все"
@@ -586,12 +510,12 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
 
         // Bind pin toggle events
         tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => this.toggleRegisterPin(parseInt(toggle.dataset.id)));
+            toggle.addEventListener('click', () => this.togglePin(parseInt(toggle.dataset.id)));
         });
 
         // Обработчик кнопки "снять все"
         if (unpinBtn) {
-            unpinBtn.onclick = () => this.unpinAllRegisters();
+            unpinBtn.onclick = () => this.unpinAll();
         }
     }
 
@@ -721,28 +645,9 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         });
     }
 
-    update(data) {
-        renderObjectInfo(this.tabKey, data.object);
-        updateChartLegends(this.tabKey, data);
-        this.handleLogServer(data.LogServer);
-    }
+    // update(data) наследуется из BaseObjectRenderer
 
-    // Pin management для регистров
-    getPinnedRegisters() {
-        return this.getPinnedItems('uniset-panel-mbs-pinned');
-    }
-
-    savePinnedRegisters(pinnedSet) {
-        this.savePinnedItems('uniset-panel-mbs-pinned', pinnedSet);
-    }
-
-    toggleRegisterPin(registerId) {
-        this.toggleItemPin('uniset-panel-mbs-pinned', registerId, this.renderRegisters);
-    }
-
-    unpinAllRegisters() {
-        this.unpinAllItems('uniset-panel-mbs-pinned', this.renderRegisters);
-    }
+    // Pin management: pinStorageKey и renderAfterPinChange заданы в конструкторе
 
     // Перерисовка после смены сортировки
     renderAfterSort() {
@@ -776,6 +681,7 @@ applyMixin(ModbusSlaveRenderer, SSESubscriptionMixin);
 applyMixin(ModbusSlaveRenderer, ResizableSectionMixin);
 applyMixin(ModbusSlaveRenderer, FilterMixin);
 applyMixin(ModbusSlaveRenderer, ParamsAccessibilityMixin);
+applyMixin(ModbusSlaveRenderer, ParamsManagerMixin);
 applyMixin(ModbusSlaveRenderer, ItemCounterMixin);
 applyMixin(ModbusSlaveRenderer, SectionHeightMixin);
 applyMixin(ModbusSlaveRenderer, PinManagementMixin);

@@ -109,7 +109,7 @@ function initRecordingUI() {
     updateRecordingStatus();
 
     // Start polling for status updates (every 5 seconds)
-    recordingState.statusPollInterval = setInterval(updateRecordingStatus, 5000);
+    recordingState.statusPollInterval = setInterval(updateRecordingStatus, RECORDING_STATUS_POLL_INTERVAL);
 }
 
 // Update recording status from API

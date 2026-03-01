@@ -16,7 +16,7 @@ class JournalRenderer {
             to: null
         };
         this.offset = 0;
-        this.limit = 100;
+        this.limit = JOURNAL_DEFAULT_LIMIT;
         this.total = 0;
         this.mtypes = [];
         this.mgroups = [];
@@ -124,7 +124,7 @@ class JournalRenderer {
                     this.filters.search = searchInput.value;
                     this.offset = 0;
                     this.loadMessages();
-                }, 300);
+                }, JOURNAL_SEARCH_DEBOUNCE_DELAY);
                 // Show/hide clear button
                 if (searchClear) {
                     searchClear.style.display = searchInput.value ? 'block' : 'none';
@@ -494,7 +494,7 @@ class JournalRenderer {
             row.innerHTML = this.renderMessageRowContent(msg);
             tbody.insertBefore(row, tbody.firstChild);
 
-            setTimeout(() => row.classList.remove('journal-new'), 2000);
+            setTimeout(() => row.classList.remove('journal-new'), JOURNAL_HIGHLIGHT_DURATION);
         }
 
         this.total += messages.length;

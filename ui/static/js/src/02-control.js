@@ -229,7 +229,7 @@ function startControlPing() {
         } catch (e) {
             console.warn('Control ping failed:', e);
         }
-    }, 30000);
+    }, CONTROL_PING_INTERVAL);
 }
 
 // Остановка ping

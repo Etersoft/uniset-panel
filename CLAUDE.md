@@ -215,12 +215,28 @@ make build
 | 60-69 | Dashboard | Dashboard base, widgets, manager, dialogs |
 | 99 | Init | DOMContentLoaded, инициализация |
 
+### Ключевые файлы
+
+| Файл | Назначение |
+|------|-----------|
+| `00-constants.js` | Все именованные константы (таймауты, лимиты, размеры) |
+| `00-state.js` | Глобальное состояние `state` |
+| `06-utils.js` | Утилиты: `escapeHtml()`, `debounce()` |
+| `10-base-renderer.js` | `BaseObjectRenderer`, все миксины (`FilterMixin`, `PinManagementMixin`, `ParamsManagerMixin` и др.) |
+
 ### Правила размещения кода
 
 - **Новый рендерер** → `2X-renderer-name.js`
-- **Новая утилита** → создать `0X-name.js` в диапазоне 00-09
+- **Новая утилита** → добавить в `06-utils.js` или создать `0X-name.js`
+- **Новая константа** → добавить в `00-constants.js`
 - **Изменение SSE** → `04-sse.js`
 - **Новый UI компонент** → `5X-ui-name.js`
+
+### Именование JS констант
+
+- **`UPPER_CASE`** — для иммутабельных значений: таймауты, лимиты, размеры сетки, пороги (`MAX_CHART_POINTS`, `DASHBOARD_GRID_COLS`, `CHART_COLORS`)
+- **`camelCase`** — для мутабельного состояния, реестров и Map/Set объектов (`state`, `dashboardState`, `objectRenderers`)
+- Магические числа → именованные константы в `00-constants.js`
 
 ## Debugging UI
 

@@ -25,7 +25,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         this.selectedAutocompleteIndex = 0;
 
         // Virtual scroll
-        this.rowHeight = 32;
+        this.rowHeight = DEFAULT_ROW_HEIGHT;
         this.bufferRows = 5;
         this.startIndex = 0;
         this.endIndex = 0;
@@ -180,7 +180,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         let debounceTimer;
         input.addEventListener('input', () => {
             clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => this.updateAutocomplete(input.value), 150);
+            debounceTimer = setTimeout(() => this.updateAutocomplete(input.value), AUTOCOMPLETE_DEBOUNCE_DELAY);
         });
 
         // Keyboard navigation
@@ -658,16 +658,11 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
 
     // Update from API response
     update(data) {
-        // Render Object Info (includes msgCount, lostMessages, isActive, etc.)
-        renderObjectInfo(this.tabKey, data.object);
-
+        super.update(data);
         // Render websockets info if present
         if (data.object?.websockets) {
             this.renderWebsocketsInfo(data.object.websockets);
         }
-
-        // Handle LogServer (uppercase - from API)
-        this.handleLogServer(data.LogServer);
     }
 
     renderWebsocketsInfo(websockets) {

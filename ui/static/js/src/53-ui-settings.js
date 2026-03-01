@@ -346,7 +346,7 @@ function setupIOGlobalFilter(tabKey, objectName) {
 
     filterInput.addEventListener('input', (e) => {
         clearTimeout(filterTimeout);
-        filterTimeout = setTimeout(refilterAll, 200);
+        filterTimeout = setTimeout(refilterAll, SETTINGS_FILTER_DEBOUNCE_DELAY);
     });
 
     // ESC to clear and blur

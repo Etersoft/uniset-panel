@@ -1,3 +1,39 @@
+// Общая функция обновления графиков из SSE batch-события
+// items - массив элементов с полями name, value, supplier (опционально)
+// prefix - префикс для varName (mb, ext, ws, io)
+// options.showSupplier - обновлять ли supplier в легенде
+function updateChartsFromBatch(tabKey, items, prefix, timestamp, options = {}) {
+    const tabState = state.tabs.get(tabKey);
+    if (!tabState) return;
+    const ts = timestamp ? new Date(timestamp) : new Date();
+    const chartsToUpdate = new Set();
+    const displayName = tabState.displayName || '';
+    for (const item of items) {
+        const varName = `${prefix}:${item.name}`;
+        const chartData = tabState.charts.get(varName);
+        if (!chartData) continue;
+        chartData.chart.data.datasets[0].data.push({ x: ts, y: item.value });
+        chartsToUpdate.add(varName);
+        // Обновляем значение в легенде
+        const safeVarName = varName.replace(/:/g, '-');
+        const legendEl = getElementInTab(tabKey, `legend-value-${displayName}-${safeVarName}`);
+        if (legendEl) legendEl.textContent = formatValue(item.value);
+        // Поставщик (опционально — для IONC, UWSGate)
+        if (options.showSupplier) {
+            const supplierEl = getElementInTab(tabKey, `legend-supplier-${displayName}-${safeVarName}`);
+            if (supplierEl) supplierEl.textContent = item.supplier || '';
+        }
+    }
+    if (chartsToUpdate.size > 0) {
+        syncAllChartsTimeRange(tabKey);
+        tabState.charts.forEach((chartData) => {
+            const data = chartData.chart.data.datasets[0].data;
+            while (data.length > MAX_CHART_POINTS) data.shift();
+            chartData.chart.update('none');
+        });
+    }
+}
+
 function initSSE() {
     // Очищаем таймер переподключения (если есть)
     if (state.sse.reconnectTimerId) {
@@ -50,7 +86,7 @@ function initSSE() {
             refreshObjectsList();
 
             // Переподписываемся на все SSE обновления (сервер мог потерять состояние подписок)
-            setTimeout(resubscribeAll, 1000);
+            setTimeout(resubscribeAll, SSE_RESUBSCRIBE_DELAY);
 
             // Отключаем polling fallback если был активен
             disablePollingFallback();
@@ -89,8 +125,6 @@ function initSSE() {
 
                 // Обновляем графики напрямую из SSE данных (без запроса истории)
                 const eventTimestamp = new Date(timestamp);
-                const maxPoints = 1000;
-
                 tabState.charts.forEach((chartData, varName) => {
                     // Пропускаем внешние датчики (ext:) - они обновляются через sensor_data
                     if (varName.startsWith('ext:')) {
@@ -121,7 +155,7 @@ function initSSE() {
                         chartData.chart.data.datasets[0].data.push(dataPoint);
 
                         // Ограничиваем количество точек
-                        if (chartData.chart.data.datasets[0].data.length > maxPoints) {
+                        if (chartData.chart.data.datasets[0].data.length > MAX_CHART_POINTS) {
                             chartData.chart.data.datasets[0].data.shift();
                         }
                     }
@@ -151,44 +185,13 @@ function initSSE() {
             const sensor = event.data;
 
             // Формируем tabKey из serverId и objectName
-            // serverId="sm" для SharedMemory событий
             const tabKey = serverId
                 ? `${serverId}:${objectName}`
                 : findTabKeyByDisplayName(objectName); // fallback для legacy
             if (!tabKey) return;
 
-            // Находим вкладку и график для этого датчика
-            const tabState = state.tabs.get(tabKey);
-            if (tabState) {
-                const displayName = tabState.displayName || objectName;
-                const varName = `ext:${sensor.name}`;
-                const chartData = tabState.charts.get(varName);
-
-                if (chartData) {
-                    // Добавляем точку на график (формат {x: Date, y: value} для time scale)
-                    const timestamp = new Date(event.timestamp);
-                    const value = sensor.value;
-                    const dataPoint = { x: timestamp, y: value };
-
-                    chartData.chart.data.datasets[0].data.push(dataPoint);
-
-                    // Ограничиваем количество точек
-                    const maxPoints = 1000;
-                    if (chartData.chart.data.datasets[0].data.length > maxPoints) {
-                        chartData.chart.data.datasets[0].data.shift();
-                    }
-
-                    // Синхронизируем временную шкалу для всех графиков объекта
-                    syncAllChartsTimeRange(tabKey);
-
-                    // Обновляем значение в легенде
-                    const safeVarName = varName.replace(/:/g, '-');
-                    const legendEl = getElementInTab(tabKey, `legend-value-${displayName}-${safeVarName}`);
-                    if (legendEl) {
-                        legendEl.textContent = formatValue(value);
-                    }
-                }
-            }
+            // Обновляем график (одиночный сенсор — оборачиваем в массив)
+            updateChartsFromBatch(tabKey, [sensor], 'ext', event.timestamp);
         } catch (err) {
             console.warn('SSE: Error обработки sensor_data:', err);
         }
@@ -199,7 +202,7 @@ function initSSE() {
         try {
             const event = JSON.parse(e.data);
             const { objectName, serverId } = event;
-            const sensors = event.data; // массив датчиков
+            const sensors = event.data;
 
             // Cache sensor values for dashboard initialization
             const now = Date.now();
@@ -211,64 +214,22 @@ function initSSE() {
                 });
             }
 
-            // Обновляем виджеты на dashboard (передаём timestamp для chart widgets)
-            const eventTimestamp = event.timestamp || null;
-            updateDashboardWidgets(sensors, eventTimestamp);
+            // Обновляем виджеты на dashboard
+            updateDashboardWidgets(sensors, event.timestamp || null);
 
-            // Формируем ключ вкладки: serverId:objectName
             const tabKey = `${serverId}:${objectName}`;
-
-            // Находим вкладку с IONC рендерером
             const tabState = state.tabs.get(tabKey);
             if (!tabState) return;
 
-            const timestamp = new Date(event.timestamp);
-            const chartsToUpdate = new Set();
-
-            // Обрабатываем все датчики
+            // Обновляем таблицу датчиков
             for (const sensor of sensors) {
-                // Обновляем таблицу датчиков
                 if (tabState.renderer?.handleIONCSensorUpdate) {
                     tabState.renderer.handleIONCSensorUpdate(sensor);
                 }
-
-                // Обновляем график если есть (IONC использует prefix 'io')
-                const varName = `io:${sensor.name}`;
-                const chartData = tabState.charts.get(varName);
-                if (chartData) {
-                    const value = sensor.value;
-                    chartData.chart.data.datasets[0].data.push({ x: timestamp, y: value });
-                    chartsToUpdate.add(varName);
-
-                    // Обновляем значение и supplier в легенде
-                    const safeVarName = varName.replace(/:/g, '-');
-                    const legendEl = getElementInTab(tabKey, `legend-value-${tabState.displayName}-${safeVarName}`);
-                    if (legendEl) {
-                        legendEl.textContent = formatValue(value);
-                    }
-                    const supplierEl = getElementInTab(tabKey, `legend-supplier-${tabState.displayName}-${safeVarName}`);
-                    if (supplierEl) {
-                        supplierEl.textContent = sensor.supplier || '';
-                    }
-                }
             }
 
-            // Один раз синхронизируем временную шкалу
-            if (chartsToUpdate.size > 0) {
-                syncAllChartsTimeRange(tabKey);
-            }
-
-            // Batch update для всех графиков
-            tabState.charts.forEach((chartData, varName) => {
-                // Ограничиваем количество точек
-                const data = chartData.chart.data.datasets[0].data;
-                const maxPoints = 1000;
-                while (data.length > maxPoints) {
-                    data.shift();
-                }
-                chartData.chart.update('none');
-            });
-
+            // Обновляем графики
+            updateChartsFromBatch(tabKey, sensors, 'io', event.timestamp, { showSupplier: true });
         } catch (err) {
             console.warn('SSE: Error обработки ionc_sensor_batch:', err);
         }
@@ -279,69 +240,27 @@ function initSSE() {
         try {
             const event = JSON.parse(e.data);
             const { objectName, serverId } = event;
-            const registers = event.data; // массив регистров
+            const registers = event.data;
 
-            // Обновляем виджеты на dashboard (передаём timestamp для chart widgets)
             updateDashboardWidgets(registers, event.timestamp);
 
-            // Формируем ключ вкладки: serverId:objectName
             const tabKey = `${serverId}:${objectName}`;
-
-            // Находим вкладку с Modbus рендерером
             const tabState = state.tabs.get(tabKey);
             if (!tabState) return;
 
-            // Проверяем, что это Modbus рендерер (Master или Slave)
             const renderer = tabState.renderer;
             if (!renderer) return;
-
             const isMaster = renderer.constructor.name === 'ModbusMasterRenderer';
             const isSlave = renderer.constructor.name === 'ModbusSlaveRenderer';
             if (!isMaster && !isSlave) return;
 
-            // Вызываем обработчик обновления регистров (для таблицы)
+            // Обновляем таблицу регистров
             if (typeof renderer.handleModbusRegisterUpdates === 'function') {
                 renderer.handleModbusRegisterUpdates(registers);
             }
 
             // Обновляем графики
-            // ModbusMaster и ModbusSlave используют одинаковый prefix 'mb' в getChartOptions()
-            const timestamp = event.timestamp ? new Date(event.timestamp) : new Date();
-            const chartsToUpdate = new Set();
-
-            for (const reg of registers) {
-                // varName формируется как prefix:sensor.name в createExternalSensorChart
-                const varName = `mb:${reg.name}`;
-                const chartData = tabState.charts.get(varName);
-                if (chartData) {
-                    const value = reg.value;
-                    chartData.chart.data.datasets[0].data.push({ x: timestamp, y: value });
-                    chartsToUpdate.add(varName);
-
-                    // Обновляем значение в легенде
-                    const safeVarName = varName.replace(/:/g, '-');
-                    const legendEl = getElementInTab(tabKey, `legend-value-${tabState.displayName}-${safeVarName}`);
-                    if (legendEl) {
-                        legendEl.textContent = formatValue(value);
-                    }
-                }
-            }
-
-            // Синхронизируем временную шкалу и обновляем графики
-            if (chartsToUpdate.size > 0) {
-                syncAllChartsTimeRange(tabKey);
-
-                // Batch update для графиков с изменениями
-                tabState.charts.forEach((chartData, varName) => {
-                    // Ограничиваем количество точек
-                    const data = chartData.chart.data.datasets[0].data;
-                    const maxPoints = 1000;
-                    while (data.length > maxPoints) {
-                        data.shift();
-                    }
-                    chartData.chart.update('none');
-                });
-            }
+            updateChartsFromBatch(tabKey, registers, 'mb', event.timestamp);
         } catch (err) {
             console.warn('SSE: Error обработки modbus_register_batch:', err);
         }
@@ -352,67 +271,26 @@ function initSSE() {
         try {
             const event = JSON.parse(e.data);
             const { objectName, serverId } = event;
-            const sensors = event.data; // массив датчиков
+            const sensors = event.data;
 
-            // Обновляем виджеты на dashboard (передаём timestamp для chart widgets)
             updateDashboardWidgets(sensors, event.timestamp);
 
-            // Формируем ключ вкладки: serverId:objectName
             const tabKey = `${serverId}:${objectName}`;
-
-            // Находим вкладку с OPCUA рендерером
             const tabState = state.tabs.get(tabKey);
             if (!tabState) return;
 
-            // Проверяем, что это OPCUAExchange или OPCUAServer рендерер
             const renderer = tabState.renderer;
             const isExchange = renderer && renderer.constructor.name === 'OPCUAExchangeRenderer';
             const isServer = renderer && renderer.constructor.name === 'OPCUAServerRenderer';
             if (!isExchange && !isServer) return;
 
-            // Вызываем обработчик обновления датчиков (для таблицы)
+            // Обновляем таблицу датчиков
             if (typeof renderer.handleOPCUASensorUpdates === 'function') {
                 renderer.handleOPCUASensorUpdates(sensors);
             }
 
             // Обновляем графики
-            // OPCUAExchange и OPCUAServer не переопределяют getChartOptions(), используют default prefix 'ext'
-            const timestamp = event.timestamp ? new Date(event.timestamp) : new Date();
-            const chartsToUpdate = new Set();
-
-            for (const sensor of sensors) {
-                // varName формируется как prefix:sensor.name в createExternalSensorChart
-                const varName = `ext:${sensor.name}`;
-                const chartData = tabState.charts.get(varName);
-                if (chartData) {
-                    const value = sensor.value;
-                    chartData.chart.data.datasets[0].data.push({ x: timestamp, y: value });
-                    chartsToUpdate.add(varName);
-
-                    // Обновляем значение в легенде
-                    const safeVarName = varName.replace(/:/g, '-');
-                    const legendEl = getElementInTab(tabKey, `legend-value-${tabState.displayName}-${safeVarName}`);
-                    if (legendEl) {
-                        legendEl.textContent = formatValue(value);
-                    }
-                }
-            }
-
-            // Синхронизируем временную шкалу и обновляем графики
-            if (chartsToUpdate.size > 0) {
-                syncAllChartsTimeRange(tabKey);
-
-                // Batch update для графиков с изменениями
-                tabState.charts.forEach((chartData, varName) => {
-                    // Ограничиваем количество точек
-                    const data = chartData.chart.data.datasets[0].data;
-                    const maxPoints = 1000;
-                    while (data.length > maxPoints) {
-                        data.shift();
-                    }
-                    chartData.chart.update('none');
-                });
-            }
+            updateChartsFromBatch(tabKey, sensors, 'ext', event.timestamp);
         } catch (err) {
             console.warn('SSE: Error обработки opcua_sensor_batch:', err);
         }
@@ -423,68 +301,24 @@ function initSSE() {
         try {
             const event = JSON.parse(e.data);
             const { objectName, serverId } = event;
-            const sensors = event.data; // массив датчиков
+            const sensors = event.data;
 
-            // Обновляем виджеты на dashboard (передаём timestamp для chart widgets)
             updateDashboardWidgets(sensors, event.timestamp);
 
-            // Формируем ключ вкладки: serverId:objectName
             const tabKey = `${serverId}:${objectName}`;
-
-            // Находим вкладку с UWebSocketGate рендерером
             const tabState = state.tabs.get(tabKey);
             if (!tabState) return;
 
-            // Проверяем, что это UWebSocketGate рендерер
             const renderer = tabState.renderer;
             if (!renderer || renderer.constructor.name !== 'UWebSocketGateRenderer') return;
 
-            // Вызываем обработчик обновления датчиков (для таблицы)
+            // Обновляем таблицу датчиков
             if (typeof renderer.handleSSEUpdate === 'function') {
                 renderer.handleSSEUpdate(sensors);
             }
 
-            // Обновляем графики (UWebSocketGate использует prefix 'ws')
-            const timestamp = event.timestamp ? new Date(event.timestamp) : new Date();
-            const chartsToUpdate = new Set();
-
-            for (const sensor of sensors) {
-                // varName формируется как prefix:sensor.name в createExternalSensorChart
-                const varName = `ws:${sensor.name}`;
-                const chartData = tabState.charts.get(varName);
-                if (chartData) {
-                    const value = sensor.value;
-                    chartData.chart.data.datasets[0].data.push({ x: timestamp, y: value });
-                    chartsToUpdate.add(varName);
-
-                    // Обновляем значение и supplier в легенде
-                    const safeVarName = varName.replace(/:/g, '-');
-                    const legendEl = getElementInTab(tabKey, `legend-value-${tabState.displayName}-${safeVarName}`);
-                    if (legendEl) {
-                        legendEl.textContent = formatValue(value);
-                    }
-                    const supplierEl = getElementInTab(tabKey, `legend-supplier-${tabState.displayName}-${safeVarName}`);
-                    if (supplierEl) {
-                        supplierEl.textContent = sensor.supplier || '';
-                    }
-                }
-            }
-
-            // Синхронизируем временную шкалу и обновляем графики
-            if (chartsToUpdate.size > 0) {
-                syncAllChartsTimeRange(tabKey);
-
-                // Batch update для графиков с изменениями
-                tabState.charts.forEach((chartData, varName) => {
-                    // Ограничиваем количество точек
-                    const data = chartData.chart.data.datasets[0].data;
-                    const maxPoints = 1000;
-                    while (data.length > maxPoints) {
-                        data.shift();
-                    }
-                    chartData.chart.update('none');
-                });
-            }
+            // Обновляем графики
+            updateChartsFromBatch(tabKey, sensors, 'ws', event.timestamp, { showSupplier: true });
         } catch (err) {
             console.warn('SSE: Error обработки uwsgate_sensor_batch:', err);
         }
@@ -727,8 +561,7 @@ function disablePollingFallback() {
 function startSSERecoveryProbe() {
     if (state.sse.recoveryProbeInterval) return;
 
-    const probeInterval = 30000; // 30 секунд
-    console.log('SSE: Запуск recovery probe каждые', probeInterval, 'ms');
+    console.log('SSE: Запуск recovery probe каждые', SSE_RECOVERY_PROBE_INTERVAL, 'ms');
 
     state.sse.recoveryProbeInterval = setInterval(async () => {
         try {
@@ -742,7 +575,7 @@ function startSSERecoveryProbe() {
         } catch (err) {
             // Сервер всё ещё недоступен
         }
-    }, probeInterval);
+    }, SSE_RECOVERY_PROBE_INTERVAL);
 }
 
 // Периодическая синхронизация статуса серверов, launcher'ов и журналов (каждые 30с)
@@ -776,7 +609,7 @@ function startServerStatusSync() {
                 }
             }
         } catch (err) { /* фоновая синхронизация */ }
-    }, 30000);
+    }, SSE_RECOVERY_PROBE_INTERVAL);
 }
 
 function stopServerStatusSync() {

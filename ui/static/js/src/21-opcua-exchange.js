@@ -11,6 +11,8 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         super(objectName, tabKey);
         this.status = null;
         this.params = {};
+        this.paramsApiPath = 'opcua';
+        this.paramsPrefix = 'opcua';
         // Параметры только для чтения (статус)
         this.readonlyParams = [
             'currentChannel',
@@ -66,6 +68,10 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         this.filter = '';
         this.typeFilter = 'all';
         this.filterDebounce = null;
+
+        // Pin management
+        this.pinStorageKey = 'uniset-panel-opcua-pinned';
+        this.renderAfterPinChange = this.renderVisibleSensors;
 
         // Sensor map for chart support
         this.sensorMap = new Map();
@@ -125,15 +131,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     bindEvents() {
-        const refreshParams = document.getElementById(`opcua-params-refresh-${this.objectName}`);
-        if (refreshParams) {
-            refreshParams.addEventListener('click', () => this.loadParams());
-        }
-
-        const saveParams = document.getElementById(`opcua-params-save-${this.objectName}`);
-        if (saveParams) {
-            saveParams.addEventListener('click', () => this.saveParams());
-        }
+        this.setupParamsListeners();
 
         // Используем методы из FilterMixin
         this.setupFilterListeners(
@@ -395,10 +393,10 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     renderControl() {
-        const allow = this.status?.httpControlAllow;
+        const allow = this.status?.httpControlAllow && canControl();
         const active = this.status?.httpControlActive;
         const enabledParams = this.status?.httpEnabledSetParams;
-        const allowText = allow ? 'Take control' : 'Control not allowed';
+        const allowText = allow ? 'Take control' : (!canControl() ? 'Read-only mode' : 'Control not allowed');
 
         // Обновляем индикаторы в шапке
         const indAllow = document.getElementById(`opcua-ind-allow-${this.objectName}`);
@@ -461,19 +459,6 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             return `Read: ${read || 0}, Write: ${write || 0}`;
         }
         return '—';
-    }
-
-    async loadParams() {
-        try {
-            const query = this.paramNames.map(n => `name=${encodeURIComponent(n)}`).join('&');
-            const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/opcua/params?${query}`);
-            this.params = data.params || {};
-            this.renderParams();
-            // Обновить состояние доступности (показать предупреждение если нужно)
-            this.updateParamsAccessibility('opcua');
-        } catch (err) {
-            this.setNote(`opcua-params-note-${this.objectName}`, err.message, true);
-        }
     }
 
     renderParams() {
@@ -563,56 +548,6 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         });
     }
 
-    async saveParams() {
-        const writableTbody = document.getElementById(`opcua-params-writable-${this.objectName}`);
-        if (!writableTbody) return;
-
-        const inputs = writableTbody.querySelectorAll('.opcua-param-input');
-        const checkboxes = writableTbody.querySelectorAll('.opcua-param-checkbox');
-        const changed = {};
-
-        inputs.forEach(input => {
-            const name = input.dataset.name;
-            const current = this.params[name];
-            const newValue = input.value;
-            if (newValue === '' || newValue === null) return;
-            if (String(current) !== newValue) {
-                changed[name] = newValue;
-            }
-        });
-
-        checkboxes.forEach(checkbox => {
-            const name = checkbox.dataset.name;
-            const current = this.params[name];
-            const newValue = checkbox.checked ? 1 : 0;
-            if (current !== newValue) {
-                changed[name] = newValue;
-            }
-        });
-
-        if (Object.keys(changed).length === 0) {
-            this.setNote(`opcua-params-note-${this.objectName}`, 'No changes');
-            return;
-        }
-
-        try {
-            const data = await this.fetchJSON(
-                `/api/objects/${encodeURIComponent(this.objectName)}/opcua/params`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ params: changed })
-                }
-            );
-            this.params = { ...this.params, ...(data.updated || {}) };
-            this.renderParams();
-            this.setNote(`opcua-params-note-${this.objectName}`, 'Parameters applied');
-            this.loadStatus();
-        } catch (err) {
-            this.setNote(`opcua-params-note-${this.objectName}`, err.message, true);
-        }
-    }
-
     async loadSensors() {
         // Reset state for fresh load
         this.allSensors = [];
@@ -684,7 +619,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
     // Загружает закреплённые датчики, если они не в текущем списке
     async loadPinnedSensors() {
-        const pinnedIds = this.getPinnedSensors();
+        const pinnedIds = this.getPinned();
         if (pinnedIds.size === 0) return;
 
         // Найти ID, которых нет в загруженных датчиках
@@ -827,7 +762,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         if (!tbody || !spacer) return;
 
         // Получаем закрепленные датчики
-        const pinnedSensors = this.getPinnedSensors();
+        const pinnedSensors = this.getPinned();
         const hasPinned = pinnedSensors.size > 0;
 
         // Показываем/скрываем кнопку "снять все"
@@ -901,12 +836,12 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
         // Bind pin toggle events
         tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => this.toggleSensorPin(parseInt(toggle.dataset.id)));
+            toggle.addEventListener('click', () => this.togglePin(parseInt(toggle.dataset.id)));
         });
 
         // Обработчик кнопки "снять все"
         if (unpinBtn) {
-            unpinBtn.onclick = () => this.unpinAllSensors();
+            unpinBtn.onclick = () => this.unpinAll();
         }
 
         // Bind row click events (prevent on chart checkbox)
@@ -1213,28 +1148,9 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         });
     }
 
-    update(data) {
-        renderObjectInfo(this.tabKey, data.object);
-        updateChartLegends(this.tabKey, data);
-        this.handleLogServer(data.LogServer);
-    }
+    // update(data) наследуется из BaseObjectRenderer
 
-    // Pin management для датчиков
-    getPinnedSensors() {
-        return this.getPinnedItems('uniset-panel-opcua-pinned');
-    }
-
-    savePinnedSensors(pinnedSet) {
-        this.savePinnedItems('uniset-panel-opcua-pinned', pinnedSet);
-    }
-
-    toggleSensorPin(sensorId) {
-        this.toggleItemPin('uniset-panel-opcua-pinned', sensorId, this.renderVisibleSensors);
-    }
-
-    unpinAllSensors() {
-        this.unpinAllItems('uniset-panel-opcua-pinned', this.renderVisibleSensors);
-    }
+    // Pin management: pinStorageKey и renderAfterPinChange заданы в конструкторе
 
     // Перерисовка после смены сортировки
     renderAfterSort() {
@@ -1268,6 +1184,7 @@ applyMixin(OPCUAExchangeRenderer, SSESubscriptionMixin);
 applyMixin(OPCUAExchangeRenderer, ResizableSectionMixin);
 applyMixin(OPCUAExchangeRenderer, FilterMixin);
 applyMixin(OPCUAExchangeRenderer, ParamsAccessibilityMixin);
+applyMixin(OPCUAExchangeRenderer, ParamsManagerMixin);
 applyMixin(OPCUAExchangeRenderer, ItemCounterMixin);
 applyMixin(OPCUAExchangeRenderer, SectionHeightMixin);
 applyMixin(OPCUAExchangeRenderer, PinManagementMixin);

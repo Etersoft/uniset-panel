@@ -3,14 +3,14 @@
 // ============================================================================
 
 // Цвета для графиков
-const chartColors = [
+const CHART_COLORS = [
     '#3274d9', '#73bf69', '#ff9830', '#f2495c',
     '#b877d9', '#5794f2', '#fade2a', '#ff6eb4'
 ];
 let colorIndex = 0;
 
 function getNextColor() {
-    const color = chartColors[colorIndex % chartColors.length];
+    const color = CHART_COLORS[colorIndex % CHART_COLORS.length];
     colorIndex++;
     return color;
 }
