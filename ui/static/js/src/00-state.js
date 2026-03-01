@@ -13,7 +13,7 @@ const state = window.state = {
     sensors: new Map(), // sensorId -> sensorInfo
     sensorsByName: new Map(), // sensorName -> sensorInfo
     sensorValuesCache: new Map(), // sensorName -> { value, error, timestamp } - cache for dashboard init
-    timeRange: 900, // секунды (по умолчанию 15 минут)
+    timeRange: DEFAULT_CHART_TIME_RANGE, // секунды (по умолчанию 15 минут)
     sidebarCollapsed: false, // свёрнутая боковая панель
     collapsedSections: {}, // состояние спойлеров
     collapsedServerGroups: new Set(), // свёрнутые группы серверов в списке объектов
@@ -40,6 +40,8 @@ const state = window.state = {
         reconnectTimerId: null,     // ID таймера переподключения (для очистки)
         statusSyncInterval: null    // ID интервала периодической синхронизации статуса серверов
     },
+    sidebarGroups: null,       // null = legacy mode, array = group mode
+    groupCollapseState: {},    // { groupName: boolean } — collapse состояние групп sidebar
     control: {
         enabled: false,       // включён ли контроль на сервере
         token: null,          // текущий токен (из localStorage или URL)

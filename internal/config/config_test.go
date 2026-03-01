@@ -829,6 +829,73 @@ func TestLauncherNameFallback(t *testing.T) {
 	}
 }
 
+func TestExpandNamePlaceholders(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		rawURL   string
+		expected string
+	}{
+		{
+			name:     "no placeholders",
+			input:    "My Server",
+			rawURL:   "http://localhost:9090",
+			expected: "My Server",
+		},
+		{
+			name:     "host placeholder",
+			input:    "{host}: Node1",
+			rawURL:   "http://myserver:9090",
+			expected: "myserver: Node1",
+		},
+		{
+			name:     "port placeholder",
+			input:    "Server on port {port}",
+			rawURL:   "http://myserver:9090",
+			expected: "Server on port 9090",
+		},
+		{
+			name:     "server placeholder",
+			input:    "Full: {server}",
+			rawURL:   "http://myserver:9090",
+			expected: "Full: http://myserver:9090",
+		},
+		{
+			name:     "all placeholders",
+			input:    "{host}:{port} ({server})",
+			rawURL:   "http://example.com:8080",
+			expected: "example.com:8080 (http://example.com:8080)",
+		},
+		{
+			name:     "host without port",
+			input:    "{host} - {port}",
+			rawURL:   "http://myhost",
+			expected: "myhost - ",
+		},
+		{
+			name:     "invalid URL returns original",
+			input:    "{host}: test",
+			rawURL:   "://invalid",
+			expected: "{host}: test",
+		},
+		{
+			name:     "empty name",
+			input:    "",
+			rawURL:   "http://localhost:9090",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := expandNamePlaceholders(tt.input, tt.rawURL)
+			if got != tt.expected {
+				t.Errorf("expandNamePlaceholders(%q, %q) = %q, want %q", tt.input, tt.rawURL, got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestMergeAndSortServers_DoesNotModifyInput(t *testing.T) {
 	// Проверяем что функция не модифицирует входные слайсы
 	configServers := []ServerConfig{

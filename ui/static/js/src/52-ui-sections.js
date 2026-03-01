@@ -497,7 +497,7 @@ function showColorPicker(element, tabKey, varName) {
     popup.style.left = `${rect.left}px`;
     popup.style.top = `${rect.bottom + 4}px`;
 
-    chartColors.forEach(color => {
+    CHART_COLORS.forEach(color => {
         const option = document.createElement('div');
         option.className = 'color-picker-option';
         if (color === currentColor) option.classList.add('selected');
@@ -656,7 +656,7 @@ function setupChartsResize(tabKey) {
     const onMouseMove = (e) => {
         if (!isResizing) return;
         const delta = e.clientY - startY;
-        const newHeight = Math.max(150, startHeight + delta);
+        const newHeight = Math.max(CHARTS_CONTAINER_MIN_HEIGHT, startHeight + delta);
         chartsContainer.style.height = `${newHeight}px`;
         chartsContainer.style.maxHeight = `${newHeight}px`;
     };
@@ -676,7 +676,7 @@ function setupChartsResize(tabKey) {
         e.preventDefault();
         isResizing = true;
         startY = e.clientY;
-        startHeight = chartsContainer.offsetHeight || 300;
+        startHeight = chartsContainer.offsetHeight || CHARTS_CONTAINER_DEFAULT_HEIGHT;
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
         document.body.style.cursor = 'ns-resize';
@@ -731,7 +731,7 @@ function setupIONCSensorsResize(objectName) {
     const onMouseMove = (e) => {
         if (!isResizing) return;
         const delta = e.clientY - startY;
-        const newHeight = Math.max(200, startHeight + delta);
+        const newHeight = Math.max(SENSORS_CONTAINER_MIN_HEIGHT, startHeight + delta);
         sensorsContainer.style.height = `${newHeight}px`;
         sensorsContainer.style.maxHeight = `${newHeight}px`;
     };

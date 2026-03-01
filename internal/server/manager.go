@@ -12,6 +12,7 @@ import (
 	"github.com/pv/uniset-panel/internal/modbus"
 	"github.com/pv/uniset-panel/internal/opcua"
 	"github.com/pv/uniset-panel/internal/recording"
+	"github.com/pv/uniset-panel/internal/sensorconfig"
 	"github.com/pv/uniset-panel/internal/storage"
 	"github.com/pv/uniset-panel/internal/uniset"
 	"github.com/pv/uniset-panel/internal/uwsgate"
@@ -142,6 +143,11 @@ func (m *Manager) SetRecordingManager(mgr *recording.Manager) {
 
 // AddServer добавляет новый сервер
 func (m *Manager) AddServer(cfg config.ServerConfig) error {
+	return m.AddServerWithSensorConfig(cfg, nil)
+}
+
+// AddServerWithSensorConfig добавляет новый сервер с per-server SensorConfig
+func (m *Manager) AddServerWithSensorConfig(cfg config.ServerConfig, sensorCfg *sensorconfig.SensorConfig) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -155,20 +161,23 @@ func (m *Manager) AddServer(cfg config.ServerConfig) error {
 		return fmt.Errorf("server URL is required")
 	}
 
-	instance := NewInstance(
-		cfg,
-		m.storage,
-		m.pollInterval,
-		m.historyTTL,
-		m.supplier,
-		m.sensorBatchSize,
-		m.objectCallback,
-		m.ioncCallback,
-		m.modbusCallback,
-		m.opcuaCallback,
-		m.statusCallback,
-		m.objectsCallback,
-	)
+	instance := NewInstance(AppConfig{
+		Server:          cfg,
+		Storage:         m.storage,
+		PollInterval:    m.pollInterval,
+		HistoryTTL:      m.historyTTL,
+		Supplier:        m.supplier,
+		SensorBatchSize: m.sensorBatchSize,
+		ObjectCallback:  m.objectCallback,
+		IONCCallback:    m.ioncCallback,
+		ModbusCallback:  m.modbusCallback,
+		OPCUACallback:   m.opcuaCallback,
+		StatusCallback:  m.statusCallback,
+		ObjectsCallback: m.objectsCallback,
+	})
+
+	// Сохраняем per-server SensorConfig
+	instance.SensorConfig = sensorCfg
 
 	// Set recording manager on all pollers if configured
 	if m.recordingMgr != nil {
@@ -290,8 +299,12 @@ func (m *Manager) GetAllObjects() ([]ObjectWithServer, error) {
 	for _, instance := range instances {
 		objects, err := instance.GetObjects()
 		if err != nil {
-			errors = append(errors, fmt.Errorf("server %s: %w", instance.Config.ID, err))
-			continue
+			// Сервер недоступен — используем кеш
+			objects = instance.GetCachedObjects()
+			if objects == nil {
+				errors = append(errors, fmt.Errorf("server %s: %w", instance.Config.ID, err))
+				continue
+			}
 		}
 
 		serverName := instance.Config.Name
@@ -345,8 +358,14 @@ func (m *Manager) GetAllObjectsGrouped() ([]ServerObjects, error) {
 
 		objects, err := instance.GetObjects()
 		if err != nil {
-			errors = append(errors, fmt.Errorf("server %s: %w", instance.Config.ID, err))
-		} else {
+			// Сервер недоступен — используем кеш
+			if cached := instance.GetCachedObjects(); cached != nil {
+				objects = cached
+			} else {
+				errors = append(errors, fmt.Errorf("server %s: %w", instance.Config.ID, err))
+			}
+		}
+		if objects != nil {
 			serverObj.Objects = objects
 		}
 
@@ -530,6 +549,15 @@ func (m *Manager) GetAllInstances() []*Instance {
 		}
 	}
 	return result
+}
+
+// GetSensorConfig возвращает SensorConfig для указанного сервера
+func (m *Manager) GetSensorConfig(serverID string) *sensorconfig.SensorConfig {
+	instance, exists := m.GetServer(serverID)
+	if !exists {
+		return nil
+	}
+	return instance.SensorConfig
 }
 
 // ForceEmitAllPollers принудительно отправляет текущие значения со всех pollers

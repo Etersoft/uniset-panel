@@ -7,8 +7,10 @@
 launchers:
   - url: http://localhost:8111
     name: "Основная нода"
+    controlToken: "admin"
   - url: http://localhost:8222
     name: "Резервная нода"
+    controlToken: "admin"
 
 # ============================================================================
 # Серверы UniSet2
@@ -29,3 +31,21 @@ servers:
 journals:
   - url: "clickhouse://localhost:9000/uniset"
     name: "DevJournal"
+
+# ============================================================================
+# Sidebar groups
+# ============================================================================
+sidebar:
+  exclude:
+    - "object:UniSetActivator"
+  groups:
+    - name: "Управление"
+      icon: "⚙️"
+      patterns:
+        - "launcher:*"
+        - "dashboard:*"
+    - name: "Мониторинг"
+      icon: "📊"
+      patterns:
+        - "object:*"
+        - "journal:*"

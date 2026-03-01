@@ -65,7 +65,7 @@ class LauncherRenderer {
         this.loadStatus();
 
         // Авто-обновление каждые 5 секунд
-        this.autoRefreshInterval = setInterval(() => this.loadStatus(), 5000);
+        this.autoRefreshInterval = setInterval(() => this.loadStatus(), LAUNCHER_AUTO_REFRESH_INTERVAL);
     }
 
     attachTakeHandler() {
@@ -151,6 +151,9 @@ class LauncherRenderer {
         if (text) {
             text.textContent = connected ? 'Connected' : 'Disconnected';
         }
+
+        // Обновляем state.nodes и CSS-классы вкладки (sidebar dot, tab button, tab panel)
+        updateLauncherNodeStatus(this.nodeId, connected);
     }
 
     updateSummary(data) {
@@ -213,6 +216,8 @@ class LauncherRenderer {
 
             if (showActions) {
                 html += `<th class="launcher-actions-header">Actions
+                    <button class="launcher-bulk-btn launcher-bulk-stop" data-node="${this.nodeId}" data-bulk="stop-all" title="Stop all running processes">Stop</button>
+                    <button class="launcher-bulk-btn launcher-bulk-start" data-node="${this.nodeId}" data-bulk="start-all" title="Start all stopped processes">Start</button>
                     <button class="launcher-bulk-btn launcher-bulk-restart" data-node="${this.nodeId}" data-bulk="restart-all" title="Restart all processes">Restart</button>
                     <button class="launcher-bulk-btn launcher-bulk-reload" data-node="${this.nodeId}" data-bulk="reload-all" title="Reload all processes">Reload</button>
                 </th>`;
@@ -367,9 +372,17 @@ class LauncherRenderer {
                     if (!resp.ok) {
                         const data = await resp.json().catch(() => ({}));
                         await showConfirmDialog('Error', data.error || resp.statusText, 'OK');
+                    } else {
+                        // Оптимистично обновляем статус процесса для мигающей анимации
+                        const transitionStates = { stop: 'stopping', start: 'starting', restart: 'restarting' };
+                        const proc = this.processes.find(p => p.name === processName);
+                        if (proc && transitionStates[action]) {
+                            proc.state = transitionStates[action];
+                            this.renderProcessTable();
+                        }
                     }
 
-                    setTimeout(() => this.loadStatus(), 1000);
+                    setTimeout(() => this.loadStatus(), LAUNCHER_ACTION_REFRESH_DELAY);
                 } catch (err) {
                     console.error(`Launcher action ${action} failed:`, err);
                     await showConfirmDialog('Error', err.message, 'OK');
@@ -388,7 +401,8 @@ class LauncherRenderer {
             btn.addEventListener('click', async (e) => {
                 const bulkAction = e.currentTarget.dataset.bulk;
                 const nodeId = e.currentTarget.dataset.node;
-                const label = bulkAction === 'restart-all' ? 'Restart' : 'Reload';
+                const labels = { 'stop-all': 'Stop', 'start-all': 'Start', 'restart-all': 'Restart', 'reload-all': 'Reload' };
+                const label = labels[bulkAction] || bulkAction;
 
                 const confirmed = await showConfirmDialog(
                     `${label} All`,
@@ -410,9 +424,27 @@ class LauncherRenderer {
                     if (!resp.ok) {
                         const data = await resp.json().catch(() => ({}));
                         await showConfirmDialog('Error', `${label} failed: ${data.error || resp.statusText}`, 'OK');
+                    } else {
+                        // Оптимистично обновляем статусы для мигающей анимации
+                        const bulkTransitions = {
+                            'stop-all': { from: 'running', to: 'stopping', skipFlags: true },
+                            'start-all': { from: null, to: 'starting', skipFlags: true },
+                            'restart-all': { from: null, to: 'restarting', skipFlags: false },
+                            'reload-all': { from: null, to: 'stopping', skipFlags: false },
+                        };
+                        const transition = bulkTransitions[bulkAction];
+                        if (transition) {
+                            for (const proc of this.processes) {
+                                if (transition.skipFlags && (proc.manual || proc.oneshot || proc.skip)) continue;
+                                if (transition.from && proc.state !== transition.from) continue;
+                                if (!transition.from && bulkAction === 'start-all' && proc.state === 'running') continue;
+                                proc.state = transition.to;
+                            }
+                            this.renderProcessTable();
+                        }
                     }
 
-                    setTimeout(() => this.loadStatus(), 1500);
+                    setTimeout(() => this.loadStatus(), LAUNCHER_BULK_ACTION_REFRESH_DELAY);
                 } catch (err) {
                     console.error(`Launcher bulk ${bulkAction} failed:`, err);
                     await showConfirmDialog('Error', `${label} failed: ${err.message}`, 'OK');

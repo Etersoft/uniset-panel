@@ -11,6 +11,7 @@ import (
 	"github.com/pv/uniset-panel/internal/modbus"
 	"github.com/pv/uniset-panel/internal/opcua"
 	"github.com/pv/uniset-panel/internal/poller"
+	"github.com/pv/uniset-panel/internal/sensorconfig"
 	"github.com/pv/uniset-panel/internal/storage"
 	"github.com/pv/uniset-panel/internal/uniset"
 	"github.com/pv/uniset-panel/internal/uwsgate"
@@ -40,6 +41,7 @@ type ObjectsChangedCallback func(serverID, serverName string, objects []string)
 // Instance представляет подключение к одному UniSet2 серверу
 type Instance struct {
 	Config        config.ServerConfig
+	SensorConfig  *sensorconfig.SensorConfig // per-server sensor configuration (может быть nil)
 	Client        *uniset.Client
 	Poller        *poller.Poller
 	IONCPoller    *ionc.Poller
@@ -52,6 +54,7 @@ type Instance struct {
 	lastPoll         time.Time
 	lastError        string
 	objectCount      int
+	cachedObjects    []string
 	statusCallback   StatusEventCallback
 	objectsCallback  ObjectsChangedCallback
 	healthInterval   time.Duration
@@ -61,25 +64,31 @@ type Instance struct {
 	wg     sync.WaitGroup
 }
 
+// AppConfig содержит параметры для создания Instance
+type AppConfig struct {
+	Server          config.ServerConfig
+	Storage         storage.Storage
+	PollInterval    time.Duration
+	HistoryTTL      time.Duration
+	Supplier        string
+	SensorBatchSize int
+
+	// Callbacks для SSE событий
+	ObjectCallback  ObjectEventCallback
+	IONCCallback    IONCEventCallback
+	ModbusCallback  ModbusEventCallback
+	OPCUACallback   OPCUAEventCallback
+	StatusCallback  StatusEventCallback
+	ObjectsCallback ObjectsChangedCallback
+}
+
 // NewInstance создаёт новый экземпляр сервера
-func NewInstance(
-	cfg config.ServerConfig,
-	store storage.Storage,
-	pollInterval time.Duration,
-	historyTTL time.Duration,
-	supplier string,
-	sensorBatchSize int,
-	objectCallback ObjectEventCallback,
-	ioncCallback IONCEventCallback,
-	modbusCallback ModbusEventCallback,
-	opcuaCallback OPCUAEventCallback,
-	statusCallback StatusEventCallback,
-	objectsCallback ObjectsChangedCallback,
-) *Instance {
-	client := uniset.NewClientWithSupplier(cfg.URL, supplier)
+func NewInstance(ic AppConfig) *Instance {
+	cfg := ic.Server
+	client := uniset.NewClientWithSupplier(cfg.URL, ic.Supplier)
 
 	// Создаём poller
-	p := poller.New(client, store, pollInterval, historyTTL)
+	p := poller.New(client, ic.Storage, ic.PollInterval, ic.HistoryTTL)
 	p.SetServerID(cfg.ID)
 
 	// Устанавливаем callback с информацией о сервере
@@ -90,31 +99,31 @@ func NewInstance(
 	}
 
 	p.SetEventCallback(func(objectName string, data *uniset.ObjectData) {
-		if objectCallback != nil {
-			objectCallback(serverID, serverName, objectName, data)
+		if ic.ObjectCallback != nil {
+			ic.ObjectCallback(serverID, serverName, objectName, data)
 		}
 	})
 
 	// Создаём IONC poller
-	ioncPoller := ionc.NewPoller(client, pollInterval, sensorBatchSize, func(updates []ionc.SensorUpdate) {
-		if ioncCallback != nil {
-			ioncCallback(serverID, serverName, updates)
+	ioncPoller := ionc.NewPoller(client, ic.PollInterval, ic.SensorBatchSize, func(updates []ionc.SensorUpdate) {
+		if ic.IONCCallback != nil {
+			ic.IONCCallback(serverID, serverName, updates)
 		}
 	})
 	ioncPoller.SetServerID(serverID)
 
 	// Создаём Modbus poller
-	modbusPoller := modbus.NewPoller(client, pollInterval, sensorBatchSize, func(updates []modbus.RegisterUpdate) {
-		if modbusCallback != nil {
-			modbusCallback(serverID, serverName, updates)
+	modbusPoller := modbus.NewPoller(client, ic.PollInterval, ic.SensorBatchSize, func(updates []modbus.RegisterUpdate) {
+		if ic.ModbusCallback != nil {
+			ic.ModbusCallback(serverID, serverName, updates)
 		}
 	})
 	modbusPoller.SetServerID(serverID)
 
 	// Создаём OPCUA poller
-	opcuaPoller := opcua.NewPoller(client, pollInterval, sensorBatchSize, func(updates []opcua.SensorUpdate) {
-		if opcuaCallback != nil {
-			opcuaCallback(serverID, serverName, updates)
+	opcuaPoller := opcua.NewPoller(client, ic.PollInterval, ic.SensorBatchSize, func(updates []opcua.SensorUpdate) {
+		if ic.OPCUACallback != nil {
+			ic.OPCUACallback(serverID, serverName, updates)
 		}
 	})
 	opcuaPoller.SetServerID(serverID)
@@ -128,9 +137,9 @@ func NewInstance(
 		IONCPoller:      ioncPoller,
 		ModbusPoller:    modbusPoller,
 		OPCUAPoller:     opcuaPoller,
-		statusCallback:  statusCallback,
-		objectsCallback: objectsCallback,
-		healthInterval:  pollInterval, // используем poll interval для health check
+		statusCallback:  ic.StatusCallback,
+		objectsCallback: ic.ObjectsCallback,
+		healthInterval:  ic.PollInterval, // используем poll interval для health check
 		ctx:             ctx,
 		cancel:          cancel,
 	}
@@ -342,8 +351,30 @@ func (i *Instance) GetObjects() ([]string, error) {
 		return nil, err
 	}
 
-	i.SetObjectCount(len(objects))
+	i.mu.Lock()
+	i.objectCount = len(objects)
+	i.cachedObjects = objects
+	i.mu.Unlock()
 	return objects, nil
+}
+
+// GetCachedObjects возвращает последний известный список объектов.
+// Если кеш пуст — делает запрос к серверу.
+func (i *Instance) GetCachedObjects() []string {
+	i.mu.RLock()
+	cached := i.cachedObjects
+	i.mu.RUnlock()
+
+	if cached != nil {
+		return cached
+	}
+
+	// Кеш пуст — пробуем получить с сервера
+	objects, err := i.GetObjects()
+	if err != nil {
+		return nil
+	}
+	return objects
 }
 
 // GetObjectData возвращает данные объекта

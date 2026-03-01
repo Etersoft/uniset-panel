@@ -7,13 +7,19 @@ import (
 	"time"
 )
 
+// ConnectionCallback вызывается при изменении connectivity журнала
+type ConnectionCallback func(journalID string, connected bool, lastError string)
+
 // Poller опрашивает журнал на наличие новых сообщений
 type Poller struct {
 	client        *Client
 	interval      time.Duration
 	lastTimestamp time.Time
 	callback      func(journalID string, messages []Message)
+	connCb        ConnectionCallback
+	connected     bool
 	logger        *slog.Logger
+	mu            sync.RWMutex
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -35,6 +41,20 @@ func NewPoller(client *Client, interval time.Duration, callback func(journalID s
 		callback:      callback,
 		logger:        logger,
 	}
+}
+
+// SetConnectionCallback устанавливает callback для изменения connectivity
+func (p *Poller) SetConnectionCallback(cb ConnectionCallback) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.connCb = cb
+}
+
+// IsConnected возвращает текущее состояние подключения
+func (p *Poller) IsConnected() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.connected
 }
 
 // Start запускает опрос
@@ -76,10 +96,37 @@ func (p *Poller) poll() {
 	ctx, cancel := context.WithTimeout(p.ctx, 10*time.Second)
 	defer cancel()
 
+	journalID := p.client.ID()
 	messages, err := p.client.GetNewMessages(ctx, p.lastTimestamp, 100)
+
+	p.mu.Lock()
+	wasConnected := p.connected
+	var connCb ConnectionCallback
+
 	if err != nil {
-		p.logger.Error("failed to poll journal", "id", p.client.ID(), "error", err)
+		if wasConnected {
+			p.connected = false
+			connCb = p.connCb
+			p.logger.Warn("journal disconnected", "id", journalID, "error", err)
+		}
+		p.mu.Unlock()
+
+		if connCb != nil {
+			connCb(journalID, false, err.Error())
+		}
 		return
+	}
+
+	// Подключились (или первый успешный опрос)
+	if !wasConnected {
+		p.connected = true
+		connCb = p.connCb
+		p.logger.Info("journal connected", "id", journalID)
+	}
+	p.mu.Unlock()
+
+	if connCb != nil {
+		connCb(journalID, true, "")
 	}
 
 	if len(messages) > 0 {
@@ -92,9 +139,9 @@ func (p *Poller) poll() {
 
 		// Вызываем callback
 		if p.callback != nil {
-			p.callback(p.client.ID(), messages)
+			p.callback(journalID, messages)
 		}
 
-		p.logger.Debug("polled new messages", "id", p.client.ID(), "count", len(messages))
+		p.logger.Debug("polled new messages", "id", journalID, "count", len(messages))
 	}
 }

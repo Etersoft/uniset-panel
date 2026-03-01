@@ -1,9 +1,22 @@
 import { test, expect } from '@playwright/test';
 
+// Получить serverId первого сервера
+async function getFirstServerId(request: any): Promise<string> {
+  const response = await request.get('/api/servers');
+  const data = await response.json();
+  return data.servers[0].id;
+}
+
 test.describe('Sensors API Tests', () => {
 
-  test('should return sensors list from API', async ({ request }) => {
+  test('should require server parameter', async ({ request }) => {
     const response = await request.get('/api/sensors');
+    expect(response.status()).toBe(400);
+  });
+
+  test('should return sensors list from API', async ({ request }) => {
+    const serverId = await getFirstServerId(request);
+    const response = await request.get(`/api/sensors?server=${serverId}`);
     expect(response.ok()).toBeTruthy();
 
     const data = await response.json();
@@ -13,7 +26,8 @@ test.describe('Sensors API Tests', () => {
   });
 
   test('should return sensors with name as primary key (no ID required)', async ({ request }) => {
-    const response = await request.get('/api/sensors');
+    const serverId = await getFirstServerId(request);
+    const response = await request.get(`/api/sensors?server=${serverId}`);
     expect(response.ok()).toBeTruthy();
 
     const data = await response.json();
@@ -37,15 +51,16 @@ test.describe('Sensors API Tests', () => {
   });
 
   test('should get sensor by name', async ({ request }) => {
+    const serverId = await getFirstServerId(request);
     // First get the list of sensors
-    const listResponse = await request.get('/api/sensors');
+    const listResponse = await request.get(`/api/sensors?server=${serverId}`);
     const listData = await listResponse.json();
 
     if (listData.count > 0) {
       const sensorName = listData.sensors[0].name;
 
       // Get sensor by name
-      const response = await request.get(`/api/sensors/by-name/${encodeURIComponent(sensorName)}`);
+      const response = await request.get(`/api/sensors/by-name/${encodeURIComponent(sensorName)}?server=${serverId}`);
       expect(response.ok()).toBeTruthy();
 
       const sensor = await response.json();
@@ -54,20 +69,22 @@ test.describe('Sensors API Tests', () => {
   });
 
   test('should return 404 for non-existent sensor name', async ({ request }) => {
-    const response = await request.get('/api/sensors/by-name/NonExistentSensorName12345');
+    const serverId = await getFirstServerId(request);
+    const response = await request.get(`/api/sensors/by-name/NonExistentSensorName12345?server=${serverId}`);
     expect(response.status()).toBe(404);
   });
 
   test('should handle sensors with special characters in name', async ({ request }) => {
+    const serverId = await getFirstServerId(request);
     // Get sensors list and check if there are any with dots (common in UniSet)
-    const listResponse = await request.get('/api/sensors');
+    const listResponse = await request.get(`/api/sensors?server=${serverId}`);
     const listData = await listResponse.json();
 
     // Find a sensor with a dot in the name (like SES.AMC1_OPCUA_EM1)
     const sensorWithDot = listData.sensors.find((s: any) => s.name.includes('.'));
 
     if (sensorWithDot) {
-      const response = await request.get(`/api/sensors/by-name/${encodeURIComponent(sensorWithDot.name)}`);
+      const response = await request.get(`/api/sensors/by-name/${encodeURIComponent(sensorWithDot.name)}?server=${serverId}`);
       expect(response.ok()).toBeTruthy();
 
       const sensor = await response.json();
@@ -76,7 +93,8 @@ test.describe('Sensors API Tests', () => {
   });
 
   test('should have correct isDiscrete and isInput properties', async ({ request }) => {
-    const response = await request.get('/api/sensors');
+    const serverId = await getFirstServerId(request);
+    const response = await request.get(`/api/sensors?server=${serverId}`);
     const data = await response.json();
 
     // Check a sample of sensors (first 100) to avoid timeout with large configs
@@ -106,7 +124,8 @@ test.describe('Sensors API Tests', () => {
   });
 
   test('sensors should have textname property', async ({ request }) => {
-    const response = await request.get('/api/sensors');
+    const serverId = await getFirstServerId(request);
+    const response = await request.get(`/api/sensors?server=${serverId}`);
     const data = await response.json();
 
     // Check a sample of sensors (first 100) to avoid timeout with large configs
@@ -119,7 +138,8 @@ test.describe('Sensors API Tests', () => {
   });
 
   test('should work with sensors without ID in XML config', async ({ request }) => {
-    const response = await request.get('/api/sensors');
+    const serverId = await getFirstServerId(request);
+    const response = await request.get(`/api/sensors?server=${serverId}`);
     const data = await response.json();
 
     // Check that we have sensors
@@ -133,7 +153,7 @@ test.describe('Sensors API Tests', () => {
     for (let i = 0; i < sampleSize; i++) {
       const sensor = sensorsWithZeroId[i];
       // Should be able to get sensor by name
-      const byNameResponse = await request.get(`/api/sensors/by-name/${encodeURIComponent(sensor.name)}`);
+      const byNameResponse = await request.get(`/api/sensors/by-name/${encodeURIComponent(sensor.name)}?server=${serverId}`);
       expect(byNameResponse.ok()).toBeTruthy();
 
       const retrieved = await byNameResponse.json();
@@ -143,7 +163,8 @@ test.describe('Sensors API Tests', () => {
   });
 
   test('all sensors should be unique by name', async ({ request }) => {
-    const response = await request.get('/api/sensors');
+    const serverId = await getFirstServerId(request);
+    const response = await request.get(`/api/sensors?server=${serverId}`);
     const data = await response.json();
 
     const names = data.sensors.map((s: any) => s.name);

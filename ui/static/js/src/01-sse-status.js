@@ -136,4 +136,9 @@ function updateServerStatus(serverId, connected) {
             panel.classList.add('server-disconnected');
         }
     });
+
+    // Обновляем статус в sidebar группах
+    if (typeof updateGroupEntityStatus === 'function') {
+        updateGroupEntityStatus('server', serverId, connected);
+    }
 }

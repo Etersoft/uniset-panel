@@ -6,6 +6,12 @@ import (
 	"time"
 )
 
+const (
+	// controlReleaseGracePeriod — задержка перед освобождением контроля при SSE disconnect,
+	// позволяет клиенту переподключиться без потери контроля
+	controlReleaseGracePeriod = 3 * time.Second
+)
+
 var (
 	ErrInvalidToken     = errors.New("invalid token")
 	ErrControlTaken     = errors.New("control already taken by another session")
@@ -151,7 +157,7 @@ func (m *ControlManager) ReleaseBySSE(token string) {
 	}
 
 	// Запускаем отложенное освобождение через 3 секунды
-	m.pendingRelease = time.AfterFunc(3*time.Second, func() {
+	m.pendingRelease = time.AfterFunc(controlReleaseGracePeriod, func() {
 		m.mu.Lock()
 		defer m.mu.Unlock()
 

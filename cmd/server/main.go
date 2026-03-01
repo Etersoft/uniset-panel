@@ -32,146 +32,232 @@ import (
 )
 
 // Version is set at build time via ldflags
-var Version = "0.0.6"
+var Version = "0.1.0"
 
 func main() {
 	cfg := config.Parse()
-
-	// Initialize logger
 	logger.Init(cfg.LogFormat, config.ParseLogLevel(cfg.LogLevel))
 
-	// Create storage
-	var store storage.Storage
-	var err error
-
-	switch cfg.Storage {
-	case config.StorageSQLite:
-		store, err = storage.NewSQLiteStorage(cfg.SQLitePath)
-		if err != nil {
-			logger.Error("Failed to create SQLite storage", "error", err)
-			os.Exit(1)
-		}
-		logger.Info("Using SQLite storage", "path", cfg.SQLitePath)
-	default:
-		store = storage.NewMemoryStorage()
-		logger.Info("Using in-memory storage")
-	}
+	store := setupStorage(cfg)
 	defer store.Close()
 
-	// Load sensor configuration if provided
+	sensorCfg, perServerConfigs := loadSensorConfigs(cfg)
+	controlsEnabled := sensorCfg != nil || len(perServerConfigs) > 0
+
+	logServerMgr := logserver.NewManager(slog.Default())
+	defer logServerMgr.Close()
+
+	sseHub := api.NewSSEHub()
+	serverMgr := server.NewManager(store, cfg.PollInterval, cfg.HistoryTTL, cfg.UnisetSupplier, cfg.GetSensorBatchSize())
+	controlMgr := setupControl(cfg, sseHub)
+	recordingMgr := setupRecording(cfg)
+	setupServerCallbacks(serverMgr, sseHub, recordingMgr)
+	launcherMgr := setupLauncher(cfg, sseHub)
+
+	// Add servers from configuration
+	for _, srvCfg := range cfg.Servers {
+		sc := perServerConfigs[srvCfg.ID]
+		if err := serverMgr.AddServerWithSensorConfig(srvCfg, sc); err != nil {
+			slog.Error("Failed to add server", "url", srvCfg.URL, "error", err)
+		}
+	}
+
+	handlers := setupHandlers(cfg, store, serverMgr, sseHub, sensorCfg, perServerConfigs,
+		controlsEnabled, logServerMgr, controlMgr, recordingMgr, launcherMgr)
+
+	dashboardMgr := setupDashboards(cfg, handlers)
+	_ = dashboardMgr
+	journalMgr, journalPollers := setupJournals(cfg, handlers, sseHub)
+
+	// Create SM poller if configured
+	smPoller := setupSMPoller(cfg, store, sseHub, handlers)
+
+	// Create API server
+	var serverOpts []api.ServerOption
+	if cfg.JSFile != "" {
+		serverOpts = append(serverOpts, api.WithJSFile(cfg.JSFile))
+	}
+	if cfg.CSSFile != "" {
+		serverOpts = append(serverOpts, api.WithCSSFile(cfg.CSSFile))
+	}
+	apiServer := api.NewServer(handlers, ui.Content, serverOpts...)
+
+	// Start pollers
+	if smPoller != nil {
+		smPoller.Start()
+		defer smPoller.Stop()
+	}
+	for _, jp := range journalPollers {
+		jp.Start()
+	}
+
+	// Start HTTP server
+	httpServer := &http.Server{
+		Addr:    cfg.Addr,
+		Handler: apiServer,
+	}
+	go startHTTPServer(httpServer, cfg)
+
+	// Wait for interrupt signal
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	gracefulShutdown(httpServer, sseHub, controlMgr, recordingMgr, journalMgr, journalPollers, launcherMgr, serverMgr)
+}
+
+// setupStorage creates and returns the storage backend.
+func setupStorage(cfg *config.Config) storage.Storage {
+	switch cfg.Storage {
+	case config.StorageSQLite:
+		store, err := storage.NewSQLiteStorage(cfg.SQLitePath)
+		if err != nil {
+			slog.Error("Failed to create SQLite storage", "error", err)
+			os.Exit(1)
+		}
+		slog.Info("Using SQLite storage", "path", cfg.SQLitePath)
+		return store
+	default:
+		slog.Info("Using in-memory storage")
+		return storage.NewMemoryStorage()
+	}
+}
+
+// loadSensorConfigs loads global and per-server sensor configurations.
+func loadSensorConfigs(cfg *config.Config) (*sensorconfig.SensorConfig, map[string]*sensorconfig.SensorConfig) {
 	var sensorCfg *sensorconfig.SensorConfig
 	if cfg.ConFile != "" {
 		var err error
 		sensorCfg, err = sensorconfig.LoadFromFile(cfg.ConFile)
 		if err != nil {
-			logger.Error("Failed to load sensor config", "file", cfg.ConFile, "error", err)
+			slog.Error("Failed to load sensor config", "file", cfg.ConFile, "error", err)
 			os.Exit(1)
 		}
-		logger.Info("Loaded sensor configuration", "file", cfg.ConFile, "sensors", sensorCfg.Count(),
+		slog.Info("Loaded global sensor configuration", "file", cfg.ConFile, "sensors", sensorCfg.Count(),
 			"objects", sensorCfg.ObjectCount(), "services", sensorCfg.ServiceCount())
 
-		// Validate that supplier exists in config (objects or services)
 		if !sensorCfg.HasObjectOrService(cfg.UnisetSupplier) {
-			logger.Error("Supplier not found in configuration",
+			slog.Error("Supplier not found in configuration",
 				"supplier", cfg.UnisetSupplier,
 				"hint", "Specify valid supplier with -uniset-supplier=<name>",
 				"note", "Supplier must exist in <objects> or <services> section of the config")
 			os.Exit(1)
 		}
-		logger.Info("Validated supplier", "supplier", cfg.UnisetSupplier)
+		slog.Info("Validated supplier", "supplier", cfg.UnisetSupplier)
 	}
 
-	// Create LogServer manager
-	logServerMgr := logserver.NewManager(slog.Default())
-	defer logServerMgr.Close()
+	perServerConfigs := make(map[string]*sensorconfig.SensorConfig)
+	for _, srvCfg := range cfg.Servers {
+		conFile := srvCfg.UnisetConfig
+		if conFile == "" {
+			conFile = cfg.ConFile
+		}
+		if conFile == "" {
+			continue
+		}
 
-	// Create ServerManager
-	serverMgr := server.NewManager(store, cfg.PollInterval, cfg.HistoryTTL, cfg.UnisetSupplier, cfg.GetSensorBatchSize())
+		if conFile == cfg.ConFile && sensorCfg != nil {
+			perServerConfigs[srvCfg.ID] = sensorCfg
+			continue
+		}
 
-	// Create SSE hub (needed for callbacks)
-	sseHub := api.NewSSEHub()
+		sc, err := sensorconfig.LoadFromFile(conFile)
+		if err != nil {
+			slog.Error("Failed to load per-server sensor config",
+				"server", srvCfg.ID, "file", conFile, "error", err)
+			continue
+		}
+		slog.Info("Loaded per-server sensor configuration",
+			"server", srvCfg.ID, "file", conFile, "sensors", sc.Count())
 
-	// Create control manager if tokens configured
-	var controlMgr *api.ControlManager
-	if cfg.IsControlEnabled() {
-		controlMgr = api.NewControlManager(cfg.ControlTokens, cfg.GetControlTimeout(), sseHub)
-		sseHub.SetControlManager(controlMgr)
-		logger.Info("Session control enabled",
-			"tokens", len(cfg.ControlTokens),
-			"timeout", cfg.GetControlTimeout())
+		if !sc.HasObjectOrService(cfg.UnisetSupplier) {
+			slog.Warn("Supplier not found in per-server configuration",
+				"server", srvCfg.ID, "supplier", cfg.UnisetSupplier)
+		}
+
+		perServerConfigs[srvCfg.ID] = sc
 	}
 
-	// Create recording manager
-	var recordingMgr *recording.Manager
+	return sensorCfg, perServerConfigs
+}
+
+// setupControl creates the control manager if tokens are configured.
+func setupControl(cfg *config.Config, sseHub *api.SSEHub) *api.ControlManager {
+	if !cfg.IsControlEnabled() {
+		return nil
+	}
+	controlMgr := api.NewControlManager(cfg.ControlTokens, cfg.GetControlTimeout(), sseHub)
+	sseHub.SetControlManager(controlMgr)
+	slog.Info("Session control enabled",
+		"tokens", len(cfg.ControlTokens),
+		"timeout", cfg.GetControlTimeout())
+	return controlMgr
+}
+
+// setupRecording creates the recording manager if path is configured.
+func setupRecording(cfg *config.Config) *recording.Manager {
 	recordingPath := cfg.GetRecordingPath()
-	if recordingPath != "" {
-		backend := recording.NewSQLiteBackend(recordingPath)
-		recordingMgr = recording.NewManager(backend, cfg.GetMaxRecords())
-		logger.Info("Recording manager initialized",
-			"path", recordingPath,
-			"max_records", cfg.GetMaxRecords())
+	if recordingPath == "" {
+		return nil
+	}
 
-		// Start recording if enabled by default
-		if cfg.RecordingEnabled {
-			if err := recordingMgr.Start(); err != nil {
-				logger.Error("Failed to start recording", "error", err)
-			} else {
-				logger.Info("Recording started (enabled by default)")
-			}
+	backend := recording.NewSQLiteBackend(recordingPath)
+	mgr := recording.NewManager(backend, cfg.GetMaxRecords())
+	slog.Info("Recording manager initialized",
+		"path", recordingPath,
+		"max_records", cfg.GetMaxRecords())
+
+	if cfg.RecordingEnabled {
+		if err := mgr.Start(); err != nil {
+			slog.Error("Failed to start recording", "error", err)
+		} else {
+			slog.Info("Recording started (enabled by default)")
 		}
 	}
 
-	// Set callbacks for SSE broadcasting (with Recording integration)
+	return mgr
+}
+
+// setupServerCallbacks wires SSE broadcasting and recording callbacks.
+func setupServerCallbacks(serverMgr *server.Manager, sseHub *api.SSEHub, recordingMgr *recording.Manager) {
 	serverMgr.SetObjectCallback(sseHub.BroadcastObjectDataWithServer)
 
-	// IONC callback with recording
 	serverMgr.SetIONCCallback(func(serverID, serverName string, updates []ionc.SensorUpdate) {
 		sseHub.BroadcastIONCSensorBatchWithServer(serverID, serverName, updates)
-		// Record IONC sensor values
 		if recordingMgr != nil && recordingMgr.IsRecording() {
 			now := time.Now()
 			for _, u := range updates {
-				varName := "ionc:" + u.Sensor.Name
-				recordingMgr.Save(serverID, u.ObjectName, varName, u.Sensor.Value, now)
+				recordingMgr.Save(serverID, u.ObjectName, "ionc:"+u.Sensor.Name, u.Sensor.Value, now)
 			}
 		}
 	})
 
-	// Modbus callback with recording
 	serverMgr.SetModbusCallback(func(serverID, serverName string, updates []modbus.RegisterUpdate) {
 		sseHub.BroadcastModbusRegisterBatchWithServer(serverID, serverName, updates)
-		// Record Modbus register values
 		if recordingMgr != nil && recordingMgr.IsRecording() {
 			now := time.Now()
 			for _, u := range updates {
-				varName := "mb:" + u.Register.Name
-				recordingMgr.Save(serverID, u.ObjectName, varName, u.Register.Value, now)
+				recordingMgr.Save(serverID, u.ObjectName, "mb:"+u.Register.Name, u.Register.Value, now)
 			}
 		}
 	})
 
-	// OPCUA callback with recording
 	serverMgr.SetOPCUACallback(func(serverID, serverName string, updates []opcua.SensorUpdate) {
 		sseHub.BroadcastOPCUASensorBatchWithServer(serverID, serverName, updates)
-		// Record OPCUA sensor values
 		if recordingMgr != nil && recordingMgr.IsRecording() {
 			now := time.Now()
 			for _, u := range updates {
-				varName := "opcua:" + u.Sensor.Name
-				recordingMgr.Save(serverID, u.ObjectName, varName, u.Sensor.Value, now)
+				recordingMgr.Save(serverID, u.ObjectName, "opcua:"+u.Sensor.Name, u.Sensor.Value, now)
 			}
 		}
 	})
 
-	// UWebSocketGate callback with recording
 	serverMgr.SetUWSGateCallback(func(serverID, serverName string, updates []uwsgate.SensorUpdate) {
 		sseHub.BroadcastUWSGateSensorBatchWithServer(serverID, serverName, updates)
-		// Record UWebSocketGate sensor values
 		if recordingMgr != nil && recordingMgr.IsRecording() {
 			now := time.Now()
 			for _, u := range updates {
-				varName := "ws:" + u.Sensor.Name
-				recordingMgr.Save(serverID, u.ObjectName, varName, u.Sensor.Value, now)
+				recordingMgr.Save(serverID, u.ObjectName, "ws:"+u.Sensor.Name, u.Sensor.Value, now)
 			}
 		}
 	})
@@ -179,33 +265,44 @@ func main() {
 	serverMgr.SetStatusCallback(sseHub.BroadcastServerStatus)
 	serverMgr.SetObjectsCallback(sseHub.BroadcastObjectsList)
 
-	// Set recording manager on server manager (for all pollers)
 	if recordingMgr != nil {
 		serverMgr.SetRecordingManager(recordingMgr)
 	}
+}
 
-	// Create launcher manager if launchers configured
-	var launcherMgr *launcher.Manager
-	if len(cfg.Launchers) > 0 {
-		launcherMgr = launcher.NewManager()
-		for _, lcfg := range cfg.Launchers {
-			if err := launcherMgr.AddLauncher(lcfg); err != nil {
-				logger.Error("Failed to add launcher", "name", lcfg.Name, "url", lcfg.URL, "error", err)
-			}
-		}
-		launcherMgr.SetStatusCallback(sseHub.BroadcastLauncherStatus)
-		launcherMgr.SetConnectionCallback(sseHub.BroadcastLauncherConnection)
-		launcherMgr.StartAll()
+// setupLauncher creates the launcher manager if launchers are configured.
+func setupLauncher(cfg *config.Config, sseHub *api.SSEHub) *launcher.Manager {
+	if len(cfg.Launchers) == 0 {
+		return nil
 	}
 
-	// Add servers from configuration
-	for _, srvCfg := range cfg.Servers {
-		if err := serverMgr.AddServer(srvCfg); err != nil {
-			logger.Error("Failed to add server", "url", srvCfg.URL, "error", err)
+	mgr := launcher.NewManager()
+	for _, lcfg := range cfg.Launchers {
+		if err := mgr.AddLauncher(lcfg); err != nil {
+			slog.Error("Failed to add launcher", "name", lcfg.Name, "url", lcfg.URL, "error", err)
 		}
 	}
+	mgr.SetStatusCallback(sseHub.BroadcastLauncherStatus)
+	mgr.SetConnectionCallback(sseHub.BroadcastLauncherConnection)
+	mgr.StartAll()
+	return mgr
+}
 
-	// Get first server's client and pollers for API handlers
+// setupHandlers creates and configures API handlers.
+func setupHandlers(
+	cfg *config.Config,
+	store storage.Storage,
+	serverMgr *server.Manager,
+	sseHub *api.SSEHub,
+	sensorCfg *sensorconfig.SensorConfig,
+	perServerConfigs map[string]*sensorconfig.SensorConfig,
+	controlsEnabled bool,
+	logServerMgr *logserver.Manager,
+	controlMgr *api.ControlManager,
+	recordingMgr *recording.Manager,
+	launcherMgr *launcher.Manager,
+) *api.Handlers {
+	// Get first server's client and pollers for backward compatibility
 	var client *uniset.Client
 	var pollerInstance *poller.Poller
 	var ioncPollerInstance *ionc.Poller
@@ -219,13 +316,16 @@ func main() {
 		opcuaPollerInstance = instance.OPCUAPoller
 	}
 
-	// Create API handlers
 	handlers := api.NewHandlers(client, store, pollerInstance, sensorCfg, cfg.PollInterval)
 	handlers.SetVersion(Version)
 	handlers.SetLogServerManager(logServerMgr)
 	handlers.SetServerManager(serverMgr)
 	handlers.SetSSEHub(sseHub)
-	handlers.SetControlsEnabled(cfg.ConFile != "") // Controls visible only if uniset-config specified
+	handlers.SetControlsEnabled(controlsEnabled)
+
+	for serverID, sc := range perServerConfigs {
+		handlers.SetPerServerSensorConfig(serverID, sc)
+	}
 	handlers.SetUIConfig(cfg.UI)
 	handlers.SetLogStreamConfig(cfg.LogStream)
 	if controlMgr != nil {
@@ -237,42 +337,6 @@ func main() {
 	if launcherMgr != nil {
 		handlers.SetLauncherManager(launcherMgr)
 	}
-
-	// Create dashboard manager if directory specified
-	if cfg.DashboardsDir != "" {
-		dashboardMgr := dashboard.NewManager(cfg.DashboardsDir)
-		if err := dashboardMgr.Load(); err != nil {
-			logger.Error("Failed to load dashboards", "dir", cfg.DashboardsDir, "error", err)
-		} else {
-			handlers.SetDashboardManager(dashboardMgr)
-			logger.Info("Loaded server dashboards", "dir", cfg.DashboardsDir, "count", dashboardMgr.Count())
-		}
-	}
-
-	// Create journal manager if configured
-	var journalMgr *journal.Manager
-	var journalPollers []*journal.Poller
-	if len(cfg.JournalURLs) > 0 {
-		journalMgr = journal.NewManager(slog.Default())
-		for _, url := range cfg.JournalURLs {
-			if err := journalMgr.AddJournal(url); err != nil {
-				logger.Error("Failed to add journal", "url", url, "error", err)
-				continue
-			}
-		}
-		handlers.SetJournalManager(journalMgr)
-		logger.Info("Journal manager initialized", "count", journalMgr.Count())
-
-		// Create pollers for each journal
-		for _, client := range journalMgr.GetAllClients() {
-			poller := journal.NewPoller(client, 2*time.Second, func(journalID string, messages []journal.Message) {
-				sseHub.BroadcastJournalMessages(journalID, messages)
-			}, slog.Default())
-			journalPollers = append(journalPollers, poller)
-		}
-	}
-
-	// Set pollers if available
 	if ioncPollerInstance != nil {
 		handlers.SetIONCPoller(ioncPollerInstance)
 	}
@@ -282,88 +346,121 @@ func main() {
 	if opcuaPollerInstance != nil {
 		handlers.SetOPCUAPoller(opcuaPollerInstance)
 	}
+	if cfg.Sidebar != nil {
+		handlers.SetSidebarConfig(cfg.Sidebar)
+	}
 
-	// Create SM poller if configured
-	var smPoller *sm.Poller
-	if cfg.SMURL != "" {
-		smClient := sm.NewClient(cfg.SMURL)
-		smInterval := cfg.SMPollInterval
-		if smInterval == 0 {
-			smInterval = cfg.PollInterval
+	return handlers
+}
+
+// setupDashboards creates the dashboard manager if directory is specified.
+func setupDashboards(cfg *config.Config, handlers *api.Handlers) *dashboard.Manager {
+	if cfg.DashboardsDir == "" {
+		return nil
+	}
+
+	mgr := dashboard.NewManager(cfg.DashboardsDir)
+	if err := mgr.Load(); err != nil {
+		slog.Error("Failed to load dashboards", "dir", cfg.DashboardsDir, "error", err)
+		return nil
+	}
+	handlers.SetDashboardManager(mgr)
+	slog.Info("Loaded server dashboards", "dir", cfg.DashboardsDir, "count", mgr.Count())
+	return mgr
+}
+
+// setupJournals creates the journal manager and pollers if configured.
+func setupJournals(cfg *config.Config, handlers *api.Handlers, sseHub *api.SSEHub) (*journal.Manager, []*journal.Poller) {
+	if len(cfg.JournalURLs) == 0 {
+		return nil, nil
+	}
+
+	journalMgr := journal.NewManager(slog.Default())
+	for _, url := range cfg.JournalURLs {
+		if err := journalMgr.AddJournal(url); err != nil {
+			slog.Error("Failed to add journal", "url", url, "error", err)
+			continue
 		}
-		smPoller = sm.NewPoller(smClient, store, smInterval, func(update sm.SensorUpdate) {
-			sseHub.BroadcastSensorUpdate(update)
+	}
+	handlers.SetJournalManager(journalMgr)
+	slog.Info("Journal manager initialized", "count", journalMgr.Count())
+
+	var pollers []*journal.Poller
+	for _, client := range journalMgr.GetAllClients() {
+		p := journal.NewPoller(client, 2*time.Second, func(journalID string, messages []journal.Message) {
+			sseHub.BroadcastJournalMessages(journalID, messages)
+		}, slog.Default())
+		p.SetConnectionCallback(func(journalID string, connected bool, lastError string) {
+			journalMgr.UpdateConnectionStatus(journalID, connected)
+			sseHub.BroadcastJournalConnection(journalID, connected, lastError)
 		})
-		handlers.SetSMPoller(smPoller)
-		logger.Info("SM integration enabled", "url", cfg.SMURL, "poll_interval", smInterval)
+		pollers = append(pollers, p)
 	}
 
-	// Create API server with optional external files for hot reload
-	var serverOpts []api.ServerOption
-	if cfg.JSFile != "" {
-		serverOpts = append(serverOpts, api.WithJSFile(cfg.JSFile))
-	}
-	if cfg.CSSFile != "" {
-		serverOpts = append(serverOpts, api.WithCSSFile(cfg.CSSFile))
-	}
-	apiServer := api.NewServer(handlers, ui.Content, serverOpts...)
+	return journalMgr, pollers
+}
 
-	// Start SM poller if configured
-	if smPoller != nil {
-		smPoller.Start()
-		defer smPoller.Stop()
+// setupSMPoller creates the SharedMemory poller if configured.
+func setupSMPoller(cfg *config.Config, store storage.Storage, sseHub *api.SSEHub, handlers *api.Handlers) *sm.Poller {
+	if cfg.SMURL == "" {
+		return nil
 	}
 
-	// Start journal pollers
-	for _, jp := range journalPollers {
-		jp.Start()
+	smClient := sm.NewClient(cfg.SMURL)
+	smInterval := cfg.SMPollInterval
+	if smInterval == 0 {
+		smInterval = cfg.PollInterval
 	}
+	smPoller := sm.NewPoller(smClient, store, smInterval, func(update sm.SensorUpdate) {
+		sseHub.BroadcastSensorUpdate(update)
+	})
+	handlers.SetSMPoller(smPoller)
+	slog.Info("SM integration enabled", "url", cfg.SMURL, "poll_interval", smInterval)
+	return smPoller
+}
 
-	// Start HTTP server
-	httpServer := &http.Server{
-		Addr:    cfg.Addr,
-		Handler: apiServer,
+// startHTTPServer starts the HTTP server in a goroutine.
+func startHTTPServer(httpServer *http.Server, cfg *config.Config) {
+	logArgs := []any{
+		"addr", cfg.Addr,
+		"poll_interval", cfg.PollInterval.String(),
+		"history_ttl", cfg.HistoryTTL.String(),
+		"servers", len(cfg.Servers),
 	}
+	if cfg.ConFile != "" {
+		logArgs = append(logArgs, "uniset_config", cfg.ConFile)
+	}
+	slog.Info("Starting server", logArgs...)
 
-	go func() {
-		logArgs := []any{
-			"addr", cfg.Addr,
-			"poll_interval", cfg.PollInterval.String(),
-			"history_ttl", cfg.HistoryTTL.String(),
-			"servers", len(cfg.Servers),
-		}
+	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		slog.Error("Server failed", "error", err)
+		os.Exit(1)
+	}
+}
 
-		if cfg.ConFile != "" {
-			logArgs = append(logArgs, "uniset_config", cfg.ConFile)
-		}
-		logger.Info("Starting server", logArgs...)
+// gracefulShutdown stops all services gracefully.
+func gracefulShutdown(
+	httpServer *http.Server,
+	sseHub *api.SSEHub,
+	controlMgr *api.ControlManager,
+	recordingMgr *recording.Manager,
+	journalMgr *journal.Manager,
+	journalPollers []*journal.Poller,
+	launcherMgr *launcher.Manager,
+	serverMgr *server.Manager,
+) {
+	slog.Info("Shutting down server...")
 
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Error("Server failed", "error", err)
-			os.Exit(1)
-		}
-	}()
-
-	// Wait for interrupt signal
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	logger.Info("Shutting down server...")
-
-	// Stop control manager
 	if controlMgr != nil {
 		controlMgr.Stop()
 	}
 
-	// Stop recording manager
 	if recordingMgr != nil {
 		if err := recordingMgr.Stop(); err != nil {
-			logger.Error("Recording manager stop error", "error", err)
+			slog.Error("Recording manager stop error", "error", err)
 		}
 	}
 
-	// Stop journal pollers and manager
 	for _, jp := range journalPollers {
 		jp.Stop()
 	}
@@ -371,25 +468,22 @@ func main() {
 		journalMgr.Close()
 	}
 
-	// Shutdown launcher manager
 	if launcherMgr != nil {
 		launcherMgr.Shutdown()
 	}
 
-	// Shutdown server manager
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
+
 	if err := serverMgr.Shutdown(shutdownCtx); err != nil {
-		logger.Error("Server manager shutdown error", "error", err)
+		slog.Error("Server manager shutdown error", "error", err)
 	}
 
-	// Close all SSE connections to allow HTTP handlers to complete
 	sseHub.Close()
 
-	// Graceful shutdown HTTP server with timeout
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
-		logger.Error("Server shutdown error", "error", err)
+		slog.Error("Server shutdown error", "error", err)
 	}
 
-	logger.Info("Server stopped")
+	slog.Info("Server stopped")
 }

@@ -5,10 +5,10 @@ const MBS_OBJECT = 'MBTCPSlave1';
 test.describe('ModbusSlave renderer', () => {
   test('should display ModbusSlave object in list and open tab', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
     // Check that MBTCPSlave1 exists
-    const mbsItem = page.locator('#objects-list li', { hasText: MBS_OBJECT });
+    const mbsItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MBS_OBJECT });
     await expect(mbsItem).toBeVisible({ timeout: 10000 });
 
     // Click on MBTCPSlave1
@@ -24,9 +24,9 @@ test.describe('ModbusSlave renderer', () => {
 
   test('should have ModbusSlave-specific sections', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    const mbsItem = page.locator('#objects-list li', { hasText: MBS_OBJECT });
+    const mbsItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MBS_OBJECT });
     await mbsItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -44,9 +44,9 @@ test.describe('ModbusSlave renderer', () => {
 
   test('should display status information', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    const mbsItem = page.locator('#objects-list li', { hasText: MBS_OBJECT });
+    const mbsItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MBS_OBJECT });
     await mbsItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -61,9 +61,9 @@ test.describe('ModbusSlave renderer', () => {
 
   test('should display registers table', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    const mbsItem = page.locator('#objects-list li', { hasText: MBS_OBJECT });
+    const mbsItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MBS_OBJECT });
     await mbsItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -82,9 +82,9 @@ test.describe('ModbusSlave renderer', () => {
 
   test('should have filter input for registers', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    const mbsItem = page.locator('#objects-list li', { hasText: MBS_OBJECT });
+    const mbsItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MBS_OBJECT });
     await mbsItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -100,9 +100,9 @@ test.describe('ModbusSlave renderer', () => {
 
   test('should display register values for SSE updates', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    const mbsItem = page.locator('#objects-list li', { hasText: MBS_OBJECT });
+    const mbsItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MBS_OBJECT });
     await mbsItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -121,9 +121,9 @@ test.describe('ModbusSlave renderer', () => {
 
   test('should filter registers by text', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    const mbsItem = page.locator('#objects-list li', { hasText: MBS_OBJECT });
+    const mbsItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MBS_OBJECT });
     await mbsItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -145,9 +145,9 @@ test.describe('ModbusSlave renderer', () => {
 
   test('should filter registers by type', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    const mbsItem = page.locator('#objects-list li', { hasText: MBS_OBJECT });
+    const mbsItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MBS_OBJECT });
     await mbsItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -174,9 +174,9 @@ test.describe('ModbusSlave renderer', () => {
 
   test('should have virtual scroll for registers', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    const mbsItem = page.locator('#objects-list li', { hasText: MBS_OBJECT });
+    const mbsItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MBS_OBJECT });
     await mbsItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -188,9 +188,9 @@ test.describe('ModbusSlave renderer', () => {
 
   test('should have resize handle for registers section', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    const mbsItem = page.locator('#objects-list li', { hasText: MBS_OBJECT });
+    const mbsItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MBS_OBJECT });
     await mbsItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -203,9 +203,9 @@ test.describe('ModbusSlave renderer', () => {
   test.describe('Chart Toggle', () => {
     test('should have chart toggle for each register row', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-      const mbsItem = page.locator('#objects-list li', { hasText: MBS_OBJECT });
+      const mbsItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MBS_OBJECT });
       await mbsItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -224,9 +224,9 @@ test.describe('ModbusSlave renderer', () => {
 
     test('should add register to chart on checkbox click', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-      const mbsItem = page.locator('#objects-list li', { hasText: MBS_OBJECT });
+      const mbsItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MBS_OBJECT });
       await mbsItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -252,9 +252,9 @@ test.describe('ModbusSlave renderer', () => {
 
     test('should remove register from chart on second click', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-      const mbsItem = page.locator('#objects-list li', { hasText: MBS_OBJECT });
+      const mbsItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MBS_OBJECT });
       await mbsItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -275,9 +275,9 @@ test.describe('ModbusSlave renderer', () => {
 
     test('should create stepped chart for DI sensor', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-      const mbsItem = page.locator('#objects-list li', { hasText: MBS_OBJECT });
+      const mbsItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MBS_OBJECT });
       await mbsItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -315,9 +315,9 @@ test.describe('ModbusSlave renderer', () => {
 
     test('should create smooth chart for AI sensor (not stepped)', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-      const mbsItem = page.locator('#objects-list li', { hasText: MBS_OBJECT });
+      const mbsItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MBS_OBJECT });
       await mbsItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -357,9 +357,9 @@ test.describe('ModbusSlave renderer', () => {
   test.describe('Pin and SSE Updates', () => {
     test('should allow pinning a register', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-      const mbsItem = page.locator('#objects-list li', { hasText: MBS_OBJECT });
+      const mbsItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MBS_OBJECT });
       await mbsItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -386,9 +386,9 @@ test.describe('ModbusSlave renderer', () => {
 
     test('should show only pinned registers when filter is empty', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-      const mbsItem = page.locator('#objects-list li', { hasText: MBS_OBJECT });
+      const mbsItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MBS_OBJECT });
       await mbsItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -419,9 +419,9 @@ test.describe('ModbusSlave renderer', () => {
 
     test('should show "Unpin all" button when registers are pinned', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-      const mbsItem = page.locator('#objects-list li', { hasText: MBS_OBJECT });
+      const mbsItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MBS_OBJECT });
       await mbsItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -453,9 +453,9 @@ test.describe('ModbusSlave renderer', () => {
       });
 
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-      const mbsItem = page.locator('#objects-list li', { hasText: MBS_OBJECT });
+      const mbsItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MBS_OBJECT });
       await mbsItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -528,9 +528,9 @@ test.describe('ModbusSlave renderer', () => {
 
     test('should apply value-changed animation on SSE update', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-      const mbsItem = page.locator('#objects-list li', { hasText: MBS_OBJECT });
+      const mbsItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MBS_OBJECT });
       await mbsItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -565,9 +565,9 @@ test.describe('ModbusSlave renderer', () => {
 
     test('should persist pinned registers in localStorage', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-      const mbsItem = page.locator('#objects-list li', { hasText: MBS_OBJECT });
+      const mbsItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: MBS_OBJECT });
       await mbsItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -589,7 +589,7 @@ test.describe('ModbusSlave renderer', () => {
 
       // Reload page
       await page.reload();
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
       await mbsItem.click();
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
       await page.waitForTimeout(1000);

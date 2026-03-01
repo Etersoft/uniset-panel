@@ -1,6 +1,68 @@
 // Auto-generated from src/*.js - DO NOT EDIT
 // Run 'make app' or 'go generate ./ui' to rebuild
 
+// === 00-constants.js ===
+// ============================================================================
+// Константы UI
+// ============================================================================
+
+// === Таймауты и интервалы (мс) ===
+const FILTER_DEBOUNCE_DELAY = 300;
+const DOUBLE_CLICK_THRESHOLD = 250;
+const RESUBSCRIBE_DELAY = 1000;
+const SIDEBAR_STATUS_REAPPLY_DELAY = 3000;
+const ANIMATION_REMOVAL_DELAY = 500;
+const AUTOCOMPLETE_DEBOUNCE_DELAY = 150;
+const JOURNAL_SEARCH_DEBOUNCE_DELAY = 300;
+const JOURNAL_HIGHLIGHT_DURATION = 2000;
+const LAUNCHER_AUTO_REFRESH_INTERVAL = 5000;
+const LAUNCHER_ACTION_REFRESH_DELAY = 1000;
+const LAUNCHER_BULK_ACTION_REFRESH_DELAY = 1500;
+const STATUS_DISPLAY_UPDATE_INTERVAL = 1000;
+const RECORDING_STATUS_POLL_INTERVAL = 5000;
+const CONTROL_PING_INTERVAL = 30000;
+const SETTINGS_FILTER_DEBOUNCE_DELAY = 200;
+
+// === SSE ===
+const SSE_RESUBSCRIBE_DELAY = 1000;
+const SSE_RECOVERY_PROBE_INTERVAL = 30000;
+
+// === Лимиты данных ===
+const MAX_CHART_POINTS = 1000;
+const MAX_LOG_LINES = 10000;
+const VIRTUAL_SCROLL_CHUNK_SIZE = 200;
+const JOURNAL_DEFAULT_LIMIT = 100;
+const AUTOCOMPLETE_MIN_QUERY = 2;
+
+// === Виртуальный скролл (px) ===
+const DEFAULT_ROW_HEIGHT = 32;
+const DEFAULT_BUFFER_ROWS = 10;
+const VIRTUAL_SCROLL_LOAD_THRESHOLD = 200;
+
+// === Высоты секций (px) ===
+const DEFAULT_SECTION_HEIGHT = 300;
+const MIN_SECTION_HEIGHT = 100;
+const MAX_SECTION_HEIGHT = 800;
+const LOGVIEWER_DEFAULT_HEIGHT = 200;
+const LOGVIEWER_MIN_HEIGHT = 100;
+const LOGVIEWER_MAX_HEIGHT = 600;
+const CHARTS_CONTAINER_MIN_HEIGHT = 150;
+const CHARTS_CONTAINER_DEFAULT_HEIGHT = 300;
+const SENSORS_CONTAINER_MIN_HEIGHT = 200;
+
+// === Dashboard сетка ===
+const DASHBOARD_GRID_COLS = 48;
+const DASHBOARD_GRID_ROW_HEIGHT = 30;
+const DASHBOARD_GRID_GAP = 4;
+
+// === Временные диапазоны (сек) ===
+const DEFAULT_CHART_TIME_RANGE = 900;
+
+// === Пороги formatTimeAgo ===
+const TIME_AGO_MIN_SECONDS = 5;
+const TIME_AGO_MINUTES_THRESHOLD = 60;
+
+
 // === 00-state.js ===
 // Идентификатор сервера для SharedMemory (SM) событий
 // Соответствует SharedMemoryServerID в backend (internal/api/sse.go)
@@ -17,7 +79,7 @@ const state = window.state = {
     sensors: new Map(), // sensorId -> sensorInfo
     sensorsByName: new Map(), // sensorName -> sensorInfo
     sensorValuesCache: new Map(), // sensorName -> { value, error, timestamp } - cache for dashboard init
-    timeRange: 900, // секунды (по умолчанию 15 минут)
+    timeRange: DEFAULT_CHART_TIME_RANGE, // секунды (по умолчанию 15 минут)
     sidebarCollapsed: false, // свёрнутая боковая панель
     collapsedSections: {}, // состояние спойлеров
     collapsedServerGroups: new Set(), // свёрнутые группы серверов в списке объектов
@@ -44,6 +106,8 @@ const state = window.state = {
         reconnectTimerId: null,     // ID таймера переподключения (для очистки)
         statusSyncInterval: null    // ID интервала периодической синхронизации статуса серверов
     },
+    sidebarGroups: null,       // null = legacy mode, array = group mode
+    groupCollapseState: {},    // { groupName: boolean } — collapse состояние групп sidebar
     control: {
         enabled: false,       // включён ли контроль на сервере
         token: null,          // текущий токен (из localStorage или URL)
@@ -194,6 +258,11 @@ function updateServerStatus(serverId, connected) {
             panel.classList.add('server-disconnected');
         }
     });
+
+    // Обновляем статус в sidebar группах
+    if (typeof updateGroupEntityStatus === 'function') {
+        updateGroupEntityStatus('server', serverId, connected);
+    }
 }
 
 
@@ -284,7 +353,7 @@ function updateAllControlButtons() {
     // IONC кнопки
     document.querySelectorAll('.ionc-btn-set, .ionc-btn-freeze, .ionc-btn-unfreeze, .ionc-btn-gen, .ionc-btn-gen-stop').forEach(btn => {
         // Не трогаем readonly сенсоры - они всегда disabled
-        if (btn.closest('tr')?.classList.contains('readonly')) return;
+        if (btn.closest('tr')?.classList.contains('ionc-sensor-readonly')) return;
         btn.disabled = !canCtrl;
         if (!canCtrl) {
             btn.title = 'Read-only mode - take control first';
@@ -429,7 +498,7 @@ function startControlPing() {
         } catch (e) {
             console.warn('Control ping failed:', e);
         }
-    }, 30000);
+    }, CONTROL_PING_INTERVAL);
 }
 
 // Остановка ping
@@ -595,7 +664,7 @@ function initRecordingUI() {
     updateRecordingStatus();
 
     // Start polling for status updates (every 5 seconds)
-    recordingState.statusPollInterval = setInterval(updateRecordingStatus, 5000);
+    recordingState.statusPollInterval = setInterval(updateRecordingStatus, RECORDING_STATUS_POLL_INTERVAL);
 }
 
 // Update recording status from API
@@ -662,6 +731,42 @@ function updateRecordingUI() {
 
 
 // === 04-sse.js ===
+// Общая функция обновления графиков из SSE batch-события
+// items - массив элементов с полями name, value, supplier (опционально)
+// prefix - префикс для varName (mb, ext, ws, io)
+// options.showSupplier - обновлять ли supplier в легенде
+function updateChartsFromBatch(tabKey, items, prefix, timestamp, options = {}) {
+    const tabState = state.tabs.get(tabKey);
+    if (!tabState) return;
+    const ts = timestamp ? new Date(timestamp) : new Date();
+    const chartsToUpdate = new Set();
+    const displayName = tabState.displayName || '';
+    for (const item of items) {
+        const varName = `${prefix}:${item.name}`;
+        const chartData = tabState.charts.get(varName);
+        if (!chartData) continue;
+        chartData.chart.data.datasets[0].data.push({ x: ts, y: item.value });
+        chartsToUpdate.add(varName);
+        // Обновляем значение в легенде
+        const safeVarName = varName.replace(/:/g, '-');
+        const legendEl = getElementInTab(tabKey, `legend-value-${displayName}-${safeVarName}`);
+        if (legendEl) legendEl.textContent = formatValue(item.value);
+        // Поставщик (опционально — для IONC, UWSGate)
+        if (options.showSupplier) {
+            const supplierEl = getElementInTab(tabKey, `legend-supplier-${displayName}-${safeVarName}`);
+            if (supplierEl) supplierEl.textContent = item.supplier || '';
+        }
+    }
+    if (chartsToUpdate.size > 0) {
+        syncAllChartsTimeRange(tabKey);
+        tabState.charts.forEach((chartData) => {
+            const data = chartData.chart.data.datasets[0].data;
+            while (data.length > MAX_CHART_POINTS) data.shift();
+            chartData.chart.update('none');
+        });
+    }
+}
+
 function initSSE() {
     // Очищаем таймер переподключения (если есть)
     if (state.sse.reconnectTimerId) {
@@ -714,7 +819,7 @@ function initSSE() {
             refreshObjectsList();
 
             // Переподписываемся на все SSE обновления (сервер мог потерять состояние подписок)
-            setTimeout(resubscribeAll, 1000);
+            setTimeout(resubscribeAll, SSE_RESUBSCRIBE_DELAY);
 
             // Отключаем polling fallback если был активен
             disablePollingFallback();
@@ -722,6 +827,11 @@ function initSSE() {
             // Запускаем периодическую синхронизацию статуса серверов
             // (ловит пропущенные server_status SSE-события)
             startServerStatusSync();
+
+            // Обновляем статусы в sidebar группах
+            if (typeof applySidebarStatuses === 'function') {
+                applySidebarStatuses();
+            }
         } catch (err) {
             console.warn('SSE: Error парсинга connected:', err);
         }
@@ -748,8 +858,6 @@ function initSSE() {
 
                 // Обновляем графики напрямую из SSE данных (без запроса истории)
                 const eventTimestamp = new Date(timestamp);
-                const maxPoints = 1000;
-
                 tabState.charts.forEach((chartData, varName) => {
                     // Пропускаем внешние датчики (ext:) - они обновляются через sensor_data
                     if (varName.startsWith('ext:')) {
@@ -780,7 +888,7 @@ function initSSE() {
                         chartData.chart.data.datasets[0].data.push(dataPoint);
 
                         // Ограничиваем количество точек
-                        if (chartData.chart.data.datasets[0].data.length > maxPoints) {
+                        if (chartData.chart.data.datasets[0].data.length > MAX_CHART_POINTS) {
                             chartData.chart.data.datasets[0].data.shift();
                         }
                     }
@@ -810,44 +918,13 @@ function initSSE() {
             const sensor = event.data;
 
             // Формируем tabKey из serverId и objectName
-            // serverId="sm" для SharedMemory событий
             const tabKey = serverId
                 ? `${serverId}:${objectName}`
                 : findTabKeyByDisplayName(objectName); // fallback для legacy
             if (!tabKey) return;
 
-            // Находим вкладку и график для этого датчика
-            const tabState = state.tabs.get(tabKey);
-            if (tabState) {
-                const displayName = tabState.displayName || objectName;
-                const varName = `ext:${sensor.name}`;
-                const chartData = tabState.charts.get(varName);
-
-                if (chartData) {
-                    // Добавляем точку на график (формат {x: Date, y: value} для time scale)
-                    const timestamp = new Date(event.timestamp);
-                    const value = sensor.value;
-                    const dataPoint = { x: timestamp, y: value };
-
-                    chartData.chart.data.datasets[0].data.push(dataPoint);
-
-                    // Ограничиваем количество точек
-                    const maxPoints = 1000;
-                    if (chartData.chart.data.datasets[0].data.length > maxPoints) {
-                        chartData.chart.data.datasets[0].data.shift();
-                    }
-
-                    // Синхронизируем временную шкалу для всех графиков объекта
-                    syncAllChartsTimeRange(tabKey);
-
-                    // Обновляем значение в легенде
-                    const safeVarName = varName.replace(/:/g, '-');
-                    const legendEl = getElementInTab(tabKey, `legend-value-${displayName}-${safeVarName}`);
-                    if (legendEl) {
-                        legendEl.textContent = formatValue(value);
-                    }
-                }
-            }
+            // Обновляем график (одиночный сенсор — оборачиваем в массив)
+            updateChartsFromBatch(tabKey, [sensor], 'ext', event.timestamp);
         } catch (err) {
             console.warn('SSE: Error обработки sensor_data:', err);
         }
@@ -858,7 +935,7 @@ function initSSE() {
         try {
             const event = JSON.parse(e.data);
             const { objectName, serverId } = event;
-            const sensors = event.data; // массив датчиков
+            const sensors = event.data;
 
             // Cache sensor values for dashboard initialization
             const now = Date.now();
@@ -870,64 +947,22 @@ function initSSE() {
                 });
             }
 
-            // Обновляем виджеты на dashboard (передаём timestamp для chart widgets)
-            const eventTimestamp = event.timestamp || null;
-            updateDashboardWidgets(sensors, eventTimestamp);
+            // Обновляем виджеты на dashboard
+            updateDashboardWidgets(sensors, event.timestamp || null);
 
-            // Формируем ключ вкладки: serverId:objectName
             const tabKey = `${serverId}:${objectName}`;
-
-            // Находим вкладку с IONC рендерером
             const tabState = state.tabs.get(tabKey);
             if (!tabState) return;
 
-            const timestamp = new Date(event.timestamp);
-            const chartsToUpdate = new Set();
-
-            // Обрабатываем все датчики
+            // Обновляем таблицу датчиков
             for (const sensor of sensors) {
-                // Обновляем таблицу датчиков
                 if (tabState.renderer?.handleIONCSensorUpdate) {
                     tabState.renderer.handleIONCSensorUpdate(sensor);
                 }
-
-                // Обновляем график если есть (IONC использует prefix 'io')
-                const varName = `io:${sensor.name}`;
-                const chartData = tabState.charts.get(varName);
-                if (chartData) {
-                    const value = sensor.value;
-                    chartData.chart.data.datasets[0].data.push({ x: timestamp, y: value });
-                    chartsToUpdate.add(varName);
-
-                    // Обновляем значение и supplier в легенде
-                    const safeVarName = varName.replace(/:/g, '-');
-                    const legendEl = getElementInTab(tabKey, `legend-value-${tabState.displayName}-${safeVarName}`);
-                    if (legendEl) {
-                        legendEl.textContent = formatValue(value);
-                    }
-                    const supplierEl = getElementInTab(tabKey, `legend-supplier-${tabState.displayName}-${safeVarName}`);
-                    if (supplierEl) {
-                        supplierEl.textContent = sensor.supplier || '';
-                    }
-                }
             }
 
-            // Один раз синхронизируем временную шкалу
-            if (chartsToUpdate.size > 0) {
-                syncAllChartsTimeRange(tabKey);
-            }
-
-            // Batch update для всех графиков
-            tabState.charts.forEach((chartData, varName) => {
-                // Ограничиваем количество точек
-                const data = chartData.chart.data.datasets[0].data;
-                const maxPoints = 1000;
-                while (data.length > maxPoints) {
-                    data.shift();
-                }
-                chartData.chart.update('none');
-            });
-
+            // Обновляем графики
+            updateChartsFromBatch(tabKey, sensors, 'io', event.timestamp, { showSupplier: true });
         } catch (err) {
             console.warn('SSE: Error обработки ionc_sensor_batch:', err);
         }
@@ -938,69 +973,27 @@ function initSSE() {
         try {
             const event = JSON.parse(e.data);
             const { objectName, serverId } = event;
-            const registers = event.data; // массив регистров
+            const registers = event.data;
 
-            // Обновляем виджеты на dashboard (передаём timestamp для chart widgets)
             updateDashboardWidgets(registers, event.timestamp);
 
-            // Формируем ключ вкладки: serverId:objectName
             const tabKey = `${serverId}:${objectName}`;
-
-            // Находим вкладку с Modbus рендерером
             const tabState = state.tabs.get(tabKey);
             if (!tabState) return;
 
-            // Проверяем, что это Modbus рендерер (Master или Slave)
             const renderer = tabState.renderer;
             if (!renderer) return;
-
             const isMaster = renderer.constructor.name === 'ModbusMasterRenderer';
             const isSlave = renderer.constructor.name === 'ModbusSlaveRenderer';
             if (!isMaster && !isSlave) return;
 
-            // Вызываем обработчик обновления регистров (для таблицы)
+            // Обновляем таблицу регистров
             if (typeof renderer.handleModbusRegisterUpdates === 'function') {
                 renderer.handleModbusRegisterUpdates(registers);
             }
 
             // Обновляем графики
-            // ModbusMaster и ModbusSlave используют одинаковый prefix 'mb' в getChartOptions()
-            const timestamp = event.timestamp ? new Date(event.timestamp) : new Date();
-            const chartsToUpdate = new Set();
-
-            for (const reg of registers) {
-                // varName формируется как prefix:sensor.name в createExternalSensorChart
-                const varName = `mb:${reg.name}`;
-                const chartData = tabState.charts.get(varName);
-                if (chartData) {
-                    const value = reg.value;
-                    chartData.chart.data.datasets[0].data.push({ x: timestamp, y: value });
-                    chartsToUpdate.add(varName);
-
-                    // Обновляем значение в легенде
-                    const safeVarName = varName.replace(/:/g, '-');
-                    const legendEl = getElementInTab(tabKey, `legend-value-${tabState.displayName}-${safeVarName}`);
-                    if (legendEl) {
-                        legendEl.textContent = formatValue(value);
-                    }
-                }
-            }
-
-            // Синхронизируем временную шкалу и обновляем графики
-            if (chartsToUpdate.size > 0) {
-                syncAllChartsTimeRange(tabKey);
-
-                // Batch update для графиков с изменениями
-                tabState.charts.forEach((chartData, varName) => {
-                    // Ограничиваем количество точек
-                    const data = chartData.chart.data.datasets[0].data;
-                    const maxPoints = 1000;
-                    while (data.length > maxPoints) {
-                        data.shift();
-                    }
-                    chartData.chart.update('none');
-                });
-            }
+            updateChartsFromBatch(tabKey, registers, 'mb', event.timestamp);
         } catch (err) {
             console.warn('SSE: Error обработки modbus_register_batch:', err);
         }
@@ -1011,67 +1004,26 @@ function initSSE() {
         try {
             const event = JSON.parse(e.data);
             const { objectName, serverId } = event;
-            const sensors = event.data; // массив датчиков
+            const sensors = event.data;
 
-            // Обновляем виджеты на dashboard (передаём timestamp для chart widgets)
             updateDashboardWidgets(sensors, event.timestamp);
 
-            // Формируем ключ вкладки: serverId:objectName
             const tabKey = `${serverId}:${objectName}`;
-
-            // Находим вкладку с OPCUA рендерером
             const tabState = state.tabs.get(tabKey);
             if (!tabState) return;
 
-            // Проверяем, что это OPCUAExchange или OPCUAServer рендерер
             const renderer = tabState.renderer;
             const isExchange = renderer && renderer.constructor.name === 'OPCUAExchangeRenderer';
             const isServer = renderer && renderer.constructor.name === 'OPCUAServerRenderer';
             if (!isExchange && !isServer) return;
 
-            // Вызываем обработчик обновления датчиков (для таблицы)
+            // Обновляем таблицу датчиков
             if (typeof renderer.handleOPCUASensorUpdates === 'function') {
                 renderer.handleOPCUASensorUpdates(sensors);
             }
 
             // Обновляем графики
-            // OPCUAExchange и OPCUAServer не переопределяют getChartOptions(), используют default prefix 'ext'
-            const timestamp = event.timestamp ? new Date(event.timestamp) : new Date();
-            const chartsToUpdate = new Set();
-
-            for (const sensor of sensors) {
-                // varName формируется как prefix:sensor.name в createExternalSensorChart
-                const varName = `ext:${sensor.name}`;
-                const chartData = tabState.charts.get(varName);
-                if (chartData) {
-                    const value = sensor.value;
-                    chartData.chart.data.datasets[0].data.push({ x: timestamp, y: value });
-                    chartsToUpdate.add(varName);
-
-                    // Обновляем значение в легенде
-                    const safeVarName = varName.replace(/:/g, '-');
-                    const legendEl = getElementInTab(tabKey, `legend-value-${tabState.displayName}-${safeVarName}`);
-                    if (legendEl) {
-                        legendEl.textContent = formatValue(value);
-                    }
-                }
-            }
-
-            // Синхронизируем временную шкалу и обновляем графики
-            if (chartsToUpdate.size > 0) {
-                syncAllChartsTimeRange(tabKey);
-
-                // Batch update для графиков с изменениями
-                tabState.charts.forEach((chartData, varName) => {
-                    // Ограничиваем количество точек
-                    const data = chartData.chart.data.datasets[0].data;
-                    const maxPoints = 1000;
-                    while (data.length > maxPoints) {
-                        data.shift();
-                    }
-                    chartData.chart.update('none');
-                });
-            }
+            updateChartsFromBatch(tabKey, sensors, 'ext', event.timestamp);
         } catch (err) {
             console.warn('SSE: Error обработки opcua_sensor_batch:', err);
         }
@@ -1082,68 +1034,24 @@ function initSSE() {
         try {
             const event = JSON.parse(e.data);
             const { objectName, serverId } = event;
-            const sensors = event.data; // массив датчиков
+            const sensors = event.data;
 
-            // Обновляем виджеты на dashboard (передаём timestamp для chart widgets)
             updateDashboardWidgets(sensors, event.timestamp);
 
-            // Формируем ключ вкладки: serverId:objectName
             const tabKey = `${serverId}:${objectName}`;
-
-            // Находим вкладку с UWebSocketGate рендерером
             const tabState = state.tabs.get(tabKey);
             if (!tabState) return;
 
-            // Проверяем, что это UWebSocketGate рендерер
             const renderer = tabState.renderer;
             if (!renderer || renderer.constructor.name !== 'UWebSocketGateRenderer') return;
 
-            // Вызываем обработчик обновления датчиков (для таблицы)
+            // Обновляем таблицу датчиков
             if (typeof renderer.handleSSEUpdate === 'function') {
                 renderer.handleSSEUpdate(sensors);
             }
 
-            // Обновляем графики (UWebSocketGate использует prefix 'ws')
-            const timestamp = event.timestamp ? new Date(event.timestamp) : new Date();
-            const chartsToUpdate = new Set();
-
-            for (const sensor of sensors) {
-                // varName формируется как prefix:sensor.name в createExternalSensorChart
-                const varName = `ws:${sensor.name}`;
-                const chartData = tabState.charts.get(varName);
-                if (chartData) {
-                    const value = sensor.value;
-                    chartData.chart.data.datasets[0].data.push({ x: timestamp, y: value });
-                    chartsToUpdate.add(varName);
-
-                    // Обновляем значение и supplier в легенде
-                    const safeVarName = varName.replace(/:/g, '-');
-                    const legendEl = getElementInTab(tabKey, `legend-value-${tabState.displayName}-${safeVarName}`);
-                    if (legendEl) {
-                        legendEl.textContent = formatValue(value);
-                    }
-                    const supplierEl = getElementInTab(tabKey, `legend-supplier-${tabState.displayName}-${safeVarName}`);
-                    if (supplierEl) {
-                        supplierEl.textContent = sensor.supplier || '';
-                    }
-                }
-            }
-
-            // Синхронизируем временную шкалу и обновляем графики
-            if (chartsToUpdate.size > 0) {
-                syncAllChartsTimeRange(tabKey);
-
-                // Batch update для графиков с изменениями
-                tabState.charts.forEach((chartData, varName) => {
-                    // Ограничиваем количество точек
-                    const data = chartData.chart.data.datasets[0].data;
-                    const maxPoints = 1000;
-                    while (data.length > maxPoints) {
-                        data.shift();
-                    }
-                    chartData.chart.update('none');
-                });
-            }
+            // Обновляем графики
+            updateChartsFromBatch(tabKey, sensors, 'ws', event.timestamp, { showSupplier: true });
         } catch (err) {
             console.warn('SSE: Error обработки uwsgate_sensor_batch:', err);
         }
@@ -1176,6 +1084,11 @@ function initSSE() {
 
             // Обновляем список объектов в sidebar
             refreshObjectsList();
+
+            // Обновляем sidebar группы (могли появиться новые объекты)
+            if (typeof refreshSidebarGroups === 'function') {
+                refreshSidebarGroups();
+            }
         } catch (err) {
             console.warn('SSE: Error обработки objects_list:', err);
         }
@@ -1241,6 +1154,20 @@ function initSSE() {
             }
         } catch (err) {
             console.warn('SSE: Error обработки launcher_connection:', err);
+        }
+    });
+
+    // Обработка изменения connectivity журнала
+    eventSource.addEventListener('journal_connection', (e) => {
+        try {
+            const event = JSON.parse(e.data);
+            const journalId = event.data?.journalId;
+            const connected = event.data?.connected ?? false;
+            if (journalId && typeof updateJournalConnectionStatus === 'function') {
+                updateJournalConnectionStatus(journalId, connected);
+            }
+        } catch (err) {
+            console.warn('SSE: Error обработки journal_connection:', err);
         }
     });
 
@@ -1367,8 +1294,7 @@ function disablePollingFallback() {
 function startSSERecoveryProbe() {
     if (state.sse.recoveryProbeInterval) return;
 
-    const probeInterval = 30000; // 30 секунд
-    console.log('SSE: Запуск recovery probe каждые', probeInterval, 'ms');
+    console.log('SSE: Запуск recovery probe каждые', SSE_RECOVERY_PROBE_INTERVAL, 'ms');
 
     state.sse.recoveryProbeInterval = setInterval(async () => {
         try {
@@ -1382,20 +1308,41 @@ function startSSERecoveryProbe() {
         } catch (err) {
             // Сервер всё ещё недоступен
         }
-    }, probeInterval);
+    }, SSE_RECOVERY_PROBE_INTERVAL);
 }
 
-// Периодическая синхронизация статуса серверов (гарантирует актуальность каждые 30с)
+// Периодическая синхронизация статуса серверов, launcher'ов и журналов (каждые 30с)
 function startServerStatusSync() {
     stopServerStatusSync();
     state.sse.statusSyncInterval = setInterval(async () => {
+        // Серверы
         try {
             const resp = await fetchServers();
             if (resp?.servers) {
                 resp.servers.forEach(s => updateServerStatus(s.id, s.connected));
             }
         } catch (err) { /* фоновая синхронизация */ }
-    }, 30000);
+
+        // Launcher'ы
+        try {
+            const lr = await fetch('/api/launchers');
+            if (lr.ok) {
+                const data = await lr.json();
+                (data?.launchers || []).forEach(l => updateLauncherNodeStatus(l.id, l.connected));
+            }
+        } catch (err) { /* фоновая синхронизация */ }
+
+        // Журналы
+        try {
+            const jr = await fetch('/api/journals');
+            if (jr.ok) {
+                const data = await jr.json();
+                if (typeof updateJournalConnectionStatus === 'function') {
+                    (data || []).forEach(j => updateJournalConnectionStatus(j.id, j.connected));
+                }
+            }
+        } catch (err) { /* фоновая синхронизация */ }
+    }, SSE_RECOVERY_PROBE_INTERVAL);
 }
 
 function stopServerStatusSync() {
@@ -1426,6 +1373,49 @@ function closeSSE() {
     }
 }
 
+// Обновление графиков при возврате на вкладку браузера
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        state.tabs.forEach((tabState, tabKey) => {
+            if (tabState.charts && tabState.charts.size > 0) {
+                tabState.charts.forEach((chartData, varName) => {
+                    if (chartData.chart) {
+                        try {
+                            syncAllChartsTimeRange(tabKey);
+                            chartData.chart.update();
+                        } catch (err) {
+                            console.warn('Chart visibility update error:', varName, err);
+                        }
+                    }
+                });
+            }
+        });
+    }
+});
+
+
+
+// === 06-utils.js ===
+// ============================================================================
+// Общие утилиты
+// ============================================================================
+
+// Экранирование HTML для безопасной вставки текста
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Универсальный debounce — возвращает обёртку, откладывающую вызов fn на delay мс
+function debounce(fn, delay) {
+    let timer = null;
+    return function(...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), delay);
+    };
+}
 
 
 // === 10-base-renderer.js ===
@@ -1447,11 +1437,11 @@ const objectRenderers = new Map();
 const VirtualScrollMixin = {
     // Инициализация свойств виртуального скролла
     initVirtualScrollProps() {
-        this.rowHeight = 32;
-        this.bufferRows = 10;
+        this.rowHeight = DEFAULT_ROW_HEIGHT;
+        this.bufferRows = DEFAULT_BUFFER_ROWS;
         this.startIndex = 0;
         this.endIndex = 0;
-        this.chunkSize = 200;
+        this.chunkSize = VIRTUAL_SCROLL_CHUNK_SIZE;
         this.hasMore = true;
         this.isLoadingChunk = false;
     },
@@ -1498,9 +1488,7 @@ const VirtualScrollMixin = {
         const scrollBottom = viewport.scrollTop + viewport.clientHeight;
         const items = this.getVirtualScrollItems();
         const totalHeight = items.length * this.rowHeight;
-        const threshold = 200;
-
-        if (totalHeight - scrollBottom < threshold) {
+        if (totalHeight - scrollBottom < VIRTUAL_SCROLL_LOAD_THRESHOLD) {
             this.loadMoreItems();
         }
     },
@@ -1616,7 +1604,7 @@ const SSESubscriptionMixin = {
  */
 const ResizableSectionMixin = {
     // Loading сохранённой высоты
-    loadSectionHeight(storageKey, defaultHeight = 320) {
+    loadSectionHeight(storageKey, defaultHeight = DEFAULT_SECTION_HEIGHT) {
         try {
             const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
             const value = saved[this.objectName];
@@ -1651,8 +1639,8 @@ const ResizableSectionMixin = {
         const container = document.getElementById(containerId);
         if (!handle || !container) return;
 
-        const minHeight = options.minHeight || 100;
-        const maxHeight = options.maxHeight || 800;
+        const minHeight = options.minHeight || MIN_SECTION_HEIGHT;
+        const maxHeight = options.maxHeight || MAX_SECTION_HEIGHT;
 
         container.style.height = `${this[heightProp]}px`;
 
@@ -1742,7 +1730,7 @@ const FilterMixin = {
     },
 
     // Настройка debounced фильтра
-    setupFilterInput(inputId, onFilter, delay = 300) {
+    setupFilterInput(inputId, onFilter, delay = FILTER_DEBOUNCE_DELAY) {
         const input = document.getElementById(inputId);
         if (!input) return;
 
@@ -1756,10 +1744,12 @@ const FilterMixin = {
     },
 
     // Полная настройка фильтров с ESC, type filter и опциональным status filter
-    setupFilterListeners(filterInputId, typeFilterId, onFilter, delay = 300, statusFilterId = null) {
+    // onTextFilter — опциональный отдельный callback для текстового фильтра (если отличается от onFilter)
+    setupFilterListeners(filterInputId, typeFilterId, onFilter, delay = FILTER_DEBOUNCE_DELAY, statusFilterId = null, onTextFilter = null) {
         const filterInput = document.getElementById(filterInputId);
         const typeFilter = document.getElementById(typeFilterId);
         const statusFilter = statusFilterId ? document.getElementById(statusFilterId) : null;
+        const textCallback = onTextFilter || onFilter;
 
         if (filterInput) {
             // Debounced input
@@ -1767,7 +1757,7 @@ const FilterMixin = {
                 clearTimeout(this.filterDebounce);
                 this.filterDebounce = setTimeout(() => {
                     this.filter = e.target.value.trim();
-                    onFilter();
+                    textCallback();
                 }, delay);
             });
 
@@ -1777,7 +1767,7 @@ const FilterMixin = {
                     if (filterInput.value) {
                         filterInput.value = '';
                         this.filter = '';
-                        onFilter();
+                        textCallback();
                     }
                     filterInput.blur();
                     e.preventDefault();
@@ -1843,11 +1833,18 @@ const ParamsAccessibilityMixin = {
         const enabled = val === true || val === 1 || val === undefined;
         const explicitlyDisabled = val === false || val === 0;
 
-        // Заблокировать кнопку "Apply"
+        // Заблокировать кнопку "Apply" (учитываем и httpEnabledSetParams, и control token)
         const saveBtn = document.getElementById(`${prefix}-params-save-${this.objectName}`);
         if (saveBtn) {
-            saveBtn.disabled = explicitlyDisabled;
-            saveBtn.title = explicitlyDisabled ? 'Parameter modification disabled' : '';
+            const blocked = explicitlyDisabled || !canControl();
+            saveBtn.disabled = blocked;
+            if (explicitlyDisabled) {
+                saveBtn.title = 'Parameter modification disabled';
+            } else if (!canControl()) {
+                saveBtn.title = 'Read-only mode - take control first';
+            } else {
+                saveBtn.title = '';
+            }
         }
 
         // Заблокировать все input в таблице параметров
@@ -1855,7 +1852,7 @@ const ParamsAccessibilityMixin = {
         if (paramsTable) {
             const inputs = paramsTable.querySelectorAll('input, select');
             inputs.forEach(input => {
-                input.disabled = explicitlyDisabled;
+                input.disabled = explicitlyDisabled || !canControl();
             });
         }
 
@@ -1870,6 +1867,102 @@ const ParamsAccessibilityMixin = {
         this.setNote(`${prefix}-params-note-${this.objectName}`,
             explicitlyDisabled ? 'Parameter modification disabled (httpEnabledSetParams=false)' : '',
             explicitlyDisabled);
+    }
+};
+
+/**
+ * Миксин для загрузки/сохранения параметров объекта через API
+ * Требует: this.paramsApiPath ('modbus' или 'opcua'), this.paramsPrefix ('mb', 'mbs', 'opcua', 'opcuasrv'),
+ *          this.paramNames (массив имён), this.renderParams() (метод рендеринга)
+ */
+const ParamsManagerMixin = {
+    // Загрузка параметров с сервера
+    async loadParams() {
+        try {
+            const query = this.paramNames.map(n => `name=${encodeURIComponent(n)}`).join('&');
+            const data = await this.fetchJSON(
+                `/api/objects/${encodeURIComponent(this.objectName)}/${this.paramsApiPath}/params?${query}`
+            );
+            this.params = data.params || {};
+            this.renderParams();
+            this.updateParamsAccessibility(this.paramsPrefix);
+            this.setNote(`${this.paramsPrefix}-params-note-${this.objectName}`, '');
+        } catch (err) {
+            this.setNote(`${this.paramsPrefix}-params-note-${this.objectName}`, err.message, true);
+        }
+    },
+
+    // Сохранение изменённых параметров на сервер
+    async saveParams() {
+        // Контейнер: ${prefix}-params-${obj} или ${prefix}-params-writable-${obj} (OPCUA Exchange)
+        const container = document.getElementById(`${this.paramsPrefix}-params-${this.objectName}`)
+            || document.getElementById(`${this.paramsPrefix}-params-writable-${this.objectName}`);
+        if (!container) return;
+
+        const changed = {};
+
+        // Текстовые и числовые inputs
+        container.querySelectorAll('input[data-param], input[data-name]').forEach(input => {
+            if (input.type === 'checkbox') return;
+            const name = input.dataset.param || input.dataset.name;
+            const val = input.value.trim();
+            if (val === '') return;
+            if (String(this.params[name]) !== val) {
+                changed[name] = val;
+            }
+        });
+
+        // Selects (exchangeMode и др.)
+        container.querySelectorAll('select[data-param], select[data-name]').forEach(select => {
+            const name = select.dataset.param || select.dataset.name;
+            const newValue = parseInt(select.value);
+            if (this.params[name] !== newValue) {
+                changed[name] = newValue;
+            }
+        });
+
+        // Чекбоксы (writeToAllChannels и др.)
+        container.querySelectorAll('input[type="checkbox"][data-param], input[type="checkbox"][data-name]').forEach(cb => {
+            const name = cb.dataset.param || cb.dataset.name;
+            const newValue = cb.checked ? 1 : 0;
+            if (this.params[name] !== newValue) {
+                changed[name] = newValue;
+            }
+        });
+
+        if (Object.keys(changed).length === 0) {
+            this.setNote(`${this.paramsPrefix}-params-note-${this.objectName}`, 'No changes');
+            return;
+        }
+
+        try {
+            const data = await this.fetchJSON(
+                `/api/objects/${encodeURIComponent(this.objectName)}/${this.paramsApiPath}/params`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ params: changed })
+                }
+            );
+            this.params = { ...this.params, ...(data.updated || {}) };
+            this.renderParams();
+            this.setNote(`${this.paramsPrefix}-params-note-${this.objectName}`, 'Parameters applied');
+            this.loadStatus();
+        } catch (err) {
+            this.setNote(`${this.paramsPrefix}-params-note-${this.objectName}`, err.message, true);
+        }
+    },
+
+    // Подключение кнопок Refresh и Apply
+    setupParamsListeners() {
+        const refreshBtn = document.getElementById(`${this.paramsPrefix}-params-refresh-${this.objectName}`);
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => this.loadParams());
+        }
+        const saveBtn = document.getElementById(`${this.paramsPrefix}-params-save-${this.objectName}`);
+        if (saveBtn) {
+            saveBtn.addEventListener('click', () => this.saveParams());
+        }
     }
 };
 
@@ -1902,7 +1995,7 @@ const SectionHeightMixin = {
      * @param {number} defaultHeight - Value по умолчанию
      * @returns {number}
      */
-    loadSectionHeight(storageKey, defaultHeight = 300) {
+    loadSectionHeight(storageKey, defaultHeight = DEFAULT_SECTION_HEIGHT) {
         try {
             const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
             const value = saved[this.objectName];
@@ -1993,7 +2086,13 @@ const PinManagementMixin = {
         if (renderCallback) {
             renderCallback.call(this);
         }
-    }
+    },
+
+    // Сокращённые методы, использующие this.pinStorageKey и this.renderAfterPinChange
+    getPinned()    { return this.getPinnedItems(this.pinStorageKey); },
+    savePinned(s)  { this.savePinnedItems(this.pinStorageKey, s); },
+    togglePin(id)  { this.toggleItemPin(this.pinStorageKey, id, this.renderAfterPinChange); },
+    unpinAll()     { this.unpinAllItems(this.pinStorageKey, this.renderAfterPinChange); }
 };
 
 /**
@@ -2229,9 +2328,12 @@ class BaseObjectRenderer {
         // Переопределяется в наследниках
     }
 
-    // Обновить данные
+    // Обновить данные (default: renderObjectInfo + updateChartLegends + handleLogServer)
+    // Переопределяется в наследниках с уникальной логикой
     update(data) {
-        // Переопределяется в наследниках
+        renderObjectInfo(this.tabKey, data.object);
+        updateChartLegends(this.tabKey, data);
+        this.handleLogServer(data.LogServer);
     }
 
     // Очистка при закрытии
@@ -2244,8 +2346,8 @@ class BaseObjectRenderer {
     formatTimeAgo(timestamp) {
         if (!timestamp) return '';
         const seconds = Math.floor((Date.now() - timestamp) / 1000);
-        if (seconds < 5) return '';
-        if (seconds < 60) return `Updated ${seconds}s ago`;
+        if (seconds < TIME_AGO_MIN_SECONDS) return '';
+        if (seconds < TIME_AGO_MINUTES_THRESHOLD) return `Updated ${seconds}s ago`;
         const minutes = Math.floor(seconds / 60);
         if (minutes < 60) return `Updated ${minutes}m ago`;
         const hours = Math.floor(minutes / 60);
@@ -2255,7 +2357,7 @@ class BaseObjectRenderer {
     // Запуск таймера обновления отображения относительного времени
     startStatusDisplayTimer() {
         this.stopStatusDisplayTimer();
-        this.statusDisplayTimer = setInterval(() => this.updateStatusDisplay(), 1000);
+        this.statusDisplayTimer = setInterval(() => this.updateStatusDisplay(), STATUS_DISPLAY_UPDATE_INTERVAL);
     }
 
     // Остановка таймера обновления отображения
@@ -3000,13 +3102,13 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         // Virtual scroll properties (как в OPCUA)
         this.allSensors = [];           // Все загруженные сенсоры
-        this.rowHeight = 32;            // Высота строки (px)
-        this.bufferRows = 10;           // Буфер строк выше/ниже viewport
+        this.rowHeight = DEFAULT_ROW_HEIGHT; // Высота строки (px)
+        this.bufferRows = DEFAULT_BUFFER_ROWS; // Буфер строк выше/ниже viewport
         this.startIndex = 0;            // Первая видимая строка
         this.endIndex = 0;              // Последняя видимая строка
 
         // Infinite scroll properties
-        this.chunkSize = 200;           // Сенсоров за запрос
+        this.chunkSize = VIRTUAL_SCROLL_CHUNK_SIZE; // Сенсоров за запрос
         this.hasMore = true;            // Есть ли ещё данные
         this.isLoadingChunk = false;    // Идёт загрузка
 
@@ -3453,7 +3555,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                     clickTimer = setTimeout(() => {
                         clickTimer = null;
                         this.showFreezeDialog(sensorId);
-                    }, 250);
+                    }, DOUBLE_CLICK_THRESHOLD);
                 }
             });
         });
@@ -3470,7 +3572,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                     clickTimer = setTimeout(() => {
                         clickTimer = null;
                         this.showUnfreezeDialog(sensorId);
-                    }, 250);
+                    }, DOUBLE_CLICK_THRESHOLD);
                 }
             });
         });
@@ -4571,7 +4673,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                     clickTimer = setTimeout(() => {
                         clickTimer = null;
                         this.showFreezeDialog(sensorId);
-                    }, 250);
+                    }, DOUBLE_CLICK_THRESHOLD);
                 }
             });
         }
@@ -4591,7 +4693,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                     clickTimer = setTimeout(() => {
                         clickTimer = null;
                         this.showUnfreezeDialog(sensorId);
-                    }, 250);
+                    }, DOUBLE_CLICK_THRESHOLD);
                 }
             });
         }
@@ -4794,13 +4896,13 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         // Очищаем очередь
         this.pendingUpdates.clear();
 
-        // Убираем анимацию через 500ms
+        // Убираем анимацию через ANIMATION_REMOVAL_DELAY
         setTimeout(() => {
             const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
             if (panel) {
                 panel.querySelectorAll('.ionc-value-updated').forEach(el => el.classList.remove('ionc-value-updated'));
             }
-        }, 500);
+        }, ANIMATION_REMOVAL_DELAY);
     }
 
     // Подписка на SSE обновления для видимых датчиков (использует SSESubscriptionMixin)
@@ -4849,6 +4951,8 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         super(objectName, tabKey);
         this.status = null;
         this.params = {};
+        this.paramsApiPath = 'opcua';
+        this.paramsPrefix = 'opcua';
         // Параметры только для чтения (статус)
         this.readonlyParams = [
             'currentChannel',
@@ -4904,6 +5008,10 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         this.filter = '';
         this.typeFilter = 'all';
         this.filterDebounce = null;
+
+        // Pin management
+        this.pinStorageKey = 'uniset-panel-opcua-pinned';
+        this.renderAfterPinChange = this.renderVisibleSensors;
 
         // Sensor map for chart support
         this.sensorMap = new Map();
@@ -4963,15 +5071,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     bindEvents() {
-        const refreshParams = document.getElementById(`opcua-params-refresh-${this.objectName}`);
-        if (refreshParams) {
-            refreshParams.addEventListener('click', () => this.loadParams());
-        }
-
-        const saveParams = document.getElementById(`opcua-params-save-${this.objectName}`);
-        if (saveParams) {
-            saveParams.addEventListener('click', () => this.saveParams());
-        }
+        this.setupParamsListeners();
 
         // Используем методы из FilterMixin
         this.setupFilterListeners(
@@ -5233,10 +5333,10 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     renderControl() {
-        const allow = this.status?.httpControlAllow;
+        const allow = this.status?.httpControlAllow && canControl();
         const active = this.status?.httpControlActive;
         const enabledParams = this.status?.httpEnabledSetParams;
-        const allowText = allow ? 'Take control' : 'Control not allowed';
+        const allowText = allow ? 'Take control' : (!canControl() ? 'Read-only mode' : 'Control not allowed');
 
         // Обновляем индикаторы в шапке
         const indAllow = document.getElementById(`opcua-ind-allow-${this.objectName}`);
@@ -5299,19 +5399,6 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             return `Read: ${read || 0}, Write: ${write || 0}`;
         }
         return '—';
-    }
-
-    async loadParams() {
-        try {
-            const query = this.paramNames.map(n => `name=${encodeURIComponent(n)}`).join('&');
-            const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/opcua/params?${query}`);
-            this.params = data.params || {};
-            this.renderParams();
-            // Обновить состояние доступности (показать предупреждение если нужно)
-            this.updateParamsAccessibility('opcua');
-        } catch (err) {
-            this.setNote(`opcua-params-note-${this.objectName}`, err.message, true);
-        }
     }
 
     renderParams() {
@@ -5401,56 +5488,6 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         });
     }
 
-    async saveParams() {
-        const writableTbody = document.getElementById(`opcua-params-writable-${this.objectName}`);
-        if (!writableTbody) return;
-
-        const inputs = writableTbody.querySelectorAll('.opcua-param-input');
-        const checkboxes = writableTbody.querySelectorAll('.opcua-param-checkbox');
-        const changed = {};
-
-        inputs.forEach(input => {
-            const name = input.dataset.name;
-            const current = this.params[name];
-            const newValue = input.value;
-            if (newValue === '' || newValue === null) return;
-            if (String(current) !== newValue) {
-                changed[name] = newValue;
-            }
-        });
-
-        checkboxes.forEach(checkbox => {
-            const name = checkbox.dataset.name;
-            const current = this.params[name];
-            const newValue = checkbox.checked ? 1 : 0;
-            if (current !== newValue) {
-                changed[name] = newValue;
-            }
-        });
-
-        if (Object.keys(changed).length === 0) {
-            this.setNote(`opcua-params-note-${this.objectName}`, 'No changes');
-            return;
-        }
-
-        try {
-            const data = await this.fetchJSON(
-                `/api/objects/${encodeURIComponent(this.objectName)}/opcua/params`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ params: changed })
-                }
-            );
-            this.params = { ...this.params, ...(data.updated || {}) };
-            this.renderParams();
-            this.setNote(`opcua-params-note-${this.objectName}`, 'Parameters applied');
-            this.loadStatus();
-        } catch (err) {
-            this.setNote(`opcua-params-note-${this.objectName}`, err.message, true);
-        }
-    }
-
     async loadSensors() {
         // Reset state for fresh load
         this.allSensors = [];
@@ -5522,7 +5559,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
     // Загружает закреплённые датчики, если они не в текущем списке
     async loadPinnedSensors() {
-        const pinnedIds = this.getPinnedSensors();
+        const pinnedIds = this.getPinned();
         if (pinnedIds.size === 0) return;
 
         // Найти ID, которых нет в загруженных датчиках
@@ -5665,7 +5702,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         if (!tbody || !spacer) return;
 
         // Получаем закрепленные датчики
-        const pinnedSensors = this.getPinnedSensors();
+        const pinnedSensors = this.getPinned();
         const hasPinned = pinnedSensors.size > 0;
 
         // Показываем/скрываем кнопку "снять все"
@@ -5739,12 +5776,12 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
         // Bind pin toggle events
         tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => this.toggleSensorPin(parseInt(toggle.dataset.id)));
+            toggle.addEventListener('click', () => this.togglePin(parseInt(toggle.dataset.id)));
         });
 
         // Обработчик кнопки "снять все"
         if (unpinBtn) {
-            unpinBtn.onclick = () => this.unpinAllSensors();
+            unpinBtn.onclick = () => this.unpinAll();
         }
 
         // Bind row click events (prevent on chart checkbox)
@@ -6051,28 +6088,9 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         });
     }
 
-    update(data) {
-        renderObjectInfo(this.tabKey, data.object);
-        updateChartLegends(this.tabKey, data);
-        this.handleLogServer(data.LogServer);
-    }
+    // update(data) наследуется из BaseObjectRenderer
 
-    // Pin management для датчиков
-    getPinnedSensors() {
-        return this.getPinnedItems('uniset-panel-opcua-pinned');
-    }
-
-    savePinnedSensors(pinnedSet) {
-        this.savePinnedItems('uniset-panel-opcua-pinned', pinnedSet);
-    }
-
-    toggleSensorPin(sensorId) {
-        this.toggleItemPin('uniset-panel-opcua-pinned', sensorId, this.renderVisibleSensors);
-    }
-
-    unpinAllSensors() {
-        this.unpinAllItems('uniset-panel-opcua-pinned', this.renderVisibleSensors);
-    }
+    // Pin management: pinStorageKey и renderAfterPinChange заданы в конструкторе
 
     // Перерисовка после смены сортировки
     renderAfterSort() {
@@ -6106,6 +6124,7 @@ applyMixin(OPCUAExchangeRenderer, SSESubscriptionMixin);
 applyMixin(OPCUAExchangeRenderer, ResizableSectionMixin);
 applyMixin(OPCUAExchangeRenderer, FilterMixin);
 applyMixin(OPCUAExchangeRenderer, ParamsAccessibilityMixin);
+applyMixin(OPCUAExchangeRenderer, ParamsManagerMixin);
 applyMixin(OPCUAExchangeRenderer, ItemCounterMixin);
 applyMixin(OPCUAExchangeRenderer, SectionHeightMixin);
 applyMixin(OPCUAExchangeRenderer, PinManagementMixin);
@@ -6127,6 +6146,8 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         super(objectName, tabKey);
         this.status = null;
         this.params = {};
+        this.paramsApiPath = 'modbus';
+        this.paramsPrefix = 'mb';
         // Параметры только для чтения (статус)
         this.readonlyParams = [
             'force',
@@ -6177,6 +6198,10 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         this.filter = '';
         this.typeFilter = 'all';
         this.filterDebounce = null;
+
+        // Pin management
+        this.pinStorageKey = 'uniset-panel-mb-pinned';
+        this.renderAfterPinChange = this.renderRegisters;
 
         // Register map for chart support
         this.registerMap = new Map();
@@ -6239,20 +6264,15 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     }
 
     bindEvents() {
-        const refreshParams = document.getElementById(`mb-params-refresh-${this.objectName}`);
-        if (refreshParams) {
-            refreshParams.addEventListener('click', () => this.loadParams());
-        }
-
-        const saveParams = document.getElementById(`mb-params-save-${this.objectName}`);
-        if (saveParams) {
-            saveParams.addEventListener('click', () => this.saveParams());
-        }
+        this.setupParamsListeners();
 
         // Используем методы из FilterMixin
-        this.setupMBFilterListeners(
+        this.setupFilterListeners(
             `mb-registers-filter-${this.objectName}`,
-            `mb-type-filter-${this.objectName}`
+            `mb-type-filter-${this.objectName}`,
+            () => this.loadRegisters(),       // type filter → серверная фильтрация
+            FILTER_DEBOUNCE_DELAY, null,
+            () => this.renderRegisters()      // text filter → локальная фильтрация
         );
 
         // HTTP Control buttons
@@ -6267,40 +6287,6 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         }
     }
 
-    // Настройка фильтров для Modbus
-    setupMBFilterListeners(filterInputId, typeFilterId) {
-        const filterInput = document.getElementById(filterInputId);
-        const typeFilter = document.getElementById(typeFilterId);
-
-        if (filterInput) {
-            filterInput.addEventListener('input', (e) => {
-                clearTimeout(this.filterDebounce);
-                this.filterDebounce = setTimeout(() => {
-                    this.filter = e.target.value.trim();
-                    this.renderRegisters(); // Локальная фильтрация по mbreg и имени
-                }, 300);
-            });
-
-            filterInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') {
-                    if (filterInput.value) {
-                        filterInput.value = '';
-                        this.filter = '';
-                        this.renderRegisters();
-                    }
-                    filterInput.blur();
-                    e.preventDefault();
-                }
-            });
-        }
-
-        if (typeFilter) {
-            typeFilter.addEventListener('change', (e) => {
-                this.typeFilter = e.target.value;
-                this.loadRegisters(); // Тип фильтруется на сервере
-            });
-        }
-    }
 
     createMBControlSection() {
         const headerIndicators = `
@@ -6464,10 +6450,10 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     }
 
     renderControl() {
-        const allow = this.status?.httpControlAllow;
+        const allow = this.status?.httpControlAllow && canControl();
         const active = this.status?.httpControlActive;
         const enabledParams = this.status?.httpEnabledSetParams;
-        const allowText = allow ? 'Take control' : 'Control not allowed';
+        const allowText = allow ? 'Take control' : (!canControl() ? 'Read-only mode' : 'Control not allowed');
 
         // Обновляем индикаторы в шапке
         const indAllow = document.getElementById(`mb-ind-allow-${this.objectName}`);
@@ -6547,19 +6533,6 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         }
     }
 
-    async loadParams() {
-        try {
-            const query = this.paramNames.map(n => `name=${encodeURIComponent(n)}`).join('&');
-            const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/params?${query}`);
-            this.params = data.params || {};
-            this.renderParams();
-            this.updateParamsAccessibility('mb');
-            this.setNote(`mb-params-note-${this.objectName}`, '');
-        } catch (err) {
-            this.setNote(`mb-params-note-${this.objectName}`, err.message, true);
-        }
-    }
-
     renderParams() {
         const tbody = document.getElementById(`mb-params-${this.objectName}`);
         if (!tbody) return;
@@ -6618,51 +6591,6 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
             `;
             tbody.appendChild(tr);
         });
-    }
-
-    async saveParams() {
-        const tbody = document.getElementById(`mb-params-${this.objectName}`);
-        if (!tbody) return;
-
-        const inputs = tbody.querySelectorAll('input.param-field');
-        const selects = tbody.querySelectorAll('select.param-field');
-        const changed = {};
-
-        inputs.forEach(input => {
-            const name = input.dataset.param;
-            const val = input.value.trim();
-            if (val !== '') {
-                changed[name] = val;
-            }
-        });
-
-        selects.forEach(select => {
-            const name = select.dataset.param;
-            const current = this.params[name];
-            const newValue = parseInt(select.value);
-            if (current !== newValue) {
-                changed[name] = newValue;
-            }
-        });
-
-        if (Object.keys(changed).length === 0) {
-            this.setNote(`mb-params-note-${this.objectName}`, 'No changes');
-            return;
-        }
-
-        try {
-            const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/params`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ params: changed })
-            });
-            this.params = { ...this.params, ...(data.updated || {}) };
-            this.renderParams();
-            this.setNote(`mb-params-note-${this.objectName}`, 'Parameters applied');
-            this.loadStatus();
-        } catch (err) {
-            this.setNote(`mb-params-note-${this.objectName}`, err.message, true);
-        }
     }
 
     async loadDevices() {
@@ -6793,7 +6721,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
 
     // Загружает закреплённые регистры, если они не в текущем списке
     async loadPinnedRegisters() {
-        const pinnedIds = this.getPinnedRegisters();
+        const pinnedIds = this.getPinned();
         if (pinnedIds.size === 0) return;
 
         // Найти ID, которых нет в загруженных регистрах
@@ -6831,7 +6759,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         if (!tbody) return;
 
         // Получаем закрепленные регистры
-        const pinnedRegisters = this.getPinnedRegisters();
+        const pinnedRegisters = this.getPinned();
         const hasPinned = pinnedRegisters.size > 0;
 
         // Показываем/скрываем кнопку "снять все"
@@ -6902,12 +6830,12 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
 
         // Bind pin toggle events
         tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => this.toggleRegisterPin(parseInt(toggle.dataset.id)));
+            toggle.addEventListener('click', () => this.togglePin(parseInt(toggle.dataset.id)));
         });
 
         // Обработчик кнопки "снять все"
         if (unpinBtn) {
-            unpinBtn.onclick = () => this.unpinAllRegisters();
+            unpinBtn.onclick = () => this.unpinAll();
         }
     }
 
@@ -7044,28 +6972,10 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         });
     }
 
-    update(data) {
-        renderObjectInfo(this.tabKey, data.object);
-        updateChartLegends(this.tabKey, data);
-        this.handleLogServer(data.LogServer);
-    }
+    // update(data) наследуется из BaseObjectRenderer
 
-    // Pin management для регистров
-    getPinnedRegisters() {
-        return this.getPinnedItems('uniset-panel-mb-pinned');
-    }
-
-    savePinnedRegisters(pinnedSet) {
-        this.savePinnedItems('uniset-panel-mb-pinned', pinnedSet);
-    }
-
-    toggleRegisterPin(registerId) {
-        this.toggleItemPin('uniset-panel-mb-pinned', registerId, this.renderRegisters);
-    }
-
-    unpinAllRegisters() {
-        this.unpinAllItems('uniset-panel-mb-pinned', this.renderRegisters);
-    }
+    // Pin management: pinStorageKey и renderAfterPinChange заданы в конструкторе
+    // Используются сокращённые методы из PinManagementMixin: getPinned(), togglePin(), unpinAll()
 
     // Перерисовка после смены сортировки
     renderAfterSort() {
@@ -7099,6 +7009,7 @@ applyMixin(ModbusMasterRenderer, SSESubscriptionMixin);
 applyMixin(ModbusMasterRenderer, ResizableSectionMixin);
 applyMixin(ModbusMasterRenderer, FilterMixin);
 applyMixin(ModbusMasterRenderer, ParamsAccessibilityMixin);
+applyMixin(ModbusMasterRenderer, ParamsManagerMixin);
 applyMixin(ModbusMasterRenderer, ItemCounterMixin);
 applyMixin(ModbusMasterRenderer, SectionHeightMixin);
 applyMixin(ModbusMasterRenderer, PinManagementMixin);
@@ -7136,6 +7047,8 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         super(objectName, tabKey);
         this.status = null;
         this.params = {};
+        this.paramsApiPath = 'modbus';
+        this.paramsPrefix = 'mbs';
         // Параметры ModbusSlave отличаются от ModbusMaster
         this.paramNames = [
             'force',
@@ -7168,6 +7081,10 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         this.filter = '';
         this.typeFilter = 'all';
         this.filterDebounce = null;
+
+        // Pin management
+        this.pinStorageKey = 'uniset-panel-mbs-pinned';
+        this.renderAfterPinChange = this.renderRegisters;
 
         // Register map for chart support
         this.registerMap = new Map();
@@ -7232,57 +7149,18 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     }
 
     bindEvents() {
-        const refreshParams = document.getElementById(`mbs-params-refresh-${this.objectName}`);
-        if (refreshParams) {
-            refreshParams.addEventListener('click', () => this.loadParams());
-        }
-
-        const saveParams = document.getElementById(`mbs-params-save-${this.objectName}`);
-        if (saveParams) {
-            saveParams.addEventListener('click', () => this.saveParams());
-        }
+        this.setupParamsListeners();
 
         // Используем методы из FilterMixin
-        this.setupMBSFilterListeners(
+        this.setupFilterListeners(
             `mbs-registers-filter-${this.objectName}`,
-            `mbs-type-filter-${this.objectName}`
+            `mbs-type-filter-${this.objectName}`,
+            () => this.loadRegisters(),       // type filter → серверная фильтрация
+            FILTER_DEBOUNCE_DELAY, null,
+            () => this.renderRegisters()      // text filter → локальная фильтрация
         );
     }
 
-    // Настройка фильтров для ModbusSlave
-    setupMBSFilterListeners(filterInputId, typeFilterId) {
-        const filterInput = document.getElementById(filterInputId);
-        const typeFilter = document.getElementById(typeFilterId);
-
-        if (filterInput) {
-            filterInput.addEventListener('input', (e) => {
-                clearTimeout(this.filterDebounce);
-                this.filterDebounce = setTimeout(() => {
-                    this.filter = e.target.value.trim();
-                    this.renderRegisters(); // Локальная фильтрация по mbreg и имени
-                }, 300);
-            });
-
-            filterInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') {
-                    if (filterInput.value) {
-                        filterInput.value = '';
-                        this.filter = '';
-                        this.renderRegisters();
-                    }
-                    filterInput.blur();
-                    e.preventDefault();
-                }
-            });
-        }
-
-        if (typeFilter) {
-            typeFilter.addEventListener('change', (e) => {
-                this.typeFilter = e.target.value;
-                this.loadRegisters();
-            });
-        }
-    }
 
     createMBSStatusSection() {
         return this.createCollapsibleSection('mbs-status', 'ModbusSlave Status', `
@@ -7463,19 +7341,6 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         }
     }
 
-    async loadParams() {
-        try {
-            const query = this.paramNames.map(n => `name=${encodeURIComponent(n)}`).join('&');
-            const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/params?${query}`);
-            this.params = data.params || {};
-            this.renderParams();
-            this.updateParamsAccessibility('mbs');
-            this.setNote(`mbs-params-note-${this.objectName}`, '');
-        } catch (err) {
-            this.setNote(`mbs-params-note-${this.objectName}`, err.message, true);
-        }
-    }
-
     renderParams() {
         const tbody = document.getElementById(`mbs-params-${this.objectName}`);
         if (!tbody) return;
@@ -7494,36 +7359,6 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             `;
             tbody.appendChild(tr);
         });
-    }
-
-    async saveParams() {
-        const inputs = document.querySelectorAll(`#mbs-params-${this.objectName} input.param-field`);
-        const params = {};
-
-        inputs.forEach(input => {
-            const name = input.dataset.param;
-            const val = input.value.trim();
-            if (val !== '') {
-                params[name] = val;
-            }
-        });
-
-        if (Object.keys(params).length === 0) {
-            this.setNote(`mbs-params-note-${this.objectName}`, 'No changes');
-            return;
-        }
-
-        try {
-            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/params`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ params })
-            });
-            this.setNote(`mbs-params-note-${this.objectName}`, 'Saved');
-            this.loadParams();
-        } catch (err) {
-            this.setNote(`mbs-params-note-${this.objectName}`, err.message, true);
-        }
     }
 
     async loadRegisters() {
@@ -7597,7 +7432,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
 
     // Загружает закреплённые регистры, если они не в текущем списке
     async loadPinnedRegisters() {
-        const pinnedIds = this.getPinnedRegisters();
+        const pinnedIds = this.getPinned();
         if (pinnedIds.size === 0) return;
 
         // Найти ID, которых нет в загруженных регистрах
@@ -7635,7 +7470,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         if (!tbody) return;
 
         // Получаем закрепленные регистры
-        const pinnedRegisters = this.getPinnedRegisters();
+        const pinnedRegisters = this.getPinned();
         const hasPinned = pinnedRegisters.size > 0;
 
         // Показываем/скрываем кнопку "снять все"
@@ -7711,12 +7546,12 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
 
         // Bind pin toggle events
         tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => this.toggleRegisterPin(parseInt(toggle.dataset.id)));
+            toggle.addEventListener('click', () => this.togglePin(parseInt(toggle.dataset.id)));
         });
 
         // Обработчик кнопки "снять все"
         if (unpinBtn) {
-            unpinBtn.onclick = () => this.unpinAllRegisters();
+            unpinBtn.onclick = () => this.unpinAll();
         }
     }
 
@@ -7846,28 +7681,9 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         });
     }
 
-    update(data) {
-        renderObjectInfo(this.tabKey, data.object);
-        updateChartLegends(this.tabKey, data);
-        this.handleLogServer(data.LogServer);
-    }
+    // update(data) наследуется из BaseObjectRenderer
 
-    // Pin management для регистров
-    getPinnedRegisters() {
-        return this.getPinnedItems('uniset-panel-mbs-pinned');
-    }
-
-    savePinnedRegisters(pinnedSet) {
-        this.savePinnedItems('uniset-panel-mbs-pinned', pinnedSet);
-    }
-
-    toggleRegisterPin(registerId) {
-        this.toggleItemPin('uniset-panel-mbs-pinned', registerId, this.renderRegisters);
-    }
-
-    unpinAllRegisters() {
-        this.unpinAllItems('uniset-panel-mbs-pinned', this.renderRegisters);
-    }
+    // Pin management: pinStorageKey и renderAfterPinChange заданы в конструкторе
 
     // Перерисовка после смены сортировки
     renderAfterSort() {
@@ -7901,6 +7717,7 @@ applyMixin(ModbusSlaveRenderer, SSESubscriptionMixin);
 applyMixin(ModbusSlaveRenderer, ResizableSectionMixin);
 applyMixin(ModbusSlaveRenderer, FilterMixin);
 applyMixin(ModbusSlaveRenderer, ParamsAccessibilityMixin);
+applyMixin(ModbusSlaveRenderer, ParamsManagerMixin);
 applyMixin(ModbusSlaveRenderer, ItemCounterMixin);
 applyMixin(ModbusSlaveRenderer, SectionHeightMixin);
 applyMixin(ModbusSlaveRenderer, PinManagementMixin);
@@ -7928,6 +7745,8 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         super(objectName, tabKey);
         this.status = null;
         this.params = {};
+        this.paramsApiPath = 'opcua';
+        this.paramsPrefix = 'opcuasrv';
         this.paramNames = [
             'updateTime_msec',
             'httpEnabledSetParams'
@@ -7957,6 +7776,10 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         this.filter = '';
         this.typeFilter = 'all';
         this.filterDebounce = null;
+
+        // Pin management
+        this.pinStorageKey = 'uniset-panel-opcuasrv-pinned';
+        this.renderAfterPinChange = this.renderVisibleSensors;
 
         // Sensor map for chart support
         this.sensorMap = new Map();
@@ -8010,15 +7833,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     bindEvents() {
-        const refreshParams = document.getElementById(`opcuasrv-params-refresh-${this.objectName}`);
-        if (refreshParams) {
-            refreshParams.addEventListener('click', () => this.loadParams());
-        }
-
-        const saveParams = document.getElementById(`opcuasrv-params-save-${this.objectName}`);
-        if (saveParams) {
-            saveParams.addEventListener('click', () => this.saveParams());
-        }
+        this.setupParamsListeners();
 
         // Используем методы из FilterMixin
         this.setupFilterListeners(
@@ -8212,19 +8027,6 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         this.handleLogServer(status.LogServer);
     }
 
-    async loadParams() {
-        try {
-            const query = this.paramNames.map(n => `name=${encodeURIComponent(n)}`).join('&');
-            const data = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/opcua/params?${query}`);
-            this.params = data.params || {};
-            this.renderParams();
-            this.updateParamsAccessibility('opcuasrv');
-            this.setNote(`opcuasrv-params-note-${this.objectName}`, '');
-        } catch (err) {
-            this.setNote(`opcuasrv-params-note-${this.objectName}`, err.message, true);
-        }
-    }
-
     renderParams() {
         const tbody = document.getElementById(`opcuasrv-params-${this.objectName}`);
         if (!tbody) return;
@@ -8245,45 +8047,6 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
             `;
             tbody.appendChild(tr);
         });
-    }
-
-    async saveParams() {
-        const tbody = document.getElementById(`opcuasrv-params-${this.objectName}`);
-        if (!tbody) return;
-
-        const inputs = tbody.querySelectorAll('.opcua-param-input');
-        const changed = {};
-        inputs.forEach(input => {
-            const name = input.dataset.name;
-            const current = this.params[name];
-            const newValue = input.value;
-            if (newValue === '' || newValue === null) return;
-            if (String(current) !== newValue) {
-                changed[name] = newValue;
-            }
-        });
-
-        if (Object.keys(changed).length === 0) {
-            this.setNote(`opcuasrv-params-note-${this.objectName}`, 'No changes');
-            return;
-        }
-
-        try {
-            const data = await this.fetchJSON(
-                `/api/objects/${encodeURIComponent(this.objectName)}/opcua/params`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ params: changed })
-                }
-            );
-            this.params = { ...this.params, ...(data.updated || {}) };
-            this.renderParams();
-            this.setNote(`opcuasrv-params-note-${this.objectName}`, 'Parameters applied');
-            this.loadStatus();
-        } catch (err) {
-            this.setNote(`opcuasrv-params-note-${this.objectName}`, err.message, true);
-        }
     }
 
     async loadSensors() {
@@ -8341,7 +8104,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
     // Загружает закреплённые датчики, если они не в текущем списке
     async loadPinnedSensors() {
-        const pinnedIds = this.getPinnedSensors();
+        const pinnedIds = this.getPinned();
         if (pinnedIds.size === 0) return;
 
         // Найти ID, которых нет в загруженных датчиках
@@ -8448,7 +8211,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         if (!tbody || !spacer) return;
 
         // Получаем закрепленные датчики
-        const pinnedSensors = this.getPinnedSensors();
+        const pinnedSensors = this.getPinned();
         const hasPinned = pinnedSensors.size > 0;
 
         // Показываем/скрываем кнопку "снять все"
@@ -8523,12 +8286,12 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
         // Bind pin toggle events
         tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => this.toggleSensorPin(parseInt(toggle.dataset.id)));
+            toggle.addEventListener('click', () => this.togglePin(parseInt(toggle.dataset.id)));
         });
 
         // Обработчик кнопки "снять все"
         if (unpinBtn) {
-            unpinBtn.onclick = () => this.unpinAllSensors();
+            unpinBtn.onclick = () => this.unpinAll();
         }
     }
 
@@ -8644,21 +8407,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     // Pin management для датчиков
-    getPinnedSensors() {
-        return this.getPinnedItems('uniset-panel-opcuasrv-pinned');
-    }
-
-    savePinnedSensors(pinnedSet) {
-        this.savePinnedItems('uniset-panel-opcuasrv-pinned', pinnedSet);
-    }
-
-    toggleSensorPin(sensorId) {
-        this.toggleItemPin('uniset-panel-opcuasrv-pinned', sensorId, this.renderVisibleSensors);
-    }
-
-    unpinAllSensors() {
-        this.unpinAllItems('uniset-panel-opcuasrv-pinned', this.renderVisibleSensors);
-    }
+    // Pin management: pinStorageKey и renderAfterPinChange заданы в конструкторе
 
     // Перерисовка после смены сортировки
     renderAfterSort() {
@@ -8692,6 +8441,7 @@ applyMixin(OPCUAServerRenderer, SSESubscriptionMixin);
 applyMixin(OPCUAServerRenderer, ResizableSectionMixin);
 applyMixin(OPCUAServerRenderer, FilterMixin);
 applyMixin(OPCUAServerRenderer, ParamsAccessibilityMixin);
+applyMixin(OPCUAServerRenderer, ParamsManagerMixin);
 applyMixin(OPCUAServerRenderer, ItemCounterMixin);
 applyMixin(OPCUAServerRenderer, SectionHeightMixin);
 applyMixin(OPCUAServerRenderer, PinManagementMixin);
@@ -8730,7 +8480,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         this.selectedAutocompleteIndex = 0;
 
         // Virtual scroll
-        this.rowHeight = 32;
+        this.rowHeight = DEFAULT_ROW_HEIGHT;
         this.bufferRows = 5;
         this.startIndex = 0;
         this.endIndex = 0;
@@ -8885,7 +8635,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         let debounceTimer;
         input.addEventListener('input', () => {
             clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => this.updateAutocomplete(input.value), 150);
+            debounceTimer = setTimeout(() => this.updateAutocomplete(input.value), AUTOCOMPLETE_DEBOUNCE_DELAY);
         });
 
         // Keyboard navigation
@@ -8961,7 +8711,10 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         if (this.allSensorsCache) return this.allSensorsCache;
 
         try {
-            const response = await fetch('/api/sensors');
+            const tabState = state.tabs.get(this.tabKey);
+            const serverId = tabState?.serverId || '';
+            const param = serverId ? `?server=${encodeURIComponent(serverId)}` : '';
+            const response = await fetch(`/api/sensors${param}`);
             if (!response.ok) return [];
             const data = await response.json();
             this.allSensorsCache = data.sensors || [];
@@ -9360,16 +9113,11 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
 
     // Update from API response
     update(data) {
-        // Render Object Info (includes msgCount, lostMessages, isActive, etc.)
-        renderObjectInfo(this.tabKey, data.object);
-
+        super.update(data);
         // Render websockets info if present
         if (data.object?.websockets) {
             this.renderWebsocketsInfo(data.object.websockets);
         }
-
-        // Handle LogServer (uppercase - from API)
-        this.handleLogServer(data.LogServer);
     }
 
     renderWebsocketsInfo(websockets) {
@@ -10206,7 +9954,7 @@ class LauncherRenderer {
         this.loadStatus();
 
         // Авто-обновление каждые 5 секунд
-        this.autoRefreshInterval = setInterval(() => this.loadStatus(), 5000);
+        this.autoRefreshInterval = setInterval(() => this.loadStatus(), LAUNCHER_AUTO_REFRESH_INTERVAL);
     }
 
     attachTakeHandler() {
@@ -10292,6 +10040,9 @@ class LauncherRenderer {
         if (text) {
             text.textContent = connected ? 'Connected' : 'Disconnected';
         }
+
+        // Обновляем state.nodes и CSS-классы вкладки (sidebar dot, tab button, tab panel)
+        updateLauncherNodeStatus(this.nodeId, connected);
     }
 
     updateSummary(data) {
@@ -10354,6 +10105,8 @@ class LauncherRenderer {
 
             if (showActions) {
                 html += `<th class="launcher-actions-header">Actions
+                    <button class="launcher-bulk-btn launcher-bulk-stop" data-node="${this.nodeId}" data-bulk="stop-all" title="Stop all running processes">Stop</button>
+                    <button class="launcher-bulk-btn launcher-bulk-start" data-node="${this.nodeId}" data-bulk="start-all" title="Start all stopped processes">Start</button>
                     <button class="launcher-bulk-btn launcher-bulk-restart" data-node="${this.nodeId}" data-bulk="restart-all" title="Restart all processes">Restart</button>
                     <button class="launcher-bulk-btn launcher-bulk-reload" data-node="${this.nodeId}" data-bulk="reload-all" title="Reload all processes">Reload</button>
                 </th>`;
@@ -10508,9 +10261,17 @@ class LauncherRenderer {
                     if (!resp.ok) {
                         const data = await resp.json().catch(() => ({}));
                         await showConfirmDialog('Error', data.error || resp.statusText, 'OK');
+                    } else {
+                        // Оптимистично обновляем статус процесса для мигающей анимации
+                        const transitionStates = { stop: 'stopping', start: 'starting', restart: 'restarting' };
+                        const proc = this.processes.find(p => p.name === processName);
+                        if (proc && transitionStates[action]) {
+                            proc.state = transitionStates[action];
+                            this.renderProcessTable();
+                        }
                     }
 
-                    setTimeout(() => this.loadStatus(), 1000);
+                    setTimeout(() => this.loadStatus(), LAUNCHER_ACTION_REFRESH_DELAY);
                 } catch (err) {
                     console.error(`Launcher action ${action} failed:`, err);
                     await showConfirmDialog('Error', err.message, 'OK');
@@ -10529,7 +10290,8 @@ class LauncherRenderer {
             btn.addEventListener('click', async (e) => {
                 const bulkAction = e.currentTarget.dataset.bulk;
                 const nodeId = e.currentTarget.dataset.node;
-                const label = bulkAction === 'restart-all' ? 'Restart' : 'Reload';
+                const labels = { 'stop-all': 'Stop', 'start-all': 'Start', 'restart-all': 'Restart', 'reload-all': 'Reload' };
+                const label = labels[bulkAction] || bulkAction;
 
                 const confirmed = await showConfirmDialog(
                     `${label} All`,
@@ -10551,9 +10313,27 @@ class LauncherRenderer {
                     if (!resp.ok) {
                         const data = await resp.json().catch(() => ({}));
                         await showConfirmDialog('Error', `${label} failed: ${data.error || resp.statusText}`, 'OK');
+                    } else {
+                        // Оптимистично обновляем статусы для мигающей анимации
+                        const bulkTransitions = {
+                            'stop-all': { from: 'running', to: 'stopping', skipFlags: true },
+                            'start-all': { from: null, to: 'starting', skipFlags: true },
+                            'restart-all': { from: null, to: 'restarting', skipFlags: false },
+                            'reload-all': { from: null, to: 'stopping', skipFlags: false },
+                        };
+                        const transition = bulkTransitions[bulkAction];
+                        if (transition) {
+                            for (const proc of this.processes) {
+                                if (transition.skipFlags && (proc.manual || proc.oneshot || proc.skip)) continue;
+                                if (transition.from && proc.state !== transition.from) continue;
+                                if (!transition.from && bulkAction === 'start-all' && proc.state === 'running') continue;
+                                proc.state = transition.to;
+                            }
+                            this.renderProcessTable();
+                        }
                     }
 
-                    setTimeout(() => this.loadStatus(), 1500);
+                    setTimeout(() => this.loadStatus(), LAUNCHER_BULK_ACTION_REFRESH_DELAY);
                 } catch (err) {
                     console.error(`Launcher bulk ${bulkAction} failed:`, err);
                     await showConfirmDialog('Error', `${label} failed: ${err.message}`, 'OK');
@@ -10623,7 +10403,7 @@ class LogViewer {
         this.connected = false;
         this.isActive = false; // true если идёт попытка подключения или переподключения
         this.lines = [];
-        this.maxLines = 10000;
+        this.maxLines = MAX_LOG_LINES;
         this.autoScroll = true;
         this.currentLevel = 0; // 0 = по умолчанию (не отправлять setLevel)
         this.selectedLevels = new Set(); // выбранные уровни логов
@@ -10632,7 +10412,7 @@ class LogViewer {
         this.filterRegex = true; // использовать regexp
         this.filterCase = false; // учитывать регистр
         this.filterOnlyMatches = false; // показывать только совпадения
-        this.height = 200;
+        this.height = LOGVIEWER_DEFAULT_HEIGHT;
         this.hasReceivedLogs = false; // Получали ли логи
         this.matchCount = 0; // количество совпадений
         this.paused = false; // пауза автопрокрутки
@@ -11107,7 +10887,7 @@ class LogViewer {
         const onMouseMove = (e) => {
             if (!isResizing) return;
             const delta = e.clientY - startY;
-            const newHeight = Math.max(100, Math.min(600, startHeight + delta));
+            const newHeight = Math.max(LOGVIEWER_MIN_HEIGHT, Math.min(LOGVIEWER_MAX_HEIGHT, startHeight + delta));
             logContainer.style.height = `${newHeight}px`;
             this.height = newHeight;
         };
@@ -11744,7 +11524,7 @@ class JournalRenderer {
             to: null
         };
         this.offset = 0;
-        this.limit = 100;
+        this.limit = JOURNAL_DEFAULT_LIMIT;
         this.total = 0;
         this.mtypes = [];
         this.mgroups = [];
@@ -11852,7 +11632,7 @@ class JournalRenderer {
                     this.filters.search = searchInput.value;
                     this.offset = 0;
                     this.loadMessages();
-                }, 300);
+                }, JOURNAL_SEARCH_DEBOUNCE_DELAY);
                 // Show/hide clear button
                 if (searchClear) {
                     searchClear.style.display = searchInput.value ? 'block' : 'none';
@@ -12222,7 +12002,7 @@ class JournalRenderer {
             row.innerHTML = this.renderMessageRowContent(msg);
             tbody.insertBefore(row, tbody.firstChild);
 
-            setTimeout(() => row.classList.remove('journal-new'), 2000);
+            setTimeout(() => row.classList.remove('journal-new'), JOURNAL_HIGHLIGHT_DURATION);
         }
 
         this.total += messages.length;
@@ -12419,6 +12199,42 @@ class JournalManager {
 // Global journal manager instance
 let journalManager = null;
 
+// Обновление статуса подключения журнала (sidebar, panel, groups)
+function updateJournalConnectionStatus(journalId, connected) {
+    // 1. Обновляем данные в journalManager
+    if (journalManager) {
+        const journal = journalManager.journals.get(journalId);
+        if (journal) {
+            journal.connected = connected;
+            journal.status = connected ? 'connected' : 'error';
+        }
+    }
+
+    // 2. Sidebar: обновляем .journal-item-status
+    const item = document.querySelector(`.journal-item[data-id="${journalId}"]`);
+    if (item) {
+        const statusEl = item.querySelector('.journal-item-status');
+        if (statusEl) {
+            statusEl.className = `journal-item-status ${connected ? 'connected' : 'error'}`;
+            statusEl.textContent = connected ? 'connected' : 'error';
+        }
+    }
+
+    // 3. Panel: toggle .server-disconnected на .journal-panel
+    const panel = document.getElementById(`journal-${journalId}`);
+    if (panel) {
+        panel.classList.toggle('server-disconnected', !connected);
+    }
+
+    // 4. Sidebar groups: обновляем статус точки
+    if (typeof updateGroupEntityStatus === 'function' && journalManager) {
+        const journal = journalManager.journals.get(journalId);
+        if (journal) {
+            updateGroupEntityStatus('journal', journal.name, connected);
+        }
+    }
+}
+
 // Global View Switcher
 // All sidebar sections (Objects, Dashboards, Journals) are always visible
 // Only the main content view changes
@@ -12495,7 +12311,8 @@ async function initJournals() {
     } else {
         // Show journals button and section, render the list
         if (journalsBtn) journalsBtn.style.display = '';
-        if (journalsSection) {
+        // В group mode секция скрыта — не показываем
+        if (journalsSection && (!state.sidebarGroups || state.sidebarGroups.length === 0)) {
             journalsSection.style.display = '';
             // Apply saved collapse state
             if (state.journalsSectionCollapsed) {
@@ -12526,14 +12343,14 @@ async function initJournals() {
 // ============================================================================
 
 // Цвета для графиков
-const chartColors = [
+const CHART_COLORS = [
     '#3274d9', '#73bf69', '#ff9830', '#f2495c',
     '#b877d9', '#5794f2', '#fade2a', '#ff6eb4'
 ];
 let colorIndex = 0;
 
 function getNextColor() {
-    const color = chartColors[colorIndex % chartColors.length];
+    const color = CHART_COLORS[colorIndex % CHART_COLORS.length];
     colorIndex++;
     return color;
 }
@@ -12649,8 +12466,9 @@ async function fetchVariableHistory(objectName, variableName, count = 100, serve
     return response.json();
 }
 
-async function fetchSensors() {
-    const response = await fetch('/api/sensors');
+async function fetchSensors(serverId) {
+    const param = serverId ? `?server=${encodeURIComponent(serverId)}` : '';
+    const response = await fetch(`/api/sensors${param}`);
     if (!response.ok) return { sensors: [], count: 0 };
     return response.json();
 }
@@ -12661,27 +12479,38 @@ async function fetchSMSensors() {
     return response.json();
 }
 
-// Loading конфигурации сенсоров
+// Loading конфигурации сенсоров (per-server, вызывается после заполнения state.servers)
 async function loadSensorsConfig() {
     try {
-        // Сначала пробуем загрузить из конфига
-        let data = await fetchSensors();
-        let source = 'config';
+        let totalLoaded = 0;
 
-        // Если конфиг пуст, пробуем загрузить из SharedMemory
-        if (!data.sensors || data.sensors.length === 0) {
+        // Загружаем сенсоры для каждого известного сервера
+        for (const [serverId] of state.servers) {
+            const data = await fetchSensors(serverId);
+            if (data.sensors && data.sensors.length > 0) {
+                data.sensors.forEach(sensor => {
+                    if (!state.sensorsByName.has(sensor.name)) {
+                        state.sensors.set(sensor.id, sensor);
+                        state.sensorsByName.set(sensor.name, sensor);
+                        totalLoaded++;
+                    }
+                });
+            }
+        }
+
+        // Если ничего не загрузилось, пробуем SharedMemory как fallback
+        if (totalLoaded === 0) {
             console.log('Конфиг датчиков пуст, загружаю из SharedMemory...');
-            data = await fetchSMSensors();
-            source = 'sm';
+            const data = await fetchSMSensors();
+            if (data.sensors) {
+                data.sensors.forEach(sensor => {
+                    state.sensors.set(sensor.id, sensor);
+                    state.sensorsByName.set(sensor.name, sensor);
+                });
+            }
         }
 
-        if (data.sensors) {
-            data.sensors.forEach(sensor => {
-                state.sensors.set(sensor.id, sensor);
-                state.sensorsByName.set(sensor.name, sensor);
-            });
-        }
-        console.log(`Загружено ${state.sensors.size} сенсоров из ${source}`);
+        console.log(`Загружено ${state.sensors.size} сенсоров`);
     } catch (err) {
         console.error('Error загрузки конфигурации сенсоров:', err);
     }
@@ -12815,21 +12644,20 @@ function openSensorDialog(tabKey) {
     filterInput.value = '';
     filterInput.focus();
 
+    // Определяем serverId текущей вкладки для per-server загрузки
+    const serverId = tabState?.serverId || '';
+
     // Определяем источник датчиков в зависимости от smEnabled
     if (state.capabilities.smEnabled) {
-        // SM включен - загружаем датчики из XML конфига
-        if (state.sensors.size === 0) {
-            renderSensorDialogContent('<div class="sensor-dialog-loading">Loading sensor list...</div>');
-            loadSensorsConfig().then(() => {
-                prepareSensorList();
-                renderSensorTable();
-            }).catch(err => {
-                renderSensorDialogContent('<div class="sensor-dialog-empty">Error loading sensors</div>');
-            });
-        } else {
-            prepareSensorList();
+        // SM включен - загружаем датчики из XML конфига (per-server)
+        renderSensorDialogContent('<div class="sensor-dialog-loading">Loading sensor list...</div>');
+        fetchSensorsForServer(serverId).then(sensors => {
+            sensorDialogState.allSensors = sensors;
+            sensorDialogState.filteredSensors = [...sensors];
             renderSensorTable();
-        }
+        }).catch(err => {
+            renderSensorDialogContent('<div class="sensor-dialog-empty">Error loading sensors</div>');
+        });
     } else {
         // SM не настроен - показываем датчики из IONC таблицы
         const ioncTabState = state.tabs.get(tabKey);
@@ -12965,12 +12793,7 @@ function renderSensorTable() {
 }
 
 // Экранирование HTML
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
+// escapeHtml() определена в 06-utils.js
 
 // Подписаться на внешние датчики через API
 // tabKey - ключ вкладки (serverId:objectName)
@@ -13613,6 +13436,15 @@ function restoreExternalSensors(tabKey, displayName) {
     setTimeout(restoreSensors, 200);
 }
 
+// Загрузка сенсоров для конкретного сервера
+async function fetchSensorsForServer(serverId) {
+    const param = serverId ? `?server=${encodeURIComponent(serverId)}` : '';
+    const response = await fetch(`/api/sensors${param}`);
+    if (!response.ok) return [];
+    const data = await response.json();
+    return data.sensors || [];
+}
+
 // UI функции
 
 
@@ -13995,6 +13827,10 @@ function createTab(tabKey, displayName, rendererInfo, initialData, serverId, ser
     if (initialData) {
         renderer.update(initialData);
     }
+
+    // Обновляем состояние кнопок контроля (disabled/enabled)
+    // для только что созданных элементов
+    updateAllControlButtons();
 }
 
 function activateTab(name) {
@@ -14072,9 +13908,13 @@ function createLauncherTab(tabKey, nodeId, nodeName, launcherUrl, hasControl) {
 
     const renderer = new LauncherRenderer(nodeName, tabKey, nodeId, launcherUrl, hasControl);
 
+    // Проверяем начальный статус подключения
+    const nodeState = state.nodes.get(nodeId);
+    const nodeConnected = nodeState?.connected !== false;
+
     // Кнопка вкладки
     const tabBtn = document.createElement('button');
-    tabBtn.className = 'tab-btn';
+    tabBtn.className = 'tab-btn' + (nodeConnected ? '' : ' server-disconnected');
     tabBtn.dataset.name = tabKey;
     tabBtn.dataset.objectType = 'Launcher';
     tabBtn.innerHTML = `
@@ -14093,7 +13933,7 @@ function createLauncherTab(tabKey, nodeId, nodeName, launcherUrl, hasControl) {
 
     // Панель содержимого
     const panel = document.createElement('div');
-    panel.className = 'tab-panel';
+    panel.className = 'tab-panel' + (nodeConnected ? '' : ' server-disconnected');
     panel.dataset.name = tabKey;
     panel.dataset.objectType = 'Launcher';
     panel.innerHTML = renderer.createPanelHTML();
@@ -14127,7 +13967,10 @@ function renderLaunchersSection(launchers) {
         section.style.display = 'none';
         return;
     }
-    section.style.display = '';
+    // В group mode секция скрыта — не показываем
+    if (!state.sidebarGroups || state.sidebarGroups.length === 0) {
+        section.style.display = '';
+    }
 
     const list = document.getElementById('launchers-list');
     const countEl = document.getElementById('launchers-count');
@@ -14205,11 +14048,27 @@ function updateLauncherNodeStatus(nodeId, connected) {
     }
 
     const item = document.querySelector(`.launcher-sidebar-item[data-node-id="${nodeId}"]`);
-    if (!item) return;
+    if (item) {
+        const dot = item.querySelector('.server-status-dot');
+        if (dot) {
+            dot.className = `server-status-dot${connected ? '' : ' disconnected'}`;
+        }
+    }
 
-    const dot = item.querySelector('.server-status-dot');
-    if (dot) {
-        dot.className = `server-status-dot${connected ? '' : ' disconnected'}`;
+    // Обновляем CSS-класс tab-кнопки и панели (аналогично updateServerStatus)
+    const tabKey = `launcher:${nodeId}`;
+    const tabBtn = document.querySelector(`.tab-btn[data-name="${CSS.escape(tabKey)}"]`);
+    if (tabBtn) {
+        tabBtn.classList.toggle('server-disconnected', !connected);
+    }
+    const tabPanel = document.querySelector(`.tab-panel[data-name="${CSS.escape(tabKey)}"]`);
+    if (tabPanel) {
+        tabPanel.classList.toggle('server-disconnected', !connected);
+    }
+
+    // Обновляем статус в sidebar группах (по имени ноды)
+    if (typeof updateGroupEntityStatus === 'function' && nodeState) {
+        updateGroupEntityStatus('launcher', nodeState.name, connected);
     }
 }
 
@@ -15375,7 +15234,7 @@ function showColorPicker(element, tabKey, varName) {
     popup.style.left = `${rect.left}px`;
     popup.style.top = `${rect.bottom + 4}px`;
 
-    chartColors.forEach(color => {
+    CHART_COLORS.forEach(color => {
         const option = document.createElement('div');
         option.className = 'color-picker-option';
         if (color === currentColor) option.classList.add('selected');
@@ -15534,7 +15393,7 @@ function setupChartsResize(tabKey) {
     const onMouseMove = (e) => {
         if (!isResizing) return;
         const delta = e.clientY - startY;
-        const newHeight = Math.max(150, startHeight + delta);
+        const newHeight = Math.max(CHARTS_CONTAINER_MIN_HEIGHT, startHeight + delta);
         chartsContainer.style.height = `${newHeight}px`;
         chartsContainer.style.maxHeight = `${newHeight}px`;
     };
@@ -15554,7 +15413,7 @@ function setupChartsResize(tabKey) {
         e.preventDefault();
         isResizing = true;
         startY = e.clientY;
-        startHeight = chartsContainer.offsetHeight || 300;
+        startHeight = chartsContainer.offsetHeight || CHARTS_CONTAINER_DEFAULT_HEIGHT;
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
         document.body.style.cursor = 'ns-resize';
@@ -15609,7 +15468,7 @@ function setupIONCSensorsResize(objectName) {
     const onMouseMove = (e) => {
         if (!isResizing) return;
         const delta = e.clientY - startY;
-        const newHeight = Math.max(200, startHeight + delta);
+        const newHeight = Math.max(SENSORS_CONTAINER_MIN_HEIGHT, startHeight + delta);
         sensorsContainer.style.height = `${newHeight}px`;
         sensorsContainer.style.maxHeight = `${newHeight}px`;
     };
@@ -16002,7 +15861,7 @@ function setupIOGlobalFilter(tabKey, objectName) {
 
     filterInput.addEventListener('input', (e) => {
         clearTimeout(filterTimeout);
-        filterTimeout = setTimeout(refilterAll, 200);
+        filterTimeout = setTimeout(refilterAll, SETTINGS_FILTER_DEBOUNCE_DELAY);
     });
 
     // ESC to clear and blur
@@ -16178,6 +16037,285 @@ async function loadAppConfig() {
     }
 }
 
+
+
+// === 55-sidebar-groups.js ===
+// Sidebar Groups — рендеринг сгруппированного sidebar
+// Загружается между UI-функциями (50-59 диапазон)
+
+const ENTITY_TYPE_BADGE = {
+    object: 'Obj',
+    launcher: 'Lnc',
+    journal: 'Jrn',
+    dashboard: 'Dsh',
+    server: 'Srv'
+};
+
+// Загрузка sidebar конфигурации с сервера
+async function loadSidebar() {
+    try {
+        const response = await fetch('/api/sidebar');
+        if (!response.ok) {
+            console.warn('Sidebar API error:', response.status);
+            state.sidebarGroups = [];
+            return;
+        }
+        const data = await response.json();
+        state.sidebarGroups = Array.isArray(data.groups) ? data.groups : [];
+        console.log(`Sidebar: ${state.sidebarGroups.length} groups loaded`);
+    } catch (err) {
+        console.warn('Failed to load sidebar config:', err);
+        state.sidebarGroups = [];
+    }
+}
+
+// Загрузка collapse состояния групп из localStorage
+function loadGroupCollapseState() {
+    try {
+        const saved = localStorage.getItem('uniset-panel-group-collapse');
+        if (saved) {
+            state.groupCollapseState = JSON.parse(saved);
+        }
+    } catch (err) {
+        state.groupCollapseState = {};
+    }
+}
+
+// Сохранение collapse состояния групп в localStorage
+function saveGroupCollapseState() {
+    try {
+        localStorage.setItem('uniset-panel-group-collapse', JSON.stringify(state.groupCollapseState));
+    } catch (err) {
+        // ignore
+    }
+}
+
+// Основная функция рендеринга всех групп
+function renderSidebarGroups() {
+    const container = document.getElementById('sidebar-groups');
+    if (!container || !state.sidebarGroups) return;
+
+    container.innerHTML = '';
+    loadGroupCollapseState();
+
+    for (const group of state.sidebarGroups) {
+        renderSidebarGroup(group, container);
+    }
+
+    // Пользовательские dashboard'ы из localStorage
+    renderUserDashboardsGroup(container);
+}
+
+// Рендеринг одной группы
+function renderSidebarGroup(group, container) {
+    const groupDiv = document.createElement('div');
+    groupDiv.className = 'sidebar-group';
+    const collapseKey = group.name || `_group_${container.children.length}`;
+    groupDiv.dataset.groupName = collapseKey;
+
+    const isCollapsed = state.groupCollapseState[collapseKey] === true;
+    if (isCollapsed) {
+        groupDiv.classList.add('collapsed');
+    }
+
+    const header = document.createElement('div');
+    header.className = 'sidebar-group-header';
+    const iconHtml = group.icon ? `<span class="sidebar-group-icon">${escapeHtml(group.icon)}</span>` : '';
+    const titleHtml = group.name ? `<span class="sidebar-group-title">${escapeHtml(group.name)}</span>` : '';
+    header.innerHTML = `
+        <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 9l6 6 6-6"/>
+        </svg>
+        ${iconHtml}
+        ${titleHtml}
+        <span class="sidebar-group-count">${group.items ? group.items.length : 0}</span>
+    `;
+    header.addEventListener('click', () => {
+        groupDiv.classList.toggle('collapsed');
+        state.groupCollapseState[collapseKey] = groupDiv.classList.contains('collapsed');
+        saveGroupCollapseState();
+    });
+    groupDiv.appendChild(header);
+
+    // Items — всегда плоский список с бейджами
+    const ul = document.createElement('ul');
+    ul.className = 'sidebar-group-items';
+
+    if (group.items) {
+        for (const item of group.items) {
+            ul.appendChild(createSidebarGroupItem(item));
+        }
+    }
+
+    groupDiv.appendChild(ul);
+    container.appendChild(groupDiv);
+}
+
+// Создание одного элемента sidebar
+function createSidebarGroupItem(item) {
+    const li = document.createElement('li');
+    li.className = 'sidebar-group-item';
+    li.dataset.type = item.type;
+    li.dataset.name = item.name;
+    if (item.serverId) {
+        li.dataset.serverId = item.serverId;
+    }
+
+    // Status dot для объектов и серверов
+    if (item.type === 'object' || item.type === 'server') {
+        const dot = document.createElement('span');
+        dot.className = 'sidebar-group-status';
+        li.appendChild(dot);
+    }
+
+    // Type badge
+    const badge = document.createElement('span');
+    badge.className = `entity-type-badge entity-type-${item.type}`;
+    badge.textContent = ENTITY_TYPE_BADGE[item.type] || item.type;
+    li.appendChild(badge);
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'sidebar-group-item-name';
+    nameSpan.textContent = item.displayName || item.name;
+    li.appendChild(nameSpan);
+
+    li.addEventListener('click', () => {
+        activateSidebarGroupItem(item.type, item.name, item.serverId);
+        // Подсветка активного элемента
+        document.querySelectorAll('.sidebar-group-item.active').forEach(el => el.classList.remove('active'));
+        li.classList.add('active');
+    });
+
+    return li;
+}
+
+// Активация элемента sidebar — открытие соответствующего таба
+function activateSidebarGroupItem(type, name, serverId) {
+    switch (type) {
+        case 'object': {
+            const serverInfo = state.servers.get(serverId);
+            const serverName = serverInfo ? serverInfo.name : (serverId || '');
+            openObjectTab(name, serverId, serverName);
+            break;
+        }
+        case 'launcher': {
+            for (const [nodeId, node] of state.nodes) {
+                if (node.name === name) {
+                    openLauncherTab(nodeId, node.name, node.launcherUrl, node.hasControl);
+                    return;
+                }
+            }
+            break;
+        }
+        case 'dashboard': {
+            if (dashboardManager) {
+                dashboardManager.switchView('dashboard');
+                dashboardManager.loadDashboard(name);
+            }
+            break;
+        }
+        case 'journal': {
+            if (typeof journalManager !== 'undefined' && journalManager) {
+                for (const [id, journal] of journalManager.journals) {
+                    if (journal.name === name) {
+                        journalManager.openJournal(id);
+                        return;
+                    }
+                }
+            }
+            break;
+        }
+        case 'server': {
+            for (const [serverId, server] of state.servers) {
+                if (server.id === name || server.name === name) {
+                    const group = document.querySelector(`.server-group[data-server-id="${serverId}"]`);
+                    if (group) {
+                        group.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                    return;
+                }
+            }
+            break;
+        }
+    }
+}
+
+// Обновление статуса сущности в sidebar группах (вызывается из SSE хуков)
+function updateGroupEntityStatus(type, name, connected) {
+    const container = document.getElementById('sidebar-groups');
+    if (!container) return;
+
+    const selector = `.sidebar-group-item[data-type="${type}"][data-name="${CSS.escape(name)}"]`;
+    const items = container.querySelectorAll(selector);
+    items.forEach(item => {
+        const dot = item.querySelector('.sidebar-group-status');
+        if (dot) {
+            dot.classList.toggle('connected', connected);
+            dot.classList.toggle('disconnected', !connected);
+        }
+    });
+
+    // Объекты наследуют статус от своего сервера
+    if (type === 'server') {
+        const objSelector = `.sidebar-group-item[data-type="object"][data-server-id="${CSS.escape(name)}"]`;
+        container.querySelectorAll(objSelector).forEach(item => {
+            const dot = item.querySelector('.sidebar-group-status');
+            if (dot) {
+                dot.classList.toggle('connected', connected);
+                dot.classList.toggle('disconnected', !connected);
+            }
+        });
+    }
+}
+
+// Обновление sidebar при изменении списка объектов
+async function refreshSidebarGroups() {
+    await loadSidebar();
+    renderSidebarGroups();
+    applySidebarStatuses();
+}
+
+// Применяет текущие статусы из state к точкам в sidebar
+function applySidebarStatuses() {
+    for (const [serverId, server] of state.servers) {
+        if (server.connected !== undefined) {
+            updateGroupEntityStatus('server', serverId, server.connected);
+        }
+    }
+    for (const [nodeId, node] of state.nodes) {
+        if (node.connected !== undefined) {
+            updateGroupEntityStatus('launcher', node.name, node.connected);
+        }
+    }
+    if (typeof journalManager !== 'undefined' && journalManager?.journals) {
+        for (const [journalId, journal] of journalManager.journals) {
+            updateGroupEntityStatus('journal', journal.name, journal.connected !== false);
+        }
+    }
+}
+
+// Рендеринг пользовательских dashboard'ов в отдельную группу
+function renderUserDashboardsGroup(container) {
+    try {
+        const saved = localStorage.getItem('user-dashboards');
+        if (!saved) return;
+
+        const userDashboards = JSON.parse(saved);
+        if (!Array.isArray(userDashboards) || userDashboards.length === 0) return;
+
+        const items = userDashboards.map(name => ({
+            type: 'dashboard',
+            name: name
+        }));
+
+        renderSidebarGroup({
+            name: 'Custom',
+            items: items
+        }, container);
+    } catch (err) {
+        // ignore
+    }
+}
 
 
 // === 60-dashboard-base.js ===
@@ -19532,10 +19670,8 @@ const WIDGET_TYPES = {
     'chart': ChartWidget
 };
 
-// Grid settings (4x finer grid for precise positioning)
-const GRID_COLS = 48;
-const GRID_ROW_HEIGHT = 30;
-const GRID_GAP = 4;
+// Grid settings используют константы из 05-constants.js:
+// DASHBOARD_GRID_COLS, DASHBOARD_GRID_ROW_HEIGHT, DASHBOARD_GRID_GAP
 
 // ============================================================================
 // Dashboard Manager
@@ -20002,15 +20138,15 @@ class DashboardManager {
             container.style.left = `${freePosition.left}px`;
             container.style.top = `${freePosition.top}px`;
             // Always calculate size from grid cells (width/height are always in cells)
-            const gap = GRID_GAP;
+            const gap = DASHBOARD_GRID_GAP;
             const gridEl = this.gridEl || document.querySelector('.dashboard-grid');
             if (gridEl) {
                 const gridRect = gridEl.getBoundingClientRect();
                 const computedStyle = window.getComputedStyle(gridEl);
                 const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
                 const contentWidth = gridRect.width - paddingLeft * 2;
-                const cellWidth = (contentWidth - gap * (GRID_COLS - 1)) / GRID_COLS;
-                const cellHeight = GRID_ROW_HEIGHT;
+                const cellWidth = (contentWidth - gap * (DASHBOARD_GRID_COLS - 1)) / DASHBOARD_GRID_COLS;
+                const cellHeight = DASHBOARD_GRID_ROW_HEIGHT;
                 container.style.width = `${width * cellWidth + (width - 1) * gap}px`;
                 container.style.height = `${height * cellHeight + (height - 1) * gap}px`;
             }
@@ -20188,7 +20324,7 @@ class DashboardManager {
                 created: new Date().toISOString(),
                 modified: new Date().toISOString()
             },
-            grid: { cols: GRID_COLS, rowHeight: GRID_ROW_HEIGHT, gap: GRID_GAP },
+            grid: { cols: DASHBOARD_GRID_COLS, rowHeight: DASHBOARD_GRID_ROW_HEIGHT, gap: DASHBOARD_GRID_GAP },
             widgets: []
         };
 
@@ -20465,7 +20601,7 @@ class DashboardManager {
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => {
                 const query = sensorInput.value.trim().toLowerCase();
-                if (query.length < 2) {
+                if (query.length < AUTOCOMPLETE_MIN_QUERY) {
                     hideAutocomplete();
                     return;
                 }
@@ -20504,7 +20640,7 @@ class DashboardManager {
         // Focus - show autocomplete if text is present
         sensorInput.addEventListener('focus', () => {
             const query = sensorInput.value.trim().toLowerCase();
-            if (query.length >= 2) {
+            if (query.length >= AUTOCOMPLETE_MIN_QUERY) {
                 const matches = sensors
                     .filter(s => s.name.toLowerCase().includes(query))
                     .slice(0, 10);
@@ -20641,7 +20777,7 @@ class DashboardManager {
         // Simple algorithm: find first empty position
         const dashboard = dashboardState.dashboards.get(dashboardState.currentDashboard);
         const widgets = dashboard?.widgets || [];
-        const cols = GRID_COLS;
+        const cols = DASHBOARD_GRID_COLS;
 
         // Build occupancy grid
         const occupied = new Set();
@@ -20714,9 +20850,9 @@ class DashboardManager {
         const startHeight = widgetConfig.position.height || 1;
 
         // Calculate cell size
-        const gap = GRID_GAP;
-        const cellWidth = (gridRect.width - gap * (GRID_COLS - 1)) / GRID_COLS;
-        const cellHeight = GRID_ROW_HEIGHT;
+        const gap = DASHBOARD_GRID_GAP;
+        const cellWidth = (gridRect.width - gap * (DASHBOARD_GRID_COLS - 1)) / DASHBOARD_GRID_COLS;
+        const cellHeight = DASHBOARD_GRID_ROW_HEIGHT;
 
         container.classList.add('resizing');
 
@@ -20726,7 +20862,7 @@ class DashboardManager {
 
             // Calculate new size in cells
             const col = widgetConfig.position.col || 0;
-            const maxWidth = GRID_COLS - col; // Can't extend beyond grid
+            const maxWidth = DASHBOARD_GRID_COLS - col; // Can't extend beyond grid
             let newWidth = Math.max(1, Math.min(maxWidth, Math.round(startWidth + deltaX / (cellWidth + gap))));
             let newHeight = Math.max(1, Math.min(20, Math.round(startHeight + deltaY / (cellHeight + gap))));
 
@@ -20789,10 +20925,10 @@ class DashboardManager {
         const offsetY = startEvent.clientY - containerRect.top;
 
         // Calculate cell size (grid content area = width minus padding on both sides)
-        const gap = GRID_GAP;
+        const gap = DASHBOARD_GRID_GAP;
         const contentWidth = gridRect.width - paddingLeft * 2;
-        const cellWidth = (contentWidth - gap * (GRID_COLS - 1)) / GRID_COLS;
-        const cellHeight = GRID_ROW_HEIGHT;
+        const cellWidth = (contentWidth - gap * (DASHBOARD_GRID_COLS - 1)) / DASHBOARD_GRID_COLS;
+        const cellHeight = DASHBOARD_GRID_ROW_HEIGHT;
 
         const width = widgetConfig.position.width || 2;
         const height = widgetConfig.position.height || 1;
@@ -20862,7 +20998,7 @@ class DashboardManager {
                 let newRow = Math.floor(relativeTop / (cellHeight + gap));
 
                 // Clamp to grid bounds
-                newCol = Math.max(0, Math.min(GRID_COLS - width, newCol));
+                newCol = Math.max(0, Math.min(DASHBOARD_GRID_COLS - width, newCol));
                 newRow = Math.max(0, newRow);
 
                 if (newCol !== pendingCol || newRow !== pendingRow) {
@@ -20976,10 +21112,10 @@ class DashboardManager {
         const gridRect = this.gridEl.getBoundingClientRect();
         const computedStyle = window.getComputedStyle(this.gridEl);
         const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
-        const gap = GRID_GAP;
+        const gap = DASHBOARD_GRID_GAP;
         const contentWidth = gridRect.width - paddingLeft * 2;
-        const cellWidth = (contentWidth - gap * (GRID_COLS - 1)) / GRID_COLS;
-        const cellHeight = GRID_ROW_HEIGHT;
+        const cellWidth = (contentWidth - gap * (DASHBOARD_GRID_COLS - 1)) / DASHBOARD_GRID_COLS;
+        const cellHeight = DASHBOARD_GRID_ROW_HEIGHT;
 
         const width = widgetConfig.position.width || 2;
         const height = widgetConfig.position.height || 1;
@@ -21038,7 +21174,7 @@ class DashboardManager {
                     col = Math.max(0, col - 1);
                     break;
                 case 'ArrowRight':
-                    col = Math.min(GRID_COLS - width, col + 1);
+                    col = Math.min(DASHBOARD_GRID_COLS - width, col + 1);
                     break;
             }
 
@@ -21840,7 +21976,7 @@ function addSensorToDashboard(sensorName, sensorLabel, dashboardName, widgetType
         const newDashboard = {
             version: DASHBOARD_VERSION,
             meta: { name: dashboardName, description: '' },
-            grid: { cols: GRID_COLS, rowHeight: GRID_ROW_HEIGHT, gap: GRID_GAP },
+            grid: { cols: DASHBOARD_GRID_COLS, rowHeight: DASHBOARD_GRID_ROW_HEIGHT, gap: DASHBOARD_GRID_GAP },
             widgets: []
         };
         dashboardState.dashboards.set(dashboardName, newDashboard);
@@ -21934,7 +22070,7 @@ async function loadAppVersion() {
 }
 
 // Инициализация
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     // Загружаем версию приложения
     loadAppVersion();
 
@@ -21947,14 +22083,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // Инициализация SSE для realtime обновлений (получаем capabilities при подключении)
     initSSE();
 
-    // Загружаем конфигурацию сенсоров (не блокируем загрузку объектов)
-    loadSensorsConfig().catch(err => {
-        console.warn('Не удалось загрузить конфигурацию сенсоров:', err);
-    });
+    // Загружаем sidebar конфигурацию (группы)
+    await loadSidebar();
 
-    // Загружаем список объектов
+    // Загружаем список объектов (заполняет state.servers)
     fetchObjects()
-        .then(renderObjectsList)
+        .then(data => {
+            renderObjectsList(data);
+            // Загружаем конфигурацию сенсоров per-server (после того как state.servers заполнен)
+            loadSensorsConfig().catch(err => {
+                console.warn('Не удалось загрузить конфигурацию сенсоров:', err);
+            });
+        })
         .catch(err => {
             console.error('Error загрузки объектов:', err);
             document.getElementById('objects-list').innerHTML =
@@ -22005,6 +22145,21 @@ document.addEventListener('DOMContentLoaded', () => {
     initJournals().catch(err => {
         console.warn('Failed to initialize journals:', err);
     });
+
+    // Показываем sidebar группы, скрываем hardcoded секции
+    const groupsContainer = document.getElementById('sidebar-groups');
+    if (groupsContainer) {
+        groupsContainer.style.display = '';
+    }
+    const legacySections = ['launchers-section', 'objects-section', 'journals-section', 'dashboards-section', 'servers-section'];
+    for (const id of legacySections) {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    }
+    renderSidebarGroups();
+    applySidebarStatuses();
+    // SSE статусы серверов приходят асинхронно, повторно применяем после стабилизации
+    setTimeout(applySidebarStatuses, SIDEBAR_STATUS_REAPPLY_DELAY);
 });
 
 // Инициализация селектора интервала опроса

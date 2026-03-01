@@ -27,9 +27,9 @@ const STATUS_LAST_PREFIXES = {
 // Helper function to open object tab and wait for status section
 async function openObjectAndWaitForStatus(page: any, objectName: string, sectionId: string) {
   await page.goto('/');
-  await page.waitForSelector('#objects-list li', { timeout: 15000 });
+  await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-  const item = page.locator('#objects-list li', { hasText: objectName });
+  const item = page.locator('.sidebar-group-item[data-type="object"]', { hasText: objectName });
   await item.click();
   await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
 
@@ -105,7 +105,7 @@ test.describe('Status Auto-Refresh', () => {
   test.describe('Global poll interval', () => {
     test('should use poll interval from header', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
       // Check poll interval selector exists in header
       const pollSelector = page.locator('#poll-interval-selector');
@@ -119,7 +119,7 @@ test.describe('Status Auto-Refresh', () => {
 
     test('should have active poll interval button', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
       // One button should be active
       const activeBtn = page.locator('.poll-btn.active');
@@ -128,7 +128,7 @@ test.describe('Status Auto-Refresh', () => {
 
     test('should change poll interval on button click', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
       // Click 10s button
       const btn10s = page.locator('.poll-btn[data-interval="10000"]');

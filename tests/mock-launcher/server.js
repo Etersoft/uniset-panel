@@ -16,14 +16,16 @@ const processes = [
     { name: 'LogDB', state: 'stopped', pid: 0, uptime: 0, restartCount: 3, lastError: 'ClickHouse connection refused', group: 'logging', critical: false },
     { name: 'BackupService', state: 'completed', pid: 0, uptime: 0, restartCount: 0, group: 'maintenance', critical: false, oneshot: true },
     { name: 'Watchdog', state: 'running', pid: 1010, uptime: 86400, restartCount: 0, group: 'core', critical: true, manual: false },
+    { name: 'ManualService', state: 'running', pid: 1011, uptime: 50000, restartCount: 0, group: 'maintenance', critical: false, manual: true },
+    { name: 'SkippedService', state: 'stopped', pid: 0, uptime: 0, restartCount: 0, group: 'maintenance', critical: false, skip: true },
 ];
 
 const groups = [
     { name: 'core', order: 1, processes: ['SharedMemory', 'IONotifyController', 'Watchdog'] },
-    { name: 'io', order: 2, dependsOn: ['core'], processes: ['MBTCPMaster1', 'MBTCPSlave1', 'OPCUAExchange', 'OPCUAServer'] },
-    { name: 'network', order: 3, dependsOn: ['core'], processes: ['UNetExchange', 'UWebSocketGate'] },
-    { name: 'logging', order: 4, dependsOn: ['core'], processes: ['LogDB'] },
-    { name: 'maintenance', order: 5, processes: ['BackupService'] },
+    { name: 'io', order: 2, depends: ['core'], processes: ['MBTCPMaster1', 'MBTCPSlave1', 'OPCUAExchange', 'OPCUAServer'] },
+    { name: 'network', order: 3, depends: ['core'], processes: ['UNetExchange', 'UWebSocketGate'] },
+    { name: 'logging', order: 4, depends: ['core'], processes: ['LogDB'] },
+    { name: 'maintenance', order: 5, processes: ['BackupService', 'ManualService', 'SkippedService'] },
 ];
 
 // Имитация живых данных — uptime растёт
@@ -40,8 +42,8 @@ function getStatus() {
     const anyCriticalFailed = processes.some(p => p.critical && (p.state === 'failed' || p.state === 'stopped'));
     return {
         node: NODE_NAME,
+        version: '2.44.0-mock',
         processes,
-        groups,
         allRunning,
         anyCriticalFailed,
     };
@@ -77,13 +79,13 @@ const server = http.createServer((req, res) => {
 
     // Processes list
     if (req.method === 'GET' && path === '/api/v2/launcher/processes') {
-        res.end(JSON.stringify(processes));
+        res.end(JSON.stringify({ count: processes.length, processes }));
         return;
     }
 
     // Groups list
     if (req.method === 'GET' && path === '/api/v2/launcher/groups') {
-        res.end(JSON.stringify(groups));
+        res.end(JSON.stringify({ count: groups.length, groups }));
         return;
     }
 
@@ -126,7 +128,7 @@ const server = http.createServer((req, res) => {
     }
 
     // Process actions: restart/stop/start
-    const actionMatch = path.match(/^\/api\/v2\/launcher\/processes\/([^/]+)\/(restart|stop|start)$/);
+    const actionMatch = path.match(/^\/api\/v2\/launcher\/process\/([^/]+)\/(restart|stop|start)$/);
     if (req.method === 'POST' && actionMatch) {
         const [, procName, action] = actionMatch;
         const proc = findProcess(procName);

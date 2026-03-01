@@ -9,6 +9,11 @@ import (
 	"github.com/pv/uniset-panel/internal/logserver"
 )
 
+const (
+	defaultLogServerHost = "localhost" // host по умолчанию для LogServer
+	defaultLogServerPort = 3333       // порт по умолчанию для LogServer
+)
+
 // === LogServer Types ===
 
 // LogServerCommand структура команды для LogServer
@@ -67,12 +72,12 @@ func (h *Handlers) HandleLogServerStream(w http.ResponseWriter, r *http.Request)
 	var host string
 	var port int
 
-	if h.serverManager != nil {
+	if h.serverMgr != nil {
 		if serverID == "" {
 			h.writeError(w, http.StatusBadRequest, "server parameter is required")
 			return
 		}
-		objData, err := h.serverManager.GetObjectData(serverID, name)
+		objData, err := h.serverMgr.GetObjectData(serverID, name)
 		if err != nil {
 			h.writeError(w, http.StatusBadGateway, err.Error())
 			return
@@ -100,10 +105,10 @@ func (h *Handlers) HandleLogServerStream(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if host == "" {
-		host = "localhost"
+		host = defaultLogServerHost
 	}
 	if port == 0 {
-		port = 3333
+		port = defaultLogServerPort
 	}
 
 	filter := r.URL.Query().Get("filter")

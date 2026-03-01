@@ -5,7 +5,7 @@ Recording позволяет записывать историю изменен�
 ## Возможности
 
 - Динамическое включение/выключение записи через UI
-- Запись всех типов датчиков: IONC, Modbus, OPCUA
+- Запись всех типов датчиков: IONC, Modbus, OPCUA, UWebSocketGate
 - Циклический буфер с автоматической очисткой старых записей
 - Экспорт в SQLite, CSV, JSON форматы
 - Сохранение начальных значений при старте записи
@@ -72,8 +72,7 @@ services:
 
 ![Recording With Data](images/recording-with-data.png)
 
-- Отображается количество записей (например, "412")
-- Отображается размер файла (например, "112KB")
+- Отображается комбинированный badge: количество записей и размер (например, `412 / 112KB`)
 
 ### Экспорт данных
 
@@ -109,7 +108,7 @@ services:
 
 ```bash
 # Получить статус
-curl http://localhost:8000/api/recording/status
+curl http://localhost:8181/api/recording/status
 
 # Ответ:
 {
@@ -122,19 +121,19 @@ curl http://localhost:8000/api/recording/status
 }
 
 # Начать запись
-curl -X POST http://localhost:8000/api/recording/start
+curl -X POST http://localhost:8181/api/recording/start
 
 # Остановить запись
-curl -X POST http://localhost:8000/api/recording/stop
+curl -X POST http://localhost:8181/api/recording/stop
 
 # Экспорт в JSON
-curl http://localhost:8000/api/export/json > history.json
+curl http://localhost:8181/api/export/json > history.json
 
 # Экспорт в CSV
-curl http://localhost:8000/api/export/csv > history.csv
+curl http://localhost:8181/api/export/csv > history.csv
 
 # Скачать SQLite базу
-curl http://localhost:8000/api/export/database > recording.db
+curl http://localhost:8181/api/export/database > recording.db
 ```
 
 ## Формат данных
@@ -157,7 +156,10 @@ curl http://localhost:8000/api/export/database > recording.db
 |-------------|---------|--------|
 | IONC (IONotifyController) | `ionc:` | `ionc:AI_Temp_S` |
 | Modbus (Master/Slave) | `mb:` | `mb:AI70_S` |
-| OPCUA (Exchange/Server) | `ext:` | `ext:Temperature` |
+| OPCUA (Exchange/Server) | `opcua:` | `opcua:Temperature` |
+| UWebSocketGate | `ws:` | `ws:SensorName` |
+
+> **Примечание:** Recording хранит OPCUA данные с prefix `opcua:`, но на фронтенде графики используют prefix `ext:` для тех же датчиков. Это различие исторически сложилось.
 
 ### Схема SQLite
 
@@ -211,10 +213,9 @@ CREATE TABLE servers (
 
 Recording использует циклический буфер для ограничения размера базы данных:
 
-1. При каждой записи проверяется количество записей
+1. Очистка выполняется только при вызове `Save()` (не `SaveBatch()`). При записи периодически проверяется количество записей
 2. Если превышен лимит (`--max-records`) + 10% буфер:
    - Удаляются 10% самых старых записей
-   - Выполняется VACUUM для освобождения места
 
 Пример: при `--max-records 1000000`:
 - Очистка начинается при 1,100,000 записей

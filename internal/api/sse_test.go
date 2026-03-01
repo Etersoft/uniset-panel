@@ -129,7 +129,7 @@ func TestSSEHubBroadcast(t *testing.T) {
 
 	// Отправляем событие для TestProc
 	event := SSEEvent{
-		Type:       "object_data",
+		Type:       EventObjectData,
 		ObjectName: "TestProc",
 		Data:       map[string]string{"test": "value"},
 		Timestamp:  time.Now(),
@@ -181,7 +181,7 @@ func TestSSEHubBroadcastObjectDataWithServer(t *testing.T) {
 
 	select {
 	case event := <-client.events:
-		if event.Type != "object_data" {
+		if event.Type != EventObjectData {
 			t.Errorf("expected type=object_data, got %s", event.Type)
 		}
 		if event.ObjectName != "TestProc" {
@@ -360,7 +360,7 @@ func TestHandleSSEReceivesEvents(t *testing.T) {
 
 func TestSSEEventJSON(t *testing.T) {
 	event := SSEEvent{
-		Type:       "object_data",
+		Type:       EventObjectData,
 		ObjectName: "TestProc",
 		Data: map[string]interface{}{
 			"var1": 100,
@@ -453,7 +453,7 @@ func TestPollerEventCallbackIntegration(t *testing.T) {
 		firstEvent := receivedEvents[0]
 		mu.Unlock()
 
-		if firstEvent.Type != "object_data" {
+		if firstEvent.Type != EventObjectData {
 			t.Errorf("expected event type=object_data, got %s", firstEvent.Type)
 		}
 		if firstEvent.ObjectName != "TestProc" {
@@ -504,10 +504,10 @@ data: {"objectName":"TestProc"}
 	if len(events) != 2 {
 		t.Errorf("expected 2 events, got %d", len(events))
 	}
-	if events[0]["event"] != "connected" {
+	if events[0]["event"] != EventConnected {
 		t.Errorf("expected first event=connected, got %s", events[0]["event"])
 	}
-	if events[1]["event"] != "object_data" {
+	if events[1]["event"] != EventObjectData {
 		t.Errorf("expected second event=object_data, got %s", events[1]["event"])
 	}
 }
@@ -526,7 +526,7 @@ func TestSSEHubBroadcastServerStatus(t *testing.T) {
 
 	select {
 	case event := <-client.events:
-		if event.Type != "server_status" {
+		if event.Type != EventServerStatus {
 			t.Errorf("expected type=server_status, got %s", event.Type)
 		}
 		if event.ServerID != "server1" {
@@ -563,7 +563,7 @@ func TestSSEHubBroadcastServerStatusDisconnected(t *testing.T) {
 
 	select {
 	case event := <-client.events:
-		if event.Type != "server_status" {
+		if event.Type != EventServerStatus {
 			t.Errorf("expected type=server_status, got %s", event.Type)
 		}
 
@@ -601,7 +601,7 @@ func TestSSEHubBroadcastServerStatusMultipleClients(t *testing.T) {
 	for i, client := range clients {
 		select {
 		case event := <-client.events:
-			if event.Type != "server_status" {
+			if event.Type != EventServerStatus {
 				t.Errorf("client%d: expected type=server_status, got %s", i+1, event.Type)
 			}
 		case <-time.After(100 * time.Millisecond):
@@ -624,7 +624,7 @@ func TestSSEHubBroadcastObjectsList(t *testing.T) {
 
 	select {
 	case event := <-client.events:
-		if event.Type != "objects_list" {
+		if event.Type != EventObjectsList {
 			t.Errorf("expected type=objects_list, got %s", event.Type)
 		}
 		if event.ServerID != "server1" {
@@ -666,7 +666,7 @@ func TestSSEHubBroadcastObjectsListEmpty(t *testing.T) {
 
 	select {
 	case event := <-client.events:
-		if event.Type != "objects_list" {
+		if event.Type != EventObjectsList {
 			t.Errorf("expected type=objects_list, got %s", event.Type)
 		}
 
@@ -704,7 +704,7 @@ func TestSSEHubBroadcastObjectsListMultipleClients(t *testing.T) {
 	for i, client := range clients {
 		select {
 		case event := <-client.events:
-			if event.Type != "objects_list" {
+			if event.Type != EventObjectsList {
 				t.Errorf("client%d: expected type=objects_list, got %s", i+1, event.Type)
 			}
 		case <-time.After(100 * time.Millisecond):
@@ -751,7 +751,7 @@ done:
 
 	// First event: server disconnected
 	if len(receivedEvents) > 0 {
-		if receivedEvents[0].Type != "server_status" {
+		if receivedEvents[0].Type != EventServerStatus {
 			t.Errorf("expected first event type=server_status, got %s", receivedEvents[0].Type)
 		}
 		data := receivedEvents[0].Data.(map[string]interface{})
@@ -762,7 +762,7 @@ done:
 
 	// Second event: server reconnected
 	if len(receivedEvents) > 1 {
-		if receivedEvents[1].Type != "server_status" {
+		if receivedEvents[1].Type != EventServerStatus {
 			t.Errorf("expected second event type=server_status, got %s", receivedEvents[1].Type)
 		}
 		data := receivedEvents[1].Data.(map[string]interface{})
@@ -773,7 +773,7 @@ done:
 
 	// Third event: objects list
 	if len(receivedEvents) > 2 {
-		if receivedEvents[2].Type != "objects_list" {
+		if receivedEvents[2].Type != EventObjectsList {
 			t.Errorf("expected third event type=objects_list, got %s", receivedEvents[2].Type)
 		}
 	}
@@ -785,7 +785,7 @@ done:
 
 func TestSSEEventServerStatusJSON(t *testing.T) {
 	event := SSEEvent{
-		Type:       "server_status",
+		Type:       EventServerStatus,
 		ServerID:   "server1",
 		ServerName: "Test Server",
 		Data: map[string]interface{}{
@@ -805,7 +805,7 @@ func TestSSEEventServerStatusJSON(t *testing.T) {
 		t.Fatalf("failed to unmarshal SSEEvent: %v", err)
 	}
 
-	if decoded.Type != "server_status" {
+	if decoded.Type != EventServerStatus {
 		t.Errorf("expected Type=server_status, got %s", decoded.Type)
 	}
 	if decoded.ServerID != "server1" {
@@ -815,7 +815,7 @@ func TestSSEEventServerStatusJSON(t *testing.T) {
 
 func TestSSEEventObjectsListJSON(t *testing.T) {
 	event := SSEEvent{
-		Type:       "objects_list",
+		Type:       EventObjectsList,
 		ServerID:   "server1",
 		ServerName: "Test Server",
 		Data: map[string]interface{}{
@@ -835,7 +835,7 @@ func TestSSEEventObjectsListJSON(t *testing.T) {
 		t.Fatalf("failed to unmarshal SSEEvent: %v", err)
 	}
 
-	if decoded["type"] != "objects_list" {
+	if decoded["type"] != EventObjectsList {
 		t.Errorf("expected type=objects_list, got %v", decoded["type"])
 	}
 

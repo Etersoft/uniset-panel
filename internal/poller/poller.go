@@ -5,7 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pv/uniset-panel/internal/logger"
+	"log/slog"
+
 	"github.com/pv/uniset-panel/internal/recording"
 	"github.com/pv/uniset-panel/internal/storage"
 	"github.com/pv/uniset-panel/internal/uniset"
@@ -116,7 +117,7 @@ func (p *Poller) poll() {
 	for _, objectName := range objects {
 		data, err := p.client.GetObjectData(objectName)
 		if err != nil {
-			logger.Warn("Poll failed", "object", objectName, "error", err)
+			slog.Warn("Poll failed", "object", objectName, "error", err)
 			continue
 		}
 
@@ -134,7 +135,7 @@ func (p *Poller) poll() {
 		if data.Variables != nil {
 			for varName, value := range data.Variables {
 				if err := p.storage.Save(p.serverID, objectName, varName, value, now); err != nil {
-					logger.Warn("Save variable failed", "object", objectName, "var", varName, "error", err)
+					slog.Warn("Save variable failed", "object", objectName, "var", varName, "error", err)
 				}
 				// Сохраняем в recording (если включено)
 				if p.recordingMgr != nil {
@@ -149,7 +150,7 @@ func (p *Poller) poll() {
 				for key, io := range data.IO.In {
 					varName := "io.in." + key
 					if err := p.storage.Save(p.serverID, objectName, varName, io.Value, now); err != nil {
-						logger.Warn("Save IO input failed", "object", objectName, "var", varName, "error", err)
+						slog.Warn("Save IO input failed", "object", objectName, "var", varName, "error", err)
 					}
 					// Сохраняем в recording (если включено)
 					if p.recordingMgr != nil {
@@ -161,7 +162,7 @@ func (p *Poller) poll() {
 				for key, io := range data.IO.Out {
 					varName := "io.out." + key
 					if err := p.storage.Save(p.serverID, objectName, varName, io.Value, now); err != nil {
-						logger.Warn("Save IO output failed", "object", objectName, "var", varName, "error", err)
+						slog.Warn("Save IO output failed", "object", objectName, "var", varName, "error", err)
 					}
 					// Сохраняем в recording (если включено)
 					if p.recordingMgr != nil {
@@ -175,7 +176,7 @@ func (p *Poller) poll() {
 	// Периодическая очистка старых данных
 	if time.Since(p.lastCleanupTime) > time.Minute {
 		if err := p.storage.Cleanup(now.Add(-p.ttl)); err != nil {
-			logger.Warn("Cleanup failed", "error", err)
+			slog.Warn("Cleanup failed", "error", err)
 		}
 		p.lastCleanupTime = now
 	}

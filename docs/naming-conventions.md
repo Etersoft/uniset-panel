@@ -21,7 +21,7 @@
 **Used for:**
 - API endpoints: `/api/objects/${objectName}/...`
 - DOM element IDs: `${prefix}-${objectName}` (e.g., `mbs-status-MBSlave1`)
-- `data-section` attributes: `${sectionId}-${objectName}` (e.g., `charts-MBSlave1`)
+- `data-section` attributes: `${prefix}-${objectName}` (e.g., `charts-MBSlave1`)
 - `toggleSection(sectionId)` where sectionId includes objectName
 - `restoreCollapsedSections(objectName)`
 - `this.objectName` in renderers
@@ -107,7 +107,14 @@ These functions operate within a single object's context:
 |-----|--------|-------------|
 | `uniset-panel-collapsed` | `{sectionId: boolean}` | Collapsed state of sections |
 | `uniset-panel-section-order` | `{tabKey: [sectionIds]}` | Order of sections per tab |
-| `uniset-panel-pinned-*` | `{objectName: [ids]}` | Pinned sensors per object |
+| `uniset-panel-ionc-pinned` | `{objectName: [ids]}` | Pinned IONC sensors |
+| `uniset-panel-mb-pinned` | `{objectName: [ids]}` | Pinned Modbus Master registers |
+| `uniset-panel-mbs-pinned` | `{objectName: [ids]}` | Pinned Modbus Slave registers |
+| `uniset-panel-opcua-pinned` | `{objectName: [ids]}` | Pinned OPCUA Exchange sensors |
+| `uniset-panel-opcuasrv-pinned` | `{objectName: [ids]}` | Pinned OPCUA Server sensors |
+| `uniset-panel-io-pinned` | `{objectName: [ids]}` | Pinned IO variables |
+| `uwsgate-pinned-${tabKey}` | `[names]` | Pinned UWebSocketGate sensors (по именам) |
+| `uwsgate-subscriptions-${tabKey}` | `[names]` | UWebSocketGate subscriptions (по именам) |
 
 ## SSE Events and Charts
 
@@ -123,8 +130,10 @@ Charts are identified by `varName` which combines a prefix and sensor name:
 | OPCUAExchange | `ext` | `ext:Temperature` |
 | OPCUAServer | `ext` | `ext:Temperature` |
 | IONotifyController | `io` | `io:AI_Temperature_S` |
+| UWebSocketGate | `ws` | `ws:SensorName` |
+| UNetExchange | `unet` | `unet:recv:42`, `unet:send:7` |
 
-**Important:** Both ModbusMaster and ModbusSlave use the same prefix `mb`.
+**Important:** Both ModbusMaster and ModbusSlave use the same prefix `mb`. Both OPCUAExchange and OPCUAServer use `ext`.
 
 ### Chart Storage
 ```javascript
@@ -137,7 +146,8 @@ tabState.charts.get(varName)  // Map<varName, ChartData>
 |------------|--------------|------------|------------|
 | `modbus_register_batch` | ModbusMaster, ModbusSlave | `registers[]` | `id`, `name`, `value` |
 | `opcua_sensor_batch` | OPCUAExchange, OPCUAServer | `sensors[]` | `id`, `name`, `value` |
-| `sensor_batch` | IONotifyController | `sensors[]` | `id`, `name`, `value` |
+| `ionc_sensor_batch` | IONotifyController | `sensors[]` | `id`, `name`, `value` |
+| `uwsgate_sensor_batch` | UWebSocketGate | `sensors[]` | `name`, `value` |
 
 ### SSE Handler Chart Update Pattern
 
@@ -165,23 +175,23 @@ for (const sensor of sensors) {
 
 ### Chart Creation (getChartOptions)
 
-Each renderer defines `getChartOptions()` which returns the prefix:
+Each renderer defines `getChartOptions()` which returns the prefix (badge + prefix):
 
 ```javascript
 // ModbusMasterRenderer and ModbusSlaveRenderer
-getChartOptions() {
-    return { prefix: 'mb', ... };
-}
+getChartOptions() { return { badge: 'MB', prefix: 'mb' }; }
 
-// OPCUAExchangeRenderer and OPCUAServerRenderer
-getChartOptions() {
-    return { prefix: 'ext', ... };
-}
+// OPCUAExchangeRenderer and OPCUAServer (наследуют от BaseObjectRenderer)
+// BaseObjectRenderer default: { badge: 'SM', prefix: 'ext' }
 
 // IONCRenderer
-getChartOptions() {
-    return { prefix: 'io', ... };
-}
+getChartOptions() { return { badge: 'IO', prefix: 'io' }; }
+
+// UWebSocketGateRenderer
+getChartOptions() { return { badge: 'WS', prefix: 'ws' }; }
+
+// UNetExchangeRenderer
+getChartOptions() { return { badge: 'UNET', prefix: 'unet' }; }
 ```
 
 ### SSE Subscription Flow

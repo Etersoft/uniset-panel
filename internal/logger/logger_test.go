@@ -6,48 +6,43 @@ import (
 )
 
 func TestLoggerInit(t *testing.T) {
-	// Test that Log is initialized by init()
-	if Log == nil {
-		t.Fatal("Log should be initialized by init()")
+	// Test that log is initialized by init()
+	if log == nil {
+		t.Fatal("log should be initialized by init()")
 	}
 }
 
 func TestInitTextFormat(t *testing.T) {
 	Init("text", slog.LevelInfo)
-	if Log == nil {
-		t.Fatal("Log is nil after Init(text)")
+	if log == nil {
+		t.Fatal("log is nil after Init(text)")
 	}
 }
 
 func TestInitJSONFormat(t *testing.T) {
 	Init("json", slog.LevelDebug)
-	if Log == nil {
-		t.Fatal("Log is nil after Init(json)")
+	if log == nil {
+		t.Fatal("log is nil after Init(json)")
 	}
 }
 
 func TestInitDefaultFormat(t *testing.T) {
 	Init("unknown", slog.LevelWarn)
-	if Log == nil {
-		t.Fatal("Log is nil after Init(unknown)")
+	if log == nil {
+		t.Fatal("log is nil after Init(unknown)")
 	}
 }
 
-func TestConvenienceFunctions(t *testing.T) {
-	// Just ensure they don't panic
+func TestSlogDefaultAfterInit(t *testing.T) {
 	Init("text", slog.LevelDebug)
-
+	// After Init(), slog.Default() should use our handler
 	// These should not panic
-	Info("test info message")
-	Error("test error message")
-	Warn("test warn message")
-	Debug("test debug message")
+	slog.Info("test info message")
+	slog.Error("test error message")
+	slog.Warn("test warn message")
+	slog.Debug("test debug message")
 
-	// With args
-	Info("test", "key", "value")
-	Error("test", "code", 500)
-	Warn("test", "count", 10)
-	Debug("test", "flag", true)
+	slog.Info("test", "key", "value")
 }
 
 func TestInitLevels(t *testing.T) {
@@ -60,8 +55,8 @@ func TestInitLevels(t *testing.T) {
 
 	for _, level := range levels {
 		Init("text", level)
-		if Log == nil {
-			t.Errorf("Log is nil after Init with level %v", level)
+		if log == nil {
+			t.Errorf("log is nil after Init with level %v", level)
 		}
 	}
 }

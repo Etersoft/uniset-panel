@@ -7,10 +7,10 @@ test.describe('UNetExchange renderer', () => {
     await page.goto('/');
 
     // Wait for objects list
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
     // Check that UNetExchange exists
-    const unetItem = page.locator('#objects-list li', { hasText: UNET_OBJECT });
+    const unetItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: UNET_OBJECT });
     await expect(unetItem).toBeVisible({ timeout: 10000 });
 
     // Click on UNetExchange
@@ -26,9 +26,9 @@ test.describe('UNetExchange renderer', () => {
 
   test('should have UNetExchange-specific sections', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    const unetItem = page.locator('#objects-list li', { hasText: UNET_OBJECT });
+    const unetItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: UNET_OBJECT });
     await unetItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -46,9 +46,9 @@ test.describe('UNetExchange renderer', () => {
 
   test('should display status information', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    const unetItem = page.locator('#objects-list li', { hasText: UNET_OBJECT });
+    const unetItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: UNET_OBJECT });
     await unetItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -67,9 +67,9 @@ test.describe('UNetExchange renderer', () => {
 
   test('should display receivers table', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    const unetItem = page.locator('#objects-list li', { hasText: UNET_OBJECT });
+    const unetItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: UNET_OBJECT });
     await unetItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -88,9 +88,9 @@ test.describe('UNetExchange renderer', () => {
 
   test('should display senders table', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    const unetItem = page.locator('#objects-list li', { hasText: UNET_OBJECT });
+    const unetItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: UNET_OBJECT });
     await unetItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -109,9 +109,9 @@ test.describe('UNetExchange renderer', () => {
 
   test('should display receiver channel info', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    const unetItem = page.locator('#objects-list li', { hasText: UNET_OBJECT });
+    const unetItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: UNET_OBJECT });
     await unetItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -143,9 +143,9 @@ test.describe('UNetExchange renderer', () => {
 
   test('should display Object Information section', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 15000 });
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-    const unetItem = page.locator('#objects-list li', { hasText: UNET_OBJECT });
+    const unetItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: UNET_OBJECT });
     await unetItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -164,9 +164,9 @@ test.describe('UNetExchange renderer', () => {
   test.describe('Chart Toggle', () => {
     test('should have chart toggle for each receiver row', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-      const unetItem = page.locator('#objects-list li', { hasText: UNET_OBJECT });
+      const unetItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: UNET_OBJECT });
       await unetItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -184,9 +184,9 @@ test.describe('UNetExchange renderer', () => {
 
     test('should create multiple metric charts on receiver toggle', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-      const unetItem = page.locator('#objects-list li', { hasText: UNET_OBJECT });
+      const unetItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: UNET_OBJECT });
       await unetItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -213,9 +213,9 @@ test.describe('UNetExchange renderer', () => {
 
     test('should add second channel to existing charts', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-      const unetItem = page.locator('#objects-list li', { hasText: UNET_OBJECT });
+      const unetItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: UNET_OBJECT });
       await unetItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -258,9 +258,9 @@ test.describe('UNetExchange renderer', () => {
 
     test('should remove channel from charts on toggle off', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-      const unetItem = page.locator('#objects-list li', { hasText: UNET_OBJECT });
+      const unetItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: UNET_OBJECT });
       await unetItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -287,9 +287,9 @@ test.describe('UNetExchange renderer', () => {
 
     test('should have chart toggle for sender rows', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-      const unetItem = page.locator('#objects-list li', { hasText: UNET_OBJECT });
+      const unetItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: UNET_OBJECT });
       await unetItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -302,9 +302,9 @@ test.describe('UNetExchange renderer', () => {
 
     test('should create sender metric chart on toggle', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-      const unetItem = page.locator('#objects-list li', { hasText: UNET_OBJECT });
+      const unetItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: UNET_OBJECT });
       await unetItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -329,9 +329,9 @@ test.describe('UNetExchange renderer', () => {
   test.describe('LogServer and LogViewer', () => {
     test('should have LogServer section in DOM', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-      const unetItem = page.locator('#objects-list li', { hasText: UNET_OBJECT });
+      const unetItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: UNET_OBJECT });
       await unetItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
@@ -344,9 +344,9 @@ test.describe('UNetExchange renderer', () => {
 
     test('should display LogViewer container', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 15000 });
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
 
-      const unetItem = page.locator('#objects-list li', { hasText: UNET_OBJECT });
+      const unetItem = page.locator('.sidebar-group-item[data-type="object"]', { hasText: UNET_OBJECT });
       await unetItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });

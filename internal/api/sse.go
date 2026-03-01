@@ -7,15 +7,40 @@ import (
 	"sync"
 	"time"
 
+	"log/slog"
+
 	"github.com/pv/uniset-panel/internal/ionc"
 	"github.com/pv/uniset-panel/internal/journal"
 	"github.com/pv/uniset-panel/internal/launcher"
-	"github.com/pv/uniset-panel/internal/logger"
 	"github.com/pv/uniset-panel/internal/modbus"
 	"github.com/pv/uniset-panel/internal/opcua"
 	"github.com/pv/uniset-panel/internal/sm"
 	"github.com/pv/uniset-panel/internal/uniset"
 	"github.com/pv/uniset-panel/internal/uwsgate"
+)
+
+// SSE defaults
+const (
+	sseEventBufferSize = 50               // размер буфера канала событий на клиента
+	sseHeartbeatInterval = 25 * time.Second // интервал heartbeat для keep-alive
+)
+
+// SSE event types
+const (
+	EventObjectData         = "object_data"
+	EventObjectsList        = "objects_list"
+	EventServerStatus       = "server_status"
+	EventSensorData         = "sensor_data"
+	EventControlStatus      = "control_status"
+	EventConnected          = "connected"
+	EventIONCSensorBatch    = "ionc_sensor_batch"
+	EventModbusRegisterBatch = "modbus_register_batch"
+	EventOPCUASensorBatch   = "opcua_sensor_batch"
+	EventUWSGateSensorBatch = "uwsgate_sensor_batch"
+	EventLauncherStatus     = "launcher_status"
+	EventLauncherConnection = "launcher_connection"
+	EventJournalMessages    = "journal_messages"
+	EventJournalConnection  = "journal_connection"
 )
 
 // SSEHub управляет SSE подключениями клиентов
@@ -68,7 +93,7 @@ func (h *SSEHub) AddClientWithToken(objectName, controlToken string) *sseClient 
 		objectName:   objectName,
 		controlToken: controlToken,
 		connectedAt:  time.Now(),
-		events:       make(chan SSEEvent, 50),
+		events:       make(chan SSEEvent, sseEventBufferSize),
 		done:         make(chan struct{}),
 	}
 
@@ -82,7 +107,7 @@ func (h *SSEHub) AddClientWithToken(objectName, controlToken string) *sseClient 
 		controlMgr.CancelPendingRelease(controlToken)
 	}
 
-	logger.Debug("SSE client connected", "object", objectName, "hasToken", controlToken != "", "total_clients", len(h.clients))
+	slog.Debug("SSE client connected", "object", objectName, "hasToken", controlToken != "", "total_clients", len(h.clients))
 	return client
 }
 
@@ -104,11 +129,11 @@ func (h *SSEHub) RemoveClient(client *sseClient) {
 	// Если клиент был контроллером, освобождаем управление
 	if client.controlToken != "" && controlMgr != nil {
 		controlMgr.ReleaseBySSE(client.controlToken)
-		logger.Debug("SSE client disconnected, released control", "object", client.objectName)
+		slog.Debug("SSE client disconnected, released control", "object", client.objectName)
 	}
 
 	duration := time.Since(client.connectedAt).Round(time.Second)
-	logger.Debug("SSE client disconnected", "object", client.objectName, "duration", duration, "total_clients", len(h.clients))
+	slog.Debug("SSE client disconnected", "object", client.objectName, "duration", duration, "total_clients", len(h.clients))
 }
 
 // Broadcast отправляет событие всем подходящим клиентам
@@ -117,8 +142,8 @@ func (h *SSEHub) Broadcast(event SSEEvent) {
 	defer h.mu.RUnlock()
 
 	// Глобальные события отправляются всем клиентам
-	isGlobalEvent := event.Type == "server_status" || event.Type == "objects_list" || event.Type == "control_status" ||
-		event.Type == "launcher_status" || event.Type == "launcher_connection"
+	isGlobalEvent := event.Type == EventServerStatus || event.Type == EventObjectsList || event.Type == EventControlStatus ||
+		event.Type == EventLauncherStatus || event.Type == EventLauncherConnection || event.Type == EventJournalConnection
 
 	for client := range h.clients {
 		// Отправляем если: глобальное событие ИЛИ клиент подписан на все объекты ИЛИ на конкретный
@@ -127,7 +152,7 @@ func (h *SSEHub) Broadcast(event SSEEvent) {
 			case client.events <- event:
 			default:
 				// Канал переполнен, пропускаем событие
-				logger.Warn("SSE client event buffer full, dropping event",
+				slog.Warn("SSE client event buffer full, dropping event",
 					"object", client.objectName)
 			}
 		}
@@ -137,7 +162,7 @@ func (h *SSEHub) Broadcast(event SSEEvent) {
 // BroadcastObjectDataWithServer отправляет данные объекта с информацией о сервере
 func (h *SSEHub) BroadcastObjectDataWithServer(serverID, serverName, objectName string, data *uniset.ObjectData) {
 	h.Broadcast(SSEEvent{
-		Type:       "object_data",
+		Type:       EventObjectData,
 		ServerID:   serverID,
 		ServerName: serverName,
 		ObjectName: objectName,
@@ -149,7 +174,7 @@ func (h *SSEHub) BroadcastObjectDataWithServer(serverID, serverName, objectName 
 // BroadcastServerStatus отправляет изменение статуса сервера
 func (h *SSEHub) BroadcastServerStatus(serverID, serverName string, connected bool, lastError string) {
 	h.Broadcast(SSEEvent{
-		Type:       "server_status",
+		Type:       EventServerStatus,
 		ServerID:   serverID,
 		ServerName: serverName,
 		Data: map[string]interface{}{
@@ -163,7 +188,7 @@ func (h *SSEHub) BroadcastServerStatus(serverID, serverName string, connected bo
 // BroadcastObjectsList отправляет обновлённый список объектов (при восстановлении связи)
 func (h *SSEHub) BroadcastObjectsList(serverID, serverName string, objects []string) {
 	h.Broadcast(SSEEvent{
-		Type:       "objects_list",
+		Type:       EventObjectsList,
 		ServerID:   serverID,
 		ServerName: serverName,
 		Data: map[string]interface{}{
@@ -180,7 +205,7 @@ const SharedMemoryServerID = "sm"
 // BroadcastSensorUpdate отправляет обновление внешнего датчика клиентам
 func (h *SSEHub) BroadcastSensorUpdate(update sm.SensorUpdate) {
 	h.Broadcast(SSEEvent{
-		Type:       "sensor_data",
+		Type:       EventSensorData,
 		ServerID:   SharedMemoryServerID,
 		ObjectName: update.ObjectName,
 		Data:       update.Sensor,
@@ -188,116 +213,67 @@ func (h *SSEHub) BroadcastSensorUpdate(update sm.SensorUpdate) {
 	})
 }
 
-// BroadcastIONCSensorBatchWithServer отправляет батч обновлений IONC датчиков с информацией о сервере
-func (h *SSEHub) BroadcastIONCSensorBatchWithServer(serverID, serverName string, updates []ionc.SensorUpdate) {
+// broadcastBatchUpdates группирует updates по objectName и отправляет per-object SSE события.
+func broadcastBatchUpdates[U any, D any](
+	h *SSEHub, serverID, serverName, eventType string,
+	updates []U,
+	extract func(U) (objectName string, data D, ts time.Time),
+) {
 	if len(updates) == 0 {
 		return
 	}
 
-	// Группируем по objectName
-	byObject := make(map[string][]uniset.IONCSensor)
+	byObject := make(map[string][]D)
 	var timestamp time.Time
 
 	for _, u := range updates {
-		byObject[u.ObjectName] = append(byObject[u.ObjectName], u.Sensor)
-		timestamp = u.Timestamp
+		obj, data, ts := extract(u)
+		byObject[obj] = append(byObject[obj], data)
+		timestamp = ts
 	}
 
-	// Отправляем по одному событию на объект
-	for objectName, sensors := range byObject {
+	for objectName, items := range byObject {
 		h.Broadcast(SSEEvent{
-			Type:       "ionc_sensor_batch",
+			Type:       eventType,
 			ServerID:   serverID,
 			ServerName: serverName,
 			ObjectName: objectName,
-			Data:       sensors,
+			Data:       items,
 			Timestamp:  timestamp,
 		})
 	}
+}
+
+// BroadcastIONCSensorBatchWithServer отправляет батч обновлений IONC датчиков с информацией о сервере
+func (h *SSEHub) BroadcastIONCSensorBatchWithServer(serverID, serverName string, updates []ionc.SensorUpdate) {
+	broadcastBatchUpdates(h, serverID, serverName, EventIONCSensorBatch, updates,
+		func(u ionc.SensorUpdate) (string, uniset.IONCSensor, time.Time) {
+			return u.ObjectName, u.Sensor, u.Timestamp
+		})
 }
 
 // BroadcastModbusRegisterBatchWithServer отправляет батч обновлений Modbus регистров с информацией о сервере
 func (h *SSEHub) BroadcastModbusRegisterBatchWithServer(serverID, serverName string, updates []modbus.RegisterUpdate) {
-	if len(updates) == 0 {
-		return
-	}
-
-	// Группируем по objectName
-	byObject := make(map[string][]uniset.MBRegister)
-	var timestamp time.Time
-
-	for _, u := range updates {
-		byObject[u.ObjectName] = append(byObject[u.ObjectName], u.Register)
-		timestamp = u.Timestamp
-	}
-
-	// Отправляем по одному событию на объект
-	for objectName, registers := range byObject {
-		h.Broadcast(SSEEvent{
-			Type:       "modbus_register_batch",
-			ServerID:   serverID,
-			ServerName: serverName,
-			ObjectName: objectName,
-			Data:       registers,
-			Timestamp:  timestamp,
+	broadcastBatchUpdates(h, serverID, serverName, EventModbusRegisterBatch, updates,
+		func(u modbus.RegisterUpdate) (string, uniset.MBRegister, time.Time) {
+			return u.ObjectName, u.Register, u.Timestamp
 		})
-	}
 }
 
 // BroadcastOPCUASensorBatchWithServer отправляет батч обновлений OPC UA датчиков с информацией о сервере
 func (h *SSEHub) BroadcastOPCUASensorBatchWithServer(serverID, serverName string, updates []opcua.SensorUpdate) {
-	if len(updates) == 0 {
-		return
-	}
-
-	// Группируем по objectName
-	byObject := make(map[string][]opcua.OPCUASensor)
-	var timestamp time.Time
-
-	for _, u := range updates {
-		byObject[u.ObjectName] = append(byObject[u.ObjectName], u.Sensor)
-		timestamp = u.Timestamp
-	}
-
-	// Отправляем по одному событию на объект
-	for objectName, sensors := range byObject {
-		h.Broadcast(SSEEvent{
-			Type:       "opcua_sensor_batch",
-			ServerID:   serverID,
-			ServerName: serverName,
-			ObjectName: objectName,
-			Data:       sensors,
-			Timestamp:  timestamp,
+	broadcastBatchUpdates(h, serverID, serverName, EventOPCUASensorBatch, updates,
+		func(u opcua.SensorUpdate) (string, opcua.OPCUASensor, time.Time) {
+			return u.ObjectName, u.Sensor, u.Timestamp
 		})
-	}
 }
 
 // BroadcastUWSGateSensorBatchWithServer отправляет батч обновлений UWebSocketGate датчиков с информацией о сервере
 func (h *SSEHub) BroadcastUWSGateSensorBatchWithServer(serverID, serverName string, updates []uwsgate.SensorUpdate) {
-	if len(updates) == 0 {
-		return
-	}
-
-	// Группируем по objectName
-	byObject := make(map[string][]uwsgate.SensorData)
-	var timestamp time.Time
-
-	for _, u := range updates {
-		byObject[u.ObjectName] = append(byObject[u.ObjectName], u.Sensor)
-		timestamp = u.Timestamp
-	}
-
-	// Отправляем по одному событию на объект
-	for objectName, sensors := range byObject {
-		h.Broadcast(SSEEvent{
-			Type:       "uwsgate_sensor_batch",
-			ServerID:   serverID,
-			ServerName: serverName,
-			ObjectName: objectName,
-			Data:       sensors,
-			Timestamp:  timestamp,
+	broadcastBatchUpdates(h, serverID, serverName, EventUWSGateSensorBatch, updates,
+		func(u uwsgate.SensorUpdate) (string, uwsgate.SensorData, time.Time) {
+			return u.ObjectName, u.Sensor, u.Timestamp
 		})
-	}
 }
 
 // ClientCount возвращает количество подключённых клиентов
@@ -322,13 +298,13 @@ func (h *SSEHub) Close() {
 	}
 	h.clients = make(map[*sseClient]bool)
 
-	logger.Info("SSE hub closed, all clients disconnected")
+	slog.Info("SSE hub closed, all clients disconnected")
 }
 
 // BroadcastControlStatus отправляет статус контроля всем клиентам
 func (h *SSEHub) BroadcastControlStatus(status ControlStatus) {
 	h.Broadcast(SSEEvent{
-		Type:      "control_status",
+		Type:      EventControlStatus,
 		Data:      status,
 		Timestamp: time.Now(),
 	})
@@ -346,7 +322,7 @@ func (h *SSEHub) UpdateClientControlToken(client *sseClient, token string) {
 // BroadcastLauncherStatus отправляет статус Launcher'а
 func (h *SSEHub) BroadcastLauncherStatus(nodeID, nodeName string, status *launcher.LauncherStatus) {
 	h.Broadcast(SSEEvent{
-		Type:       "launcher_status",
+		Type:       EventLauncherStatus,
 		ServerID:   nodeID,
 		ServerName: nodeName,
 		Data:       status,
@@ -357,7 +333,7 @@ func (h *SSEHub) BroadcastLauncherStatus(nodeID, nodeName string, status *launch
 // BroadcastLauncherConnection отправляет изменение connectivity Launcher'а
 func (h *SSEHub) BroadcastLauncherConnection(nodeID, nodeName string, connected bool, lastError string) {
 	h.Broadcast(SSEEvent{
-		Type:       "launcher_connection",
+		Type:       EventLauncherConnection,
 		ServerID:   nodeID,
 		ServerName: nodeName,
 		Data: map[string]interface{}{
@@ -374,10 +350,23 @@ func (h *SSEHub) BroadcastJournalMessages(journalID string, messages []journal.M
 		return
 	}
 	h.Broadcast(SSEEvent{
-		Type: "journal_messages",
+		Type: EventJournalMessages,
 		Data: map[string]interface{}{
 			"journalId": journalID,
 			"messages":  messages,
+		},
+		Timestamp: time.Now(),
+	})
+}
+
+// BroadcastJournalConnection отправляет изменение connectivity журнала
+func (h *SSEHub) BroadcastJournalConnection(journalID string, connected bool, lastError string) {
+	h.Broadcast(SSEEvent{
+		Type: EventJournalConnection,
+		Data: map[string]interface{}{
+			"journalId": journalID,
+			"connected": connected,
+			"lastError": lastError,
 		},
 		Timestamp: time.Now(),
 	})
@@ -430,14 +419,14 @@ func (h *Handlers) HandleSSE(w http.ResponseWriter, r *http.Request) {
 
 	// Отправляем приветственное сообщение с capabilities и статусом контроля
 	h.sendSSEEvent(w, SSEEvent{
-		Type:      "connected",
+		Type:      EventConnected,
 		Timestamp: time.Now(),
 		Data:      connectedData,
 	})
 	flusher.Flush()
 
 	// Heartbeat для поддержания соединения (предотвращает разрыв прокси/балансировщиками)
-	heartbeat := time.NewTicker(25 * time.Second)
+	heartbeat := time.NewTicker(sseHeartbeatInterval)
 	defer heartbeat.Stop()
 
 	// Слушаем события
@@ -462,7 +451,7 @@ func (h *Handlers) HandleSSE(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) sendSSEEvent(w http.ResponseWriter, event SSEEvent) {
 	data, err := json.Marshal(event)
 	if err != nil {
-		logger.Error("Failed to marshal SSE event", "error", err)
+		slog.Error("Failed to marshal SSE event", "error", err)
 		return
 	}
 

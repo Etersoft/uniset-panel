@@ -1,8 +1,6 @@
 package api
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/pv/uniset-panel/internal/uwsgate"
@@ -12,101 +10,101 @@ import (
 // UWebSocketGate Handlers
 // ============================================================================
 
+// requireUWSGatePoller returns UWSGate poller for the request.
+// Returns nil and false if unavailable (error already written).
+func (h *Handlers) requireUWSGatePoller(w http.ResponseWriter, r *http.Request) (*uwsgate.Poller, bool) {
+	p := h.getUWSGatePollerForObject(r)
+	if p == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "UWebSocketGate poller not available")
+		return nil, false
+	}
+	return p, true
+}
+
 // SubscribeUWSGateSensors подписывает на датчики через UWebSocketGate
 // POST /api/objects/{name}/uwsgate/subscribe
 func (h *Handlers) SubscribeUWSGateSensors(w http.ResponseWriter, r *http.Request) {
-	objectName := r.PathValue("name")
-	if objectName == "" {
-		http.Error(w, "Object name is required", http.StatusBadRequest)
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
-	poller := h.getUWSGatePollerForObject(r)
-	if poller == nil {
-		http.Error(w, "UWebSocketGate poller not available", http.StatusServiceUnavailable)
+	poller, ok := h.requireUWSGatePoller(w, r)
+	if !ok {
 		return
 	}
 
 	var req uwsgate.SubscribeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+	if !h.decodeJSONBody(w, r, &req) {
 		return
 	}
 
 	if len(req.Sensors) == 0 {
-		http.Error(w, "No sensors specified", http.StatusBadRequest)
+		h.writeError(w, http.StatusBadRequest, "no sensors specified")
 		return
 	}
 
-	if err := poller.Subscribe(objectName, req.Sensors); err != nil {
-		http.Error(w, fmt.Sprintf("Subscribe failed: %v", err), http.StatusInternalServerError)
+	if err := poller.Subscribe(name, req.Sensors); err != nil {
+		h.writeError(w, http.StatusInternalServerError, "subscribe failed: "+err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	h.writeJSON(w, map[string]any{
 		"status":  "ok",
-		"message": fmt.Sprintf("Subscribed to %d sensors", len(req.Sensors)),
+		"message": "subscribed",
 	})
 }
 
 // UnsubscribeUWSGateSensors отписывает от датчиков
 // POST /api/objects/{name}/uwsgate/unsubscribe
 func (h *Handlers) UnsubscribeUWSGateSensors(w http.ResponseWriter, r *http.Request) {
-	objectName := r.PathValue("name")
-	if objectName == "" {
-		http.Error(w, "Object name is required", http.StatusBadRequest)
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
-	poller := h.getUWSGatePollerForObject(r)
-	if poller == nil {
-		http.Error(w, "UWebSocketGate poller not available", http.StatusServiceUnavailable)
+	poller, ok := h.requireUWSGatePoller(w, r)
+	if !ok {
 		return
 	}
 
 	var req uwsgate.SubscribeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+	if !h.decodeJSONBody(w, r, &req) {
 		return
 	}
 
 	if len(req.Sensors) == 0 {
-		http.Error(w, "No sensors specified", http.StatusBadRequest)
+		h.writeError(w, http.StatusBadRequest, "no sensors specified")
 		return
 	}
 
-	if err := poller.Unsubscribe(objectName, req.Sensors); err != nil {
-		http.Error(w, fmt.Sprintf("Unsubscribe failed: %v", err), http.StatusInternalServerError)
+	if err := poller.Unsubscribe(name, req.Sensors); err != nil {
+		h.writeError(w, http.StatusInternalServerError, "unsubscribe failed: "+err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	h.writeJSON(w, map[string]any{
 		"status":  "ok",
-		"message": fmt.Sprintf("Unsubscribed from %d sensors", len(req.Sensors)),
+		"message": "unsubscribed",
 	})
 }
 
 // GetUWSGateSubscriptions возвращает список подписок для объекта
 // GET /api/objects/{name}/uwsgate/subscriptions
 func (h *Handlers) GetUWSGateSubscriptions(w http.ResponseWriter, r *http.Request) {
-	objectName := r.PathValue("name")
-	if objectName == "" {
-		http.Error(w, "Object name is required", http.StatusBadRequest)
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
-	poller := h.getUWSGatePollerForObject(r)
-	if poller == nil {
-		http.Error(w, "UWebSocketGate poller not available", http.StatusServiceUnavailable)
+	poller, ok := h.requireUWSGatePoller(w, r)
+	if !ok {
 		return
 	}
 
-	subscriptions := poller.GetSubscriptions(objectName)
+	subscriptions := poller.GetSubscriptions(name)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	h.writeJSON(w, map[string]any{
 		"sensors": subscriptions,
 	})
 }
@@ -114,19 +112,17 @@ func (h *Handlers) GetUWSGateSubscriptions(w http.ResponseWriter, r *http.Reques
 // GetUWSGateSensors возвращает текущие значения подписанных датчиков
 // GET /api/objects/{name}/uwsgate/sensors
 func (h *Handlers) GetUWSGateSensors(w http.ResponseWriter, r *http.Request) {
-	objectName := r.PathValue("name")
-	if objectName == "" {
-		http.Error(w, "Object name is required", http.StatusBadRequest)
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
-	poller := h.getUWSGatePollerForObject(r)
-	if poller == nil {
-		http.Error(w, "UWebSocketGate poller not available", http.StatusServiceUnavailable)
+	poller, ok := h.requireUWSGatePoller(w, r)
+	if !ok {
 		return
 	}
 
-	sensorData := poller.GetSensorsForObject(objectName)
+	sensorData := poller.GetSensorsForObject(name)
 
 	// Конвертируем в формат Sensor с дополнительной информацией из sensorconfig
 	sensors := make([]uwsgate.Sensor, 0, len(sensorData))
@@ -154,25 +150,18 @@ func (h *Handlers) GetUWSGateSensors(w http.ResponseWriter, r *http.Request) {
 		sensors = append(sensors, sensor)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(uwsgate.SensorsResponse{
+	h.writeJSON(w, uwsgate.SensorsResponse{
 		Sensors: sensors,
 	})
 }
 
 // getUWSGatePollerForObject возвращает UWSGate poller для запроса
-// Сначала проверяем serverManager, потом fallback на h.uwsgatePoller
 func (h *Handlers) getUWSGatePollerForObject(r *http.Request) *uwsgate.Poller {
-	// Если есть serverManager, используем его
-	if h.serverManager != nil {
+	if h.serverMgr != nil {
 		serverID := r.URL.Query().Get("server")
 		if serverID != "" {
-			if poller := h.serverManager.GetUWSGatePoller(serverID); poller != nil {
-				return poller
-			}
+			return h.serverMgr.GetUWSGatePoller(serverID)
 		}
 	}
-
-	// Fallback на единственный poller
-	return h.uwsgatePoller
+	return nil
 }

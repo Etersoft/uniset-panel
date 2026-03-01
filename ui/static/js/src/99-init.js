@@ -15,7 +15,7 @@ async function loadAppVersion() {
 }
 
 // Инициализация
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     // Загружаем версию приложения
     loadAppVersion();
 
@@ -28,14 +28,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // Инициализация SSE для realtime обновлений (получаем capabilities при подключении)
     initSSE();
 
-    // Загружаем конфигурацию сенсоров (не блокируем загрузку объектов)
-    loadSensorsConfig().catch(err => {
-        console.warn('Не удалось загрузить конфигурацию сенсоров:', err);
-    });
+    // Загружаем sidebar конфигурацию (группы)
+    await loadSidebar();
 
-    // Загружаем список объектов
+    // Загружаем список объектов (заполняет state.servers)
     fetchObjects()
-        .then(renderObjectsList)
+        .then(data => {
+            renderObjectsList(data);
+            // Загружаем конфигурацию сенсоров per-server (после того как state.servers заполнен)
+            loadSensorsConfig().catch(err => {
+                console.warn('Не удалось загрузить конфигурацию сенсоров:', err);
+            });
+        })
         .catch(err => {
             console.error('Error загрузки объектов:', err);
             document.getElementById('objects-list').innerHTML =
@@ -86,6 +90,21 @@ document.addEventListener('DOMContentLoaded', () => {
     initJournals().catch(err => {
         console.warn('Failed to initialize journals:', err);
     });
+
+    // Показываем sidebar группы, скрываем hardcoded секции
+    const groupsContainer = document.getElementById('sidebar-groups');
+    if (groupsContainer) {
+        groupsContainer.style.display = '';
+    }
+    const legacySections = ['launchers-section', 'objects-section', 'journals-section', 'dashboards-section', 'servers-section'];
+    for (const id of legacySections) {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    }
+    renderSidebarGroups();
+    applySidebarStatuses();
+    // SSE статусы серверов приходят асинхронно, повторно применяем после стабилизации
+    setTimeout(applySidebarStatuses, SIDEBAR_STATUS_REAPPLY_DELAY);
 });
 
 // Инициализация селектора интервала опроса

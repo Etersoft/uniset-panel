@@ -56,16 +56,19 @@ func TestClient_GetStatus(t *testing.T) {
 }
 
 func TestClient_GetProcesses(t *testing.T) {
-	processes := []Process{
-		{Name: "Proc1", State: "RUNNING", PID: 100},
-		{Name: "Proc2", State: "STOPPED"},
+	resp := map[string]interface{}{
+		"count": 2,
+		"processes": []Process{
+			{Name: "Proc1", State: "RUNNING", PID: 100},
+			{Name: "Proc2", State: "STOPPED"},
+		},
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v2/launcher/processes" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
-		json.NewEncoder(w).Encode(processes)
+		json.NewEncoder(w).Encode(resp)
 	}))
 	defer srv.Close()
 
@@ -87,15 +90,18 @@ func TestClient_GetProcesses(t *testing.T) {
 }
 
 func TestClient_GetGroups(t *testing.T) {
-	groups := []ProcessGroup{
-		{Name: "core", Order: 1, Processes: []string{"SM"}},
+	resp := map[string]interface{}{
+		"count": 1,
+		"groups": []ProcessGroup{
+			{Name: "core", Order: 1, Processes: []string{"SM"}},
+		},
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v2/launcher/groups" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
-		json.NewEncoder(w).Encode(groups)
+		json.NewEncoder(w).Encode(resp)
 	}))
 	defer srv.Close()
 

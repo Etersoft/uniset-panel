@@ -6,8 +6,8 @@ test.describe('OPCUAExchange renderer', () => {
   test('shows OPCUA sections and disables control when not allowed', async ({ page }) => {
     await page.goto('/');
 
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_OBJECT }).click();
 
     const panel = page.locator('.tab-panel.active');
     await panel.waitFor({ timeout: 10000 });
@@ -40,8 +40,8 @@ test.describe('OPCUAExchange renderer', () => {
 
   test('should display sensor values for SSE updates', async ({ page }) => {
     await page.goto('/');
-    await page.waitForSelector('#objects-list li', { timeout: 10000 });
-    await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+    await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+    await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_OBJECT }).click();
 
     const panel = page.locator('.tab-panel.active');
     await panel.waitFor({ timeout: 10000 });
@@ -65,8 +65,8 @@ test.describe('OPCUAExchange renderer', () => {
   test.describe('Sensor Filtering', () => {
     test('should filter sensors by name', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -96,8 +96,8 @@ test.describe('OPCUAExchange renderer', () => {
 
     test('should filter sensors by type using dropdown', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -121,8 +121,8 @@ test.describe('OPCUAExchange renderer', () => {
 
     test('should reset filter on ESC key', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -143,8 +143,8 @@ test.describe('OPCUAExchange renderer', () => {
 
     test('should show "no sensors" message when filter returns empty', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -160,8 +160,8 @@ test.describe('OPCUAExchange renderer', () => {
 
     test('should have status filter dropdown with correct options', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -178,8 +178,8 @@ test.describe('OPCUAExchange renderer', () => {
 
     test('should filter sensors by status using dropdown', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -235,8 +235,8 @@ test.describe('OPCUAExchange renderer', () => {
   test.describe('UI Consistency', () => {
     test('should have type filter dropdown', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -255,8 +255,8 @@ test.describe('OPCUAExchange renderer', () => {
 
     test('should display sensor count badge', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -271,8 +271,8 @@ test.describe('OPCUAExchange renderer', () => {
 
     test('should have type badges with correct colors', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -291,8 +291,8 @@ test.describe('OPCUAExchange renderer', () => {
 
     test('should have resize handle for sensors section', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -305,8 +305,8 @@ test.describe('OPCUAExchange renderer', () => {
   test.describe('Chart Toggle', () => {
     test('should have chart toggle for each sensor row', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -325,8 +325,8 @@ test.describe('OPCUAExchange renderer', () => {
 
     test('should add sensor to chart on checkbox click', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -352,8 +352,8 @@ test.describe('OPCUAExchange renderer', () => {
 
     test('should remove sensor from chart on second click', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -374,8 +374,8 @@ test.describe('OPCUAExchange renderer', () => {
 
     test('should create stepped chart for DI sensor', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });
@@ -417,8 +417,8 @@ test.describe('OPCUAExchange renderer', () => {
 
     test('should create smooth chart for AI sensor (not stepped)', async ({ page }) => {
       await page.goto('/');
-      await page.waitForSelector('#objects-list li', { timeout: 10000 });
-      await page.locator('#objects-list li', { hasText: OPCUA_OBJECT }).click();
+      await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 10000 });
+      await page.locator('.sidebar-group-item[data-type="object"]', { hasText: OPCUA_OBJECT }).click();
 
       const panel = page.locator('.tab-panel.active');
       await panel.waitFor({ timeout: 10000 });

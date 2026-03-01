@@ -15,10 +15,8 @@ const WIDGET_TYPES = {
     'chart': ChartWidget
 };
 
-// Grid settings (4x finer grid for precise positioning)
-const GRID_COLS = 48;
-const GRID_ROW_HEIGHT = 30;
-const GRID_GAP = 4;
+// Grid settings используют константы из 05-constants.js:
+// DASHBOARD_GRID_COLS, DASHBOARD_GRID_ROW_HEIGHT, DASHBOARD_GRID_GAP
 
 // ============================================================================
 // Dashboard Manager
@@ -485,15 +483,15 @@ class DashboardManager {
             container.style.left = `${freePosition.left}px`;
             container.style.top = `${freePosition.top}px`;
             // Always calculate size from grid cells (width/height are always in cells)
-            const gap = GRID_GAP;
+            const gap = DASHBOARD_GRID_GAP;
             const gridEl = this.gridEl || document.querySelector('.dashboard-grid');
             if (gridEl) {
                 const gridRect = gridEl.getBoundingClientRect();
                 const computedStyle = window.getComputedStyle(gridEl);
                 const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
                 const contentWidth = gridRect.width - paddingLeft * 2;
-                const cellWidth = (contentWidth - gap * (GRID_COLS - 1)) / GRID_COLS;
-                const cellHeight = GRID_ROW_HEIGHT;
+                const cellWidth = (contentWidth - gap * (DASHBOARD_GRID_COLS - 1)) / DASHBOARD_GRID_COLS;
+                const cellHeight = DASHBOARD_GRID_ROW_HEIGHT;
                 container.style.width = `${width * cellWidth + (width - 1) * gap}px`;
                 container.style.height = `${height * cellHeight + (height - 1) * gap}px`;
             }
@@ -671,7 +669,7 @@ class DashboardManager {
                 created: new Date().toISOString(),
                 modified: new Date().toISOString()
             },
-            grid: { cols: GRID_COLS, rowHeight: GRID_ROW_HEIGHT, gap: GRID_GAP },
+            grid: { cols: DASHBOARD_GRID_COLS, rowHeight: DASHBOARD_GRID_ROW_HEIGHT, gap: DASHBOARD_GRID_GAP },
             widgets: []
         };
 
@@ -948,7 +946,7 @@ class DashboardManager {
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => {
                 const query = sensorInput.value.trim().toLowerCase();
-                if (query.length < 2) {
+                if (query.length < AUTOCOMPLETE_MIN_QUERY) {
                     hideAutocomplete();
                     return;
                 }
@@ -987,7 +985,7 @@ class DashboardManager {
         // Focus - show autocomplete if text is present
         sensorInput.addEventListener('focus', () => {
             const query = sensorInput.value.trim().toLowerCase();
-            if (query.length >= 2) {
+            if (query.length >= AUTOCOMPLETE_MIN_QUERY) {
                 const matches = sensors
                     .filter(s => s.name.toLowerCase().includes(query))
                     .slice(0, 10);
@@ -1124,7 +1122,7 @@ class DashboardManager {
         // Simple algorithm: find first empty position
         const dashboard = dashboardState.dashboards.get(dashboardState.currentDashboard);
         const widgets = dashboard?.widgets || [];
-        const cols = GRID_COLS;
+        const cols = DASHBOARD_GRID_COLS;
 
         // Build occupancy grid
         const occupied = new Set();
@@ -1197,9 +1195,9 @@ class DashboardManager {
         const startHeight = widgetConfig.position.height || 1;
 
         // Calculate cell size
-        const gap = GRID_GAP;
-        const cellWidth = (gridRect.width - gap * (GRID_COLS - 1)) / GRID_COLS;
-        const cellHeight = GRID_ROW_HEIGHT;
+        const gap = DASHBOARD_GRID_GAP;
+        const cellWidth = (gridRect.width - gap * (DASHBOARD_GRID_COLS - 1)) / DASHBOARD_GRID_COLS;
+        const cellHeight = DASHBOARD_GRID_ROW_HEIGHT;
 
         container.classList.add('resizing');
 
@@ -1209,7 +1207,7 @@ class DashboardManager {
 
             // Calculate new size in cells
             const col = widgetConfig.position.col || 0;
-            const maxWidth = GRID_COLS - col; // Can't extend beyond grid
+            const maxWidth = DASHBOARD_GRID_COLS - col; // Can't extend beyond grid
             let newWidth = Math.max(1, Math.min(maxWidth, Math.round(startWidth + deltaX / (cellWidth + gap))));
             let newHeight = Math.max(1, Math.min(20, Math.round(startHeight + deltaY / (cellHeight + gap))));
 
@@ -1272,10 +1270,10 @@ class DashboardManager {
         const offsetY = startEvent.clientY - containerRect.top;
 
         // Calculate cell size (grid content area = width minus padding on both sides)
-        const gap = GRID_GAP;
+        const gap = DASHBOARD_GRID_GAP;
         const contentWidth = gridRect.width - paddingLeft * 2;
-        const cellWidth = (contentWidth - gap * (GRID_COLS - 1)) / GRID_COLS;
-        const cellHeight = GRID_ROW_HEIGHT;
+        const cellWidth = (contentWidth - gap * (DASHBOARD_GRID_COLS - 1)) / DASHBOARD_GRID_COLS;
+        const cellHeight = DASHBOARD_GRID_ROW_HEIGHT;
 
         const width = widgetConfig.position.width || 2;
         const height = widgetConfig.position.height || 1;
@@ -1345,7 +1343,7 @@ class DashboardManager {
                 let newRow = Math.floor(relativeTop / (cellHeight + gap));
 
                 // Clamp to grid bounds
-                newCol = Math.max(0, Math.min(GRID_COLS - width, newCol));
+                newCol = Math.max(0, Math.min(DASHBOARD_GRID_COLS - width, newCol));
                 newRow = Math.max(0, newRow);
 
                 if (newCol !== pendingCol || newRow !== pendingRow) {
@@ -1459,10 +1457,10 @@ class DashboardManager {
         const gridRect = this.gridEl.getBoundingClientRect();
         const computedStyle = window.getComputedStyle(this.gridEl);
         const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
-        const gap = GRID_GAP;
+        const gap = DASHBOARD_GRID_GAP;
         const contentWidth = gridRect.width - paddingLeft * 2;
-        const cellWidth = (contentWidth - gap * (GRID_COLS - 1)) / GRID_COLS;
-        const cellHeight = GRID_ROW_HEIGHT;
+        const cellWidth = (contentWidth - gap * (DASHBOARD_GRID_COLS - 1)) / DASHBOARD_GRID_COLS;
+        const cellHeight = DASHBOARD_GRID_ROW_HEIGHT;
 
         const width = widgetConfig.position.width || 2;
         const height = widgetConfig.position.height || 1;
@@ -1521,7 +1519,7 @@ class DashboardManager {
                     col = Math.max(0, col - 1);
                     break;
                 case 'ArrowRight':
-                    col = Math.min(GRID_COLS - width, col + 1);
+                    col = Math.min(DASHBOARD_GRID_COLS - width, col + 1);
                     break;
             }
 

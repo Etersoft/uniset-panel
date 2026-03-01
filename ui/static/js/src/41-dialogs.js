@@ -109,21 +109,20 @@ function openSensorDialog(tabKey) {
     filterInput.value = '';
     filterInput.focus();
 
+    // Определяем serverId текущей вкладки для per-server загрузки
+    const serverId = tabState?.serverId || '';
+
     // Определяем источник датчиков в зависимости от smEnabled
     if (state.capabilities.smEnabled) {
-        // SM включен - загружаем датчики из XML конфига
-        if (state.sensors.size === 0) {
-            renderSensorDialogContent('<div class="sensor-dialog-loading">Loading sensor list...</div>');
-            loadSensorsConfig().then(() => {
-                prepareSensorList();
-                renderSensorTable();
-            }).catch(err => {
-                renderSensorDialogContent('<div class="sensor-dialog-empty">Error loading sensors</div>');
-            });
-        } else {
-            prepareSensorList();
+        // SM включен - загружаем датчики из XML конфига (per-server)
+        renderSensorDialogContent('<div class="sensor-dialog-loading">Loading sensor list...</div>');
+        fetchSensorsForServer(serverId).then(sensors => {
+            sensorDialogState.allSensors = sensors;
+            sensorDialogState.filteredSensors = [...sensors];
             renderSensorTable();
-        }
+        }).catch(err => {
+            renderSensorDialogContent('<div class="sensor-dialog-empty">Error loading sensors</div>');
+        });
     } else {
         // SM не настроен - показываем датчики из IONC таблицы
         const ioncTabState = state.tabs.get(tabKey);
@@ -259,12 +258,7 @@ function renderSensorTable() {
 }
 
 // Экранирование HTML
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
+// escapeHtml() определена в 06-utils.js
 
 // Подписаться на внешние датчики через API
 // tabKey - ключ вкладки (serverId:objectName)
@@ -905,6 +899,15 @@ function restoreExternalSensors(tabKey, displayName) {
 
     // Даём время на инициализацию вкладки
     setTimeout(restoreSensors, 200);
+}
+
+// Загрузка сенсоров для конкретного сервера
+async function fetchSensorsForServer(serverId) {
+    const param = serverId ? `?server=${encodeURIComponent(serverId)}` : '';
+    const response = await fetch(`/api/sensors${param}`);
+    if (!response.ok) return [];
+    const data = await response.json();
+    return data.sensors || [];
 }
 
 // UI функции

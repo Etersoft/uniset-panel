@@ -25,6 +25,11 @@
 - Управлять freeze/unfreeze
 - Запускать генераторы
 - Отправлять команды LogServer
+- Добавлять/удалять серверы, менять poll interval
+- Управлять Modbus режимами (mode/control)
+- Управлять OPCUA (control)
+
+> **Примечание:** Launcher использует собственную аутентификацию (`controlToken` в YAML), не зависящую от Control Token панели.
 
 ## Конфигурация
 
@@ -123,12 +128,12 @@ ui:
 | GET | `/api/control/status` | Получить текущий статус контроля |
 | POST | `/api/control/take` | Взять контроль |
 | POST | `/api/control/release` | Освободить контроль |
-| POST | `/api/control/ping` | Keep-alive (продлить сессию) |
+| POST | `/api/control/ping` | Keep-alive (продлить сессию, токен в `X-Control-Token` header) |
 
 ### Пример: взятие контроля
 
 ```bash
-curl -X POST http://localhost:8000/api/control/take \
+curl -X POST http://localhost:8181/api/control/take \
   -H "Content-Type: application/json" \
   -d '{"token": "admin123"}'
 ```
@@ -146,20 +151,20 @@ curl -X POST http://localhost:8000/api/control/take \
 ### Пример: освобождение контроля
 
 ```bash
-curl -X POST http://localhost:8000/api/control/release \
+curl -X POST http://localhost:8181/api/control/release \
   -H "Content-Type: application/json" \
   -d '{"token": "admin123"}'
 ```
 
 ### Передача токена через URL
 
-Токен можно передать через URL параметр для автоматического взятия контроля:
+Токен можно передать через URL параметр для быстрой подстановки в UI:
 
 ```
-http://localhost:8000/?token=admin123
+http://localhost:8181/?token=admin123
 ```
 
-Токен будет сохранён в localStorage и удалён из URL для безопасности.
+Токен будет сохранён в localStorage и удалён из URL для безопасности. После этого нужно нажать **Take** (или вызвать `/api/control/take`) для фактического захвата контроля.
 
 ## Коды ошибок
 

@@ -376,6 +376,10 @@ function createTab(tabKey, displayName, rendererInfo, initialData, serverId, ser
     if (initialData) {
         renderer.update(initialData);
     }
+
+    // Обновляем состояние кнопок контроля (disabled/enabled)
+    // для только что созданных элементов
+    updateAllControlButtons();
 }
 
 function activateTab(name) {
@@ -453,9 +457,13 @@ function createLauncherTab(tabKey, nodeId, nodeName, launcherUrl, hasControl) {
 
     const renderer = new LauncherRenderer(nodeName, tabKey, nodeId, launcherUrl, hasControl);
 
+    // Проверяем начальный статус подключения
+    const nodeState = state.nodes.get(nodeId);
+    const nodeConnected = nodeState?.connected !== false;
+
     // Кнопка вкладки
     const tabBtn = document.createElement('button');
-    tabBtn.className = 'tab-btn';
+    tabBtn.className = 'tab-btn' + (nodeConnected ? '' : ' server-disconnected');
     tabBtn.dataset.name = tabKey;
     tabBtn.dataset.objectType = 'Launcher';
     tabBtn.innerHTML = `
@@ -474,7 +482,7 @@ function createLauncherTab(tabKey, nodeId, nodeName, launcherUrl, hasControl) {
 
     // Панель содержимого
     const panel = document.createElement('div');
-    panel.className = 'tab-panel';
+    panel.className = 'tab-panel' + (nodeConnected ? '' : ' server-disconnected');
     panel.dataset.name = tabKey;
     panel.dataset.objectType = 'Launcher';
     panel.innerHTML = renderer.createPanelHTML();
@@ -508,7 +516,10 @@ function renderLaunchersSection(launchers) {
         section.style.display = 'none';
         return;
     }
-    section.style.display = '';
+    // В group mode секция скрыта — не показываем
+    if (!state.sidebarGroups || state.sidebarGroups.length === 0) {
+        section.style.display = '';
+    }
 
     const list = document.getElementById('launchers-list');
     const countEl = document.getElementById('launchers-count');
@@ -586,11 +597,27 @@ function updateLauncherNodeStatus(nodeId, connected) {
     }
 
     const item = document.querySelector(`.launcher-sidebar-item[data-node-id="${nodeId}"]`);
-    if (!item) return;
+    if (item) {
+        const dot = item.querySelector('.server-status-dot');
+        if (dot) {
+            dot.className = `server-status-dot${connected ? '' : ' disconnected'}`;
+        }
+    }
 
-    const dot = item.querySelector('.server-status-dot');
-    if (dot) {
-        dot.className = `server-status-dot${connected ? '' : ' disconnected'}`;
+    // Обновляем CSS-класс tab-кнопки и панели (аналогично updateServerStatus)
+    const tabKey = `launcher:${nodeId}`;
+    const tabBtn = document.querySelector(`.tab-btn[data-name="${CSS.escape(tabKey)}"]`);
+    if (tabBtn) {
+        tabBtn.classList.toggle('server-disconnected', !connected);
+    }
+    const tabPanel = document.querySelector(`.tab-panel[data-name="${CSS.escape(tabKey)}"]`);
+    if (tabPanel) {
+        tabPanel.classList.toggle('server-disconnected', !connected);
+    }
+
+    // Обновляем статус в sidebar группах (по имени ноды)
+    if (typeof updateGroupEntityStatus === 'function' && nodeState) {
+        updateGroupEntityStatus('launcher', nodeState.name, connected);
     }
 }
 

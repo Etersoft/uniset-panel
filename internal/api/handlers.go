@@ -21,14 +21,18 @@ import (
 	"github.com/pv/uniset-panel/internal/sm"
 	"github.com/pv/uniset-panel/internal/storage"
 	"github.com/pv/uniset-panel/internal/uniset"
-	"github.com/pv/uniset-panel/internal/uwsgate"
+)
+
+const (
+	defaultHistoryCount = 100 // кол-во записей истории переменной по умолчанию
 )
 
 type Handlers struct {
 	client          *uniset.Client
 	storage         storage.Storage
 	poller          *poller.Poller
-	sensorConfig    *sensorconfig.SensorConfig
+	sensorConfig    *sensorconfig.SensorConfig            // deprecated: глобальный конфиг (backward compat)
+	sensorConfigs   map[string]*sensorconfig.SensorConfig // serverID → per-server config
 	sseHub          *SSEHub
 	pollInterval    time.Duration
 	logServerMgr    *logserver.Manager
@@ -36,27 +40,35 @@ type Handlers struct {
 	ioncPoller      *ionc.Poller
 	modbusPoller    *modbus.Poller
 	opcuaPoller     *opcua.Poller
-	serverManager   *server.Manager  // менеджер нескольких серверов
+	serverMgr   *server.Manager  // менеджер нескольких серверов
 	controlsEnabled bool             // true if uniset-config was specified (IONC controls visible)
 	uiConfig        *config.UIConfig
 	logStreamConfig *config.LogStreamConfig
 	controlMgr      *ControlManager      // менеджер сессий контроля
 	recordingMgr    *recording.Manager   // менеджер записи истории
 	version         string               // версия приложения
-	uwsgatePoller   *uwsgate.Poller      // поллер UWebSocketGate
 	dashboardMgr    *dashboard.Manager   // менеджер серверных dashboard'ов
 	journalMgr      *journal.Manager     // менеджер журналов сообщений
-	launcherMgr     *launcher.Manager    // менеджер Launcher'ов
+	launcherMgr     *launcher.Manager              // менеджер Launcher'ов
+	sidebarConfig   *config.SidebarConfig          // конфиг sidebar (nil = дефолт по типам)
 }
 
 func NewHandlers(client *uniset.Client, store storage.Storage, p *poller.Poller, sensorCfg *sensorconfig.SensorConfig, pollInterval time.Duration) *Handlers {
 	return &Handlers{
-		client:       client,
-		storage:      store,
-		poller:       p,
-		sensorConfig: sensorCfg,
-		sseHub:       NewSSEHub(),
-		pollInterval: pollInterval,
+		client:        client,
+		storage:       store,
+		poller:        p,
+		sensorConfig:  sensorCfg,
+		sensorConfigs: make(map[string]*sensorconfig.SensorConfig),
+		sseHub:        NewSSEHub(),
+		pollInterval:  pollInterval,
+	}
+}
+
+// SetPerServerSensorConfig устанавливает SensorConfig для конкретного сервера
+func (h *Handlers) SetPerServerSensorConfig(serverID string, cfg *sensorconfig.SensorConfig) {
+	if cfg != nil {
+		h.sensorConfigs[serverID] = cfg
 	}
 }
 
@@ -85,11 +97,6 @@ func (h *Handlers) SetOPCUAPoller(p *opcua.Poller) {
 	h.opcuaPoller = p
 }
 
-// SetUWSGatePoller устанавливает UWebSocketGate poller
-func (h *Handlers) SetUWSGatePoller(p *uwsgate.Poller) {
-	h.uwsgatePoller = p
-}
-
 // SetDashboardManager устанавливает менеджер dashboard'ов
 func (h *Handlers) SetDashboardManager(mgr *dashboard.Manager) {
 	h.dashboardMgr = mgr
@@ -102,7 +109,7 @@ func (h *Handlers) SetJournalManager(mgr *journal.Manager) {
 
 // SetServerManager устанавливает менеджер серверов
 func (h *Handlers) SetServerManager(mgr *server.Manager) {
-	h.serverManager = mgr
+	h.serverMgr = mgr
 }
 
 // SetControlsEnabled устанавливает доступность элементов управления IONC
@@ -164,11 +171,11 @@ func (h *Handlers) GetVersion(w http.ResponseWriter, r *http.Request) {
 // getUniSetClient возвращает UniSet2 client с учётом serverID (multi-server)
 // В multi-server режиме параметр serverID обязателен
 func (h *Handlers) getUniSetClient(serverID string) (*uniset.Client, int, string) {
-	if h.serverManager != nil {
+	if h.serverMgr != nil {
 		if serverID == "" {
 			return nil, http.StatusBadRequest, "server parameter is required"
 		}
-		if instance, ok := h.serverManager.GetServer(serverID); ok {
+		if instance, ok := h.serverMgr.GetServer(serverID); ok {
 			return instance.Client, 0, ""
 		}
 		return nil, http.StatusNotFound, "server not found"
@@ -237,12 +244,12 @@ func (h *Handlers) GetObjectData(w http.ResponseWriter, r *http.Request) {
 	var data *uniset.ObjectData
 	var err error
 
-	if h.serverManager != nil {
+	if h.serverMgr != nil {
 		if serverID == "" {
 			h.writeError(w, http.StatusBadRequest, "server parameter is required")
 			return
 		}
-		data, err = h.serverManager.GetObjectData(serverID, name)
+		data, err = h.serverMgr.GetObjectData(serverID, name)
 	} else if h.client != nil {
 		// Fallback на старый клиент (для совместимости)
 		data, err = h.client.GetObjectData(name)
@@ -291,8 +298,8 @@ func (h *Handlers) WatchObject(w http.ResponseWriter, r *http.Request) {
 
 	serverID := r.URL.Query().Get("server")
 
-	if h.serverManager != nil && serverID != "" {
-		if err := h.serverManager.Watch(serverID, name); err != nil {
+	if h.serverMgr != nil && serverID != "" {
+		if err := h.serverMgr.Watch(serverID, name); err != nil {
 			h.writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -314,8 +321,8 @@ func (h *Handlers) UnwatchObject(w http.ResponseWriter, r *http.Request) {
 
 	serverID := r.URL.Query().Get("server")
 
-	if h.serverManager != nil && serverID != "" {
-		if err := h.serverManager.Unwatch(serverID, name); err != nil {
+	if h.serverMgr != nil && serverID != "" {
+		if err := h.serverMgr.Unwatch(serverID, name); err != nil {
 			h.writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -337,7 +344,7 @@ func (h *Handlers) GetVariableHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	count := 100
+	count := defaultHistoryCount
 	if countStr := r.URL.Query().Get("count"); countStr != "" {
 		if c, err := strconv.Atoi(countStr); err == nil && c > 0 {
 			count = c
@@ -394,10 +401,26 @@ func (h *Handlers) GetVariableHistoryRange(w http.ResponseWriter, r *http.Reques
 	h.writeJSON(w, history)
 }
 
+// getSensorConfig возвращает SensorConfig для указанного сервера.
+func (h *Handlers) getSensorConfig(serverID string) *sensorconfig.SensorConfig {
+	if cfg, ok := h.sensorConfigs[serverID]; ok {
+		return cfg
+	}
+	// Fallback на глобальный
+	return h.sensorConfig
+}
+
 // GetSensors возвращает список всех датчиков из конфигурации
-// GET /api/sensors
+// GET /api/sensors?server=serverID (параметр server обязателен)
 func (h *Handlers) GetSensors(w http.ResponseWriter, r *http.Request) {
-	if h.sensorConfig == nil {
+	serverID := r.URL.Query().Get("server")
+	if serverID == "" {
+		h.writeError(w, http.StatusBadRequest, "server parameter is required")
+		return
+	}
+
+	cfg := h.getSensorConfig(serverID)
+	if cfg == nil {
 		h.writeJSON(w, map[string]interface{}{
 			"sensors": []interface{}{},
 			"count":   0,
@@ -406,13 +429,13 @@ func (h *Handlers) GetSensors(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.writeJSON(w, map[string]interface{}{
-		"sensors": h.sensorConfig.GetAllInfo(),
-		"count":   h.sensorConfig.Count(),
+		"sensors": cfg.GetAllInfo(),
+		"count":   cfg.Count(),
 	})
 }
 
 // GetSensorByName возвращает информацию о датчике по имени
-// GET /api/sensors/by-name/{name}
+// GET /api/sensors/by-name/{name}?server=serverID (параметр server обязателен)
 func (h *Handlers) GetSensorByName(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
@@ -420,12 +443,19 @@ func (h *Handlers) GetSensorByName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.sensorConfig == nil {
+	serverID := r.URL.Query().Get("server")
+	if serverID == "" {
+		h.writeError(w, http.StatusBadRequest, "server parameter is required")
+		return
+	}
+
+	cfg := h.getSensorConfig(serverID)
+	if cfg == nil {
 		h.writeError(w, http.StatusNotFound, "sensor configuration not loaded")
 		return
 	}
 
-	sensor := h.sensorConfig.GetByName(name)
+	sensor := cfg.GetByName(name)
 	if sensor == nil {
 		h.writeError(w, http.StatusNotFound, "sensor not found")
 		return

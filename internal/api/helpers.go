@@ -64,19 +64,22 @@ func getPagination(r *http.Request, defaultLimit int) (offset, limit int) {
 	return offset, limit
 }
 
+// resolvePoller resolves a poller from serverMgr (by server query param) with fallback.
+// fromManager may be nil if serverMgr is not configured.
+func resolvePoller[T any](r *http.Request, fromManager func(string) (T, bool), fallback T) T {
+	serverID := r.URL.Query().Get("server")
+	if serverID != "" && fromManager != nil {
+		if p, ok := fromManager(serverID); ok {
+			return p
+		}
+	}
+	return fallback
+}
+
 // requireIONCPoller returns IONC poller for the request (supports multi-server).
 // Returns nil and false if unavailable (error already written).
 func (h *Handlers) requireIONCPoller(w http.ResponseWriter, r *http.Request) (*ionc.Poller, bool) {
-	var p *ionc.Poller
-	serverID := r.URL.Query().Get("server")
-	if h.serverManager != nil && serverID != "" {
-		if poller, ok := h.serverManager.GetIONCPoller(serverID); ok {
-			p = poller
-		}
-	}
-	if p == nil {
-		p = h.ioncPoller
-	}
+	p := h.getIONCPoller(r)
 	if p == nil {
 		h.writeError(w, http.StatusServiceUnavailable, "IONC poller not available")
 		return nil, false
@@ -87,16 +90,7 @@ func (h *Handlers) requireIONCPoller(w http.ResponseWriter, r *http.Request) (*i
 // requireModbusPoller returns Modbus poller for the request (supports multi-server).
 // Returns nil and false if unavailable (error already written).
 func (h *Handlers) requireModbusPoller(w http.ResponseWriter, r *http.Request) (*modbus.Poller, bool) {
-	var p *modbus.Poller
-	serverID := r.URL.Query().Get("server")
-	if h.serverManager != nil && serverID != "" {
-		if poller, ok := h.serverManager.GetModbusPoller(serverID); ok {
-			p = poller
-		}
-	}
-	if p == nil {
-		p = h.modbusPoller
-	}
+	p := h.getModbusPoller(r)
 	if p == nil {
 		h.writeError(w, http.StatusServiceUnavailable, "Modbus poller not available")
 		return nil, false
@@ -107,16 +101,7 @@ func (h *Handlers) requireModbusPoller(w http.ResponseWriter, r *http.Request) (
 // requireOPCUAPoller returns OPCUA poller for the request (supports multi-server).
 // Returns nil and false if unavailable (error already written).
 func (h *Handlers) requireOPCUAPoller(w http.ResponseWriter, r *http.Request) (*opcua.Poller, bool) {
-	var p *opcua.Poller
-	serverID := r.URL.Query().Get("server")
-	if h.serverManager != nil && serverID != "" {
-		if poller, ok := h.serverManager.GetOPCUAPoller(serverID); ok {
-			p = poller
-		}
-	}
-	if p == nil {
-		p = h.opcuaPoller
-	}
+	p := h.getOPCUAPoller(r)
 	if p == nil {
 		h.writeError(w, http.StatusServiceUnavailable, "OPCUA poller not available")
 		return nil, false
@@ -125,47 +110,28 @@ func (h *Handlers) requireOPCUAPoller(w http.ResponseWriter, r *http.Request) (*
 }
 
 // getIONCPoller returns IONC poller for the request without error writing.
-// Used when poller absence is not an error (e.g., GetIONCSubscriptions).
 func (h *Handlers) getIONCPoller(r *http.Request) *ionc.Poller {
-	var p *ionc.Poller
-	serverID := r.URL.Query().Get("server")
-	if h.serverManager != nil && serverID != "" {
-		if poller, ok := h.serverManager.GetIONCPoller(serverID); ok {
-			p = poller
-		}
+	var fromMgr func(string) (*ionc.Poller, bool)
+	if h.serverMgr != nil {
+		fromMgr = h.serverMgr.GetIONCPoller
 	}
-	if p == nil {
-		p = h.ioncPoller
-	}
-	return p
+	return resolvePoller(r, fromMgr, h.ioncPoller)
 }
 
 // getModbusPoller returns Modbus poller for the request without error writing.
 func (h *Handlers) getModbusPoller(r *http.Request) *modbus.Poller {
-	var p *modbus.Poller
-	serverID := r.URL.Query().Get("server")
-	if h.serverManager != nil && serverID != "" {
-		if poller, ok := h.serverManager.GetModbusPoller(serverID); ok {
-			p = poller
-		}
+	var fromMgr func(string) (*modbus.Poller, bool)
+	if h.serverMgr != nil {
+		fromMgr = h.serverMgr.GetModbusPoller
 	}
-	if p == nil {
-		p = h.modbusPoller
-	}
-	return p
+	return resolvePoller(r, fromMgr, h.modbusPoller)
 }
 
 // getOPCUAPoller returns OPCUA poller for the request without error writing.
 func (h *Handlers) getOPCUAPoller(r *http.Request) *opcua.Poller {
-	var p *opcua.Poller
-	serverID := r.URL.Query().Get("server")
-	if h.serverManager != nil && serverID != "" {
-		if poller, ok := h.serverManager.GetOPCUAPoller(serverID); ok {
-			p = poller
-		}
+	var fromMgr func(string) (*opcua.Poller, bool)
+	if h.serverMgr != nil {
+		fromMgr = h.serverMgr.GetOPCUAPoller
 	}
-	if p == nil {
-		p = h.opcuaPoller
-	}
-	return p
+	return resolvePoller(r, fromMgr, h.opcuaPoller)
 }
