@@ -27,6 +27,9 @@ const SETTINGS_FILTER_DEBOUNCE_DELAY = 200;
 const SSE_RESUBSCRIBE_DELAY = 1000;
 const SSE_RECOVERY_PROBE_INTERVAL = 30000;
 
+// === Retry ===
+const RESTORE_SENSORS_MAX_ATTEMPTS = 30; // × 100ms = 3s max wait for tab init
+
 // === Лимиты данных ===
 const MAX_CHART_POINTS = 1000;
 const MAX_LOG_LINES = 10000;
@@ -758,12 +761,15 @@ function updateChartsFromBatch(tabKey, items, prefix, timestamp, options = {}) {
         }
     }
     if (chartsToUpdate.size > 0) {
-        syncAllChartsTimeRange(tabKey);
-        tabState.charts.forEach((chartData) => {
+        // Обрезаем данные только у обновлённых графиков
+        chartsToUpdate.forEach(varName => {
+            const chartData = tabState.charts.get(varName);
+            if (!chartData) return;
             const data = chartData.chart.data.datasets[0].data;
             while (data.length > MAX_CHART_POINTS) data.shift();
-            chartData.chart.update('none');
         });
+        // syncAllChartsTimeRange обновляет min/max и вызывает update('none') для всех графиков
+        syncAllChartsTimeRange(tabKey);
     }
 }
 
@@ -12166,7 +12172,8 @@ function openIoncDialog(options) {
         }, 50);
     }
 
-    // Add ESC handler
+    // Add ESC handler (remove old one first to prevent duplicates)
+    document.removeEventListener('keydown', handleIoncDialogKeydown);
     document.addEventListener('keydown', handleIoncDialogKeydown);
 }
 
@@ -12349,12 +12356,13 @@ function renderSensorTable() {
             <tr>
                 <td>
                     <button class="sensor-add-btn" ${btnDisabled} title="${btnTitle}"
-                            onclick="addExternalSensor('${sensorDialogState.objectName}', '${sensor.name}')">${btnText}</button>
+                            data-object="${escapeHtml(sensorDialogState.objectName)}"
+                            data-sensor="${escapeHtml(sensor.name)}">${btnText}</button>
                 </td>
                 <td>${sensor.id}</td>
                 <td class="sensor-name">${escapeHtml(sensor.name)}</td>
                 <td>${escapeHtml(sensor.textname || '')}</td>
-                <td class="sensor-type">${sensor.iotype || ''}</td>
+                <td class="sensor-type">${escapeHtml(sensor.iotype || '')}</td>
             </tr>
         `;
     }).join('');
@@ -12373,6 +12381,14 @@ function renderSensorTable() {
             <tbody>${rows}</tbody>
         </table>
     `);
+
+    // Навешиваем обработчики клика программно (вместо inline onclick)
+    const container = document.getElementById('sensor-dialog-content');
+    container.querySelectorAll('.sensor-add-btn:not([disabled])').forEach(btn => {
+        btn.addEventListener('click', () => {
+            addExternalSensor(btn.dataset.object, btn.dataset.sensor);
+        });
+    });
 }
 
 // Экранирование HTML
@@ -12851,13 +12867,13 @@ function removeExternalSensor(tabKey, sensorName, options = {}) {
     }
 
     // Снять галочку в любой таблице по data-sensor-name (Modbus, OPCUA и др.)
-    const chartCheckbox = document.querySelector(`.chart-checkbox[data-sensor-name="${sensorName}"]`);
+    const chartCheckbox = document.querySelector(`.chart-checkbox[data-sensor-name="${CSS.escape(sensorName)}"]`);
     if (chartCheckbox) {
         chartCheckbox.checked = false;
     }
 
     // Снять галочку в таблице UWebSocketGate (по data-name)
-    const uwsgateCheckbox = getElementsInTab(tabKey, `.uwsgate-chart-checkbox[data-name="${sensorName}"]`);
+    const uwsgateCheckbox = getElementsInTab(tabKey, `.uwsgate-chart-checkbox[data-name="${CSS.escape(sensorName)}"]`);
     if (uwsgateCheckbox && uwsgateCheckbox.length > 0) {
         uwsgateCheckbox[0].checked = false;
     }
@@ -12931,9 +12947,11 @@ function restoreExternalSensors(tabKey, displayName) {
     // Теперь sensors - это Map<name, sensorData>
     // Используем сохранённые данные напрямую, без необходимости искать в state
 
+    let attempts = 0;
     const restoreSensors = () => {
         const tabState = state.tabs.get(tabKey);
         if (!tabState) {
+            if (++attempts > RESTORE_SENSORS_MAX_ATTEMPTS) return;
             setTimeout(restoreSensors, 100);
             return;
         }
@@ -14506,7 +14524,7 @@ function renderObjectInfo(tabKey, objectData) {
     fields.forEach(({ key, label, format }) => {
         if (objectData[key] !== undefined) {
             const tr = document.createElement('tr');
-            const value = format ? format(objectData[key]) : objectData[key];
+            const value = format ? format(objectData[key]) : escapeHtml(String(objectData[key]));
             tr.innerHTML = `
                 <td class="info-label">${label}</td>
                 <td class="info-value">${value}</td>
@@ -14550,9 +14568,9 @@ function renderLogServer(tabKey, logServerData) {
                 // Проверяем с учётом возможных опечаток (RUNNIG вместо RUNNING)
                 const stateClass = stateValue.startsWith('RUNN') ? 'state-running' :
                                    stateValue === 'STOPPED' ? 'state-stopped' : '';
-                valueHtml = `<span class="state-badge ${stateClass}">${logServerData[key]}</span>`;
+                valueHtml = `<span class="state-badge ${stateClass}">${escapeHtml(String(logServerData[key]))}</span>`;
             } else {
-                valueHtml = logServerData[key];
+                valueHtml = escapeHtml(String(logServerData[key]));
             }
             tr.innerHTML = `
                 <td class="info-label">${label}</td>
@@ -14571,7 +14589,7 @@ function renderLogServer(tabKey, logServerData) {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="info-label">Макс. сессий</td>
-                <td class="info-value">${info.sessMaxCount}</td>
+                <td class="info-value">${escapeHtml(String(info.sessMaxCount))}</td>
             `;
             tbody.appendChild(tr);
         }
@@ -14594,7 +14612,7 @@ function renderLogServer(tabKey, logServerData) {
                         JSON.stringify(session) : String(session);
                     sessionTr.innerHTML = `
                         <td class="info-label" style="padding-left: 1.5rem">Сессия ${idx + 1}</td>
-                        <td class="info-value">${sessionInfo}</td>
+                        <td class="info-value">${escapeHtml(sessionInfo)}</td>
                     `;
                     tbody.appendChild(sessionTr);
                 });
@@ -14683,8 +14701,8 @@ function renderStatistics(tabKey, statsData) {
         }
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td class="info-label">${key}</td>
-            <td class="info-value">${formatValue(value)}</td>
+            <td class="info-label">${escapeHtml(key)}</td>
+            <td class="info-value">${escapeHtml(String(formatValue(value)))}</td>
         `;
         generalTbody.appendChild(tr);
     });
@@ -14739,9 +14757,9 @@ function renderStatisticsSensors(tabKey, filterText = '') {
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${sensorId}</td>
-            <td class="variable-name">${sensorName}</td>
-            <td class="variable-value">${formatValue(sensorCount)}</td>
+            <td>${escapeHtml(String(sensorId))}</td>
+            <td class="variable-name">${escapeHtml(String(sensorName))}</td>
+            <td class="variable-value">${escapeHtml(String(formatValue(sensorCount)))}</td>
         `;
         tbody.appendChild(tr);
     });

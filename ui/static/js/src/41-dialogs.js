@@ -37,7 +37,8 @@ function openIoncDialog(options) {
         }, 50);
     }
 
-    // Add ESC handler
+    // Add ESC handler (remove old one first to prevent duplicates)
+    document.removeEventListener('keydown', handleIoncDialogKeydown);
     document.addEventListener('keydown', handleIoncDialogKeydown);
 }
 
@@ -220,12 +221,13 @@ function renderSensorTable() {
             <tr>
                 <td>
                     <button class="sensor-add-btn" ${btnDisabled} title="${btnTitle}"
-                            onclick="addExternalSensor('${sensorDialogState.objectName}', '${sensor.name}')">${btnText}</button>
+                            data-object="${escapeHtml(sensorDialogState.objectName)}"
+                            data-sensor="${escapeHtml(sensor.name)}">${btnText}</button>
                 </td>
                 <td>${sensor.id}</td>
                 <td class="sensor-name">${escapeHtml(sensor.name)}</td>
                 <td>${escapeHtml(sensor.textname || '')}</td>
-                <td class="sensor-type">${sensor.iotype || ''}</td>
+                <td class="sensor-type">${escapeHtml(sensor.iotype || '')}</td>
             </tr>
         `;
     }).join('');
@@ -244,6 +246,14 @@ function renderSensorTable() {
             <tbody>${rows}</tbody>
         </table>
     `);
+
+    // Навешиваем обработчики клика программно (вместо inline onclick)
+    const container = document.getElementById('sensor-dialog-content');
+    container.querySelectorAll('.sensor-add-btn:not([disabled])').forEach(btn => {
+        btn.addEventListener('click', () => {
+            addExternalSensor(btn.dataset.object, btn.dataset.sensor);
+        });
+    });
 }
 
 // Экранирование HTML
@@ -722,13 +732,13 @@ function removeExternalSensor(tabKey, sensorName, options = {}) {
     }
 
     // Снять галочку в любой таблице по data-sensor-name (Modbus, OPCUA и др.)
-    const chartCheckbox = document.querySelector(`.chart-checkbox[data-sensor-name="${sensorName}"]`);
+    const chartCheckbox = document.querySelector(`.chart-checkbox[data-sensor-name="${CSS.escape(sensorName)}"]`);
     if (chartCheckbox) {
         chartCheckbox.checked = false;
     }
 
     // Снять галочку в таблице UWebSocketGate (по data-name)
-    const uwsgateCheckbox = getElementsInTab(tabKey, `.uwsgate-chart-checkbox[data-name="${sensorName}"]`);
+    const uwsgateCheckbox = getElementsInTab(tabKey, `.uwsgate-chart-checkbox[data-name="${CSS.escape(sensorName)}"]`);
     if (uwsgateCheckbox && uwsgateCheckbox.length > 0) {
         uwsgateCheckbox[0].checked = false;
     }
@@ -802,9 +812,11 @@ function restoreExternalSensors(tabKey, displayName) {
     // Теперь sensors - это Map<name, sensorData>
     // Используем сохранённые данные напрямую, без необходимости искать в state
 
+    let attempts = 0;
     const restoreSensors = () => {
         const tabState = state.tabs.get(tabKey);
         if (!tabState) {
+            if (++attempts > RESTORE_SENSORS_MAX_ATTEMPTS) return;
             setTimeout(restoreSensors, 100);
             return;
         }

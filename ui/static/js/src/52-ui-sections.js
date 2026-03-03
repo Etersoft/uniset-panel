@@ -182,7 +182,7 @@ function renderObjectInfo(tabKey, objectData) {
     fields.forEach(({ key, label, format }) => {
         if (objectData[key] !== undefined) {
             const tr = document.createElement('tr');
-            const value = format ? format(objectData[key]) : objectData[key];
+            const value = format ? format(objectData[key]) : escapeHtml(String(objectData[key]));
             tr.innerHTML = `
                 <td class="info-label">${label}</td>
                 <td class="info-value">${value}</td>
@@ -226,9 +226,9 @@ function renderLogServer(tabKey, logServerData) {
                 // Проверяем с учётом возможных опечаток (RUNNIG вместо RUNNING)
                 const stateClass = stateValue.startsWith('RUNN') ? 'state-running' :
                                    stateValue === 'STOPPED' ? 'state-stopped' : '';
-                valueHtml = `<span class="state-badge ${stateClass}">${logServerData[key]}</span>`;
+                valueHtml = `<span class="state-badge ${stateClass}">${escapeHtml(String(logServerData[key]))}</span>`;
             } else {
-                valueHtml = logServerData[key];
+                valueHtml = escapeHtml(String(logServerData[key]));
             }
             tr.innerHTML = `
                 <td class="info-label">${label}</td>
@@ -247,7 +247,7 @@ function renderLogServer(tabKey, logServerData) {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="info-label">Макс. сессий</td>
-                <td class="info-value">${info.sessMaxCount}</td>
+                <td class="info-value">${escapeHtml(String(info.sessMaxCount))}</td>
             `;
             tbody.appendChild(tr);
         }
@@ -270,7 +270,7 @@ function renderLogServer(tabKey, logServerData) {
                         JSON.stringify(session) : String(session);
                     sessionTr.innerHTML = `
                         <td class="info-label" style="padding-left: 1.5rem">Сессия ${idx + 1}</td>
-                        <td class="info-value">${sessionInfo}</td>
+                        <td class="info-value">${escapeHtml(sessionInfo)}</td>
                     `;
                     tbody.appendChild(sessionTr);
                 });
@@ -359,8 +359,8 @@ function renderStatistics(tabKey, statsData) {
         }
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td class="info-label">${key}</td>
-            <td class="info-value">${formatValue(value)}</td>
+            <td class="info-label">${escapeHtml(key)}</td>
+            <td class="info-value">${escapeHtml(String(formatValue(value)))}</td>
         `;
         generalTbody.appendChild(tr);
     });
@@ -415,9 +415,9 @@ function renderStatisticsSensors(tabKey, filterText = '') {
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${sensorId}</td>
-            <td class="variable-name">${sensorName}</td>
-            <td class="variable-value">${formatValue(sensorCount)}</td>
+            <td>${escapeHtml(String(sensorId))}</td>
+            <td class="variable-name">${escapeHtml(String(sensorName))}</td>
+            <td class="variable-value">${escapeHtml(String(formatValue(sensorCount)))}</td>
         `;
         tbody.appendChild(tr);
     });

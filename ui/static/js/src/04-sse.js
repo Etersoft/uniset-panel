@@ -25,12 +25,15 @@ function updateChartsFromBatch(tabKey, items, prefix, timestamp, options = {}) {
         }
     }
     if (chartsToUpdate.size > 0) {
-        syncAllChartsTimeRange(tabKey);
-        tabState.charts.forEach((chartData) => {
+        // Обрезаем данные только у обновлённых графиков
+        chartsToUpdate.forEach(varName => {
+            const chartData = tabState.charts.get(varName);
+            if (!chartData) return;
             const data = chartData.chart.data.datasets[0].data;
             while (data.length > MAX_CHART_POINTS) data.shift();
-            chartData.chart.update('none');
         });
+        // syncAllChartsTimeRange обновляет min/max и вызывает update('none') для всех графиков
+        syncAllChartsTimeRange(tabKey);
     }
 }
 
