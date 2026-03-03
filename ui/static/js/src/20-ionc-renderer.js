@@ -32,6 +32,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         // Инициализация сортировки
         this.initSortProps();
+        this.sortTableId = `ionc-sensors-table-${objectName}`;
         // Определение колонок для сортировки
         this.sortColumnDefs = {
             id: { field: 'id', type: 'number' },
@@ -478,32 +479,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         this.renderVisibleSensors();
     }
 
-    // Метод для перерисовки после изменения сортировки
-    renderAfterSort() {
-        // Обновляем заголовки таблицы
-        this.updateSortHeaders();
-        // Перерисовываем данные
-        this.renderVisibleSensors();
-    }
-
-    // Обновление заголовков таблицы с индикаторами сортировки
-    updateSortHeaders() {
-        const table = this.getEl(`ionc-sensors-table-${this.objectName}`);
-        if (!table) return;
-
-        table.querySelectorAll('th.th-sortable').forEach(th => {
-            const column = th.dataset.column;
-            th.classList.toggle('th-sorted', column === this.sortColumn);
-            const arrow = th.querySelector('.sort-arrow');
-            if (arrow) {
-                if (column === this.sortColumn) {
-                    arrow.textContent = this.sortDirection === 'asc' ? ' ↑' : ' ↓';
-                } else {
-                    arrow.textContent = '';
-                }
-            }
-        });
-    }
+    // Bridge для TableSortMixin.renderAfterSort()
+    sortRenderVisible() { this.renderVisibleSensors(); }
 
     renderSensorRow(sensor, isPinned) {
         // Получаем textname из справочника сенсоров (конфигурации)

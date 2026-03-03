@@ -42,8 +42,8 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
 
         // SSE подписки (используется subscribedSensorIds из миксина)
         this.subscribedSensorIds = new Set();
-        this.pendingUpdates = [];
-        this.renderScheduled = false;
+        this.batchTbodyId = `mb-registers-tbody-${objectName}`;
+        this.initBatchRenderProps();
 
         // Virtual scroll properties
         this.allRegisters = [];
@@ -65,6 +65,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
 
         // Инициализация сортировки
         this.initSortProps();
+        this.sortTableId = `mb-registers-table-${objectName}`;
         this.sortColumnDefs = {
             id: { field: 'id', type: 'number' },
             name: { field: 'name', type: 'string' },
@@ -742,82 +743,30 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     }
 
     handleModbusRegisterUpdates(registers) {
-        if (!Array.isArray(registers) || registers.length === 0) return;
-
-        // Добавляем в очередь на обновление
-        this.pendingUpdates.push(...registers);
-
-        // Планируем батчевый рендеринг
-        if (!this.renderScheduled) {
-            this.renderScheduled = true;
-            requestAnimationFrame(() => this.batchRenderUpdates());
-        }
+        this.handleBatchUpdates(registers);
     }
 
-    batchRenderUpdates() {
-        this.renderScheduled = false;
+    // Bridge для BatchRenderMixin
+    getBatchItems() { return this.allRegisters; }
 
-        if (this.pendingUpdates.length === 0) return;
-
-        const updates = this.pendingUpdates;
-        this.pendingUpdates = [];
-
-        // Создаём map для быстрого поиска
-        const updateMap = new Map();
-        updates.forEach(reg => {
-            updateMap.set(reg.id, reg);
-        });
-
-        // Обновляем данные в allRegisters (все поля)
-        this.allRegisters.forEach((reg, index) => {
-            const update = updateMap.get(reg.id);
-            if (update) {
-                this.allRegisters[index] = { ...reg, ...update };
-            }
-        });
-
-        // Обновляем изменившиеся ячейки в DOM
-        const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
-        if (!panel) return;
-
-        const tbody = panel.querySelector(`#mb-registers-tbody-${CSS.escape(this.objectName)}`);
-        if (!tbody) return;
-
-        const rows = tbody.querySelectorAll('tr');
-        rows.forEach(row => {
-            const regId = parseInt(row.dataset.sensorId);
-            if (!regId) return;
-
-            const update = updateMap.get(regId);
-            if (!update) return;
-
-            // Value
-            const valueCell = row.querySelector('.col-value');
-            if (valueCell) {
-                const newValue = update.value !== undefined ? String(update.value) : '';
-                if (valueCell.textContent !== newValue) {
-                    valueCell.textContent = newValue;
-                    valueCell.classList.remove('value-changed');
-                    void valueCell.offsetWidth;
-                    valueCell.classList.add('value-changed');
-                }
-            }
-
-            // Device respond status
-            const deviceCell = row.querySelector('.col-device .mb-respond');
-            if (deviceCell && update.device !== undefined) {
-                const deviceAddr = update.device;
-                const deviceInfo = this.devicesDict[deviceAddr] || {};
-                deviceCell.className = `mb-respond ${deviceInfo.respond ? 'ok' : 'fail'}`;
-            }
-
-            // MB val (raw modbus value)
-            const mbvalCell = row.querySelector('.col-mbval');
-            if (mbvalCell && update.register) {
-                const newMbval = update.register.mbval !== undefined ? String(update.register.mbval) : '';
-                mbvalCell.textContent = newMbval;
-            }
-        });
+    updateRowCells(row, update) {
+        // Value
+        if (update.value !== undefined) {
+            this._animateCellValue(row, '.col-value', String(update.value), 'value-changed');
+        }
+        // Device respond status
+        const deviceCell = row.querySelector('.col-device .mb-respond');
+        if (deviceCell && update.device !== undefined) {
+            const deviceAddr = update.device;
+            const deviceInfo = this.devicesDict[deviceAddr] || {};
+            deviceCell.className = `mb-respond ${deviceInfo.respond ? 'ok' : 'fail'}`;
+        }
+        // MB val (raw modbus value)
+        const mbvalCell = row.querySelector('.col-mbval');
+        if (mbvalCell && update.register) {
+            const newMbval = update.register.mbval !== undefined ? String(update.register.mbval) : '';
+            mbvalCell.textContent = newMbval;
+        }
     }
 
     // update(data) наследуется из BaseObjectRenderer
@@ -825,35 +774,14 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     // Pin management: pinStorageKey и renderAfterPinChange заданы в конструкторе
     // Используются сокращённые методы из PinManagementMixin: getPinned(), togglePin(), unpinAll()
 
-    // Перерисовка после смены сортировки
-    renderAfterSort() {
-        this.renderRegisters();
-        this.updateSortHeaders();
-    }
-
-    // Обновление визуальных индикаторов сортировки
-    updateSortHeaders() {
-        const table = this.getEl(`mb-registers-table-${this.objectName}`);
-        if (!table) return;
-
-        table.querySelectorAll('th.th-sortable').forEach(th => {
-            const column = th.dataset.column;
-            th.classList.toggle('th-sorted', column === this.sortColumn);
-            const arrow = th.querySelector('.sort-arrow');
-            if (arrow) {
-                if (column === this.sortColumn) {
-                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
-                } else {
-                    arrow.textContent = '';
-                }
-            }
-        });
-    }
+    // Bridge для TableSortMixin.renderAfterSort()
+    sortRenderVisible() { this.renderRegisters(); }
 }
 
 // Apply mixins to ModbusMasterRenderer
 applyMixin(ModbusMasterRenderer, VirtualScrollMixin);
 applyMixin(ModbusMasterRenderer, SSESubscriptionMixin);
+applyMixin(ModbusMasterRenderer, BatchRenderMixin);
 applyMixin(ModbusMasterRenderer, ResizableSectionMixin);
 applyMixin(ModbusMasterRenderer, FilterMixin);
 applyMixin(ModbusMasterRenderer, ParamsAccessibilityMixin);

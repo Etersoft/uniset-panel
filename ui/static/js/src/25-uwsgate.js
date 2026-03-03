@@ -29,6 +29,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
 
         // Инициализация сортировки
         this.initSortProps();
+        this.sortTableId = `uwsgate-sensors-table-${objectName}`;
         this.sortColumnDefs = {
             id: { field: 'id', type: 'number' },
             name: { field: 'name', type: 'string' },
@@ -764,30 +765,8 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         }
     }
 
-    // Перерисовка после смены сортировки
-    renderAfterSort() {
-        this.renderSensorsTable();
-        this.updateSortHeaders();
-    }
-
-    // Обновление визуальных индикаторов сортировки
-    updateSortHeaders() {
-        const table = getElementInTab(this.tabKey, `uwsgate-sensors-table-${this.objectName}`);
-        if (!table) return;
-
-        table.querySelectorAll('th.th-sortable').forEach(th => {
-            const column = th.dataset.column;
-            th.classList.toggle('th-sorted', column === this.sortColumn);
-            const arrow = th.querySelector('.sort-arrow');
-            if (arrow) {
-                if (column === this.sortColumn) {
-                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
-                } else {
-                    arrow.textContent = '';
-                }
-            }
-        });
-    }
+    // Bridge для TableSortMixin.renderAfterSort()
+    sortRenderVisible() { this.renderSensorsTable(); }
 }
 
 // Apply mixins

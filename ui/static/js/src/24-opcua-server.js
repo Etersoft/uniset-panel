@@ -18,8 +18,8 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
         // SSE подписки
         this.subscribedSensorIds = new Set();
-        this.pendingUpdates = [];
-        this.renderScheduled = false;
+        this.batchTbodyId = `opcuasrv-sensors-${objectName}`;
+        this.initBatchRenderProps();
 
         // Virtual scroll properties
         this.allSensors = [];
@@ -40,6 +40,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
         // Инициализация сортировки
         this.initSortProps();
+        this.sortTableId = `opcuasrv-sensors-table-${objectName}`;
         this.sortColumnDefs = {
             id: { field: 'id', type: 'number' },
             name: { field: 'name', type: 'string' },
@@ -576,88 +577,28 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     handleOPCUASensorUpdates(sensors) {
-        if (!sensors || !Array.isArray(sensors)) return;
+        this.handleBatchUpdates(sensors);
+    }
 
-        // Queue updates for batch rendering
-        this.pendingUpdates.push(...sensors);
+    // Bridge для BatchRenderMixin
+    getBatchItems() { return this.allSensors; }
 
-        if (!this.renderScheduled) {
-            this.renderScheduled = true;
-            requestAnimationFrame(() => this.batchRenderUpdates());
+    updateRowCells(row, update) {
+        if (update.value !== undefined) {
+            this._animateCellValue(row, '.sensor-value', formatValue(update.value), 'value-updated');
         }
     }
 
-    batchRenderUpdates() {
-        this.renderScheduled = false;
-
-        if (this.pendingUpdates.length === 0) return;
-
-        const updateMap = new Map();
-        this.pendingUpdates.forEach(u => updateMap.set(u.id, u));
-        this.pendingUpdates = [];
-
-        // Update allSensors array (все поля)
-        this.allSensors.forEach((sensor, index) => {
-            const update = updateMap.get(sensor.id);
-            if (update) {
-                this.allSensors[index] = { ...sensor, ...update };
-            }
-        });
-
-        // Update visible rows in DOM
-        const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
-        if (!panel) return;
-
-        const tbody = panel.querySelector(`#opcuasrv-sensors-${CSS.escape(this.objectName)}`);
-        if (!tbody) return;
-
-        tbody.querySelectorAll('tr[data-sensor-id]').forEach(row => {
-            const sensorId = parseInt(row.dataset.sensorId, 10);
-            const update = updateMap.get(sensorId);
-            if (!update) return;
-
-            const valueCell = row.querySelector('.sensor-value');
-            if (valueCell && update.value !== undefined) {
-                valueCell.textContent = formatValue(update.value);
-                valueCell.classList.remove('value-updated');
-                void valueCell.offsetWidth;
-                valueCell.classList.add('value-updated');
-            }
-        });
-    }
-
-    // Pin management для датчиков
     // Pin management: pinStorageKey и renderAfterPinChange заданы в конструкторе
 
-    // Перерисовка после смены сортировки
-    renderAfterSort() {
-        this.renderVisibleSensors();
-        this.updateSortHeaders();
-    }
-
-    // Обновление визуальных индикаторов сортировки
-    updateSortHeaders() {
-        const table = this.getEl(`opcuasrv-sensors-table-${this.objectName}`);
-        if (!table) return;
-
-        table.querySelectorAll('th.th-sortable').forEach(th => {
-            const column = th.dataset.column;
-            th.classList.toggle('th-sorted', column === this.sortColumn);
-            const arrow = th.querySelector('.sort-arrow');
-            if (arrow) {
-                if (column === this.sortColumn) {
-                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
-                } else {
-                    arrow.textContent = '';
-                }
-            }
-        });
-    }
+    // Bridge для TableSortMixin.renderAfterSort()
+    sortRenderVisible() { this.renderVisibleSensors(); }
 }
 
 // Apply mixins to OPCUAServerRenderer
 applyMixin(OPCUAServerRenderer, VirtualScrollMixin);
 applyMixin(OPCUAServerRenderer, SSESubscriptionMixin);
+applyMixin(OPCUAServerRenderer, BatchRenderMixin);
 applyMixin(OPCUAServerRenderer, ResizableSectionMixin);
 applyMixin(OPCUAServerRenderer, FilterMixin);
 applyMixin(OPCUAServerRenderer, ParamsAccessibilityMixin);

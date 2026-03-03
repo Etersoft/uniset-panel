@@ -2259,6 +2259,129 @@ const TableSortMixin = {
             th._sortHandler = handler;
             th.addEventListener('click', handler);
         });
+    },
+
+    /**
+     * Обновление визуальных индикаторов сортировки
+     * Требует: this.sortTableId — полный ID таблицы (задаётся в конструкторе рендерера)
+     */
+    updateSortHeaders() {
+        const table = this.getEl(this.sortTableId);
+        if (!table) return;
+        table.querySelectorAll('th.th-sortable').forEach(th => {
+            const column = th.dataset.column;
+            th.classList.toggle('th-sorted', column === this.sortColumn);
+            const arrow = th.querySelector('.sort-arrow');
+            if (arrow) {
+                if (column === this.sortColumn) {
+                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
+                } else {
+                    arrow.textContent = '';
+                }
+            }
+        });
+    },
+
+    /**
+     * Перерисовка таблицы после смены сортировки
+     * Требует: sortRenderVisible() — мост к render-методу рендерера
+     */
+    renderAfterSort() {
+        this.sortRenderVisible();
+        this.updateSortHeaders();
+    }
+};
+
+/**
+ * Миксин для батчевого рендеринга SSE-обновлений
+ *
+ * Контракт рендерера:
+ *   - this.batchTbodyId  — ID элемента tbody (задаётся в конструкторе)
+ *   - getBatchItems()     — возвращает backing-массив (this.allSensors / this.allRegisters)
+ *   - updateRowCells(row, update) — обновление ячеек конкретной строки (renderer-specific)
+ */
+const BatchRenderMixin = {
+    initBatchRenderProps() {
+        this.pendingUpdates = [];
+        this.renderScheduled = false;
+    },
+
+    /**
+     * Общий SSE-обработчик: валидация, добавление в очередь, планирование RAF
+     * @param {Array} items - Массив обновлений из SSE
+     */
+    handleBatchUpdates(items) {
+        if (!Array.isArray(items) || items.length === 0) return;
+        this.pendingUpdates.push(...items);
+        if (!this.renderScheduled) {
+            this.renderScheduled = true;
+            requestAnimationFrame(() => this.batchRenderUpdates());
+        }
+    },
+
+    /**
+     * Общий batchRenderUpdates: drain → tbody → iterate rows → updateRowCells
+     * Рендерер может переопределить если нужна нестандартная логика.
+     */
+    batchRenderUpdates() {
+        const updateMap = this._drainPendingUpdates(this.getBatchItems());
+        if (!updateMap) return;
+
+        const tbody = this.getEl(this.batchTbodyId);
+        if (!tbody) return;
+
+        tbody.querySelectorAll('tr[data-sensor-id]').forEach(row => {
+            const id = parseInt(row.dataset.sensorId);
+            if (!id) return;
+
+            const update = updateMap.get(id);
+            if (!update) return;
+
+            this.updateRowCells(row, update);
+        });
+    },
+
+    /**
+     * Утилита: обновить текст ячейки с CSS-анимацией при изменении
+     * @param {HTMLElement} row - Строка таблицы
+     * @param {string} selector - CSS-селектор ячейки
+     * @param {string} newValue - Новое значение
+     * @param {string} animationClass - CSS-класс для анимации
+     */
+    _animateCellValue(row, selector, newValue, animationClass) {
+        const cell = row.querySelector(selector);
+        if (!cell) return;
+        if (cell.textContent !== newValue) {
+            cell.textContent = newValue;
+            cell.classList.remove(animationClass);
+            void cell.offsetWidth;
+            cell.classList.add(animationClass);
+        }
+    },
+
+    /**
+     * Слить очередь → обновить backing-массив → вернуть updateMap
+     * @param {Array} items - Backing-массив (this.allSensors / this.allRegisters)
+     * @returns {Map|null} updateMap или null если очередь пуста
+     */
+    _drainPendingUpdates(items) {
+        this.renderScheduled = false;
+        if (this.pendingUpdates.length === 0) return null;
+
+        const updates = this.pendingUpdates;
+        this.pendingUpdates = [];
+
+        const updateMap = new Map();
+        updates.forEach(item => updateMap.set(item.id, item));
+
+        items.forEach((item, index) => {
+            const update = updateMap.get(item.id);
+            if (update) {
+                items[index] = { ...item, ...update };
+            }
+        });
+
+        return updateMap;
     }
 };
 
@@ -3061,6 +3184,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         // Инициализация сортировки
         this.initSortProps();
+        this.sortTableId = `ionc-sensors-table-${objectName}`;
         // Определение колонок для сортировки
         this.sortColumnDefs = {
             id: { field: 'id', type: 'number' },
@@ -3507,32 +3631,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         this.renderVisibleSensors();
     }
 
-    // Метод для перерисовки после изменения сортировки
-    renderAfterSort() {
-        // Обновляем заголовки таблицы
-        this.updateSortHeaders();
-        // Перерисовываем данные
-        this.renderVisibleSensors();
-    }
-
-    // Обновление заголовков таблицы с индикаторами сортировки
-    updateSortHeaders() {
-        const table = this.getEl(`ionc-sensors-table-${this.objectName}`);
-        if (!table) return;
-
-        table.querySelectorAll('th.th-sortable').forEach(th => {
-            const column = th.dataset.column;
-            th.classList.toggle('th-sorted', column === this.sortColumn);
-            const arrow = th.querySelector('.sort-arrow');
-            if (arrow) {
-                if (column === this.sortColumn) {
-                    arrow.textContent = this.sortDirection === 'asc' ? ' ↑' : ' ↓';
-                } else {
-                    arrow.textContent = '';
-                }
-            }
-        });
-    }
+    // Bridge для TableSortMixin.renderAfterSort()
+    sortRenderVisible() { this.renderVisibleSensors(); }
 
     renderSensorRow(sensor, isPinned) {
         // Получаем textname из справочника сенсоров (конфигурации)
@@ -4895,8 +4995,8 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
         // SSE подписки
         this.subscribedSensorIds = new Set();
-        this.pendingUpdates = [];
-        this.renderScheduled = false;
+        this.batchTbodyId = `opcua-sensors-${objectName}`;
+        this.initBatchRenderProps();
 
         // Virtual scroll properties
         this.allSensors = [];
@@ -4917,6 +5017,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
         // Инициализация сортировки
         this.initSortProps();
+        this.sortTableId = `opcua-sensors-table-${objectName}`;
         this.sortColumnDefs = {
             id: { field: 'id', type: 'number' },
             name: { field: 'name', type: 'string' },
@@ -5860,129 +5961,57 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     handleOPCUASensorUpdates(sensors) {
-        if (!Array.isArray(sensors) || sensors.length === 0) return;
-
-        // Добавляем в очередь на обновление
-        this.pendingUpdates.push(...sensors);
-
-        // Планируем батчевый рендеринг
-        if (!this.renderScheduled) {
-            this.renderScheduled = true;
-            requestAnimationFrame(() => this.batchRenderUpdates());
-        }
+        this.handleBatchUpdates(sensors);
     }
 
-    batchRenderUpdates() {
-        this.renderScheduled = false;
+    // Bridge для BatchRenderMixin
+    getBatchItems() { return this.allSensors; }
 
-        if (this.pendingUpdates.length === 0) return;
-
-        const updates = this.pendingUpdates;
-        this.pendingUpdates = [];
-
-        // Создаём map для быстрого поиска
-        const updateMap = new Map();
-        updates.forEach(sensor => {
-            updateMap.set(sensor.id, sensor);
-        });
-
-        // Обновляем данные в allSensors (все поля)
-        this.allSensors.forEach((sensor, index) => {
-            const update = updateMap.get(sensor.id);
-            if (update) {
-                this.allSensors[index] = { ...sensor, ...update };
+    updateRowCells(row, update) {
+        // Value
+        if (update.value !== undefined) {
+            this._animateCellValue(row, '.col-value', String(update.value), 'value-changed');
+        }
+        // Tick
+        const tickCell = row.querySelector('.col-tick');
+        if (tickCell && update.tick !== undefined) {
+            tickCell.textContent = String(update.tick);
+        }
+        // Status
+        const statusCell = row.querySelector('.col-status');
+        if (statusCell && update.status !== undefined) {
+            statusCell.textContent = update.status || '—';
+            statusCell.title = update.status || '';
+            if (update.status && update.status.toLowerCase() !== 'ok') {
+                statusCell.classList.add('status-bad');
+            } else {
+                statusCell.classList.remove('status-bad');
             }
-        });
-
-        // Обновляем видимые строки в DOM
-        const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
-        if (!panel) return;
-
-        const tbody = panel.querySelector(`#opcua-sensors-${CSS.escape(this.objectName)}`);
-        if (!tbody) return;
-
-        const rows = tbody.querySelectorAll('tr');
-        rows.forEach(row => {
-            const sensorId = parseInt(row.dataset.sensorId);
-            if (!sensorId) return;
-
-            const update = updateMap.get(sensorId);
-            if (!update) return;
-
-            // Value
-            const valueCell = row.querySelector('.col-value');
-            if (valueCell && update.value !== undefined) {
-                const oldValue = valueCell.textContent;
-                const newValue = String(update.value);
-                if (oldValue !== newValue) {
-                    valueCell.textContent = newValue;
-                    valueCell.classList.remove('value-changed');
-                    void valueCell.offsetWidth;
-                    valueCell.classList.add('value-changed');
-                }
-            }
-            // Tick
-            const tickCell = row.querySelector('.col-tick');
-            if (tickCell && update.tick !== undefined) {
-                tickCell.textContent = String(update.tick);
-            }
-            // Status
-            const statusCell = row.querySelector('.col-status');
-            if (statusCell && update.status !== undefined) {
-                statusCell.textContent = update.status || '—';
-                statusCell.title = update.status || '';
-                if (update.status && update.status.toLowerCase() !== 'ok') {
-                    statusCell.classList.add('status-bad');
-                } else {
-                    statusCell.classList.remove('status-bad');
-                }
-            }
-            // VType
-            const vtypeCell = row.querySelector('.col-vtype');
-            if (vtypeCell && update.vtype !== undefined) {
-                vtypeCell.textContent = update.vtype || '—';
-            }
-            // Precision
-            const precisionCell = row.querySelector('.col-precision');
-            if (precisionCell && update.precision !== undefined) {
-                precisionCell.textContent = update.precision ?? '—';
-            }
-        });
+        }
+        // VType
+        const vtypeCell = row.querySelector('.col-vtype');
+        if (vtypeCell && update.vtype !== undefined) {
+            vtypeCell.textContent = update.vtype || '—';
+        }
+        // Precision
+        const precisionCell = row.querySelector('.col-precision');
+        if (precisionCell && update.precision !== undefined) {
+            precisionCell.textContent = update.precision ?? '—';
+        }
     }
 
     // update(data) наследуется из BaseObjectRenderer
 
     // Pin management: pinStorageKey и renderAfterPinChange заданы в конструкторе
 
-    // Перерисовка после смены сортировки
-    renderAfterSort() {
-        this.renderVisibleSensors();
-        this.updateSortHeaders();
-    }
-
-    // Обновление визуальных индикаторов сортировки
-    updateSortHeaders() {
-        const table = this.getEl(`opcua-sensors-table-${this.objectName}`);
-        if (!table) return;
-
-        table.querySelectorAll('th.th-sortable').forEach(th => {
-            const column = th.dataset.column;
-            th.classList.toggle('th-sorted', column === this.sortColumn);
-            const arrow = th.querySelector('.sort-arrow');
-            if (arrow) {
-                if (column === this.sortColumn) {
-                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
-                } else {
-                    arrow.textContent = '';
-                }
-            }
-        });
-    }
+    // Bridge для TableSortMixin.renderAfterSort()
+    sortRenderVisible() { this.renderVisibleSensors(); }
 }
 
 // Apply mixins to OPCUAExchangeRenderer
 applyMixin(OPCUAExchangeRenderer, VirtualScrollMixin);
 applyMixin(OPCUAExchangeRenderer, SSESubscriptionMixin);
+applyMixin(OPCUAExchangeRenderer, BatchRenderMixin);
 applyMixin(OPCUAExchangeRenderer, ResizableSectionMixin);
 applyMixin(OPCUAExchangeRenderer, FilterMixin);
 applyMixin(OPCUAExchangeRenderer, ParamsAccessibilityMixin);
@@ -6039,8 +6068,8 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
 
         // SSE подписки (используется subscribedSensorIds из миксина)
         this.subscribedSensorIds = new Set();
-        this.pendingUpdates = [];
-        this.renderScheduled = false;
+        this.batchTbodyId = `mb-registers-tbody-${objectName}`;
+        this.initBatchRenderProps();
 
         // Virtual scroll properties
         this.allRegisters = [];
@@ -6062,6 +6091,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
 
         // Инициализация сортировки
         this.initSortProps();
+        this.sortTableId = `mb-registers-table-${objectName}`;
         this.sortColumnDefs = {
             id: { field: 'id', type: 'number' },
             name: { field: 'name', type: 'string' },
@@ -6739,82 +6769,30 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     }
 
     handleModbusRegisterUpdates(registers) {
-        if (!Array.isArray(registers) || registers.length === 0) return;
-
-        // Добавляем в очередь на обновление
-        this.pendingUpdates.push(...registers);
-
-        // Планируем батчевый рендеринг
-        if (!this.renderScheduled) {
-            this.renderScheduled = true;
-            requestAnimationFrame(() => this.batchRenderUpdates());
-        }
+        this.handleBatchUpdates(registers);
     }
 
-    batchRenderUpdates() {
-        this.renderScheduled = false;
+    // Bridge для BatchRenderMixin
+    getBatchItems() { return this.allRegisters; }
 
-        if (this.pendingUpdates.length === 0) return;
-
-        const updates = this.pendingUpdates;
-        this.pendingUpdates = [];
-
-        // Создаём map для быстрого поиска
-        const updateMap = new Map();
-        updates.forEach(reg => {
-            updateMap.set(reg.id, reg);
-        });
-
-        // Обновляем данные в allRegisters (все поля)
-        this.allRegisters.forEach((reg, index) => {
-            const update = updateMap.get(reg.id);
-            if (update) {
-                this.allRegisters[index] = { ...reg, ...update };
-            }
-        });
-
-        // Обновляем изменившиеся ячейки в DOM
-        const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
-        if (!panel) return;
-
-        const tbody = panel.querySelector(`#mb-registers-tbody-${CSS.escape(this.objectName)}`);
-        if (!tbody) return;
-
-        const rows = tbody.querySelectorAll('tr');
-        rows.forEach(row => {
-            const regId = parseInt(row.dataset.sensorId);
-            if (!regId) return;
-
-            const update = updateMap.get(regId);
-            if (!update) return;
-
-            // Value
-            const valueCell = row.querySelector('.col-value');
-            if (valueCell) {
-                const newValue = update.value !== undefined ? String(update.value) : '';
-                if (valueCell.textContent !== newValue) {
-                    valueCell.textContent = newValue;
-                    valueCell.classList.remove('value-changed');
-                    void valueCell.offsetWidth;
-                    valueCell.classList.add('value-changed');
-                }
-            }
-
-            // Device respond status
-            const deviceCell = row.querySelector('.col-device .mb-respond');
-            if (deviceCell && update.device !== undefined) {
-                const deviceAddr = update.device;
-                const deviceInfo = this.devicesDict[deviceAddr] || {};
-                deviceCell.className = `mb-respond ${deviceInfo.respond ? 'ok' : 'fail'}`;
-            }
-
-            // MB val (raw modbus value)
-            const mbvalCell = row.querySelector('.col-mbval');
-            if (mbvalCell && update.register) {
-                const newMbval = update.register.mbval !== undefined ? String(update.register.mbval) : '';
-                mbvalCell.textContent = newMbval;
-            }
-        });
+    updateRowCells(row, update) {
+        // Value
+        if (update.value !== undefined) {
+            this._animateCellValue(row, '.col-value', String(update.value), 'value-changed');
+        }
+        // Device respond status
+        const deviceCell = row.querySelector('.col-device .mb-respond');
+        if (deviceCell && update.device !== undefined) {
+            const deviceAddr = update.device;
+            const deviceInfo = this.devicesDict[deviceAddr] || {};
+            deviceCell.className = `mb-respond ${deviceInfo.respond ? 'ok' : 'fail'}`;
+        }
+        // MB val (raw modbus value)
+        const mbvalCell = row.querySelector('.col-mbval');
+        if (mbvalCell && update.register) {
+            const newMbval = update.register.mbval !== undefined ? String(update.register.mbval) : '';
+            mbvalCell.textContent = newMbval;
+        }
     }
 
     // update(data) наследуется из BaseObjectRenderer
@@ -6822,35 +6800,14 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     // Pin management: pinStorageKey и renderAfterPinChange заданы в конструкторе
     // Используются сокращённые методы из PinManagementMixin: getPinned(), togglePin(), unpinAll()
 
-    // Перерисовка после смены сортировки
-    renderAfterSort() {
-        this.renderRegisters();
-        this.updateSortHeaders();
-    }
-
-    // Обновление визуальных индикаторов сортировки
-    updateSortHeaders() {
-        const table = this.getEl(`mb-registers-table-${this.objectName}`);
-        if (!table) return;
-
-        table.querySelectorAll('th.th-sortable').forEach(th => {
-            const column = th.dataset.column;
-            th.classList.toggle('th-sorted', column === this.sortColumn);
-            const arrow = th.querySelector('.sort-arrow');
-            if (arrow) {
-                if (column === this.sortColumn) {
-                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
-                } else {
-                    arrow.textContent = '';
-                }
-            }
-        });
-    }
+    // Bridge для TableSortMixin.renderAfterSort()
+    sortRenderVisible() { this.renderRegisters(); }
 }
 
 // Apply mixins to ModbusMasterRenderer
 applyMixin(ModbusMasterRenderer, VirtualScrollMixin);
 applyMixin(ModbusMasterRenderer, SSESubscriptionMixin);
+applyMixin(ModbusMasterRenderer, BatchRenderMixin);
 applyMixin(ModbusMasterRenderer, ResizableSectionMixin);
 applyMixin(ModbusMasterRenderer, FilterMixin);
 applyMixin(ModbusMasterRenderer, ParamsAccessibilityMixin);
@@ -6905,8 +6862,8 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
 
         // SSE подписки (используется subscribedSensorIds из миксина)
         this.subscribedSensorIds = new Set();
-        this.pendingUpdates = [];
-        this.renderScheduled = false;
+        this.batchTbodyId = `mbs-registers-tbody-${objectName}`;
+        this.initBatchRenderProps();
 
         // Virtual scroll properties
         this.allRegisters = [];
@@ -6928,6 +6885,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
 
         // Инициализация сортировки
         this.initSortProps();
+        this.sortTableId = `mbs-registers-table-${objectName}`;
         this.sortColumnDefs = {
             id: { field: 'id', type: 'number' },
             name: { field: 'name', type: 'string' },
@@ -7438,110 +7396,38 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     }
 
     handleModbusRegisterUpdates(registers) {
-        if (!Array.isArray(registers) || registers.length === 0) return;
-
-        // Добавляем в очередь на обновление
-        this.pendingUpdates.push(...registers);
-
-        // Планируем батчевый рендеринг
-        if (!this.renderScheduled) {
-            this.renderScheduled = true;
-            requestAnimationFrame(() => this.batchRenderUpdates());
-        }
+        this.handleBatchUpdates(registers);
     }
 
-    batchRenderUpdates() {
-        this.renderScheduled = false;
+    // Bridge для BatchRenderMixin
+    getBatchItems() { return this.allRegisters; }
 
-        if (this.pendingUpdates.length === 0) return;
-
-        const updates = this.pendingUpdates;
-        this.pendingUpdates = [];
-
-        // Создаём map для быстрого поиска
-        const updateMap = new Map();
-        updates.forEach(reg => {
-            updateMap.set(reg.id, reg);
-        });
-
-        // Обновляем данные в allRegisters (все поля)
-        this.allRegisters.forEach((reg, index) => {
-            const update = updateMap.get(reg.id);
-            if (update) {
-                this.allRegisters[index] = { ...reg, ...update };
-            }
-        });
-
-        // Обновляем изменившиеся ячейки в DOM
-        const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
-        if (!panel) return;
-
-        const tbody = panel.querySelector(`#mbs-registers-tbody-${CSS.escape(this.objectName)}`);
-        if (!tbody) return;
-
-        const rows = tbody.querySelectorAll('tr');
-        rows.forEach(row => {
-            const regId = parseInt(row.dataset.sensorId);
-            if (!regId) return;
-
-            const update = updateMap.get(regId);
-            if (!update) return;
-
-            // Value
-            const valueCell = row.querySelector('.col-value');
-            if (valueCell) {
-                const newValue = update.value !== undefined ? String(update.value) : '';
-                if (valueCell.textContent !== newValue) {
-                    valueCell.textContent = newValue;
-                    valueCell.classList.remove('value-changed');
-                    void valueCell.offsetWidth;
-                    valueCell.classList.add('value-changed');
-                }
-            }
-
-            // Device respond status
-            const deviceCell = row.querySelector('.col-device .mb-respond');
-            if (deviceCell && update.device !== undefined) {
-                const deviceAddr = update.device;
-                const deviceInfo = this.devicesDict ? (this.devicesDict[deviceAddr] || {}) : {};
-                deviceCell.className = `mb-respond ${deviceInfo.respond ? 'ok' : 'fail'}`;
-            }
-        });
+    updateRowCells(row, update) {
+        // Value
+        if (update.value !== undefined) {
+            this._animateCellValue(row, '.col-value', String(update.value), 'value-changed');
+        }
+        // Device respond status
+        const deviceCell = row.querySelector('.col-device .mb-respond');
+        if (deviceCell && update.device !== undefined) {
+            const deviceAddr = update.device;
+            const deviceInfo = this.devicesDict ? (this.devicesDict[deviceAddr] || {}) : {};
+            deviceCell.className = `mb-respond ${deviceInfo.respond ? 'ok' : 'fail'}`;
+        }
     }
 
     // update(data) наследуется из BaseObjectRenderer
 
     // Pin management: pinStorageKey и renderAfterPinChange заданы в конструкторе
 
-    // Перерисовка после смены сортировки
-    renderAfterSort() {
-        this.renderRegisters();
-        this.updateSortHeaders();
-    }
-
-    // Обновление визуальных индикаторов сортировки
-    updateSortHeaders() {
-        const table = this.getEl(`mbs-registers-table-${this.objectName}`);
-        if (!table) return;
-
-        table.querySelectorAll('th.th-sortable').forEach(th => {
-            const column = th.dataset.column;
-            th.classList.toggle('th-sorted', column === this.sortColumn);
-            const arrow = th.querySelector('.sort-arrow');
-            if (arrow) {
-                if (column === this.sortColumn) {
-                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
-                } else {
-                    arrow.textContent = '';
-                }
-            }
-        });
-    }
+    // Bridge для TableSortMixin.renderAfterSort()
+    sortRenderVisible() { this.renderRegisters(); }
 }
 
 // Apply mixins to ModbusSlaveRenderer
 applyMixin(ModbusSlaveRenderer, VirtualScrollMixin);
 applyMixin(ModbusSlaveRenderer, SSESubscriptionMixin);
+applyMixin(ModbusSlaveRenderer, BatchRenderMixin);
 applyMixin(ModbusSlaveRenderer, ResizableSectionMixin);
 applyMixin(ModbusSlaveRenderer, FilterMixin);
 applyMixin(ModbusSlaveRenderer, ParamsAccessibilityMixin);
@@ -7584,8 +7470,8 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
         // SSE подписки
         this.subscribedSensorIds = new Set();
-        this.pendingUpdates = [];
-        this.renderScheduled = false;
+        this.batchTbodyId = `opcuasrv-sensors-${objectName}`;
+        this.initBatchRenderProps();
 
         // Virtual scroll properties
         this.allSensors = [];
@@ -7606,6 +7492,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
         // Инициализация сортировки
         this.initSortProps();
+        this.sortTableId = `opcuasrv-sensors-table-${objectName}`;
         this.sortColumnDefs = {
             id: { field: 'id', type: 'number' },
             name: { field: 'name', type: 'string' },
@@ -8142,88 +8029,28 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     handleOPCUASensorUpdates(sensors) {
-        if (!sensors || !Array.isArray(sensors)) return;
+        this.handleBatchUpdates(sensors);
+    }
 
-        // Queue updates for batch rendering
-        this.pendingUpdates.push(...sensors);
+    // Bridge для BatchRenderMixin
+    getBatchItems() { return this.allSensors; }
 
-        if (!this.renderScheduled) {
-            this.renderScheduled = true;
-            requestAnimationFrame(() => this.batchRenderUpdates());
+    updateRowCells(row, update) {
+        if (update.value !== undefined) {
+            this._animateCellValue(row, '.sensor-value', formatValue(update.value), 'value-updated');
         }
     }
 
-    batchRenderUpdates() {
-        this.renderScheduled = false;
-
-        if (this.pendingUpdates.length === 0) return;
-
-        const updateMap = new Map();
-        this.pendingUpdates.forEach(u => updateMap.set(u.id, u));
-        this.pendingUpdates = [];
-
-        // Update allSensors array (все поля)
-        this.allSensors.forEach((sensor, index) => {
-            const update = updateMap.get(sensor.id);
-            if (update) {
-                this.allSensors[index] = { ...sensor, ...update };
-            }
-        });
-
-        // Update visible rows in DOM
-        const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
-        if (!panel) return;
-
-        const tbody = panel.querySelector(`#opcuasrv-sensors-${CSS.escape(this.objectName)}`);
-        if (!tbody) return;
-
-        tbody.querySelectorAll('tr[data-sensor-id]').forEach(row => {
-            const sensorId = parseInt(row.dataset.sensorId, 10);
-            const update = updateMap.get(sensorId);
-            if (!update) return;
-
-            const valueCell = row.querySelector('.sensor-value');
-            if (valueCell && update.value !== undefined) {
-                valueCell.textContent = formatValue(update.value);
-                valueCell.classList.remove('value-updated');
-                void valueCell.offsetWidth;
-                valueCell.classList.add('value-updated');
-            }
-        });
-    }
-
-    // Pin management для датчиков
     // Pin management: pinStorageKey и renderAfterPinChange заданы в конструкторе
 
-    // Перерисовка после смены сортировки
-    renderAfterSort() {
-        this.renderVisibleSensors();
-        this.updateSortHeaders();
-    }
-
-    // Обновление визуальных индикаторов сортировки
-    updateSortHeaders() {
-        const table = this.getEl(`opcuasrv-sensors-table-${this.objectName}`);
-        if (!table) return;
-
-        table.querySelectorAll('th.th-sortable').forEach(th => {
-            const column = th.dataset.column;
-            th.classList.toggle('th-sorted', column === this.sortColumn);
-            const arrow = th.querySelector('.sort-arrow');
-            if (arrow) {
-                if (column === this.sortColumn) {
-                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
-                } else {
-                    arrow.textContent = '';
-                }
-            }
-        });
-    }
+    // Bridge для TableSortMixin.renderAfterSort()
+    sortRenderVisible() { this.renderVisibleSensors(); }
 }
 
 // Apply mixins to OPCUAServerRenderer
 applyMixin(OPCUAServerRenderer, VirtualScrollMixin);
 applyMixin(OPCUAServerRenderer, SSESubscriptionMixin);
+applyMixin(OPCUAServerRenderer, BatchRenderMixin);
 applyMixin(OPCUAServerRenderer, ResizableSectionMixin);
 applyMixin(OPCUAServerRenderer, FilterMixin);
 applyMixin(OPCUAServerRenderer, ParamsAccessibilityMixin);
@@ -8270,6 +8097,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
 
         // Инициализация сортировки
         this.initSortProps();
+        this.sortTableId = `uwsgate-sensors-table-${objectName}`;
         this.sortColumnDefs = {
             id: { field: 'id', type: 'number' },
             name: { field: 'name', type: 'string' },
@@ -9005,30 +8833,8 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         }
     }
 
-    // Перерисовка после смены сортировки
-    renderAfterSort() {
-        this.renderSensorsTable();
-        this.updateSortHeaders();
-    }
-
-    // Обновление визуальных индикаторов сортировки
-    updateSortHeaders() {
-        const table = getElementInTab(this.tabKey, `uwsgate-sensors-table-${this.objectName}`);
-        if (!table) return;
-
-        table.querySelectorAll('th.th-sortable').forEach(th => {
-            const column = th.dataset.column;
-            th.classList.toggle('th-sorted', column === this.sortColumn);
-            const arrow = th.querySelector('.sort-arrow');
-            if (arrow) {
-                if (column === this.sortColumn) {
-                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
-                } else {
-                    arrow.textContent = '';
-                }
-            }
-        });
-    }
+    // Bridge для TableSortMixin.renderAfterSort()
+    sortRenderVisible() { this.renderSensorsTable(); }
 }
 
 // Apply mixins

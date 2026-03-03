@@ -848,6 +848,129 @@ const TableSortMixin = {
             th._sortHandler = handler;
             th.addEventListener('click', handler);
         });
+    },
+
+    /**
+     * Обновление визуальных индикаторов сортировки
+     * Требует: this.sortTableId — полный ID таблицы (задаётся в конструкторе рендерера)
+     */
+    updateSortHeaders() {
+        const table = this.getEl(this.sortTableId);
+        if (!table) return;
+        table.querySelectorAll('th.th-sortable').forEach(th => {
+            const column = th.dataset.column;
+            th.classList.toggle('th-sorted', column === this.sortColumn);
+            const arrow = th.querySelector('.sort-arrow');
+            if (arrow) {
+                if (column === this.sortColumn) {
+                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
+                } else {
+                    arrow.textContent = '';
+                }
+            }
+        });
+    },
+
+    /**
+     * Перерисовка таблицы после смены сортировки
+     * Требует: sortRenderVisible() — мост к render-методу рендерера
+     */
+    renderAfterSort() {
+        this.sortRenderVisible();
+        this.updateSortHeaders();
+    }
+};
+
+/**
+ * Миксин для батчевого рендеринга SSE-обновлений
+ *
+ * Контракт рендерера:
+ *   - this.batchTbodyId  — ID элемента tbody (задаётся в конструкторе)
+ *   - getBatchItems()     — возвращает backing-массив (this.allSensors / this.allRegisters)
+ *   - updateRowCells(row, update) — обновление ячеек конкретной строки (renderer-specific)
+ */
+const BatchRenderMixin = {
+    initBatchRenderProps() {
+        this.pendingUpdates = [];
+        this.renderScheduled = false;
+    },
+
+    /**
+     * Общий SSE-обработчик: валидация, добавление в очередь, планирование RAF
+     * @param {Array} items - Массив обновлений из SSE
+     */
+    handleBatchUpdates(items) {
+        if (!Array.isArray(items) || items.length === 0) return;
+        this.pendingUpdates.push(...items);
+        if (!this.renderScheduled) {
+            this.renderScheduled = true;
+            requestAnimationFrame(() => this.batchRenderUpdates());
+        }
+    },
+
+    /**
+     * Общий batchRenderUpdates: drain → tbody → iterate rows → updateRowCells
+     * Рендерер может переопределить если нужна нестандартная логика.
+     */
+    batchRenderUpdates() {
+        const updateMap = this._drainPendingUpdates(this.getBatchItems());
+        if (!updateMap) return;
+
+        const tbody = this.getEl(this.batchTbodyId);
+        if (!tbody) return;
+
+        tbody.querySelectorAll('tr[data-sensor-id]').forEach(row => {
+            const id = parseInt(row.dataset.sensorId);
+            if (!id) return;
+
+            const update = updateMap.get(id);
+            if (!update) return;
+
+            this.updateRowCells(row, update);
+        });
+    },
+
+    /**
+     * Утилита: обновить текст ячейки с CSS-анимацией при изменении
+     * @param {HTMLElement} row - Строка таблицы
+     * @param {string} selector - CSS-селектор ячейки
+     * @param {string} newValue - Новое значение
+     * @param {string} animationClass - CSS-класс для анимации
+     */
+    _animateCellValue(row, selector, newValue, animationClass) {
+        const cell = row.querySelector(selector);
+        if (!cell) return;
+        if (cell.textContent !== newValue) {
+            cell.textContent = newValue;
+            cell.classList.remove(animationClass);
+            void cell.offsetWidth;
+            cell.classList.add(animationClass);
+        }
+    },
+
+    /**
+     * Слить очередь → обновить backing-массив → вернуть updateMap
+     * @param {Array} items - Backing-массив (this.allSensors / this.allRegisters)
+     * @returns {Map|null} updateMap или null если очередь пуста
+     */
+    _drainPendingUpdates(items) {
+        this.renderScheduled = false;
+        if (this.pendingUpdates.length === 0) return null;
+
+        const updates = this.pendingUpdates;
+        this.pendingUpdates = [];
+
+        const updateMap = new Map();
+        updates.forEach(item => updateMap.set(item.id, item));
+
+        items.forEach((item, index) => {
+            const update = updateMap.get(item.id);
+            if (update) {
+                items[index] = { ...item, ...update };
+            }
+        });
+
+        return updateMap;
     }
 };
 
