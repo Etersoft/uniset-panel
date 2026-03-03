@@ -623,46 +623,13 @@ function setupChartsResize(tabKey) {
 
     const displayName = tabState.displayName || tabKey;
 
-    const resizeHandle = getElementInTab(tabKey, `charts-resize-${displayName}`);
-    const chartsContainer = getElementInTab(tabKey, `charts-container-${displayName}`);
+    setupResizeHandle(
+        getElementInTab(tabKey, `charts-resize-${displayName}`),
+        getElementInTab(tabKey, `charts-container-${displayName}`),
+        CHARTS_CONTAINER_MIN_HEIGHT,
+        (height) => saveChartsHeight(tabKey, height)
+    );
 
-    if (!resizeHandle || !chartsContainer) return;
-
-    let startY = 0;
-    let startHeight = 0;
-    let isResizing = false;
-
-    const onMouseMove = (e) => {
-        if (!isResizing) return;
-        const delta = e.clientY - startY;
-        const newHeight = Math.max(CHARTS_CONTAINER_MIN_HEIGHT, startHeight + delta);
-        chartsContainer.style.height = `${newHeight}px`;
-        chartsContainer.style.maxHeight = `${newHeight}px`;
-    };
-
-    const onMouseUp = () => {
-        if (!isResizing) return;
-        isResizing = false;
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        // Сохраняем высоту
-        saveChartsHeight(tabKey, chartsContainer.offsetHeight);
-    };
-
-    resizeHandle.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        isResizing = true;
-        startY = e.clientY;
-        startHeight = chartsContainer.offsetHeight || CHARTS_CONTAINER_DEFAULT_HEIGHT;
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = 'ns-resize';
-        document.body.style.userSelect = 'none';
-    });
-
-    // Загружаем сохранённую высоту
     loadChartsHeight(tabKey);
 }
 
@@ -698,46 +665,13 @@ function loadChartsHeight(tabKey) {
 
 // Настройка resize для IONC секции датчиков
 function setupIONCSensorsResize(tabKey, objectName) {
-    const resizeHandle = getElementInTab(tabKey, `ionc-resize-${objectName}`);
-    const sensorsContainer = getElementInTab(tabKey, `ionc-sensors-container-${objectName}`);
+    setupResizeHandle(
+        getElementInTab(tabKey, `ionc-resize-${objectName}`),
+        getElementInTab(tabKey, `ionc-sensors-container-${objectName}`),
+        SENSORS_CONTAINER_MIN_HEIGHT,
+        (height) => saveIONCSensorsHeight(tabKey, height)
+    );
 
-    if (!resizeHandle || !sensorsContainer) return;
-
-    let startY = 0;
-    let startHeight = 0;
-    let isResizing = false;
-
-    const onMouseMove = (e) => {
-        if (!isResizing) return;
-        const delta = e.clientY - startY;
-        const newHeight = Math.max(SENSORS_CONTAINER_MIN_HEIGHT, startHeight + delta);
-        sensorsContainer.style.height = `${newHeight}px`;
-        sensorsContainer.style.maxHeight = `${newHeight}px`;
-    };
-
-    const onMouseUp = () => {
-        if (!isResizing) return;
-        isResizing = false;
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        // Сохраняем высоту
-        saveIONCSensorsHeight(tabKey, sensorsContainer.offsetHeight);
-    };
-
-    resizeHandle.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        isResizing = true;
-        startY = e.clientY;
-        startHeight = sensorsContainer.offsetHeight || 400;
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = 'ns-resize';
-        document.body.style.userSelect = 'none';
-    });
-
-    // Загружаем сохранённую высоту
     loadIONCSensorsHeight(tabKey, objectName);
 }
 

@@ -559,45 +559,6 @@ const ItemCounterMixin = {
     }
 };
 
-/**
- * Миксин для сохранения/загрузки высоты секций в localStorage
- */
-const SectionHeightMixin = {
-    /**
-     * Загружает сохранённую высоту секции
-     * @param {string} storageKey - Ключ в localStorage
-     * @param {number} defaultHeight - Value по умолчанию
-     * @returns {number}
-     */
-    loadSectionHeight(storageKey, defaultHeight = DEFAULT_SECTION_HEIGHT) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            const value = saved[this.tabKey] ?? saved[this.objectName];
-            if (typeof value === 'number' && value > 0) {
-                return value;
-            }
-        } catch (err) {
-            console.warn('Failed to load section height:', err);
-        }
-        return defaultHeight;
-    },
-
-    /**
-     * Сохраняет высоту секции
-     * @param {string} storageKey - Ключ в localStorage
-     * @param {number} value - Value высоты
-     */
-    saveSectionHeight(storageKey, value) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            saved[this.tabKey] = value;
-            localStorage.setItem(storageKey, JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save section height:', err);
-        }
-    }
-};
-
 const PinManagementMixin = {
     /**
      * Получает закрепленные элементы (датчики/регистры)
@@ -971,6 +932,105 @@ const BatchRenderMixin = {
         });
 
         return updateMap;
+    }
+};
+
+const ModbusRegistersMixin = {
+    async loadRegisterChunk(offset) {
+        if (this.isLoadingChunk || !this.hasMore) return;
+        this.isLoadingChunk = true;
+
+        const prefix = this.paramsPrefix;
+        const loadingEl = this.getEl(`${prefix}-loading-more-${this.objectName}`);
+        if (loadingEl) loadingEl.style.display = 'block';
+
+        try {
+            let url = `/api/objects/${encodeURIComponent(this.objectName)}/modbus/registers?offset=${offset}&limit=${this.chunkSize}`;
+            if (this.typeFilter && this.typeFilter !== 'all') {
+                url += `&iotype=${encodeURIComponent(this.typeFilter)}`;
+            }
+
+            const data = await this.fetchJSON(url);
+            const registers = data.registers || [];
+            this.registersTotal = data.total || 0;
+
+            // Merge devices dictionary
+            if (data.devices) {
+                Object.assign(this.devicesDict, data.devices);
+            }
+
+            if (offset === 0) {
+                this.allRegisters = registers;
+                this.registerMap.clear();
+                registers.forEach(r => this.registerMap.set(r.id, r));
+
+                // Если нет фильтра и есть закреплённые регистры - загрузить их отдельно
+                if (!this.filter) {
+                    await this.loadPinnedRegisters();
+                }
+            } else {
+                this.allRegisters = this.allRegisters.concat(registers);
+                registers.forEach(r => this.registerMap.set(r.id, r));
+            }
+
+            this.hasMore = this.allRegisters.length < this.registersTotal;
+            this.renderRegisters();
+            this.setNote(`${prefix}-registers-note-${this.objectName}`, '');
+
+            this.updateItemCount(`${prefix}-register-count-${this.objectName}`, this.allRegisters.length, this.registersTotal);
+
+            // Подписываемся на SSE обновления после загрузки
+            this.subscribeToSSE();
+
+            // Обработчики сортировки (только при первой загрузке)
+            if (offset === 0) {
+                const table = this.getEl(`${prefix}-registers-table-${this.objectName}`);
+                if (table) {
+                    this.attachSortHandlers(table);
+                    this.updateSortHeaders();
+                }
+            }
+        } catch (err) {
+            this.setNote(`${prefix}-registers-note-${this.objectName}`, err.message, true);
+        } finally {
+            this.isLoadingChunk = false;
+            if (loadingEl) loadingEl.style.display = 'none';
+        }
+    },
+
+    // Загружает закреплённые регистры, если они не в текущем списке
+    async loadPinnedRegisters() {
+        const pinnedIds = this.getPinned();
+        if (pinnedIds.size === 0) return;
+
+        // Найти ID, которых нет в загруженных регистрах
+        const missingIds = [];
+        for (const idStr of pinnedIds) {
+            const id = parseInt(idStr);
+            if (!this.registerMap.has(id)) {
+                missingIds.push(id);
+            }
+        }
+
+        if (missingIds.length === 0) return;
+
+        // Загрузить отсутствующие регистры по ID
+        try {
+            const idsParam = missingIds.join(',');
+            const url = `/api/objects/${encodeURIComponent(this.objectName)}/modbus/get?filter=${idsParam}`;
+            const response = await this.fetchJSON(url);
+            const pinnedRegisters = response.registers || [];
+
+            // Добавить закреплённые регистры в начало списка
+            for (const reg of pinnedRegisters) {
+                if (!this.registerMap.has(reg.id)) {
+                    this.allRegisters.unshift(reg);
+                    this.registerMap.set(reg.id, reg);
+                }
+            }
+        } catch (err) {
+            console.warn('Failed to load pinned registers:', err);
+        }
     }
 };
 

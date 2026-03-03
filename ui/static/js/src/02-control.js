@@ -80,17 +80,14 @@ function updateControlUI() {
 // Обновление всех кнопок управления (disabled состояние)
 function updateAllControlButtons() {
     const canCtrl = canControl();
+    const readonlyTitle = canCtrl ? '' : 'Read-only mode - take control first';
 
     // IONC кнопки
     document.querySelectorAll('.ionc-btn-set, .ionc-btn-freeze, .ionc-btn-unfreeze, .ionc-btn-gen, .ionc-btn-gen-stop').forEach(btn => {
         // Не трогаем readonly сенсоры - они всегда disabled
         if (btn.closest('tr')?.classList.contains('ionc-sensor-readonly')) return;
         btn.disabled = !canCtrl;
-        if (!canCtrl) {
-            btn.title = 'Read-only mode - take control first';
-        } else {
-            btn.title = '';
-        }
+        btn.title = readonlyTitle;
     });
 
     // Modbus/OPCUA control кнопки
@@ -98,26 +95,11 @@ function updateAllControlButtons() {
         btn.disabled = !canCtrl;
     });
 
-    // Кнопки сохранения параметров (Modbus, OPCUA)
-    document.querySelectorAll('[id^="mb-params-save-"], [id^="mbs-params-save-"], [id^="opcua-params-save-"], [id^="opcuasrv-params-save-"]').forEach(btn => {
+    // Кнопки сохранения параметров и команд логера
+    document.querySelectorAll('[id^="mb-params-save-"], [id^="mbs-params-save-"], [id^="opcua-params-save-"], [id^="opcuasrv-params-save-"], .log-command-btn').forEach(btn => {
         btn.disabled = !canCtrl;
-        if (!canCtrl) {
-            btn.title = 'Read-only mode - take control first';
-        } else {
-            btn.title = '';
-        }
+        btn.title = readonlyTitle;
     });
-
-    // Кнопки команд логера
-    document.querySelectorAll('.log-command-btn').forEach(btn => {
-        btn.disabled = !canCtrl;
-        if (!canCtrl) {
-            btn.title = 'Read-only mode - take control first';
-        } else {
-            btn.title = '';
-        }
-    });
-
 }
 
 // Показать диалог ввода токена

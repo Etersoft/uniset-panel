@@ -258,43 +258,12 @@ function loadIOCollapseState(tabKey, type) {
 }
 
 function setupIOResize(tabKey, objectName, type) {
-    const resizeHandle = getElementInTab(tabKey, `io-resize-${type}-${objectName}`);
-    const container = getElementInTab(tabKey, `io-container-${type}-${objectName}`);
-
-    if (!resizeHandle || !container) return;
-
-    let startY = 0;
-    let startHeight = 0;
-    let isResizing = false;
-
-    const onMouseMove = (e) => {
-        if (!isResizing) return;
-        const delta = e.clientY - startY;
-        const newHeight = Math.max(100, startHeight + delta);
-        container.style.height = `${newHeight}px`;
-        container.style.maxHeight = `${newHeight}px`;
-    };
-
-    const onMouseUp = () => {
-        if (!isResizing) return;
-        isResizing = false;
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        saveIOHeight(tabKey, type, container.offsetHeight);
-    };
-
-    resizeHandle.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        isResizing = true;
-        startY = e.clientY;
-        startHeight = container.offsetHeight || 200;
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = 'ns-resize';
-        document.body.style.userSelect = 'none';
-    });
+    setupResizeHandle(
+        getElementInTab(tabKey, `io-resize-${type}-${objectName}`),
+        getElementInTab(tabKey, `io-container-${type}-${objectName}`),
+        MIN_SECTION_HEIGHT,
+        (height) => saveIOHeight(tabKey, type, height)
+    );
 
     loadIOHeight(tabKey, objectName, type);
 }
@@ -363,6 +332,15 @@ function setupIOGlobalFilter(tabKey, objectName) {
     });
 }
 
+// Перерисовка IO секции по типу (inputs/outputs/timers)
+function reRenderIOType(tabKey, type) {
+    const tabState = state.tabs.get(tabKey);
+    if (!tabState) return;
+    if (type === 'inputs' && tabState.ioData?.in) renderIO(tabKey, 'inputs', tabState.ioData.in);
+    else if (type === 'outputs' && tabState.ioData?.out) renderIO(tabKey, 'outputs', tabState.ioData.out);
+    else if (type === 'timers' && tabState.timersData) renderTimers(tabKey, tabState.timersData);
+}
+
 // tabKey - ключ вкладки, objectName - displayName для DOM селекторов
 function setupIOUnpinAll(tabKey, objectName, type) {
     const unpinBtn = getElementInTab(tabKey, `io-unpin-${type}-${objectName}`);
@@ -371,17 +349,7 @@ function setupIOUnpinAll(tabKey, objectName, type) {
     unpinBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         clearIOPinnedRows(tabKey, type);
-        // Перерисовываем
-        const tabState = state.tabs.get(tabKey);
-        if (tabState) {
-            if (type === 'inputs' && tabState.ioData?.in) {
-                renderIO(tabKey, 'inputs', tabState.ioData.in);
-            } else if (type === 'outputs' && tabState.ioData?.out) {
-                renderIO(tabKey, 'outputs', tabState.ioData.out);
-            } else if (type === 'timers' && tabState.timersData) {
-                renderTimers(tabKey, tabState.timersData);
-            }
-        }
+        reRenderIOType(tabKey, type);
     });
 }
 
@@ -418,18 +386,7 @@ function toggleIOPin(tabKey, type, rowKey) {
     }
 
     saveIOPinnedRows(tabKey, type, pinned);
-
-    // Перерисовываем
-    const tabState = state.tabs.get(tabKey);
-    if (tabState) {
-        if (type === 'inputs' && tabState.ioData?.in) {
-            renderIO(tabKey, 'inputs', tabState.ioData.in);
-        } else if (type === 'outputs' && tabState.ioData?.out) {
-            renderIO(tabKey, 'outputs', tabState.ioData.out);
-        } else if (type === 'timers' && tabState.timersData) {
-            renderTimers(tabKey, tabState.timersData);
-        }
-    }
+    reRenderIOType(tabKey, type);
 }
 
 function clearIOPinnedRows(tabKey, type) {

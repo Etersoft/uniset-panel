@@ -604,7 +604,6 @@ applyMixin(OPCUAServerRenderer, FilterMixin);
 applyMixin(OPCUAServerRenderer, ParamsAccessibilityMixin);
 applyMixin(OPCUAServerRenderer, ParamsManagerMixin);
 applyMixin(OPCUAServerRenderer, ItemCounterMixin);
-applyMixin(OPCUAServerRenderer, SectionHeightMixin);
 applyMixin(OPCUAServerRenderer, PinManagementMixin);
 applyMixin(OPCUAServerRenderer, TableSortMixin);
 

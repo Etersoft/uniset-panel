@@ -10,6 +10,38 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Универсальный resize-handle: mousedown → mousemove → mouseup паттерн
+function setupResizeHandle(handle, container, minHeight, onSave) {
+    if (!handle || !container) return;
+    let startY = 0, startHeight = 0, isResizing = false;
+
+    const onMouseMove = (e) => {
+        if (!isResizing) return;
+        const newHeight = Math.max(minHeight, startHeight + e.clientY - startY);
+        container.style.height = `${newHeight}px`;
+        container.style.maxHeight = `${newHeight}px`;
+    };
+    const onMouseUp = () => {
+        if (!isResizing) return;
+        isResizing = false;
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        onSave(container.offsetHeight);
+    };
+    handle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        isResizing = true;
+        startY = e.clientY;
+        startHeight = container.offsetHeight;
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = 'ns-resize';
+        document.body.style.userSelect = 'none';
+    });
+}
+
 // Универсальный debounce — возвращает обёртку, откладывающую вызов fn на delay мс
 function debounce(fn, delay) {
     let timer = null;

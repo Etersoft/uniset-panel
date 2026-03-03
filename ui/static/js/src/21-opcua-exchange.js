@@ -1070,7 +1070,6 @@ applyMixin(OPCUAExchangeRenderer, FilterMixin);
 applyMixin(OPCUAExchangeRenderer, ParamsAccessibilityMixin);
 applyMixin(OPCUAExchangeRenderer, ParamsManagerMixin);
 applyMixin(OPCUAExchangeRenderer, ItemCounterMixin);
-applyMixin(OPCUAExchangeRenderer, SectionHeightMixin);
 applyMixin(OPCUAExchangeRenderer, PinManagementMixin);
 applyMixin(OPCUAExchangeRenderer, TableSortMixin);
 

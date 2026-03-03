@@ -1787,6 +1787,5 @@ applyMixin(IONotifyControllerRenderer, SSESubscriptionMixin);
 applyMixin(IONotifyControllerRenderer, ResizableSectionMixin);
 applyMixin(IONotifyControllerRenderer, FilterMixin);
 applyMixin(IONotifyControllerRenderer, ItemCounterMixin);
-applyMixin(IONotifyControllerRenderer, SectionHeightMixin);
 applyMixin(IONotifyControllerRenderer, TableSortMixin);
 

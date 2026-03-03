@@ -233,34 +233,12 @@ function updateServerStatus(serverId, connected) {
     }
 
     // Обновляем бейджи серверов в табах
-    const tabBadges = document.querySelectorAll(`.tab-server-badge[data-server-id="${serverId}"]`);
-    tabBadges.forEach(badge => {
-        if (connected) {
-            badge.classList.remove('disconnected');
-        } else {
-            badge.classList.add('disconnected');
-        }
-    });
+    document.querySelectorAll(`.tab-server-badge[data-server-id="${serverId}"]`)
+        .forEach(el => el.classList.toggle('disconnected', !connected));
 
-    // Обновляем состояние кнопок табов (заголовки)
-    const tabButtons = document.querySelectorAll(`.tab-btn[data-server-id="${serverId}"]`);
-    tabButtons.forEach(btn => {
-        if (connected) {
-            btn.classList.remove('server-disconnected');
-        } else {
-            btn.classList.add('server-disconnected');
-        }
-    });
-
-    // Обновляем состояние панелей табов (контент)
-    const tabPanels = document.querySelectorAll(`.tab-panel[data-server-id="${serverId}"]`);
-    tabPanels.forEach(panel => {
-        if (connected) {
-            panel.classList.remove('server-disconnected');
-        } else {
-            panel.classList.add('server-disconnected');
-        }
-    });
+    // Обновляем состояние кнопок и панелей табов
+    document.querySelectorAll(`.tab-btn[data-server-id="${serverId}"], .tab-panel[data-server-id="${serverId}"]`)
+        .forEach(el => el.classList.toggle('server-disconnected', !connected));
 
     // Обновляем статус в sidebar группах
     if (typeof updateGroupEntityStatus === 'function') {
@@ -352,17 +330,14 @@ function updateControlUI() {
 // Обновление всех кнопок управления (disabled состояние)
 function updateAllControlButtons() {
     const canCtrl = canControl();
+    const readonlyTitle = canCtrl ? '' : 'Read-only mode - take control first';
 
     // IONC кнопки
     document.querySelectorAll('.ionc-btn-set, .ionc-btn-freeze, .ionc-btn-unfreeze, .ionc-btn-gen, .ionc-btn-gen-stop').forEach(btn => {
         // Не трогаем readonly сенсоры - они всегда disabled
         if (btn.closest('tr')?.classList.contains('ionc-sensor-readonly')) return;
         btn.disabled = !canCtrl;
-        if (!canCtrl) {
-            btn.title = 'Read-only mode - take control first';
-        } else {
-            btn.title = '';
-        }
+        btn.title = readonlyTitle;
     });
 
     // Modbus/OPCUA control кнопки
@@ -370,26 +345,11 @@ function updateAllControlButtons() {
         btn.disabled = !canCtrl;
     });
 
-    // Кнопки сохранения параметров (Modbus, OPCUA)
-    document.querySelectorAll('[id^="mb-params-save-"], [id^="mbs-params-save-"], [id^="opcua-params-save-"], [id^="opcuasrv-params-save-"]').forEach(btn => {
+    // Кнопки сохранения параметров и команд логера
+    document.querySelectorAll('[id^="mb-params-save-"], [id^="mbs-params-save-"], [id^="opcua-params-save-"], [id^="opcuasrv-params-save-"], .log-command-btn').forEach(btn => {
         btn.disabled = !canCtrl;
-        if (!canCtrl) {
-            btn.title = 'Read-only mode - take control first';
-        } else {
-            btn.title = '';
-        }
+        btn.title = readonlyTitle;
     });
-
-    // Кнопки команд логера
-    document.querySelectorAll('.log-command-btn').forEach(btn => {
-        btn.disabled = !canCtrl;
-        if (!canCtrl) {
-            btn.title = 'Read-only mode - take control first';
-        } else {
-            btn.title = '';
-        }
-    });
-
 }
 
 // Показать диалог ввода токена
@@ -712,23 +672,15 @@ function updateRecordingUI() {
     statusEl.classList.remove('hidden');
 
     // Update recording state
-    if (recordingState.isRecording) {
-        statusEl.classList.add('recording');
-        toggleBtn.textContent = 'Stop';
-        toggleBtn.title = 'Stop recording';
-        badge.classList.remove('hidden');
+    const isRec = recordingState.isRecording;
+    const hasData = isRec || recordingState.recordCount > 0;
+
+    statusEl.classList.toggle('recording', isRec);
+    toggleBtn.textContent = isRec ? 'Stop' : 'Record';
+    toggleBtn.title = isRec ? 'Stop recording' : 'Start recording';
+    badge.classList.toggle('hidden', !hasData);
+    if (hasData) {
         badge.textContent = `${formatNumber(recordingState.recordCount)} / ${formatBytes(recordingState.sizeBytes)}`;
-    } else {
-        statusEl.classList.remove('recording');
-        toggleBtn.textContent = 'Record';
-        toggleBtn.title = 'Start recording';
-        // Show badge if there's data
-        if (recordingState.recordCount > 0) {
-            badge.classList.remove('hidden');
-            badge.textContent = `${formatNumber(recordingState.recordCount)} / ${formatBytes(recordingState.sizeBytes)}`;
-        } else {
-            badge.classList.add('hidden');
-        }
     }
 }
 
@@ -1404,6 +1356,38 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Универсальный resize-handle: mousedown → mousemove → mouseup паттерн
+function setupResizeHandle(handle, container, minHeight, onSave) {
+    if (!handle || !container) return;
+    let startY = 0, startHeight = 0, isResizing = false;
+
+    const onMouseMove = (e) => {
+        if (!isResizing) return;
+        const newHeight = Math.max(minHeight, startHeight + e.clientY - startY);
+        container.style.height = `${newHeight}px`;
+        container.style.maxHeight = `${newHeight}px`;
+    };
+    const onMouseUp = () => {
+        if (!isResizing) return;
+        isResizing = false;
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        onSave(container.offsetHeight);
+    };
+    handle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        isResizing = true;
+        startY = e.clientY;
+        startHeight = container.offsetHeight;
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = 'ns-resize';
+        document.body.style.userSelect = 'none';
+    });
+}
+
 // Универсальный debounce — возвращает обёртку, откладывающую вызов fn на delay мс
 function debounce(fn, delay) {
     let timer = null;
@@ -1976,45 +1960,6 @@ const ItemCounterMixin = {
     }
 };
 
-/**
- * Миксин для сохранения/загрузки высоты секций в localStorage
- */
-const SectionHeightMixin = {
-    /**
-     * Загружает сохранённую высоту секции
-     * @param {string} storageKey - Ключ в localStorage
-     * @param {number} defaultHeight - Value по умолчанию
-     * @returns {number}
-     */
-    loadSectionHeight(storageKey, defaultHeight = DEFAULT_SECTION_HEIGHT) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            const value = saved[this.tabKey] ?? saved[this.objectName];
-            if (typeof value === 'number' && value > 0) {
-                return value;
-            }
-        } catch (err) {
-            console.warn('Failed to load section height:', err);
-        }
-        return defaultHeight;
-    },
-
-    /**
-     * Сохраняет высоту секции
-     * @param {string} storageKey - Ключ в localStorage
-     * @param {number} value - Value высоты
-     */
-    saveSectionHeight(storageKey, value) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            saved[this.tabKey] = value;
-            localStorage.setItem(storageKey, JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save section height:', err);
-        }
-    }
-};
-
 const PinManagementMixin = {
     /**
      * Получает закрепленные элементы (датчики/регистры)
@@ -2388,6 +2333,105 @@ const BatchRenderMixin = {
         });
 
         return updateMap;
+    }
+};
+
+const ModbusRegistersMixin = {
+    async loadRegisterChunk(offset) {
+        if (this.isLoadingChunk || !this.hasMore) return;
+        this.isLoadingChunk = true;
+
+        const prefix = this.paramsPrefix;
+        const loadingEl = this.getEl(`${prefix}-loading-more-${this.objectName}`);
+        if (loadingEl) loadingEl.style.display = 'block';
+
+        try {
+            let url = `/api/objects/${encodeURIComponent(this.objectName)}/modbus/registers?offset=${offset}&limit=${this.chunkSize}`;
+            if (this.typeFilter && this.typeFilter !== 'all') {
+                url += `&iotype=${encodeURIComponent(this.typeFilter)}`;
+            }
+
+            const data = await this.fetchJSON(url);
+            const registers = data.registers || [];
+            this.registersTotal = data.total || 0;
+
+            // Merge devices dictionary
+            if (data.devices) {
+                Object.assign(this.devicesDict, data.devices);
+            }
+
+            if (offset === 0) {
+                this.allRegisters = registers;
+                this.registerMap.clear();
+                registers.forEach(r => this.registerMap.set(r.id, r));
+
+                // Если нет фильтра и есть закреплённые регистры - загрузить их отдельно
+                if (!this.filter) {
+                    await this.loadPinnedRegisters();
+                }
+            } else {
+                this.allRegisters = this.allRegisters.concat(registers);
+                registers.forEach(r => this.registerMap.set(r.id, r));
+            }
+
+            this.hasMore = this.allRegisters.length < this.registersTotal;
+            this.renderRegisters();
+            this.setNote(`${prefix}-registers-note-${this.objectName}`, '');
+
+            this.updateItemCount(`${prefix}-register-count-${this.objectName}`, this.allRegisters.length, this.registersTotal);
+
+            // Подписываемся на SSE обновления после загрузки
+            this.subscribeToSSE();
+
+            // Обработчики сортировки (только при первой загрузке)
+            if (offset === 0) {
+                const table = this.getEl(`${prefix}-registers-table-${this.objectName}`);
+                if (table) {
+                    this.attachSortHandlers(table);
+                    this.updateSortHeaders();
+                }
+            }
+        } catch (err) {
+            this.setNote(`${prefix}-registers-note-${this.objectName}`, err.message, true);
+        } finally {
+            this.isLoadingChunk = false;
+            if (loadingEl) loadingEl.style.display = 'none';
+        }
+    },
+
+    // Загружает закреплённые регистры, если они не в текущем списке
+    async loadPinnedRegisters() {
+        const pinnedIds = this.getPinned();
+        if (pinnedIds.size === 0) return;
+
+        // Найти ID, которых нет в загруженных регистрах
+        const missingIds = [];
+        for (const idStr of pinnedIds) {
+            const id = parseInt(idStr);
+            if (!this.registerMap.has(id)) {
+                missingIds.push(id);
+            }
+        }
+
+        if (missingIds.length === 0) return;
+
+        // Загрузить отсутствующие регистры по ID
+        try {
+            const idsParam = missingIds.join(',');
+            const url = `/api/objects/${encodeURIComponent(this.objectName)}/modbus/get?filter=${idsParam}`;
+            const response = await this.fetchJSON(url);
+            const pinnedRegisters = response.registers || [];
+
+            // Добавить закреплённые регистры в начало списка
+            for (const reg of pinnedRegisters) {
+                if (!this.registerMap.has(reg.id)) {
+                    this.allRegisters.unshift(reg);
+                    this.registerMap.set(reg.id, reg);
+                }
+            }
+        } catch (err) {
+            console.warn('Failed to load pinned registers:', err);
+        }
     }
 };
 
@@ -4945,7 +4989,6 @@ applyMixin(IONotifyControllerRenderer, SSESubscriptionMixin);
 applyMixin(IONotifyControllerRenderer, ResizableSectionMixin);
 applyMixin(IONotifyControllerRenderer, FilterMixin);
 applyMixin(IONotifyControllerRenderer, ItemCounterMixin);
-applyMixin(IONotifyControllerRenderer, SectionHeightMixin);
 applyMixin(IONotifyControllerRenderer, TableSortMixin);
 
 
@@ -6023,7 +6066,6 @@ applyMixin(OPCUAExchangeRenderer, FilterMixin);
 applyMixin(OPCUAExchangeRenderer, ParamsAccessibilityMixin);
 applyMixin(OPCUAExchangeRenderer, ParamsManagerMixin);
 applyMixin(OPCUAExchangeRenderer, ItemCounterMixin);
-applyMixin(OPCUAExchangeRenderer, SectionHeightMixin);
 applyMixin(OPCUAExchangeRenderer, PinManagementMixin);
 applyMixin(OPCUAExchangeRenderer, TableSortMixin);
 
@@ -6555,102 +6597,6 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         await this.loadRegisterChunk(0);
     }
 
-    async loadRegisterChunk(offset) {
-        if (this.isLoadingChunk || !this.hasMore) return;
-        this.isLoadingChunk = true;
-
-        const loadingEl = this.getEl(`mb-loading-more-${this.objectName}`);
-        if (loadingEl) loadingEl.style.display = 'block';
-
-        try {
-            let url = `/api/objects/${encodeURIComponent(this.objectName)}/modbus/registers?offset=${offset}&limit=${this.chunkSize}`;
-            if (this.typeFilter && this.typeFilter !== 'all') {
-                url += `&iotype=${encodeURIComponent(this.typeFilter)}`;
-            }
-
-            const data = await this.fetchJSON(url);
-            const registers = data.registers || [];
-            this.registersTotal = data.total || 0;
-
-            // Merge devices dictionary
-            if (data.devices) {
-                Object.assign(this.devicesDict, data.devices);
-            }
-
-            if (offset === 0) {
-                this.allRegisters = registers;
-                this.registerMap.clear();
-                registers.forEach(r => this.registerMap.set(r.id, r));
-
-                // Если нет фильтра и есть закреплённые регистры - загрузить их отдельно
-                if (!this.filter) {
-                    await this.loadPinnedRegisters();
-                }
-            } else {
-                this.allRegisters = this.allRegisters.concat(registers);
-                registers.forEach(r => this.registerMap.set(r.id, r));
-            }
-
-            this.hasMore = this.allRegisters.length < this.registersTotal;
-            this.renderRegisters();
-            this.setNote(`mb-registers-note-${this.objectName}`, '');
-
-            this.updateItemCount(`mb-register-count-${this.objectName}`, this.allRegisters.length, this.registersTotal);
-
-            // Подписываемся на SSE обновления после загрузки
-            this.subscribeToSSE();
-
-            // Обработчики сортировки (только при первой загрузке)
-            if (offset === 0) {
-                const table = this.getEl(`mb-registers-table-${this.objectName}`);
-                if (table) {
-                    this.attachSortHandlers(table);
-                    this.updateSortHeaders();
-                }
-            }
-        } catch (err) {
-            this.setNote(`mb-registers-note-${this.objectName}`, err.message, true);
-        } finally {
-            this.isLoadingChunk = false;
-            if (loadingEl) loadingEl.style.display = 'none';
-        }
-    }
-
-    // Загружает закреплённые регистры, если они не в текущем списке
-    async loadPinnedRegisters() {
-        const pinnedIds = this.getPinned();
-        if (pinnedIds.size === 0) return;
-
-        // Найти ID, которых нет в загруженных регистрах
-        const missingIds = [];
-        for (const idStr of pinnedIds) {
-            const id = parseInt(idStr);
-            if (!this.registerMap.has(id)) {
-                missingIds.push(id);
-            }
-        }
-
-        if (missingIds.length === 0) return;
-
-        // Загрузить отсутствующие регистры по ID
-        try {
-            const idsParam = missingIds.join(',');
-            const url = `/api/objects/${encodeURIComponent(this.objectName)}/modbus/get?filter=${idsParam}`;
-            const response = await this.fetchJSON(url);
-            const pinnedRegisters = response.registers || [];
-
-            // Добавить закреплённые регистры в начало списка
-            for (const reg of pinnedRegisters) {
-                if (!this.registerMap.has(reg.id)) {
-                    this.allRegisters.unshift(reg);
-                    this.registerMap.set(reg.id, reg);
-                }
-            }
-        } catch (err) {
-            console.warn('Failed to load pinned registers:', err);
-        }
-    }
-
     renderRegisters() {
         const tbody = this.getEl(`mb-registers-tbody-${this.objectName}`);
         if (!tbody) return;
@@ -6819,9 +6765,9 @@ applyMixin(ModbusMasterRenderer, FilterMixin);
 applyMixin(ModbusMasterRenderer, ParamsAccessibilityMixin);
 applyMixin(ModbusMasterRenderer, ParamsManagerMixin);
 applyMixin(ModbusMasterRenderer, ItemCounterMixin);
-applyMixin(ModbusMasterRenderer, SectionHeightMixin);
 applyMixin(ModbusMasterRenderer, PinManagementMixin);
 applyMixin(ModbusMasterRenderer, TableSortMixin);
+applyMixin(ModbusMasterRenderer, ModbusRegistersMixin);
 
 // Регистрируем стандартные рендереры
 registerRenderer('UniSetManager', UniSetManagerRenderer);
@@ -7177,102 +7123,6 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         await this.loadRegisterChunk(0);
     }
 
-    async loadRegisterChunk(offset) {
-        if (this.isLoadingChunk || !this.hasMore) return;
-        this.isLoadingChunk = true;
-
-        const loadingEl = this.getEl(`mbs-loading-more-${this.objectName}`);
-        if (loadingEl) loadingEl.style.display = 'block';
-
-        try {
-            let url = `/api/objects/${encodeURIComponent(this.objectName)}/modbus/registers?offset=${offset}&limit=${this.chunkSize}`;
-            if (this.typeFilter && this.typeFilter !== 'all') {
-                url += `&iotype=${encodeURIComponent(this.typeFilter)}`;
-            }
-
-            const data = await this.fetchJSON(url);
-            const registers = data.registers || [];
-            this.registersTotal = data.total || 0;
-
-            // Merge devices dictionary
-            if (data.devices) {
-                Object.assign(this.devicesDict, data.devices);
-            }
-
-            if (offset === 0) {
-                this.allRegisters = registers;
-                this.registerMap.clear();
-                registers.forEach(r => this.registerMap.set(r.id, r));
-
-                // Если нет фильтра и есть закреплённые регистры - загрузить их отдельно
-                if (!this.filter) {
-                    await this.loadPinnedRegisters();
-                }
-            } else {
-                this.allRegisters = this.allRegisters.concat(registers);
-                registers.forEach(r => this.registerMap.set(r.id, r));
-            }
-
-            this.hasMore = this.allRegisters.length < this.registersTotal;
-            this.renderRegisters();
-            this.setNote(`mbs-registers-note-${this.objectName}`, '');
-
-            this.updateItemCount(`mbs-register-count-${this.objectName}`, this.allRegisters.length, this.registersTotal);
-
-            // Подписываемся на SSE обновления после загрузки
-            this.subscribeToSSE();
-
-            // Обработчики сортировки (только при первой загрузке)
-            if (offset === 0) {
-                const table = this.getEl(`mbs-registers-table-${this.objectName}`);
-                if (table) {
-                    this.attachSortHandlers(table);
-                    this.updateSortHeaders();
-                }
-            }
-        } catch (err) {
-            this.setNote(`mbs-registers-note-${this.objectName}`, err.message, true);
-        } finally {
-            this.isLoadingChunk = false;
-            if (loadingEl) loadingEl.style.display = 'none';
-        }
-    }
-
-    // Загружает закреплённые регистры, если они не в текущем списке
-    async loadPinnedRegisters() {
-        const pinnedIds = this.getPinned();
-        if (pinnedIds.size === 0) return;
-
-        // Найти ID, которых нет в загруженных регистрах
-        const missingIds = [];
-        for (const idStr of pinnedIds) {
-            const id = parseInt(idStr);
-            if (!this.registerMap.has(id)) {
-                missingIds.push(id);
-            }
-        }
-
-        if (missingIds.length === 0) return;
-
-        // Загрузить отсутствующие регистры по ID
-        try {
-            const idsParam = missingIds.join(',');
-            const url = `/api/objects/${encodeURIComponent(this.objectName)}/modbus/get?filter=${idsParam}`;
-            const response = await this.fetchJSON(url);
-            const pinnedRegisters = response.registers || [];
-
-            // Добавить закреплённые регистры в начало списка
-            for (const reg of pinnedRegisters) {
-                if (!this.registerMap.has(reg.id)) {
-                    this.allRegisters.unshift(reg);
-                    this.registerMap.set(reg.id, reg);
-                }
-            }
-        } catch (err) {
-            console.warn('Failed to load pinned registers:', err);
-        }
-    }
-
     renderRegisters() {
         const tbody = this.getEl(`mbs-registers-tbody-${this.objectName}`);
         if (!tbody) return;
@@ -7439,9 +7289,9 @@ applyMixin(ModbusSlaveRenderer, FilterMixin);
 applyMixin(ModbusSlaveRenderer, ParamsAccessibilityMixin);
 applyMixin(ModbusSlaveRenderer, ParamsManagerMixin);
 applyMixin(ModbusSlaveRenderer, ItemCounterMixin);
-applyMixin(ModbusSlaveRenderer, SectionHeightMixin);
 applyMixin(ModbusSlaveRenderer, PinManagementMixin);
 applyMixin(ModbusSlaveRenderer, TableSortMixin);
+applyMixin(ModbusSlaveRenderer, ModbusRegistersMixin);
 
 // ModbusSlave рендерер (по extensionType)
 registerRenderer('ModbusSlave', ModbusSlaveRenderer);
@@ -8062,7 +7912,6 @@ applyMixin(OPCUAServerRenderer, FilterMixin);
 applyMixin(OPCUAServerRenderer, ParamsAccessibilityMixin);
 applyMixin(OPCUAServerRenderer, ParamsManagerMixin);
 applyMixin(OPCUAServerRenderer, ItemCounterMixin);
-applyMixin(OPCUAServerRenderer, SectionHeightMixin);
 applyMixin(OPCUAServerRenderer, PinManagementMixin);
 applyMixin(OPCUAServerRenderer, TableSortMixin);
 
@@ -8844,7 +8693,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
 }
 
 // Apply mixins
-applyMixin(UWebSocketGateRenderer, SectionHeightMixin);
+applyMixin(UWebSocketGateRenderer, ResizableSectionMixin);
 applyMixin(UWebSocketGateRenderer, TableSortMixin);
 
 // UWebSocketGate рендерер (по extensionType)
@@ -13214,13 +13063,10 @@ function toggleServerGroup(serverId) {
     const group = document.querySelector(`.server-group[data-server-id="${serverId}"]`);
     if (!group) return;
 
-    if (state.collapsedServerGroups.has(serverId)) {
-        state.collapsedServerGroups.delete(serverId);
-        group.classList.remove('collapsed');
-    } else {
-        state.collapsedServerGroups.add(serverId);
-        group.classList.add('collapsed');
-    }
+    const collapsed = !state.collapsedServerGroups.has(serverId);
+    if (collapsed) state.collapsedServerGroups.add(serverId);
+    else state.collapsedServerGroups.delete(serverId);
+    group.classList.toggle('collapsed', collapsed);
     saveSettings();
 }
 
@@ -13234,11 +13080,7 @@ function renderServersSection() {
     if (!section || !list) return;
 
     // Применяем сохранённое состояние свёрнутости
-    if (state.serversSectionCollapsed) {
-        section.classList.add('collapsed');
-    } else {
-        section.classList.remove('collapsed');
-    }
+    section.classList.toggle('collapsed', state.serversSectionCollapsed);
 
     // Обработчик клика на заголовок секции
     if (!header.dataset.listenerAdded) {
@@ -14965,46 +14807,13 @@ function setupChartsResize(tabKey) {
 
     const displayName = tabState.displayName || tabKey;
 
-    const resizeHandle = getElementInTab(tabKey, `charts-resize-${displayName}`);
-    const chartsContainer = getElementInTab(tabKey, `charts-container-${displayName}`);
+    setupResizeHandle(
+        getElementInTab(tabKey, `charts-resize-${displayName}`),
+        getElementInTab(tabKey, `charts-container-${displayName}`),
+        CHARTS_CONTAINER_MIN_HEIGHT,
+        (height) => saveChartsHeight(tabKey, height)
+    );
 
-    if (!resizeHandle || !chartsContainer) return;
-
-    let startY = 0;
-    let startHeight = 0;
-    let isResizing = false;
-
-    const onMouseMove = (e) => {
-        if (!isResizing) return;
-        const delta = e.clientY - startY;
-        const newHeight = Math.max(CHARTS_CONTAINER_MIN_HEIGHT, startHeight + delta);
-        chartsContainer.style.height = `${newHeight}px`;
-        chartsContainer.style.maxHeight = `${newHeight}px`;
-    };
-
-    const onMouseUp = () => {
-        if (!isResizing) return;
-        isResizing = false;
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        // Сохраняем высоту
-        saveChartsHeight(tabKey, chartsContainer.offsetHeight);
-    };
-
-    resizeHandle.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        isResizing = true;
-        startY = e.clientY;
-        startHeight = chartsContainer.offsetHeight || CHARTS_CONTAINER_DEFAULT_HEIGHT;
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = 'ns-resize';
-        document.body.style.userSelect = 'none';
-    });
-
-    // Загружаем сохранённую высоту
     loadChartsHeight(tabKey);
 }
 
@@ -15040,46 +14849,13 @@ function loadChartsHeight(tabKey) {
 
 // Настройка resize для IONC секции датчиков
 function setupIONCSensorsResize(tabKey, objectName) {
-    const resizeHandle = getElementInTab(tabKey, `ionc-resize-${objectName}`);
-    const sensorsContainer = getElementInTab(tabKey, `ionc-sensors-container-${objectName}`);
+    setupResizeHandle(
+        getElementInTab(tabKey, `ionc-resize-${objectName}`),
+        getElementInTab(tabKey, `ionc-sensors-container-${objectName}`),
+        SENSORS_CONTAINER_MIN_HEIGHT,
+        (height) => saveIONCSensorsHeight(tabKey, height)
+    );
 
-    if (!resizeHandle || !sensorsContainer) return;
-
-    let startY = 0;
-    let startHeight = 0;
-    let isResizing = false;
-
-    const onMouseMove = (e) => {
-        if (!isResizing) return;
-        const delta = e.clientY - startY;
-        const newHeight = Math.max(SENSORS_CONTAINER_MIN_HEIGHT, startHeight + delta);
-        sensorsContainer.style.height = `${newHeight}px`;
-        sensorsContainer.style.maxHeight = `${newHeight}px`;
-    };
-
-    const onMouseUp = () => {
-        if (!isResizing) return;
-        isResizing = false;
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        // Сохраняем высоту
-        saveIONCSensorsHeight(tabKey, sensorsContainer.offsetHeight);
-    };
-
-    resizeHandle.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        isResizing = true;
-        startY = e.clientY;
-        startHeight = sensorsContainer.offsetHeight || 400;
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = 'ns-resize';
-        document.body.style.userSelect = 'none';
-    });
-
-    // Загружаем сохранённую высоту
     loadIONCSensorsHeight(tabKey, objectName);
 }
 
@@ -15357,43 +15133,12 @@ function loadIOCollapseState(tabKey, type) {
 }
 
 function setupIOResize(tabKey, objectName, type) {
-    const resizeHandle = getElementInTab(tabKey, `io-resize-${type}-${objectName}`);
-    const container = getElementInTab(tabKey, `io-container-${type}-${objectName}`);
-
-    if (!resizeHandle || !container) return;
-
-    let startY = 0;
-    let startHeight = 0;
-    let isResizing = false;
-
-    const onMouseMove = (e) => {
-        if (!isResizing) return;
-        const delta = e.clientY - startY;
-        const newHeight = Math.max(100, startHeight + delta);
-        container.style.height = `${newHeight}px`;
-        container.style.maxHeight = `${newHeight}px`;
-    };
-
-    const onMouseUp = () => {
-        if (!isResizing) return;
-        isResizing = false;
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        saveIOHeight(tabKey, type, container.offsetHeight);
-    };
-
-    resizeHandle.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        isResizing = true;
-        startY = e.clientY;
-        startHeight = container.offsetHeight || 200;
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = 'ns-resize';
-        document.body.style.userSelect = 'none';
-    });
+    setupResizeHandle(
+        getElementInTab(tabKey, `io-resize-${type}-${objectName}`),
+        getElementInTab(tabKey, `io-container-${type}-${objectName}`),
+        MIN_SECTION_HEIGHT,
+        (height) => saveIOHeight(tabKey, type, height)
+    );
 
     loadIOHeight(tabKey, objectName, type);
 }
@@ -15462,6 +15207,15 @@ function setupIOGlobalFilter(tabKey, objectName) {
     });
 }
 
+// Перерисовка IO секции по типу (inputs/outputs/timers)
+function reRenderIOType(tabKey, type) {
+    const tabState = state.tabs.get(tabKey);
+    if (!tabState) return;
+    if (type === 'inputs' && tabState.ioData?.in) renderIO(tabKey, 'inputs', tabState.ioData.in);
+    else if (type === 'outputs' && tabState.ioData?.out) renderIO(tabKey, 'outputs', tabState.ioData.out);
+    else if (type === 'timers' && tabState.timersData) renderTimers(tabKey, tabState.timersData);
+}
+
 // tabKey - ключ вкладки, objectName - displayName для DOM селекторов
 function setupIOUnpinAll(tabKey, objectName, type) {
     const unpinBtn = getElementInTab(tabKey, `io-unpin-${type}-${objectName}`);
@@ -15470,17 +15224,7 @@ function setupIOUnpinAll(tabKey, objectName, type) {
     unpinBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         clearIOPinnedRows(tabKey, type);
-        // Перерисовываем
-        const tabState = state.tabs.get(tabKey);
-        if (tabState) {
-            if (type === 'inputs' && tabState.ioData?.in) {
-                renderIO(tabKey, 'inputs', tabState.ioData.in);
-            } else if (type === 'outputs' && tabState.ioData?.out) {
-                renderIO(tabKey, 'outputs', tabState.ioData.out);
-            } else if (type === 'timers' && tabState.timersData) {
-                renderTimers(tabKey, tabState.timersData);
-            }
-        }
+        reRenderIOType(tabKey, type);
     });
 }
 
@@ -15517,18 +15261,7 @@ function toggleIOPin(tabKey, type, rowKey) {
     }
 
     saveIOPinnedRows(tabKey, type, pinned);
-
-    // Перерисовываем
-    const tabState = state.tabs.get(tabKey);
-    if (tabState) {
-        if (type === 'inputs' && tabState.ioData?.in) {
-            renderIO(tabKey, 'inputs', tabState.ioData.in);
-        } else if (type === 'outputs' && tabState.ioData?.out) {
-            renderIO(tabKey, 'outputs', tabState.ioData.out);
-        } else if (type === 'timers' && tabState.timersData) {
-            renderTimers(tabKey, tabState.timersData);
-        }
-    }
+    reRenderIOType(tabKey, type);
 }
 
 function clearIOPinnedRows(tabKey, type) {
@@ -21794,12 +21527,11 @@ function initPollIntervalSelector() {
 
 // Перезапуск автообновления статуса для всех активных табов
 function restartAllStatusAutoRefresh() {
-    for (const tabKey of Object.keys(state.tabs)) {
-        const tab = state.tabs[tabKey];
-        if (tab && tab.renderer && typeof tab.renderer.startStatusAutoRefresh === 'function') {
+    state.tabs.forEach((tab) => {
+        if (tab.renderer && typeof tab.renderer.startStatusAutoRefresh === 'function') {
             tab.renderer.startStatusAutoRefresh();
         }
-    }
+    });
 }
 
 

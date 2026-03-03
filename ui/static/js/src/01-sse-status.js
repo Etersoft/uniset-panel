@@ -108,34 +108,12 @@ function updateServerStatus(serverId, connected) {
     }
 
     // Обновляем бейджи серверов в табах
-    const tabBadges = document.querySelectorAll(`.tab-server-badge[data-server-id="${serverId}"]`);
-    tabBadges.forEach(badge => {
-        if (connected) {
-            badge.classList.remove('disconnected');
-        } else {
-            badge.classList.add('disconnected');
-        }
-    });
+    document.querySelectorAll(`.tab-server-badge[data-server-id="${serverId}"]`)
+        .forEach(el => el.classList.toggle('disconnected', !connected));
 
-    // Обновляем состояние кнопок табов (заголовки)
-    const tabButtons = document.querySelectorAll(`.tab-btn[data-server-id="${serverId}"]`);
-    tabButtons.forEach(btn => {
-        if (connected) {
-            btn.classList.remove('server-disconnected');
-        } else {
-            btn.classList.add('server-disconnected');
-        }
-    });
-
-    // Обновляем состояние панелей табов (контент)
-    const tabPanels = document.querySelectorAll(`.tab-panel[data-server-id="${serverId}"]`);
-    tabPanels.forEach(panel => {
-        if (connected) {
-            panel.classList.remove('server-disconnected');
-        } else {
-            panel.classList.add('server-disconnected');
-        }
-    });
+    // Обновляем состояние кнопок и панелей табов
+    document.querySelectorAll(`.tab-btn[data-server-id="${serverId}"], .tab-panel[data-server-id="${serverId}"]`)
+        .forEach(el => el.classList.toggle('server-disconnected', !connected));
 
     // Обновляем статус в sidebar группах
     if (typeof updateGroupEntityStatus === 'function') {

@@ -159,10 +159,9 @@ function initPollIntervalSelector() {
 
 // Перезапуск автообновления статуса для всех активных табов
 function restartAllStatusAutoRefresh() {
-    for (const tabKey of Object.keys(state.tabs)) {
-        const tab = state.tabs[tabKey];
-        if (tab && tab.renderer && typeof tab.renderer.startStatusAutoRefresh === 'function') {
+    state.tabs.forEach((tab) => {
+        if (tab.renderer && typeof tab.renderer.startStatusAutoRefresh === 'function') {
             tab.renderer.startStatusAutoRefresh();
         }
-    }
+    });
 }

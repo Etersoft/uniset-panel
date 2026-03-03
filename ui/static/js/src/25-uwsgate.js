@@ -770,7 +770,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
 }
 
 // Apply mixins
-applyMixin(UWebSocketGateRenderer, SectionHeightMixin);
+applyMixin(UWebSocketGateRenderer, ResizableSectionMixin);
 applyMixin(UWebSocketGateRenderer, TableSortMixin);
 
 // UWebSocketGate рендерер (по extensionType)
