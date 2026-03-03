@@ -630,16 +630,6 @@ function resubscribeAll() {
     });
 }
 
-// Close SSE соединение
-function closeSSE() {
-    stopServerStatusSync();
-    if (state.sse.eventSource) {
-        state.sse.eventSource.close();
-        state.sse.eventSource = null;
-        state.sse.connected = false;
-    }
-}
-
 // Обновление графиков при возврате на вкладку браузера
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {

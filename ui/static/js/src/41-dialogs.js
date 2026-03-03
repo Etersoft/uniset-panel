@@ -75,11 +75,6 @@ function showIoncDialogError(message) {
     errorEl.textContent = message;
 }
 
-function clearIoncDialogError() {
-    const errorEl = document.getElementById('ionc-dialog-error');
-    errorEl.textContent = '';
-}
-
 // === Sensor Dialog ===
 
 // Status диалога датчиков
@@ -169,12 +164,6 @@ function handleSensorDialogKeydown(e) {
         }
         e.preventDefault();
     }
-}
-
-// Подготовить список датчиков из XML конфига
-function prepareSensorList() {
-    sensorDialogState.allSensors = Array.from(state.sensors.values());
-    sensorDialogState.filteredSensors = [...sensorDialogState.allSensors];
 }
 
 // Подготовить список датчиков из IONC таблицы

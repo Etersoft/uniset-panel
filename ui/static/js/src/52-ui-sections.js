@@ -140,14 +140,6 @@ function startTimerUpdateInterval() {
     }, UPDATE_INTERVAL);
 }
 
-// Остановка интервала обновления таймеров
-function stopTimerUpdateInterval() {
-    if (timerUpdateInterval) {
-        clearInterval(timerUpdateInterval);
-        timerUpdateInterval = null;
-    }
-}
-
 // Рендеринг информации об объекте
 function renderObjectInfo(tabKey, objectData) {
     const tabState = state.tabs.get(tabKey);
@@ -581,19 +573,6 @@ function toggleChartSmooth(tabKey, varName, smoothEnabled) {
     if (!chartData) return;
 
     chartData.chart.data.datasets[0].tension = smoothEnabled ? 0.3 : 0;
-    chartData.chart.update('none');
-}
-
-// Переключение stepped режима графика (меандр)
-// tabKey - ключ вкладки (serverId:objectName)
-function toggleChartStepped(tabKey, varName, steppedEnabled) {
-    const tabState = state.tabs.get(tabKey);
-    if (!tabState) return;
-
-    const chartData = tabState.charts.get(varName);
-    if (!chartData) return;
-
-    chartData.chart.data.datasets[0].stepped = steppedEnabled ? 'before' : false;
     chartData.chart.update('none');
 }
 
