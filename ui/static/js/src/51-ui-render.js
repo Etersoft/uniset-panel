@@ -437,7 +437,7 @@ async function updateChart(objectName, varName, chart) {
         // Обновить значение в легенде
         if (history.points && history.points.length > 0) {
             const lastValue = history.points[history.points.length - 1].value;
-            const legendEl = document.getElementById(`legend-value-${objectName}-${varName}`);
+            const legendEl = getElementInTab(tabKey, `legend-value-${objectName}-${varName}`);
             if (legendEl) {
                 legendEl.textContent = formatValue(lastValue);
             }

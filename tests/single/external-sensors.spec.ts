@@ -154,9 +154,10 @@ test.describe('External Sensors (SM Integration)', () => {
     await page.waitForSelector('[data-section^="charts-"]', { timeout: 10000 });
 
     // Очистим localStorage перед тестом
-    await page.evaluate((objName) => {
-      localStorage.removeItem(`uniset-panel-external-sensors-${objName}`);
-    }, 'TestProc');
+    const tabKey = await page.locator('.tab-panel.active').getAttribute('data-name');
+    await page.evaluate((key) => {
+      localStorage.removeItem(`uniset-panel-external-sensors-${key}`);
+    }, tabKey);
 
     await page.locator('.add-sensor-btn').first().click();
 
@@ -182,9 +183,10 @@ test.describe('External Sensors (SM Integration)', () => {
     await expect(page.locator('.sensor-dialog-overlay')).not.toHaveClass(/visible/, { timeout: 5000 });
 
     // Проверяем localStorage
-    const savedSensors = await page.evaluate((objName) => {
-      return localStorage.getItem(`uniset-panel-external-sensors-${objName}`);
-    }, 'TestProc');
+    const activeTabKey = await page.locator('.tab-panel.active').getAttribute('data-name');
+    const savedSensors = await page.evaluate((key) => {
+      return localStorage.getItem(`uniset-panel-external-sensors-${key}`);
+    }, activeTabKey);
 
     expect(savedSensors).toBeTruthy();
     if (sensorName) {
@@ -281,9 +283,10 @@ test.describe('External Sensors (SM Integration)', () => {
     await page.waitForSelector('[data-section^="charts-"]', { timeout: 10000 });
 
     // Проверяем localStorage — датчик должен быть сохранён
-    const savedSensors = await page.evaluate((objName) => {
-      return localStorage.getItem(`uniset-panel-external-sensors-${objName}`);
-    }, 'TestProc');
+    const activeTabKey = await page.locator('.tab-panel.active').getAttribute('data-name');
+    const savedSensors = await page.evaluate((key) => {
+      return localStorage.getItem(`uniset-panel-external-sensors-${key}`);
+    }, activeTabKey);
 
     expect(savedSensors).toBeTruthy();
     if (sensorName) {
@@ -295,9 +298,10 @@ test.describe('External Sensors (SM Integration)', () => {
     await page.waitForSelector('[data-section^="charts-"]', { timeout: 10000 });
 
     // Очистим localStorage перед тестом
-    await page.evaluate((objName) => {
-      localStorage.removeItem(`uniset-panel-external-sensors-${objName}`);
-    }, 'TestProc');
+    const tabKey = await page.locator('.tab-panel.active').getAttribute('data-name');
+    await page.evaluate((key) => {
+      localStorage.removeItem(`uniset-panel-external-sensors-${key}`);
+    }, tabKey);
 
     // Добавляем датчик
     await page.locator('.add-sensor-btn').first().click();
@@ -357,9 +361,10 @@ test.describe('External Sensors (SM Integration)', () => {
     await page.waitForSelector('[data-section^="charts-"]', { timeout: 10000 });
 
     // Очистим localStorage перед тестом
-    await page.evaluate((objName) => {
-      localStorage.removeItem(`uniset-panel-external-sensors-${objName}`);
-    }, 'TestProc');
+    const tabKey = await page.locator('.tab-panel.active').getAttribute('data-name');
+    await page.evaluate((key) => {
+      localStorage.removeItem(`uniset-panel-external-sensors-${key}`);
+    }, tabKey);
 
     // Добавляем несколько датчиков
     await page.locator('.add-sensor-btn').first().click();
@@ -406,9 +411,10 @@ test.describe('External Sensors (SM Integration)', () => {
     await page.waitForSelector('[data-section^="charts-"]', { timeout: 10000 });
 
     // Очистим localStorage перед тестом
-    await page.evaluate((objName) => {
-      localStorage.removeItem(`uniset-panel-external-sensors-${objName}`);
-    }, 'TestProc');
+    const tabKey = await page.locator('.tab-panel.active').getAttribute('data-name');
+    await page.evaluate((key) => {
+      localStorage.removeItem(`uniset-panel-external-sensors-${key}`);
+    }, tabKey);
 
     // Добавляем датчик
     await page.locator('.add-sensor-btn').first().click();
@@ -424,10 +430,11 @@ test.describe('External Sensors (SM Integration)', () => {
     await page.keyboard.press('Escape');
 
     // Проверяем формат данных в localStorage
-    const savedData = await page.evaluate((objName) => {
-      const data = localStorage.getItem(`uniset-panel-external-sensors-${objName}`);
+    const activeTabKey2 = await page.locator('.tab-panel.active').getAttribute('data-name');
+    const savedData = await page.evaluate((key) => {
+      const data = localStorage.getItem(`uniset-panel-external-sensors-${key}`);
       return data ? JSON.parse(data) : null;
-    }, 'TestProc');
+    }, activeTabKey2);
 
     expect(savedData).toBeTruthy();
     expect(Array.isArray(savedData)).toBe(true);
@@ -458,9 +465,10 @@ test.describe('External Sensors (SM Integration)', () => {
     await page.waitForSelector('[data-section^="charts-"]', { timeout: 10000 });
 
     // Очистим localStorage перед тестом
-    await page.evaluate((objName) => {
-      localStorage.removeItem(`uniset-panel-external-sensors-${objName}`);
-    }, 'TestProc');
+    const tabKey = await page.locator('.tab-panel.active').getAttribute('data-name');
+    await page.evaluate((key) => {
+      localStorage.removeItem(`uniset-panel-external-sensors-${key}`);
+    }, tabKey);
 
     // Открываем диалог
     await page.locator('.add-sensor-btn').first().click();
@@ -500,10 +508,11 @@ test.describe('External Sensors (SM Integration)', () => {
     await expect(badges).toHaveCount(3);
 
     // Проверяем localStorage - должны быть сохранены 3 датчика
-    const savedSensors = await page.evaluate((objName) => {
-      const data = localStorage.getItem(`uniset-panel-external-sensors-${objName}`);
+    const activeTabKey3 = await page.locator('.tab-panel.active').getAttribute('data-name');
+    const savedSensors = await page.evaluate((key) => {
+      const data = localStorage.getItem(`uniset-panel-external-sensors-${key}`);
       return data ? JSON.parse(data) : [];
-    }, 'TestProc');
+    }, activeTabKey3);
 
     expect(savedSensors.length).toBe(3);
   });
@@ -513,9 +522,10 @@ test.describe('External Sensors (SM Integration)', () => {
     await page.waitForSelector('[data-section^="charts-"]', { timeout: 10000 });
 
     // Очистим localStorage перед тестом
-    await page.evaluate((objName) => {
-      localStorage.removeItem(`uniset-panel-external-sensors-${objName}`);
-    }, 'TestProc');
+    const tabKey = await page.locator('.tab-panel.active').getAttribute('data-name');
+    await page.evaluate((key) => {
+      localStorage.removeItem(`uniset-panel-external-sensors-${key}`);
+    }, tabKey);
 
     await page.locator('.add-sensor-btn').first().click();
     await page.waitForSelector('.sensor-dialog-content table tbody tr, .sensor-dialog-empty', { timeout: 10000 });
