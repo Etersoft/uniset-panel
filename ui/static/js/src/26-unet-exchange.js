@@ -187,7 +187,7 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
     }
 
     renderStatus() {
-        const container = document.getElementById(`unet-status-${this.objectName}`);
+        const container = this.getEl(`unet-status-${this.objectName}`);
         if (!container || !this.status) return;
 
         const activated = this.status.activated;
@@ -217,15 +217,15 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
     }
 
     renderStatusError(message) {
-        const container = document.getElementById(`unet-status-${this.objectName}`);
+        const container = this.getEl(`unet-status-${this.objectName}`);
         if (container) {
             container.innerHTML = `<div class="status-error">Error: ${message}</div>`;
         }
     }
 
     renderReceivers() {
-        const tbody = document.getElementById(`unet-receivers-tbody-${this.objectName}`);
-        const countEl = document.getElementById(`unet-receivers-count-${this.objectName}`);
+        const tbody = this.getEl(`unet-receivers-tbody-${this.objectName}`);
+        const countEl = this.getEl(`unet-receivers-count-${this.objectName}`);
         if (!tbody) return;
 
         if (!this.receivers || this.receivers.length === 0) {
@@ -293,8 +293,8 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
     }
 
     renderSenders() {
-        const tbody = document.getElementById(`unet-senders-tbody-${this.objectName}`);
-        const countEl = document.getElementById(`unet-senders-count-${this.objectName}`);
+        const tbody = this.getEl(`unet-senders-tbody-${this.objectName}`);
+        const countEl = this.getEl(`unet-senders-count-${this.objectName}`);
         if (!tbody) return;
 
         const channels = Object.keys(this.senders).filter(k => k.startsWith('chan'));
@@ -358,7 +358,7 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
 
         if (!tabState.charts.has(chartKey)) {
             // Создаём новый график
-            const chartsGrid = document.getElementById(`charts-${this.objectName}`);
+            const chartsGrid = this.getEl(`charts-${this.objectName}`);
             if (!chartsGrid) return null;
 
             const safeChartKey = chartKey.replace(/:/g, '-');
@@ -386,7 +386,7 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
             `;
             chartsGrid.appendChild(chartContainer);
 
-            const canvas = document.getElementById(`chart-canvas-${this.objectName}-${safeChartKey}`);
+            const canvas = this.getEl(`chart-canvas-${this.objectName}-${safeChartKey}`);
             const chart = new Chart(canvas, {
                 type: 'line',
                 data: {
@@ -485,7 +485,7 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
 
             // Удаляем контейнер
             const safeChartKey = chartKey.replace(/:/g, '-');
-            const container = document.getElementById(`chart-panel-${this.objectName}-${safeChartKey}`);
+            const container = this.getEl(`chart-panel-${this.objectName}-${safeChartKey}`);
             if (container) {
                 container.remove();
             }

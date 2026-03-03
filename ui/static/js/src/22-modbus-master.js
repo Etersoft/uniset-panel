@@ -141,12 +141,12 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         );
 
         // HTTP Control buttons
-        const takeControl = document.getElementById(`mb-control-take-${this.objectName}`);
+        const takeControl = this.getEl(`mb-control-take-${this.objectName}`);
         if (takeControl) {
             takeControl.addEventListener('click', () => this.takeControl());
         }
 
-        const releaseControl = document.getElementById(`mb-control-release-${this.objectName}`);
+        const releaseControl = this.getEl(`mb-control-release-${this.objectName}`);
         if (releaseControl) {
             releaseControl.addEventListener('click', () => this.releaseControl());
         }
@@ -280,7 +280,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     }
 
     renderStatus() {
-        const tbody = document.getElementById(`mb-status-${this.objectName}`);
+        const tbody = this.getEl(`mb-status-${this.objectName}`);
         if (!tbody) return;
 
         tbody.innerHTML = '';
@@ -321,9 +321,9 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         const allowText = allow ? 'Take control' : (!canControl() ? 'Read-only mode' : 'Control not allowed');
 
         // Обновляем индикаторы в шапке
-        const indAllow = document.getElementById(`mb-ind-allow-${this.objectName}`);
-        const indActive = document.getElementById(`mb-ind-active-${this.objectName}`);
-        const indParams = document.getElementById(`mb-ind-params-${this.objectName}`);
+        const indAllow = this.getEl(`mb-ind-allow-${this.objectName}`);
+        const indActive = this.getEl(`mb-ind-active-${this.objectName}`);
+        const indParams = this.getEl(`mb-ind-params-${this.objectName}`);
 
         if (indAllow) {
             indAllow.className = `header-indicator-dot ${allow ? 'ok' : 'fail'}`;
@@ -339,9 +339,9 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         }
 
         // Обновляем кнопки
-        const takeBtn = document.getElementById(`mb-control-take-${this.objectName}`);
-        const releaseBtn = document.getElementById(`mb-control-release-${this.objectName}`);
-        const noteEl = document.getElementById(`mb-control-note-${this.objectName}`);
+        const takeBtn = this.getEl(`mb-control-take-${this.objectName}`);
+        const releaseBtn = this.getEl(`mb-control-release-${this.objectName}`);
+        const noteEl = this.getEl(`mb-control-note-${this.objectName}`);
 
         if (takeBtn) {
             takeBtn.disabled = !allow;
@@ -399,7 +399,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     }
 
     renderParams() {
-        const tbody = document.getElementById(`mb-params-${this.objectName}`);
+        const tbody = this.getEl(`mb-params-${this.objectName}`);
         if (!tbody) return;
 
         tbody.innerHTML = '';
@@ -470,8 +470,8 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     }
 
     renderDevices() {
-        const container = document.getElementById(`mb-devices-${this.objectName}`);
-        const countEl = document.getElementById(`mb-device-count-${this.objectName}`);
+        const container = this.getEl(`mb-devices-${this.objectName}`);
+        const countEl = this.getEl(`mb-device-count-${this.objectName}`);
         if (!container) return;
 
         if (countEl) {
@@ -527,7 +527,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         if (this.isLoadingChunk || !this.hasMore) return;
         this.isLoadingChunk = true;
 
-        const loadingEl = document.getElementById(`mb-loading-more-${this.objectName}`);
+        const loadingEl = this.getEl(`mb-loading-more-${this.objectName}`);
         if (loadingEl) loadingEl.style.display = 'block';
 
         try {
@@ -570,7 +570,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
 
             // Обработчики сортировки (только при первой загрузке)
             if (offset === 0) {
-                const table = document.getElementById(`mb-registers-table-${this.objectName}`);
+                const table = this.getEl(`mb-registers-table-${this.objectName}`);
                 if (table) {
                     this.attachSortHandlers(table);
                     this.updateSortHeaders();
@@ -620,7 +620,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     }
 
     renderRegisters() {
-        const tbody = document.getElementById(`mb-registers-tbody-${this.objectName}`);
+        const tbody = this.getEl(`mb-registers-tbody-${this.objectName}`);
         if (!tbody) return;
 
         // Получаем закрепленные регистры
@@ -628,7 +628,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         const hasPinned = pinnedRegisters.size > 0;
 
         // Показываем/скрываем кнопку "снять все"
-        const unpinBtn = document.getElementById(`mb-unpin-${this.objectName}`);
+        const unpinBtn = this.getEl(`mb-unpin-${this.objectName}`);
         if (unpinBtn) {
             unpinBtn.style.display = hasPinned ? 'inline' : 'none';
         }
@@ -713,7 +713,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     }
 
     setupVirtualScroll() {
-        const viewport = document.getElementById(`mb-registers-viewport-${this.objectName}`);
+        const viewport = this.getEl(`mb-registers-viewport-${this.objectName}`);
         if (!viewport) return;
 
         viewport.addEventListener('scroll', () => {
@@ -850,7 +850,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
 
     // Обновление визуальных индикаторов сортировки
     updateSortHeaders() {
-        const table = document.getElementById(`mb-registers-table-${this.objectName}`);
+        const table = this.getEl(`mb-registers-table-${this.objectName}`);
         if (!table) return;
 
         table.querySelectorAll('th.th-sortable').forEach(th => {

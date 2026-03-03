@@ -372,6 +372,8 @@ node debug-something.js
    - `moveSectionUp(tabKey, sectionId)` / `moveSectionDown(tabKey, sectionId)`
    - `loadSectionOrder(tabKey)` / `saveSectionOrder(tabKey)`
    - Атрибут `data-name` на панелях вкладок
+   - **localStorage ключи** — все пользовательские настройки (pinned, heights, collapse, sort и т.д.)
+   - **DOM-поиск** — `this.getEl(id)` / `getElementInTab(tabKey, id)`
 
 2. **`objectName` использовать для:**
    - API endpoints: `/api/objects/${objectName}/...`
@@ -428,28 +430,68 @@ const chartData = tabState.charts.get(varName);
 
 ### Поиск DOM элементов
 
-При поиске элементов внутри вкладок использовать `getElementInTab()` вместо `document.getElementById()`:
+При поиске элементов внутри вкладок использовать `this.getEl()` / `this.getEls()` (в рендерерах) или `getElementInTab()` (в standalone-функциях) вместо `document.getElementById()`:
 
 ```javascript
-// ✅ ПРАВИЛЬНО - ищет элемент внутри панели конкретной вкладки
-const fillCheckbox = getElementInTab(tabKey, `fill-${displayName}-${varName}`);
+// ✅ В рендерерах (BaseObjectRenderer, LogViewer) — используй this.getEl()
+const tbody = this.getEl(`mbs-registers-tbody-${this.objectName}`);
+const rows = this.getEls('.sensor-row');
 
-// ❌ НЕПРАВИЛЬНО - может найти элемент из другой вкладки с тем же ID
-const fillCheckbox = document.getElementById(`fill-${displayName}-${varName}`);
+// ✅ В standalone-функциях (53-ui-settings.js и др.) — используй getElementInTab()
+const container = getElementInTab(tabKey, `io-container-inputs-${objectName}`);
+
+// ❌ НЕПРАВИЛЬНО — может найти элемент из другой вкладки с тем же ID
+const tbody = document.getElementById(`mbs-registers-tbody-${this.objectName}`);
 ```
 
 **Почему важно:**
 - При работе с несколькими серверами может быть несколько объектов с одинаковым именем (например, `SharedMemory` на разных серверах)
 - `getElementById` найдёт первый элемент с таким ID, который может принадлежать другой вкладке
-- `getElementInTab` сначала находит панель вкладки по `tabKey`, затем ищет элемент внутри неё
+- `getEl()` / `getElementInTab()` ищут элемент внутри панели конкретной вкладки (`.tab-panel[data-name="${tabKey}"]`)
 
-**Доступные функции:**
+**Доступные API:**
 ```javascript
-// Найти один элемент по ID внутри вкладки
-getElementInTab(tabKey, elementId)
+// В рендерерах (BaseObjectRenderer, LogViewer) — методы экземпляра
+this.getEl(elementId)     // ищет по ID внутри панели this.tabKey
+this.getEls(cssSelector)  // ищет все по CSS-селектору внутри панели this.tabKey
 
-// Найти все элементы по CSS-селектору внутри вкладки
+// В standalone-функциях — глобальные функции из 51-ui-render.js
+getElementInTab(tabKey, elementId)
 getElementsInTab(tabKey, selector)
+```
+
+**Что НЕ трогать** — `document.getElementById()` допустим для:
+- Глобальных синглтон-элементов (sidebar, tabs-header, control-dialog и т.д.)
+- Глобальных диалогов IONC (`ionc-set-*`, `ionc-freeze-*`, `ionc-gen-*`, `ionc-dialog-body`)
+- Launcher-рендерера (использует уникальный `nodeId`, конфликтов не бывает)
+- Journal (использует уникальный `journalId`)
+- Dashboard (глобальный синглтон)
+
+### localStorage ключи
+
+Все пользовательские настройки (pinned items, высоты секций, порядок секций, состояние collapse и т.д.) сохраняются в localStorage по `tabKey`, а не по `objectName`:
+
+```javascript
+// ✅ ПРАВИЛЬНО — ключ по tabKey (уникален для каждого сервера)
+saved[this.tabKey] = value;
+
+// ❌ НЕПРАВИЛЬНО — конфликт при одинаковых объектах с разных серверов
+saved[this.objectName] = value;
+```
+
+**При чтении** — fallback на `objectName` для обратной совместимости со старыми данными:
+```javascript
+const value = saved[this.tabKey] ?? saved[this.objectName];
+```
+
+**Standalone-функции** (в `53-ui-settings.js`, `52-ui-sections.js`) должны принимать `tabKey` как параметр и использовать его для DOM-поиска и localStorage:
+```javascript
+// ✅ Функция принимает tabKey и objectName
+function setupIOResize(tabKey, objectName, type) {
+    const container = getElementInTab(tabKey, `io-container-${type}-${objectName}`);
+    // localStorage ключ по tabKey
+    saved[`${tabKey}-${type}`] = height;
+}
 ```
 
 ### Единообразие UI элементов
@@ -473,7 +515,8 @@ getElementsInTab(tabKey, selector)
 - **НЕ** путать форматы `sectionId` - всегда `${prefix}-${objectName}`
 - **НЕ** использовать `id` для varName графиков - использовать `name`
 - **НЕ** использовать разные prefixes для ModbusMaster/Slave - оба используют `mb`
-- **НЕ** использовать `document.getElementById()` для элементов внутри вкладок (использовать `getElementInTab()`)
+- **НЕ** использовать `document.getElementById()` для элементов внутри вкладок — в рендерерах `this.getEl()`, в standalone-функциях `getElementInTab(tabKey, id)`
+- **НЕ** использовать `objectName` для ключей localStorage — использовать `tabKey`
 - **НЕ** создавать новые стили для одинаковых элементов - использовать существующие общие классы
 
 Полная документация: `docs/naming-conventions.md`

@@ -410,7 +410,9 @@ function closeTab(name) {
         }
     }
 
-    unwatchObject(name).catch(console.error);
+    const objectName = tabState?.displayName || name;
+    const serverId = tabState?.serverId || null;
+    unwatchObject(objectName, serverId).catch(console.error);
 
     state.tabs.delete(name);
 

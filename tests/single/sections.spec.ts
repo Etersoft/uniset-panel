@@ -259,12 +259,13 @@ test.describe('IO layout toggle', () => {
     // Enable sequential mode
     await checkbox.check();
 
-    // Check localStorage
-    const saved = await page.evaluate((objectName) => {
+    // Check localStorage (keys are stored by tabKey, not objectName)
+    const tabKey = await page.locator('.tab-panel.active').getAttribute('data-name');
+    const saved = await page.evaluate((key) => {
       const data = localStorage.getItem('uniset-panel-io-layout');
       if (!data) return null;
-      return JSON.parse(data)[objectName];
-    }, TEST_OBJECT);
+      return JSON.parse(data)[key];
+    }, tabKey);
     expect(saved).toBe(true);
 
     // Clean up

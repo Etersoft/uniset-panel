@@ -1448,7 +1448,7 @@ const VirtualScrollMixin = {
 
     // Настройка обработчика скролла
     setupVirtualScrollFor(viewportId) {
-        const viewport = document.getElementById(viewportId);
+        const viewport = this.getEl(viewportId);
         if (!viewport) return;
 
         let ticking = false;
@@ -1466,7 +1466,7 @@ const VirtualScrollMixin = {
 
     // Обновление видимых строк
     updateVisibleRowsFor(viewportId) {
-        const viewport = document.getElementById(viewportId);
+        const viewport = this.getEl(viewportId);
         if (!viewport) return;
 
         const scrollTop = viewport.scrollTop;
@@ -1495,7 +1495,7 @@ const VirtualScrollMixin = {
 
     // Показать/скрыть индикатор загрузки
     showLoadingIndicatorFor(elementId, show) {
-        const el = document.getElementById(elementId);
+        const el = this.getEl(elementId);
         if (el) el.style.display = show ? 'block' : 'none';
     },
 
@@ -1607,7 +1607,7 @@ const ResizableSectionMixin = {
     loadSectionHeight(storageKey, defaultHeight = DEFAULT_SECTION_HEIGHT) {
         try {
             const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            const value = saved[this.objectName];
+            const value = saved[this.tabKey] ?? saved[this.objectName];
             if (typeof value === 'number' && value > 0) {
                 return value;
             }
@@ -1621,7 +1621,7 @@ const ResizableSectionMixin = {
     saveSectionHeight(storageKey, value) {
         try {
             const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            saved[this.objectName] = value;
+            saved[this.tabKey] = value;
             localStorage.setItem(storageKey, JSON.stringify(saved));
         } catch (err) {
             console.warn('Failed to save section height:', err);
@@ -1635,8 +1635,8 @@ const ResizableSectionMixin = {
     // heightProp - имя свойства для высоты (например 'sensorsHeight')
     // options - дополнительные параметры { minHeight, maxHeight }
     setupSectionResize(handleId, containerId, storageKey, heightProp, options = {}) {
-        const handle = document.getElementById(handleId);
-        const container = document.getElementById(containerId);
+        const handle = this.getEl(handleId);
+        const container = this.getEl(containerId);
         if (!handle || !container) return;
 
         const minHeight = options.minHeight || MIN_SECTION_HEIGHT;
@@ -1731,7 +1731,7 @@ const FilterMixin = {
 
     // Настройка debounced фильтра
     setupFilterInput(inputId, onFilter, delay = FILTER_DEBOUNCE_DELAY) {
-        const input = document.getElementById(inputId);
+        const input = this.getEl(inputId);
         if (!input) return;
 
         input.addEventListener('input', (e) => {
@@ -1746,9 +1746,9 @@ const FilterMixin = {
     // Полная настройка фильтров с ESC, type filter и опциональным status filter
     // onTextFilter — опциональный отдельный callback для текстового фильтра (если отличается от onFilter)
     setupFilterListeners(filterInputId, typeFilterId, onFilter, delay = FILTER_DEBOUNCE_DELAY, statusFilterId = null, onTextFilter = null) {
-        const filterInput = document.getElementById(filterInputId);
-        const typeFilter = document.getElementById(typeFilterId);
-        const statusFilter = statusFilterId ? document.getElementById(statusFilterId) : null;
+        const filterInput = this.getEl(filterInputId);
+        const typeFilter = this.getEl(typeFilterId);
+        const statusFilter = statusFilterId ? this.getEl(statusFilterId) : null;
         const textCallback = onTextFilter || onFilter;
 
         if (filterInput) {
@@ -1792,8 +1792,8 @@ const FilterMixin = {
 
     // Настройка ESC на контейнере для сброса фильтра
     setupContainerEscHandler(containerId, filterInputId, onFilter) {
-        const container = document.getElementById(containerId);
-        const filterInput = document.getElementById(filterInputId);
+        const container = this.getEl(containerId);
+        const filterInput = this.getEl(filterInputId);
         if (!container || !filterInput) return;
 
         container.setAttribute('tabindex', '0');
@@ -1834,7 +1834,7 @@ const ParamsAccessibilityMixin = {
         const explicitlyDisabled = val === false || val === 0;
 
         // Заблокировать кнопку "Apply" (учитываем и httpEnabledSetParams, и control token)
-        const saveBtn = document.getElementById(`${prefix}-params-save-${this.objectName}`);
+        const saveBtn = this.getEl(`${prefix}-params-save-${this.objectName}`);
         if (saveBtn) {
             const blocked = explicitlyDisabled || !canControl();
             saveBtn.disabled = blocked;
@@ -1848,7 +1848,7 @@ const ParamsAccessibilityMixin = {
         }
 
         // Заблокировать все input в таблице параметров
-        const paramsTable = document.getElementById(`${prefix}-params-${this.objectName}`);
+        const paramsTable = this.getEl(`${prefix}-params-${this.objectName}`);
         if (paramsTable) {
             const inputs = paramsTable.querySelectorAll('input, select');
             inputs.forEach(input => {
@@ -1857,7 +1857,7 @@ const ParamsAccessibilityMixin = {
         }
 
         // Обновить индикатор в шапке (если есть)
-        const indParams = document.getElementById(`${prefix}-ind-params-${this.objectName}`);
+        const indParams = this.getEl(`${prefix}-ind-params-${this.objectName}`);
         if (indParams) {
             indParams.className = `header-indicator-dot ${enabled ? 'ok' : 'fail'}`;
             indParams.title = enabled ? 'Parameters: Yes' : 'Parameters: No';
@@ -1895,8 +1895,8 @@ const ParamsManagerMixin = {
     // Сохранение изменённых параметров на сервер
     async saveParams() {
         // Контейнер: ${prefix}-params-${obj} или ${prefix}-params-writable-${obj} (OPCUA Exchange)
-        const container = document.getElementById(`${this.paramsPrefix}-params-${this.objectName}`)
-            || document.getElementById(`${this.paramsPrefix}-params-writable-${this.objectName}`);
+        const container = this.getEl(`${this.paramsPrefix}-params-${this.objectName}`)
+            || this.getEl(`${this.paramsPrefix}-params-writable-${this.objectName}`);
         if (!container) return;
 
         const changed = {};
@@ -1955,11 +1955,11 @@ const ParamsManagerMixin = {
 
     // Подключение кнопок Refresh и Apply
     setupParamsListeners() {
-        const refreshBtn = document.getElementById(`${this.paramsPrefix}-params-refresh-${this.objectName}`);
+        const refreshBtn = this.getEl(`${this.paramsPrefix}-params-refresh-${this.objectName}`);
         if (refreshBtn) {
             refreshBtn.addEventListener('click', () => this.loadParams());
         }
-        const saveBtn = document.getElementById(`${this.paramsPrefix}-params-save-${this.objectName}`);
+        const saveBtn = this.getEl(`${this.paramsPrefix}-params-save-${this.objectName}`);
         if (saveBtn) {
             saveBtn.addEventListener('click', () => this.saveParams());
         }
@@ -1978,7 +1978,7 @@ const ItemCounterMixin = {
      * @param {number} total - Общее количество элементов
      */
     updateItemCount(elementId, loaded, total) {
-        const countEl = document.getElementById(elementId);
+        const countEl = this.getEl(elementId);
         if (countEl) {
             countEl.textContent = loaded === total ? `${total}` : `${loaded} / ${total}`;
         }
@@ -1998,7 +1998,7 @@ const SectionHeightMixin = {
     loadSectionHeight(storageKey, defaultHeight = DEFAULT_SECTION_HEIGHT) {
         try {
             const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            const value = saved[this.objectName];
+            const value = saved[this.tabKey] ?? saved[this.objectName];
             if (typeof value === 'number' && value > 0) {
                 return value;
             }
@@ -2016,7 +2016,7 @@ const SectionHeightMixin = {
     saveSectionHeight(storageKey, value) {
         try {
             const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            saved[this.objectName] = value;
+            saved[this.tabKey] = value;
             localStorage.setItem(storageKey, JSON.stringify(saved));
         } catch (err) {
             console.warn('Failed to save section height:', err);
@@ -2033,7 +2033,7 @@ const PinManagementMixin = {
     getPinnedItems(storageKey) {
         try {
             const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            return new Set(saved[this.objectName] || []);
+            return new Set(saved[this.tabKey] || saved[this.objectName] || []);
         } catch (err) {
             return new Set();
         }
@@ -2047,7 +2047,7 @@ const PinManagementMixin = {
     savePinnedItems(storageKey, pinnedSet) {
         try {
             const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            saved[this.objectName] = Array.from(pinnedSet);
+            saved[this.tabKey] = Array.from(pinnedSet);
             localStorage.setItem(storageKey, JSON.stringify(saved));
         } catch (err) {
             console.warn('Failed to save pinned items:', err);
@@ -2118,10 +2118,10 @@ const TableSortMixin = {
         this.sortStorageKey = storageKey;
         try {
             const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            const state = saved[this.objectName];
-            if (state) {
-                this.sortColumn = state.column || 'name';
-                this.sortDirection = state.direction || 'asc';
+            const sortState = saved[this.tabKey] || saved[this.objectName];
+            if (sortState) {
+                this.sortColumn = sortState.column || 'name';
+                this.sortDirection = sortState.direction || 'asc';
             }
         } catch (err) {
             console.warn('Failed to load sort state:', err);
@@ -2135,7 +2135,7 @@ const TableSortMixin = {
         if (!this.sortStorageKey) return;
         try {
             const saved = JSON.parse(localStorage.getItem(this.sortStorageKey) || '{}');
-            saved[this.objectName] = {
+            saved[this.tabKey] = {
                 column: this.sortColumn,
                 direction: this.sortDirection
             };
@@ -2311,6 +2311,16 @@ class BaseObjectRenderer {
         this.showAddSensorButton = true;
     }
 
+    // Найти элемент по ID внутри панели своей вкладки
+    getEl(id) {
+        return getElementInTab(this.tabKey, id);
+    }
+
+    // Найти все элементы по CSS-селектору внутри панели своей вкладки
+    getEls(selector) {
+        return getElementsInTab(this.tabKey, selector);
+    }
+
     // Получить тип объекта (для отображения)
     static getTypeName() {
         return 'Object';
@@ -2370,7 +2380,7 @@ class BaseObjectRenderer {
 
     // Обновить отображение относительного времени
     updateStatusDisplay() {
-        const el = document.getElementById(`${this.statusLastIdPrefix}-${this.objectName}`);
+        const el = this.getEl(`${this.statusLastIdPrefix}-${this.objectName}`);
         if (!el) return;
         el.textContent = this.formatTimeAgo(this.statusLastUpdate);
     }
@@ -2469,7 +2479,7 @@ class BaseObjectRenderer {
                                placeholder="Filter..." data-object="${this.objectName}">
                     </div>
                     <label class="io-sequential-toggle" onclick="event.stopPropagation()">
-                        <input type="checkbox" id="io-sequential-${this.objectName}" onchange="toggleIOLayout('${this.objectName}')">
+                        <input type="checkbox" id="io-sequential-${this.objectName}" onchange="toggleIOLayout('${this.tabKey}', '${this.objectName}')">
                         <span>Sequential</span>
                     </label>
                     <div class="section-reorder-buttons" onclick="event.stopPropagation()">
@@ -2592,7 +2602,7 @@ class BaseObjectRenderer {
             return;
         }
 
-        const container = document.getElementById(`logviewer-container-${this.objectName}`);
+        const container = this.getEl(`logviewer-container-${this.objectName}`);
         if (!container) return;
 
         // Создаём LogViewer только если его ещё нет
@@ -2828,7 +2838,7 @@ class BaseObjectRenderer {
 
     // Set текст уведомления
     setNote(id, text, isError = false) {
-        const el = document.getElementById(id);
+        const el = this.getEl(id);
         if (!el) return;
         el.textContent = text || '';
         el.classList.toggle('note-error', !!(text && isError));
@@ -2836,8 +2846,9 @@ class BaseObjectRenderer {
 
     // Базовый resize handler для секций
     setupResize(containerSelector, handleSelector, storageKey, minHeight = 100, maxHeight = 800) {
-        const container = document.querySelector(containerSelector);
-        const handle = document.querySelector(handleSelector);
+        const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
+        const container = panel ? panel.querySelector(containerSelector) : document.querySelector(containerSelector);
+        const handle = panel ? panel.querySelector(handleSelector) : document.querySelector(handleSelector);
         if (!container || !handle) return;
 
         let startY, startHeight;
@@ -2915,7 +2926,7 @@ class UniSetManagerRenderer extends BaseObjectRenderer {
     initialize() {
         setupFilterHandlers(this.tabKey);
         setupChartsResize(this.tabKey);
-        loadIOLayoutState(this.objectName);
+        loadIOLayoutState(this.tabKey, this.objectName);
         setupIOSections(this.tabKey);
     }
 
@@ -3016,7 +3027,7 @@ class FallbackRenderer extends BaseObjectRenderer {
         }
 
         // Выводим JSON - используем raw_data если есть, иначе весь data
-        const jsonPre = document.getElementById(`fallback-json-${this.objectName}`);
+        const jsonPre = this.getEl(`fallback-json-${this.objectName}`);
         if (jsonPre) {
             const displayData = data.raw_data || data;
             jsonPre.textContent = JSON.stringify(displayData, null, 2);
@@ -3148,7 +3159,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         this.loadSensors();
         this.loadLostConsumers();
         setupChartsResize(this.tabKey);
-        setupIONCSensorsResize(this.objectName);
+        setupIONCSensorsResize(this.tabKey, this.objectName);
         this.setupVirtualScroll();
     }
 
@@ -3263,10 +3274,10 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         this.startIndex = 0;
         this.endIndex = 0;
 
-        const viewport = document.getElementById(`ionc-sensors-viewport-${this.objectName}`);
+        const viewport = this.getEl(`ionc-sensors-viewport-${this.objectName}`);
         if (viewport) viewport.scrollTop = 0;
 
-        const tbody = document.getElementById(`ionc-sensors-tbody-${this.objectName}`);
+        const tbody = this.getEl(`ionc-sensors-tbody-${this.objectName}`);
         if (tbody) {
             tbody.innerHTML = '<tr><td colspan="11" class="ionc-loading">Loading...</td></tr>';
         }
@@ -3321,7 +3332,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             this.setupDashboardClickHandler();
 
             // Привязываем обработчики сортировки
-            const table = document.getElementById(`ionc-sensors-table-${this.objectName}`);
+            const table = this.getEl(`ionc-sensors-table-${this.objectName}`);
             this.attachSortHandlers(table);
         } catch (err) {
             console.error('Error loading IONC sensors:', err);
@@ -3441,7 +3452,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     setupVirtualScroll() {
-        const viewport = document.getElementById(`ionc-sensors-viewport-${this.objectName}`);
+        const viewport = this.getEl(`ionc-sensors-viewport-${this.objectName}`);
         if (!viewport) return;
 
         let ticking = false;
@@ -3458,7 +3469,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     updateVisibleRows() {
-        const viewport = document.getElementById(`ionc-sensors-viewport-${this.objectName}`);
+        const viewport = this.getEl(`ionc-sensors-viewport-${this.objectName}`);
         if (!viewport) return;
 
         const scrollTop = viewport.scrollTop;
@@ -3485,13 +3496,13 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     showLoadingIndicator(show) {
-        const el = document.getElementById(`ionc-loading-more-${this.objectName}`);
+        const el = this.getEl(`ionc-loading-more-${this.objectName}`);
         if (el) el.style.display = show ? 'block' : 'none';
     }
 
     renderVisibleSensors() {
-        const tbody = document.getElementById(`ionc-sensors-tbody-${this.objectName}`);
-        const spacer = document.getElementById(`ionc-sensors-spacer-${this.objectName}`);
+        const tbody = this.getEl(`ionc-sensors-tbody-${this.objectName}`);
+        const spacer = this.getEl(`ionc-sensors-spacer-${this.objectName}`);
         if (!tbody || !spacer) return;
 
         // Set высоту spacer для позиционирования
@@ -3502,7 +3513,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         const hasPinned = pinnedSensors.size > 0;
 
         // Показываем/скрываем кнопку "снять все"
-        const unpinBtn = document.getElementById(`ionc-unpin-${this.objectName}`);
+        const unpinBtn = this.getEl(`ionc-unpin-${this.objectName}`);
         if (unpinBtn) {
             unpinBtn.style.display = hasPinned ? 'inline' : 'none';
         }
@@ -3610,7 +3621,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
     // Обновление заголовков таблицы с индикаторами сортировки
     updateSortHeaders() {
-        const table = document.getElementById(`ionc-sensors-table-${this.objectName}`);
+        const table = this.getEl(`ionc-sensors-table-${this.objectName}`);
         if (!table) return;
 
         table.querySelectorAll('th.th-sortable').forEach(th => {
@@ -3739,7 +3750,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     getPinnedSensors() {
         try {
             const saved = JSON.parse(localStorage.getItem('uniset-panel-ionc-pinned') || '{}');
-            return new Set(saved[this.objectName] || []);
+            return new Set(saved[this.tabKey] || saved[this.objectName] || []);
         } catch (err) {
             return new Set();
         }
@@ -3748,7 +3759,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     savePinnedSensors(pinnedSet) {
         try {
             const saved = JSON.parse(localStorage.getItem('uniset-panel-ionc-pinned') || '{}');
-            saved[this.objectName] = Array.from(pinnedSet);
+            saved[this.tabKey] = Array.from(pinnedSet);
             localStorage.setItem('uniset-panel-ionc-pinned', JSON.stringify(saved));
         } catch (err) {
             console.warn('Failed to save pinned sensors:', err);
@@ -4801,8 +4812,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             const data = await response.json();
             const lost = data['lost consumers'] || [];
 
-            const listEl = document.getElementById(`ionc-lost-list-${this.objectName}`);
-            const countEl = document.getElementById(`ionc-lost-count-${this.objectName}`);
+            const listEl = this.getEl(`ionc-lost-list-${this.objectName}`);
+            const countEl = this.getEl(`ionc-lost-count-${this.objectName}`);
 
             if (countEl) countEl.textContent = lost.length;
 
@@ -5082,17 +5093,17 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             `opcua-status-filter-${this.objectName}`
         );
 
-        const refreshDiag = document.getElementById(`opcua-diagnostics-refresh-${this.objectName}`);
+        const refreshDiag = this.getEl(`opcua-diagnostics-refresh-${this.objectName}`);
         if (refreshDiag) {
             refreshDiag.addEventListener('click', () => this.loadDiagnostics());
         }
 
-        const takeControl = document.getElementById(`opcua-control-take-${this.objectName}`);
+        const takeControl = this.getEl(`opcua-control-take-${this.objectName}`);
         if (takeControl) {
             takeControl.addEventListener('click', () => this.takeControl());
         }
 
-        const releaseControl = document.getElementById(`opcua-control-release-${this.objectName}`);
+        const releaseControl = this.getEl(`opcua-control-release-${this.objectName}`);
         if (releaseControl) {
             releaseControl.addEventListener('click', () => this.releaseControl());
         }
@@ -5241,9 +5252,9 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     renderStatus() {
-        const statsContainer = document.getElementById(`opcua-stats-${this.objectName}`);
-        const monitorContainer = document.getElementById(`opcua-monitor-${this.objectName}`);
-        const headerChannels = document.getElementById(`opcua-header-channels-${this.objectName}`);
+        const statsContainer = this.getEl(`opcua-stats-${this.objectName}`);
+        const monitorContainer = this.getEl(`opcua-monitor-${this.objectName}`);
+        const headerChannels = this.getEl(`opcua-header-channels-${this.objectName}`);
 
         if (!statsContainer || !monitorContainer) return;
 
@@ -5339,9 +5350,9 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         const allowText = allow ? 'Take control' : (!canControl() ? 'Read-only mode' : 'Control not allowed');
 
         // Обновляем индикаторы в шапке
-        const indAllow = document.getElementById(`opcua-ind-allow-${this.objectName}`);
-        const indActive = document.getElementById(`opcua-ind-active-${this.objectName}`);
-        const indParams = document.getElementById(`opcua-ind-params-${this.objectName}`);
+        const indAllow = this.getEl(`opcua-ind-allow-${this.objectName}`);
+        const indActive = this.getEl(`opcua-ind-active-${this.objectName}`);
+        const indParams = this.getEl(`opcua-ind-params-${this.objectName}`);
 
         if (indAllow) {
             indAllow.className = `header-indicator-dot ${allow ? 'ok' : 'fail'}`;
@@ -5357,9 +5368,9 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         }
 
         // Обновляем кнопки
-        const takeBtn = document.getElementById(`opcua-control-take-${this.objectName}`);
-        const releaseBtn = document.getElementById(`opcua-control-release-${this.objectName}`);
-        const noteEl = document.getElementById(`opcua-control-note-${this.objectName}`);
+        const takeBtn = this.getEl(`opcua-control-take-${this.objectName}`);
+        const releaseBtn = this.getEl(`opcua-control-release-${this.objectName}`);
+        const noteEl = this.getEl(`opcua-control-note-${this.objectName}`);
 
         if (takeBtn) {
             takeBtn.disabled = !allow;
@@ -5402,8 +5413,8 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     renderParams() {
-        const readonlyTbody = document.getElementById(`opcua-params-readonly-${this.objectName}`);
-        const writableTbody = document.getElementById(`opcua-params-writable-${this.objectName}`);
+        const readonlyTbody = this.getEl(`opcua-params-readonly-${this.objectName}`);
+        const writableTbody = this.getEl(`opcua-params-writable-${this.objectName}`);
         if (!readonlyTbody || !writableTbody) return;
 
         readonlyTbody.innerHTML = '';
@@ -5496,7 +5507,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         this.endIndex = 0;
 
         // Reset viewport scroll position
-        const viewport = document.getElementById(`opcua-sensors-viewport-${this.objectName}`);
+        const viewport = this.getEl(`opcua-sensors-viewport-${this.objectName}`);
         if (viewport) viewport.scrollTop = 0;
 
         // Проверяем режим фильтрации: false = серверная (default), true = UI
@@ -5547,7 +5558,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             this.subscribeToSSE();
 
             // Обработчики сортировки
-            const table = document.getElementById(`opcua-sensors-table-${this.objectName}`);
+            const table = this.getEl(`opcua-sensors-table-${this.objectName}`);
             if (table) {
                 this.attachSortHandlers(table);
                 this.updateSortHeaders();
@@ -5665,7 +5676,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     setupVirtualScroll() {
-        const viewport = document.getElementById(`opcua-sensors-viewport-${this.objectName}`);
+        const viewport = this.getEl(`opcua-sensors-viewport-${this.objectName}`);
         if (!viewport) return;
 
         let ticking = false;
@@ -5682,7 +5693,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     updateVisibleRows() {
-        const viewport = document.getElementById(`opcua-sensors-viewport-${this.objectName}`);
+        const viewport = this.getEl(`opcua-sensors-viewport-${this.objectName}`);
         if (!viewport) return;
 
         const scrollTop = viewport.scrollTop;
@@ -5697,8 +5708,8 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     renderVisibleSensors() {
-        const tbody = document.getElementById(`opcua-sensors-${this.objectName}`);
-        const spacer = document.getElementById(`opcua-sensors-spacer-${this.objectName}`);
+        const tbody = this.getEl(`opcua-sensors-${this.objectName}`);
+        const spacer = this.getEl(`opcua-sensors-spacer-${this.objectName}`);
         if (!tbody || !spacer) return;
 
         // Получаем закрепленные датчики
@@ -5706,7 +5717,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         const hasPinned = pinnedSensors.size > 0;
 
         // Показываем/скрываем кнопку "снять все"
-        const unpinBtn = document.getElementById(`opcua-unpin-${this.objectName}`);
+        const unpinBtn = this.getEl(`opcua-unpin-${this.objectName}`);
         if (unpinBtn) {
             unpinBtn.style.display = hasPinned ? 'inline' : 'none';
         }
@@ -5821,7 +5832,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     showLoadingIndicator(show) {
-        const el = document.getElementById(`opcua-loading-more-${this.objectName}`);
+        const el = this.getEl(`opcua-loading-more-${this.objectName}`);
         if (el) {
             el.style.display = show ? 'block' : 'none';
         }
@@ -5837,7 +5848,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     renderSensorDetails(sensor) {
-        const container = document.getElementById(`opcua-sensor-details-${this.objectName}`);
+        const container = this.getEl(`opcua-sensor-details-${this.objectName}`);
         if (!container) return;
 
         if (!sensor) {
@@ -5880,7 +5891,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     renderDiagnostics() {
-        const container = document.getElementById(`opcua-diagnostics-${this.objectName}`);
+        const container = this.getEl(`opcua-diagnostics-${this.objectName}`);
         if (!container) return;
 
         if (!this.diagnostics) {
@@ -6100,7 +6111,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
     // Обновление визуальных индикаторов сортировки
     updateSortHeaders() {
-        const table = document.getElementById(`opcua-sensors-table-${this.objectName}`);
+        const table = this.getEl(`opcua-sensors-table-${this.objectName}`);
         if (!table) return;
 
         table.querySelectorAll('th.th-sortable').forEach(th => {
@@ -6276,12 +6287,12 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         );
 
         // HTTP Control buttons
-        const takeControl = document.getElementById(`mb-control-take-${this.objectName}`);
+        const takeControl = this.getEl(`mb-control-take-${this.objectName}`);
         if (takeControl) {
             takeControl.addEventListener('click', () => this.takeControl());
         }
 
-        const releaseControl = document.getElementById(`mb-control-release-${this.objectName}`);
+        const releaseControl = this.getEl(`mb-control-release-${this.objectName}`);
         if (releaseControl) {
             releaseControl.addEventListener('click', () => this.releaseControl());
         }
@@ -6415,7 +6426,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     }
 
     renderStatus() {
-        const tbody = document.getElementById(`mb-status-${this.objectName}`);
+        const tbody = this.getEl(`mb-status-${this.objectName}`);
         if (!tbody) return;
 
         tbody.innerHTML = '';
@@ -6456,9 +6467,9 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         const allowText = allow ? 'Take control' : (!canControl() ? 'Read-only mode' : 'Control not allowed');
 
         // Обновляем индикаторы в шапке
-        const indAllow = document.getElementById(`mb-ind-allow-${this.objectName}`);
-        const indActive = document.getElementById(`mb-ind-active-${this.objectName}`);
-        const indParams = document.getElementById(`mb-ind-params-${this.objectName}`);
+        const indAllow = this.getEl(`mb-ind-allow-${this.objectName}`);
+        const indActive = this.getEl(`mb-ind-active-${this.objectName}`);
+        const indParams = this.getEl(`mb-ind-params-${this.objectName}`);
 
         if (indAllow) {
             indAllow.className = `header-indicator-dot ${allow ? 'ok' : 'fail'}`;
@@ -6474,9 +6485,9 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         }
 
         // Обновляем кнопки
-        const takeBtn = document.getElementById(`mb-control-take-${this.objectName}`);
-        const releaseBtn = document.getElementById(`mb-control-release-${this.objectName}`);
-        const noteEl = document.getElementById(`mb-control-note-${this.objectName}`);
+        const takeBtn = this.getEl(`mb-control-take-${this.objectName}`);
+        const releaseBtn = this.getEl(`mb-control-release-${this.objectName}`);
+        const noteEl = this.getEl(`mb-control-note-${this.objectName}`);
 
         if (takeBtn) {
             takeBtn.disabled = !allow;
@@ -6534,7 +6545,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     }
 
     renderParams() {
-        const tbody = document.getElementById(`mb-params-${this.objectName}`);
+        const tbody = this.getEl(`mb-params-${this.objectName}`);
         if (!tbody) return;
 
         tbody.innerHTML = '';
@@ -6605,8 +6616,8 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     }
 
     renderDevices() {
-        const container = document.getElementById(`mb-devices-${this.objectName}`);
-        const countEl = document.getElementById(`mb-device-count-${this.objectName}`);
+        const container = this.getEl(`mb-devices-${this.objectName}`);
+        const countEl = this.getEl(`mb-device-count-${this.objectName}`);
         if (!container) return;
 
         if (countEl) {
@@ -6662,7 +6673,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         if (this.isLoadingChunk || !this.hasMore) return;
         this.isLoadingChunk = true;
 
-        const loadingEl = document.getElementById(`mb-loading-more-${this.objectName}`);
+        const loadingEl = this.getEl(`mb-loading-more-${this.objectName}`);
         if (loadingEl) loadingEl.style.display = 'block';
 
         try {
@@ -6705,7 +6716,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
 
             // Обработчики сортировки (только при первой загрузке)
             if (offset === 0) {
-                const table = document.getElementById(`mb-registers-table-${this.objectName}`);
+                const table = this.getEl(`mb-registers-table-${this.objectName}`);
                 if (table) {
                     this.attachSortHandlers(table);
                     this.updateSortHeaders();
@@ -6755,7 +6766,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     }
 
     renderRegisters() {
-        const tbody = document.getElementById(`mb-registers-tbody-${this.objectName}`);
+        const tbody = this.getEl(`mb-registers-tbody-${this.objectName}`);
         if (!tbody) return;
 
         // Получаем закрепленные регистры
@@ -6763,7 +6774,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         const hasPinned = pinnedRegisters.size > 0;
 
         // Показываем/скрываем кнопку "снять все"
-        const unpinBtn = document.getElementById(`mb-unpin-${this.objectName}`);
+        const unpinBtn = this.getEl(`mb-unpin-${this.objectName}`);
         if (unpinBtn) {
             unpinBtn.style.display = hasPinned ? 'inline' : 'none';
         }
@@ -6848,7 +6859,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     }
 
     setupVirtualScroll() {
-        const viewport = document.getElementById(`mb-registers-viewport-${this.objectName}`);
+        const viewport = this.getEl(`mb-registers-viewport-${this.objectName}`);
         if (!viewport) return;
 
         viewport.addEventListener('scroll', () => {
@@ -6985,7 +6996,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
 
     // Обновление визуальных индикаторов сортировки
     updateSortHeaders() {
-        const table = document.getElementById(`mb-registers-table-${this.objectName}`);
+        const table = this.getEl(`mb-registers-table-${this.objectName}`);
         if (!table) return;
 
         table.querySelectorAll('th.th-sortable').forEach(th => {
@@ -7267,7 +7278,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     }
 
     renderStatus() {
-        const tbody = document.getElementById(`mbs-status-${this.objectName}`);
+        const tbody = this.getEl(`mbs-status-${this.objectName}`);
         if (!tbody) return;
 
         tbody.innerHTML = '';
@@ -7314,8 +7325,8 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     }
 
     renderTcpSessions() {
-        const tbody = document.getElementById(`mbs-tcp-sessions-${this.objectName}`);
-        const info = document.getElementById(`mbs-tcp-sessions-info-${this.objectName}`);
+        const tbody = this.getEl(`mbs-tcp-sessions-${this.objectName}`);
+        const info = this.getEl(`mbs-tcp-sessions-info-${this.objectName}`);
         if (!tbody) return;
 
         tbody.innerHTML = '';
@@ -7342,7 +7353,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     }
 
     renderParams() {
-        const tbody = document.getElementById(`mbs-params-${this.objectName}`);
+        const tbody = this.getEl(`mbs-params-${this.objectName}`);
         if (!tbody) return;
 
         tbody.innerHTML = '';
@@ -7373,7 +7384,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         if (this.isLoadingChunk || !this.hasMore) return;
         this.isLoadingChunk = true;
 
-        const loadingEl = document.getElementById(`mbs-loading-more-${this.objectName}`);
+        const loadingEl = this.getEl(`mbs-loading-more-${this.objectName}`);
         if (loadingEl) loadingEl.style.display = 'block';
 
         try {
@@ -7416,7 +7427,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
 
             // Обработчики сортировки (только при первой загрузке)
             if (offset === 0) {
-                const table = document.getElementById(`mbs-registers-table-${this.objectName}`);
+                const table = this.getEl(`mbs-registers-table-${this.objectName}`);
                 if (table) {
                     this.attachSortHandlers(table);
                     this.updateSortHeaders();
@@ -7466,7 +7477,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     }
 
     renderRegisters() {
-        const tbody = document.getElementById(`mbs-registers-tbody-${this.objectName}`);
+        const tbody = this.getEl(`mbs-registers-tbody-${this.objectName}`);
         if (!tbody) return;
 
         // Получаем закрепленные регистры
@@ -7474,7 +7485,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         const hasPinned = pinnedRegisters.size > 0;
 
         // Показываем/скрываем кнопку "снять все"
-        const unpinBtn = document.getElementById(`mbs-unpin-${this.objectName}`);
+        const unpinBtn = this.getEl(`mbs-unpin-${this.objectName}`);
         if (unpinBtn) {
             unpinBtn.style.display = hasPinned ? 'inline' : 'none';
         }
@@ -7564,7 +7575,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     }
 
     setupVirtualScroll() {
-        const viewport = document.getElementById(`mbs-registers-viewport-${this.objectName}`);
+        const viewport = this.getEl(`mbs-registers-viewport-${this.objectName}`);
         if (!viewport) return;
 
         viewport.addEventListener('scroll', () => {
@@ -7693,7 +7704,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
 
     // Обновление визуальных индикаторов сортировки
     updateSortHeaders() {
-        const table = document.getElementById(`mbs-registers-table-${this.objectName}`);
+        const table = this.getEl(`mbs-registers-table-${this.objectName}`);
         if (!table) return;
 
         table.querySelectorAll('th.th-sortable').forEach(th => {
@@ -7936,9 +7947,9 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     renderStatus() {
-        const tbody = document.getElementById(`opcuasrv-status-${this.objectName}`);
-        const endpointsContainer = document.getElementById(`opcuasrv-endpoints-${this.objectName}`);
-        const configContainer = document.getElementById(`opcuasrv-config-${this.objectName}`);
+        const tbody = this.getEl(`opcuasrv-status-${this.objectName}`);
+        const endpointsContainer = this.getEl(`opcuasrv-endpoints-${this.objectName}`);
+        const configContainer = this.getEl(`opcuasrv-config-${this.objectName}`);
         if (!tbody || !endpointsContainer || !configContainer) return;
 
         tbody.innerHTML = '';
@@ -8028,7 +8039,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     renderParams() {
-        const tbody = document.getElementById(`opcuasrv-params-${this.objectName}`);
+        const tbody = this.getEl(`opcuasrv-params-${this.objectName}`);
         if (!tbody) return;
 
         tbody.innerHTML = '';
@@ -8057,7 +8068,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         this.endIndex = 0;
 
         // Reset viewport scroll position
-        const viewport = document.getElementById(`opcuasrv-sensors-viewport-${this.objectName}`);
+        const viewport = this.getEl(`opcuasrv-sensors-viewport-${this.objectName}`);
         if (viewport) viewport.scrollTop = 0;
 
         try {
@@ -8092,7 +8103,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
             this.subscribeToSSE();
 
             // Обработчики сортировки
-            const table = document.getElementById(`opcuasrv-sensors-table-${this.objectName}`);
+            const table = this.getEl(`opcuasrv-sensors-table-${this.objectName}`);
             if (table) {
                 this.attachSortHandlers(table);
                 this.updateSortHeaders();
@@ -8174,7 +8185,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     setupVirtualScroll() {
-        const viewport = document.getElementById(`opcuasrv-sensors-viewport-${this.objectName}`);
+        const viewport = this.getEl(`opcuasrv-sensors-viewport-${this.objectName}`);
         if (!viewport) return;
 
         let ticking = false;
@@ -8191,7 +8202,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     updateVisibleRows() {
-        const viewport = document.getElementById(`opcuasrv-sensors-viewport-${this.objectName}`);
+        const viewport = this.getEl(`opcuasrv-sensors-viewport-${this.objectName}`);
         if (!viewport) return;
 
         const scrollTop = viewport.scrollTop;
@@ -8206,8 +8217,8 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     renderVisibleSensors() {
-        const tbody = document.getElementById(`opcuasrv-sensors-${this.objectName}`);
-        const spacer = document.getElementById(`opcuasrv-sensors-spacer-${this.objectName}`);
+        const tbody = this.getEl(`opcuasrv-sensors-${this.objectName}`);
+        const spacer = this.getEl(`opcuasrv-sensors-spacer-${this.objectName}`);
         if (!tbody || !spacer) return;
 
         // Получаем закрепленные датчики
@@ -8215,7 +8226,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         const hasPinned = pinnedSensors.size > 0;
 
         // Показываем/скрываем кнопку "снять все"
-        const unpinBtn = document.getElementById(`opcuasrv-unpin-${this.objectName}`);
+        const unpinBtn = this.getEl(`opcuasrv-unpin-${this.objectName}`);
         if (unpinBtn) {
             unpinBtn.style.display = hasPinned ? 'inline' : 'none';
         }
@@ -8315,7 +8326,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     showLoadingIndicator(show) {
-        const indicator = document.getElementById(`opcuasrv-loading-more-${this.objectName}`);
+        const indicator = this.getEl(`opcuasrv-loading-more-${this.objectName}`);
         if (indicator) {
             indicator.style.display = show ? 'block' : 'none';
         }
@@ -8417,7 +8428,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
     // Обновление визуальных индикаторов сортировки
     updateSortHeaders() {
-        const table = document.getElementById(`opcuasrv-sensors-table-${this.objectName}`);
+        const table = this.getEl(`opcuasrv-sensors-table-${this.objectName}`);
         if (!table) return;
 
         table.querySelectorAll('th.th-sortable').forEach(th => {
@@ -9450,7 +9461,7 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
     }
 
     renderStatus() {
-        const container = document.getElementById(`unet-status-${this.objectName}`);
+        const container = this.getEl(`unet-status-${this.objectName}`);
         if (!container || !this.status) return;
 
         const activated = this.status.activated;
@@ -9480,15 +9491,15 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
     }
 
     renderStatusError(message) {
-        const container = document.getElementById(`unet-status-${this.objectName}`);
+        const container = this.getEl(`unet-status-${this.objectName}`);
         if (container) {
             container.innerHTML = `<div class="status-error">Error: ${message}</div>`;
         }
     }
 
     renderReceivers() {
-        const tbody = document.getElementById(`unet-receivers-tbody-${this.objectName}`);
-        const countEl = document.getElementById(`unet-receivers-count-${this.objectName}`);
+        const tbody = this.getEl(`unet-receivers-tbody-${this.objectName}`);
+        const countEl = this.getEl(`unet-receivers-count-${this.objectName}`);
         if (!tbody) return;
 
         if (!this.receivers || this.receivers.length === 0) {
@@ -9556,8 +9567,8 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
     }
 
     renderSenders() {
-        const tbody = document.getElementById(`unet-senders-tbody-${this.objectName}`);
-        const countEl = document.getElementById(`unet-senders-count-${this.objectName}`);
+        const tbody = this.getEl(`unet-senders-tbody-${this.objectName}`);
+        const countEl = this.getEl(`unet-senders-count-${this.objectName}`);
         if (!tbody) return;
 
         const channels = Object.keys(this.senders).filter(k => k.startsWith('chan'));
@@ -9621,7 +9632,7 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
 
         if (!tabState.charts.has(chartKey)) {
             // Создаём новый график
-            const chartsGrid = document.getElementById(`charts-${this.objectName}`);
+            const chartsGrid = this.getEl(`charts-${this.objectName}`);
             if (!chartsGrid) return null;
 
             const safeChartKey = chartKey.replace(/:/g, '-');
@@ -9649,7 +9660,7 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
             `;
             chartsGrid.appendChild(chartContainer);
 
-            const canvas = document.getElementById(`chart-canvas-${this.objectName}-${safeChartKey}`);
+            const canvas = this.getEl(`chart-canvas-${this.objectName}-${safeChartKey}`);
             const chart = new Chart(canvas, {
                 type: 'line',
                 data: {
@@ -9748,7 +9759,7 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
 
             // Удаляем контейнер
             const safeChartKey = chartKey.replace(/:/g, '-');
-            const container = document.getElementById(`chart-panel-${this.objectName}-${safeChartKey}`);
+            const container = this.getEl(`chart-panel-${this.objectName}-${safeChartKey}`);
             if (container) {
                 container.remove();
             }
@@ -10428,6 +10439,11 @@ class LogViewer {
         this.init();
     }
 
+    // Найти элемент по ID внутри панели своей вкладки
+    getEl(id) {
+        return getElementInTab(this.tabKey, id);
+    }
+
     init() {
         this.render();
         this.setupEventHandlers();
@@ -10549,7 +10565,7 @@ class LogViewer {
         });
 
         // Connect button
-        const connectBtn = document.getElementById(`log-connect-${this.objectName}`);
+        const connectBtn = this.getEl(`log-connect-${this.objectName}`);
         connectBtn.addEventListener('click', () => {
             if (this.isActive) {
                 this.disconnect();
@@ -10559,22 +10575,22 @@ class LogViewer {
         });
 
         // Clear button
-        const clearBtn = document.getElementById(`log-clear-${this.objectName}`);
+        const clearBtn = this.getEl(`log-clear-${this.objectName}`);
         clearBtn.addEventListener('click', () => this.clear());
 
         // Download button
-        const downloadBtn = document.getElementById(`log-download-${this.objectName}`);
+        const downloadBtn = this.getEl(`log-download-${this.objectName}`);
         downloadBtn.addEventListener('click', () => this.downloadLogs());
 
         // Pause button
-        const pauseBtn = document.getElementById(`log-pause-${this.objectName}`);
+        const pauseBtn = this.getEl(`log-pause-${this.objectName}`);
         pauseBtn.addEventListener('click', () => this.togglePause());
 
         // Level dropdown
         this.setupLevelDropdown();
 
         // Filter input with local filtering
-        const filterInput = document.getElementById(`log-filter-${this.objectName}`);
+        const filterInput = this.getEl(`log-filter-${this.objectName}`);
         let filterTimeout = null;
         filterInput.addEventListener('input', (e) => {
             clearTimeout(filterTimeout);
@@ -10585,21 +10601,21 @@ class LogViewer {
         });
 
         // Filter options
-        const regexCheckbox = document.getElementById(`log-filter-regex-${this.objectName}`);
+        const regexCheckbox = this.getEl(`log-filter-regex-${this.objectName}`);
         regexCheckbox.addEventListener('change', (e) => {
             this.filterRegex = e.target.checked;
             this.saveFilterOptions();
             this.applyFilter();
         });
 
-        const caseCheckbox = document.getElementById(`log-filter-case-${this.objectName}`);
+        const caseCheckbox = this.getEl(`log-filter-case-${this.objectName}`);
         caseCheckbox.addEventListener('change', (e) => {
             this.filterCase = e.target.checked;
             this.saveFilterOptions();
             this.applyFilter();
         });
 
-        const onlyCheckbox = document.getElementById(`log-filter-only-${this.objectName}`);
+        const onlyCheckbox = this.getEl(`log-filter-only-${this.objectName}`);
         onlyCheckbox.addEventListener('change', (e) => {
             this.filterOnlyMatches = e.target.checked;
             this.saveFilterOptions();
@@ -10609,7 +10625,7 @@ class LogViewer {
         // Hotkey "/" for filter focus, Esc for pause toggle
         document.addEventListener('keydown', (e) => {
             // Check if LogViewer section is visible
-            const section = document.getElementById(`logviewer-section-${this.objectName}`);
+            const section = this.getEl(`logviewer-section-${this.objectName}`);
             if (!section || section.classList.contains('collapsed')) return;
 
             if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
@@ -10631,7 +10647,7 @@ class LogViewer {
         });
 
         // Buffer size select
-        const bufferSelect = document.getElementById(`log-buffer-${this.objectName}`);
+        const bufferSelect = this.getEl(`log-buffer-${this.objectName}`);
         bufferSelect.addEventListener('change', (e) => {
             this.maxLines = parseInt(e.target.value);
             this.saveBufferSize();
@@ -10642,7 +10658,7 @@ class LogViewer {
         this.setupResize();
 
         // Auto-scroll on container scroll
-        const logContainer = document.getElementById(`log-container-${this.objectName}`);
+        const logContainer = this.getEl(`log-container-${this.objectName}`);
         logContainer.addEventListener('scroll', () => {
             const { scrollTop, scrollHeight, clientHeight } = logContainer;
             this.autoScroll = scrollHeight - scrollTop - clientHeight < 50;
@@ -10657,7 +10673,7 @@ class LogViewer {
     saveFilterOptions() {
         try {
             const saved = JSON.parse(localStorage.getItem('uniset-panel-filter-options') || '{}');
-            saved[this.objectName] = {
+            saved[this.tabKey] = {
                 regex: this.filterRegex,
                 case: this.filterCase,
                 only: this.filterOnlyMatches
@@ -10671,16 +10687,16 @@ class LogViewer {
     loadFilterOptions() {
         try {
             const saved = JSON.parse(localStorage.getItem('uniset-panel-filter-options') || '{}');
-            if (saved[this.objectName]) {
-                const opts = saved[this.objectName];
+            const opts = saved[this.tabKey] || saved[this.objectName];
+            if (opts) {
                 this.filterRegex = opts.regex !== undefined ? opts.regex : true;
                 this.filterCase = opts.case !== undefined ? opts.case : false;
                 this.filterOnlyMatches = opts.only !== undefined ? opts.only : false;
 
                 // Update checkboxes
-                const regexCheckbox = document.getElementById(`log-filter-regex-${this.objectName}`);
-                const caseCheckbox = document.getElementById(`log-filter-case-${this.objectName}`);
-                const onlyCheckbox = document.getElementById(`log-filter-only-${this.objectName}`);
+                const regexCheckbox = this.getEl(`log-filter-regex-${this.objectName}`);
+                const caseCheckbox = this.getEl(`log-filter-case-${this.objectName}`);
+                const onlyCheckbox = this.getEl(`log-filter-only-${this.objectName}`);
 
                 if (regexCheckbox) regexCheckbox.checked = this.filterRegex;
                 if (caseCheckbox) caseCheckbox.checked = this.filterCase;
@@ -10694,7 +10710,7 @@ class LogViewer {
     saveBufferSize() {
         try {
             const saved = JSON.parse(localStorage.getItem('uniset-panel-buffersize') || '{}');
-            saved[this.objectName] = this.maxLines;
+            saved[this.tabKey] = this.maxLines;
             localStorage.setItem('uniset-panel-buffersize', JSON.stringify(saved));
         } catch (err) {
             console.warn('Failed to save buffer size:', err);
@@ -10704,9 +10720,10 @@ class LogViewer {
     loadSavedBufferSize() {
         try {
             const saved = JSON.parse(localStorage.getItem('uniset-panel-buffersize') || '{}');
-            if (saved[this.objectName]) {
-                this.maxLines = saved[this.objectName];
-                const bufferSelect = document.getElementById(`log-buffer-${this.objectName}`);
+            const bufSize = saved[this.tabKey] ?? saved[this.objectName];
+            if (bufSize) {
+                this.maxLines = bufSize;
+                const bufferSelect = this.getEl(`log-buffer-${this.objectName}`);
                 if (bufferSelect) {
                     bufferSelect.value = this.maxLines;
                 }
@@ -10717,9 +10734,9 @@ class LogViewer {
     }
 
     setupLevelDropdown() {
-        const btn = document.getElementById(`log-level-btn-${this.objectName}`);
-        const dropdown = document.getElementById(`log-level-dropdown-${this.objectName}`);
-        const wrapper = document.getElementById(`log-level-wrapper-${this.objectName}`);
+        const btn = this.getEl(`log-level-btn-${this.objectName}`);
+        const dropdown = this.getEl(`log-level-dropdown-${this.objectName}`);
+        const wrapper = this.getEl(`log-level-wrapper-${this.objectName}`);
 
         // Toggle dropdown
         btn.addEventListener('click', (e) => {
@@ -10792,7 +10809,7 @@ class LogViewer {
         });
 
         // Apply button
-        const applyBtn = document.getElementById(`log-level-apply-${this.objectName}`);
+        const applyBtn = this.getEl(`log-level-apply-${this.objectName}`);
         applyBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             this.applyLevelSelection();
@@ -10802,7 +10819,7 @@ class LogViewer {
     }
 
     updatePillsUI() {
-        const dropdown = document.getElementById(`log-level-dropdown-${this.objectName}`);
+        const dropdown = this.getEl(`log-level-dropdown-${this.objectName}`);
         const pills = dropdown.querySelectorAll('.log-level-pill');
         pills.forEach(pill => {
             const level = pill.dataset.level;
@@ -10810,7 +10827,7 @@ class LogViewer {
         });
 
         // Update button text to show selected count
-        const btn = document.getElementById(`log-level-btn-${this.objectName}`);
+        const btn = this.getEl(`log-level-btn-${this.objectName}`);
         if (this.selectedLevels.size === 0) {
             btn.textContent = 'Levels ▼';
         } else if (this.selectedLevels.has('ANY')) {
@@ -10845,7 +10862,7 @@ class LogViewer {
     saveLevels() {
         try {
             const saved = JSON.parse(localStorage.getItem('uniset-panel-loglevels') || '{}');
-            saved[this.objectName] = Array.from(this.selectedLevels);
+            saved[this.tabKey] = Array.from(this.selectedLevels);
             localStorage.setItem('uniset-panel-loglevels', JSON.stringify(saved));
         } catch (err) {
             console.warn('Failed to save log levels:', err);
@@ -10855,8 +10872,9 @@ class LogViewer {
     loadSavedLevels() {
         try {
             const saved = JSON.parse(localStorage.getItem('uniset-panel-loglevels') || '{}');
-            if (saved[this.objectName]) {
-                this.selectedLevels = new Set(saved[this.objectName]);
+            const levels = saved[this.tabKey] || saved[this.objectName];
+            if (levels) {
+                this.selectedLevels = new Set(levels);
                 this.updatePillsUI();
                 // Calculate mask for currentLevel
                 let mask = 0;
@@ -10877,8 +10895,8 @@ class LogViewer {
     }
 
     setupResize() {
-        const resizeHandle = document.getElementById(`log-resize-${this.objectName}`);
-        const logContainer = document.getElementById(`log-container-${this.objectName}`);
+        const resizeHandle = this.getEl(`log-resize-${this.objectName}`);
+        const logContainer = this.getEl(`log-container-${this.objectName}`);
 
         let startY = 0;
         let startHeight = 0;
@@ -10915,7 +10933,7 @@ class LogViewer {
     }
 
     toggleCollapse() {
-        const section = document.getElementById(`logviewer-section-${this.objectName}`);
+        const section = this.getEl(`logviewer-section-${this.objectName}`);
         section.classList.toggle('collapsed');
         this.saveCollapsedState();
     }
@@ -11094,7 +11112,7 @@ class LogViewer {
         if (this.lines.length > this.maxLines) {
             this.lines = this.lines.slice(-this.maxLines);
             // Remove old lines from DOM
-            const linesContainer = document.getElementById(`log-lines-${this.objectName}`);
+            const linesContainer = this.getEl(`log-lines-${this.objectName}`);
             if (linesContainer && linesContainer.children.length > this.maxLines) {
                 const toRemove = linesContainer.children.length - this.maxLines;
                 for (let i = 0; i < toRemove; i++) {
@@ -11139,7 +11157,7 @@ class LogViewer {
             const excess = this.lines.length - this.maxLines;
             this.lines = this.lines.slice(-this.maxLines);
             // Remove old lines from DOM
-            const linesContainer = document.getElementById(`log-lines-${this.objectName}`);
+            const linesContainer = this.getEl(`log-lines-${this.objectName}`);
             if (linesContainer) {
                 const toRemove = Math.min(excess, linesContainer.children.length);
                 for (let i = 0; i < toRemove; i++) {
@@ -11149,7 +11167,7 @@ class LogViewer {
         }
 
         // Render all new lines using DocumentFragment for better performance
-        const linesContainer = document.getElementById(`log-lines-${this.objectName}`);
+        const linesContainer = this.getEl(`log-lines-${this.objectName}`);
         if (!linesContainer) return;
 
         const fragment = document.createDocumentFragment();
@@ -11191,7 +11209,7 @@ class LogViewer {
     }
 
     renderLine(line, index = -1) {
-        const linesContainer = document.getElementById(`log-lines-${this.objectName}`);
+        const linesContainer = this.getEl(`log-lines-${this.objectName}`);
         if (!linesContainer) return;
 
         const div = document.createElement('div');
@@ -11255,7 +11273,7 @@ class LogViewer {
     }
 
     applyFilter() {
-        const linesContainer = document.getElementById(`log-lines-${this.objectName}`);
+        const linesContainer = this.getEl(`log-lines-${this.objectName}`);
         if (!linesContainer) return;
 
         // Re-render all lines with filter
@@ -11276,7 +11294,7 @@ class LogViewer {
     }
 
     updateMatchCount() {
-        const countEl = document.getElementById(`log-match-count-${this.objectName}`);
+        const countEl = this.getEl(`log-match-count-${this.objectName}`);
         if (countEl) {
             if (this.filter && this.matchCount > 0) {
                 countEl.textContent = `${this.matchCount} matches`;
@@ -11292,7 +11310,7 @@ class LogViewer {
     }
 
     updateStats() {
-        const statsEl = document.getElementById(`log-stats-${this.objectName}`);
+        const statsEl = this.getEl(`log-stats-${this.objectName}`);
         if (statsEl) {
             statsEl.textContent = `${this.lines.length} / ${this.maxLines}`;
         }
@@ -11309,7 +11327,7 @@ class LogViewer {
     }
 
     updatePauseUI() {
-        const pauseBtn = document.getElementById(`log-pause-${this.objectName}`);
+        const pauseBtn = this.getEl(`log-pause-${this.objectName}`);
         const pauseIcon = pauseBtn?.querySelector('.pause-icon');
 
         if (pauseBtn) {
@@ -11322,7 +11340,7 @@ class LogViewer {
     }
 
     updatePauseCount() {
-        const countEl = document.getElementById(`log-pause-count-${this.objectName}`);
+        const countEl = this.getEl(`log-pause-count-${this.objectName}`);
         if (countEl) {
             if (this.paused && this.pausedBuffer.length > 0) {
                 countEl.textContent = `+${this.pausedBuffer.length}`;
@@ -11393,25 +11411,25 @@ class LogViewer {
 
     scrollToBottom() {
         if (!this.autoScroll) return;
-        const container = document.getElementById(`log-container-${this.objectName}`);
+        const container = this.getEl(`log-container-${this.objectName}`);
         if (container) {
             container.scrollTop = container.scrollHeight;
         }
     }
 
     showWaiting() {
-        const placeholder = document.getElementById(`log-placeholder-${this.objectName}`);
-        const waiting = document.getElementById(`log-waiting-${this.objectName}`);
-        const lines = document.getElementById(`log-lines-${this.objectName}`);
+        const placeholder = this.getEl(`log-placeholder-${this.objectName}`);
+        const waiting = this.getEl(`log-waiting-${this.objectName}`);
+        const lines = this.getEl(`log-lines-${this.objectName}`);
         if (placeholder) placeholder.style.display = 'none';
         if (waiting) waiting.style.display = 'flex';
         if (lines) lines.style.display = 'none';
     }
 
     showLogLines() {
-        const placeholder = document.getElementById(`log-placeholder-${this.objectName}`);
-        const waiting = document.getElementById(`log-waiting-${this.objectName}`);
-        const lines = document.getElementById(`log-lines-${this.objectName}`);
+        const placeholder = this.getEl(`log-placeholder-${this.objectName}`);
+        const waiting = this.getEl(`log-waiting-${this.objectName}`);
+        const lines = this.getEl(`log-lines-${this.objectName}`);
         if (placeholder) placeholder.style.display = 'none';
         if (waiting) waiting.style.display = 'none';
         if (lines) lines.style.display = 'block';
@@ -11419,16 +11437,16 @@ class LogViewer {
 
     clear() {
         this.lines = [];
-        const linesContainer = document.getElementById(`log-lines-${this.objectName}`);
+        const linesContainer = this.getEl(`log-lines-${this.objectName}`);
         if (linesContainer) {
             linesContainer.innerHTML = '';
         }
     }
 
     updateStatus(status) {
-        const dot = document.getElementById(`log-status-dot-${this.objectName}`);
-        const text = document.getElementById(`log-status-text-${this.objectName}`);
-        const btn = document.getElementById(`log-connect-${this.objectName}`);
+        const dot = this.getEl(`log-status-dot-${this.objectName}`);
+        const text = this.getEl(`log-status-text-${this.objectName}`);
+        const btn = this.getEl(`log-connect-${this.objectName}`);
 
         if (!dot || !text || !btn) return;
 
@@ -11462,7 +11480,7 @@ class LogViewer {
     saveHeight() {
         try {
             const heights = JSON.parse(localStorage.getItem('uniset-panel-logheights') || '{}');
-            heights[this.objectName] = this.height;
+            heights[this.tabKey] = this.height;
             localStorage.setItem('uniset-panel-logheights', JSON.stringify(heights));
         } catch (err) {
             console.warn('Failed to save log height:', err);
@@ -11472,9 +11490,10 @@ class LogViewer {
     loadSavedHeight() {
         try {
             const heights = JSON.parse(localStorage.getItem('uniset-panel-logheights') || '{}');
-            if (heights[this.objectName]) {
-                this.height = heights[this.objectName];
-                const container = document.getElementById(`log-container-${this.objectName}`);
+            const h = heights[this.tabKey] ?? heights[this.objectName];
+            if (h) {
+                this.height = h;
+                const container = this.getEl(`log-container-${this.objectName}`);
                 if (container) {
                     container.style.height = `${this.height}px`;
                 }
@@ -11485,7 +11504,7 @@ class LogViewer {
     }
 
     saveCollapsedState() {
-        const section = document.getElementById(`logviewer-section-${this.objectName}`);
+        const section = this.getEl(`logviewer-section-${this.objectName}`);
         const collapsed = section.classList.contains('collapsed');
         state.collapsedSections[`logviewer-${this.objectName}`] = collapsed;
         saveCollapsedSections();
@@ -11493,7 +11512,7 @@ class LogViewer {
 
     restoreCollapsedState() {
         if (state.collapsedSections[`logviewer-${this.objectName}`]) {
-            const section = document.getElementById(`logviewer-section-${this.objectName}`);
+            const section = this.getEl(`logviewer-section-${this.objectName}`);
             section?.classList.add('collapsed');
         }
     }
@@ -13861,7 +13880,9 @@ function closeTab(name) {
         }
     }
 
-    unwatchObject(name).catch(console.error);
+    const objectName = tabState?.displayName || name;
+    const serverId = tabState?.serverId || null;
+    unwatchObject(objectName, serverId).catch(console.error);
 
     state.tabs.delete(name);
 
@@ -15455,9 +15476,9 @@ function loadChartsHeight(tabKey) {
 }
 
 // Настройка resize для IONC секции датчиков
-function setupIONCSensorsResize(objectName) {
-    const resizeHandle = document.getElementById(`ionc-resize-${objectName}`);
-    const sensorsContainer = document.getElementById(`ionc-sensors-container-${objectName}`);
+function setupIONCSensorsResize(tabKey, objectName) {
+    const resizeHandle = getElementInTab(tabKey, `ionc-resize-${objectName}`);
+    const sensorsContainer = getElementInTab(tabKey, `ionc-sensors-container-${objectName}`);
 
     if (!resizeHandle || !sensorsContainer) return;
 
@@ -15481,7 +15502,7 @@ function setupIONCSensorsResize(objectName) {
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
         // Сохраняем высоту
-        saveIONCSensorsHeight(objectName, sensorsContainer.offsetHeight);
+        saveIONCSensorsHeight(tabKey, sensorsContainer.offsetHeight);
     };
 
     resizeHandle.addEventListener('mousedown', (e) => {
@@ -15496,30 +15517,31 @@ function setupIONCSensorsResize(objectName) {
     });
 
     // Загружаем сохранённую высоту
-    loadIONCSensorsHeight(objectName);
+    loadIONCSensorsHeight(tabKey, objectName);
 }
 
-function saveIONCSensorsHeight(objectName, height) {
+function saveIONCSensorsHeight(tabKey, height) {
     try {
         const saved = JSON.parse(localStorage.getItem('uniset-panel-ionc-height') || '{}');
-        saved[objectName] = height;
+        saved[tabKey] = height;
         localStorage.setItem('uniset-panel-ionc-height', JSON.stringify(saved));
     } catch (err) {
         console.warn('Failed to save IONC sensors height:', err);
     }
 }
 
-function loadIONCSensorsHeight(objectName) {
+function loadIONCSensorsHeight(tabKey, objectName) {
 
 
 // === 53-ui-settings.js ===
     try {
         const saved = JSON.parse(localStorage.getItem('uniset-panel-ionc-height') || '{}');
-        if (saved[objectName]) {
-            const sensorsContainer = document.getElementById(`ionc-sensors-container-${objectName}`);
+        const height = saved[tabKey] ?? saved[objectName];
+        if (height) {
+            const sensorsContainer = getElementInTab(tabKey, `ionc-sensors-container-${objectName}`);
             if (sensorsContainer) {
-                sensorsContainer.style.height = `${saved[objectName]}px`;
-                sensorsContainer.style.maxHeight = `${saved[objectName]}px`;
+                sensorsContainer.style.height = `${height}px`;
+                sensorsContainer.style.maxHeight = `${height}px`;
             }
         }
     } catch (err) {
@@ -15528,9 +15550,9 @@ function loadIONCSensorsHeight(objectName) {
 }
 
 // Переключение режима отображения IO (горизонтально/вертикально)
-function toggleIOLayout(objectName) {
-    const checkbox = document.getElementById(`io-sequential-${objectName}`);
-    const ioGrid = document.getElementById(`io-grid-${objectName}`);
+function toggleIOLayout(tabKey, objectName) {
+    const checkbox = getElementInTab(tabKey, `io-sequential-${objectName}`);
+    const ioGrid = getElementInTab(tabKey, `io-grid-${objectName}`);
 
     if (!checkbox || !ioGrid) return;
 
@@ -15541,25 +15563,25 @@ function toggleIOLayout(objectName) {
     }
 
     // Сохраняем состояние
-    saveIOLayoutState(objectName, checkbox.checked);
+    saveIOLayoutState(tabKey, checkbox.checked);
 }
 
-function saveIOLayoutState(objectName, isSequential) {
+function saveIOLayoutState(tabKey, isSequential) {
     try {
         const saved = JSON.parse(localStorage.getItem('uniset-panel-io-layout') || '{}');
-        saved[objectName] = isSequential;
+        saved[tabKey] = isSequential;
         localStorage.setItem('uniset-panel-io-layout', JSON.stringify(saved));
     } catch (err) {
         console.warn('Failed to save IO layout state:', err);
     }
 }
 
-function loadIOLayoutState(objectName) {
+function loadIOLayoutState(tabKey, objectName) {
     try {
         const saved = JSON.parse(localStorage.getItem('uniset-panel-io-layout') || '{}');
-        if (saved[objectName]) {
-            const checkbox = document.getElementById(`io-sequential-${objectName}`);
-            const ioGrid = document.getElementById(`io-grid-${objectName}`);
+        if (saved[tabKey] ?? saved[objectName]) {
+            const checkbox = getElementInTab(tabKey, `io-sequential-${objectName}`);
+            const ioGrid = getElementInTab(tabKey, `io-grid-${objectName}`);
             if (checkbox && ioGrid) {
                 checkbox.checked = true;
                 ioGrid.classList.add('io-sequential');
@@ -15683,7 +15705,7 @@ function loadSectionOrder(tabKey) {
             anchor = orderedSections[i];
         }
 
-        updateReorderButtons(objectName);
+        updateReorderButtons(tabKey);
     } catch (err) {
         console.warn('Failed to load section order:', err);
     }
@@ -15721,20 +15743,23 @@ function setupIOSections(tabKey) {
     setupIOGlobalFilter(tabKey, objectName);
 
     ['inputs', 'outputs', 'timers'].forEach(type => {
-        setupIOResize(objectName, type);
+        setupIOResize(tabKey, objectName, type);
         setupIOUnpinAll(tabKey, objectName, type);
-        setupIOCollapse(objectName, type);
+        setupIOCollapse(tabKey, objectName, type);
     });
 }
 
-function setupIOCollapse(objectName, type) {
-    const toggleEl = document.querySelector(`.io-section-toggle[data-section="${type}-${objectName}"]`);
-    const section = document.getElementById(`${type}-section-${objectName}`);
+function setupIOCollapse(tabKey, objectName, type) {
+    const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+    if (!panel) return;
+
+    const toggleEl = panel.querySelector(`.io-section-toggle[data-section="${type}-${objectName}"]`);
+    const section = getElementInTab(tabKey, `${type}-section-${objectName}`);
 
     if (!toggleEl || !section) return;
 
     // Load saved state
-    const savedState = loadIOCollapseState(objectName, type);
+    const savedState = loadIOCollapseState(tabKey, type);
     if (savedState === 'collapsed') {
         section.classList.add('collapsed');
     }
@@ -15742,14 +15767,14 @@ function setupIOCollapse(objectName, type) {
     toggleEl.addEventListener('click', (e) => {
         e.stopPropagation();
         section.classList.toggle('collapsed');
-        saveIOCollapseState(objectName, type, section.classList.contains('collapsed'));
+        saveIOCollapseState(tabKey, type, section.classList.contains('collapsed'));
     });
 }
 
-function saveIOCollapseState(objectName, type, collapsed) {
+function saveIOCollapseState(tabKey, type, collapsed) {
     try {
         const saved = JSON.parse(localStorage.getItem('uniset-panel-io-collapse') || '{}');
-        const key = `${objectName}-${type}`;
+        const key = `${tabKey}-${type}`;
         saved[key] = collapsed ? 'collapsed' : 'expanded';
         localStorage.setItem('uniset-panel-io-collapse', JSON.stringify(saved));
     } catch (err) {
@@ -15757,10 +15782,10 @@ function saveIOCollapseState(objectName, type, collapsed) {
     }
 }
 
-function loadIOCollapseState(objectName, type) {
+function loadIOCollapseState(tabKey, type) {
     try {
         const saved = JSON.parse(localStorage.getItem('uniset-panel-io-collapse') || '{}');
-        const key = `${objectName}-${type}`;
+        const key = `${tabKey}-${type}`;
         return saved[key] || 'expanded';
     } catch (err) {
         console.warn('Failed to load IO collapse state:', err);
@@ -15768,9 +15793,9 @@ function loadIOCollapseState(objectName, type) {
     }
 }
 
-function setupIOResize(objectName, type) {
-    const resizeHandle = document.getElementById(`io-resize-${type}-${objectName}`);
-    const container = document.getElementById(`io-container-${type}-${objectName}`);
+function setupIOResize(tabKey, objectName, type) {
+    const resizeHandle = getElementInTab(tabKey, `io-resize-${type}-${objectName}`);
+    const container = getElementInTab(tabKey, `io-container-${type}-${objectName}`);
 
     if (!resizeHandle || !container) return;
 
@@ -15793,7 +15818,7 @@ function setupIOResize(objectName, type) {
         document.removeEventListener('mouseup', onMouseUp);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
-        saveIOHeight(objectName, type, container.offsetHeight);
+        saveIOHeight(tabKey, type, container.offsetHeight);
     };
 
     resizeHandle.addEventListener('mousedown', (e) => {
@@ -15807,13 +15832,13 @@ function setupIOResize(objectName, type) {
         document.body.style.userSelect = 'none';
     });
 
-    loadIOHeight(objectName, type);
+    loadIOHeight(tabKey, objectName, type);
 }
 
-function saveIOHeight(objectName, type, height) {
+function saveIOHeight(tabKey, type, height) {
     try {
         const saved = JSON.parse(localStorage.getItem('uniset-panel-io-heights') || '{}');
-        const key = `${objectName}-${type}`;
+        const key = `${tabKey}-${type}`;
         saved[key] = height;
         localStorage.setItem('uniset-panel-io-heights', JSON.stringify(saved));
     } catch (err) {
@@ -15821,12 +15846,12 @@ function saveIOHeight(objectName, type, height) {
     }
 }
 
-function loadIOHeight(objectName, type) {
+function loadIOHeight(tabKey, objectName, type) {
     try {
         const saved = JSON.parse(localStorage.getItem('uniset-panel-io-heights') || '{}');
-        const key = `${objectName}-${type}`;
+        const key = `${tabKey}-${type}`;
         if (saved[key]) {
-            const container = document.getElementById(`io-container-${type}-${objectName}`);
+            const container = getElementInTab(tabKey, `io-container-${type}-${objectName}`);
             if (container) {
                 container.style.height = `${saved[key]}px`;
                 container.style.maxHeight = `${saved[key]}px`;
@@ -15839,7 +15864,7 @@ function loadIOHeight(objectName, type) {
 
 // tabKey - ключ вкладки, objectName - displayName для DOM селекторов
 function setupIOGlobalFilter(tabKey, objectName) {
-    const filterInput = document.getElementById(`io-filter-global-${objectName}`);
+    const filterInput = getElementInTab(tabKey, `io-filter-global-${objectName}`);
     if (!filterInput) return;
 
     let filterTimeout = null;
@@ -15876,7 +15901,7 @@ function setupIOGlobalFilter(tabKey, objectName) {
 
 // tabKey - ключ вкладки, objectName - displayName для DOM селекторов
 function setupIOUnpinAll(tabKey, objectName, type) {
-    const unpinBtn = document.getElementById(`io-unpin-${type}-${objectName}`);
+    const unpinBtn = getElementInTab(tabKey, `io-unpin-${type}-${objectName}`);
     if (!unpinBtn) return;
 
     unpinBtn.addEventListener('click', (e) => {

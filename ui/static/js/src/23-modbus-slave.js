@@ -231,7 +231,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     }
 
     renderStatus() {
-        const tbody = document.getElementById(`mbs-status-${this.objectName}`);
+        const tbody = this.getEl(`mbs-status-${this.objectName}`);
         if (!tbody) return;
 
         tbody.innerHTML = '';
@@ -278,8 +278,8 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     }
 
     renderTcpSessions() {
-        const tbody = document.getElementById(`mbs-tcp-sessions-${this.objectName}`);
-        const info = document.getElementById(`mbs-tcp-sessions-info-${this.objectName}`);
+        const tbody = this.getEl(`mbs-tcp-sessions-${this.objectName}`);
+        const info = this.getEl(`mbs-tcp-sessions-info-${this.objectName}`);
         if (!tbody) return;
 
         tbody.innerHTML = '';
@@ -306,7 +306,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     }
 
     renderParams() {
-        const tbody = document.getElementById(`mbs-params-${this.objectName}`);
+        const tbody = this.getEl(`mbs-params-${this.objectName}`);
         if (!tbody) return;
 
         tbody.innerHTML = '';
@@ -337,7 +337,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         if (this.isLoadingChunk || !this.hasMore) return;
         this.isLoadingChunk = true;
 
-        const loadingEl = document.getElementById(`mbs-loading-more-${this.objectName}`);
+        const loadingEl = this.getEl(`mbs-loading-more-${this.objectName}`);
         if (loadingEl) loadingEl.style.display = 'block';
 
         try {
@@ -380,7 +380,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
 
             // Обработчики сортировки (только при первой загрузке)
             if (offset === 0) {
-                const table = document.getElementById(`mbs-registers-table-${this.objectName}`);
+                const table = this.getEl(`mbs-registers-table-${this.objectName}`);
                 if (table) {
                     this.attachSortHandlers(table);
                     this.updateSortHeaders();
@@ -430,7 +430,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     }
 
     renderRegisters() {
-        const tbody = document.getElementById(`mbs-registers-tbody-${this.objectName}`);
+        const tbody = this.getEl(`mbs-registers-tbody-${this.objectName}`);
         if (!tbody) return;
 
         // Получаем закрепленные регистры
@@ -438,7 +438,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         const hasPinned = pinnedRegisters.size > 0;
 
         // Показываем/скрываем кнопку "снять все"
-        const unpinBtn = document.getElementById(`mbs-unpin-${this.objectName}`);
+        const unpinBtn = this.getEl(`mbs-unpin-${this.objectName}`);
         if (unpinBtn) {
             unpinBtn.style.display = hasPinned ? 'inline' : 'none';
         }
@@ -528,7 +528,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     }
 
     setupVirtualScroll() {
-        const viewport = document.getElementById(`mbs-registers-viewport-${this.objectName}`);
+        const viewport = this.getEl(`mbs-registers-viewport-${this.objectName}`);
         if (!viewport) return;
 
         viewport.addEventListener('scroll', () => {
@@ -657,7 +657,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
 
     // Обновление визуальных индикаторов сортировки
     updateSortHeaders() {
-        const table = document.getElementById(`mbs-registers-table-${this.objectName}`);
+        const table = this.getEl(`mbs-registers-table-${this.objectName}`);
         if (!table) return;
 
         table.querySelectorAll('th.th-sortable').forEach(th => {

@@ -579,13 +579,14 @@ test.describe('ModbusSlave renderer', () => {
       const pinToggle = firstRow.locator('.pin-toggle');
       await pinToggle.click();
 
-      // Check localStorage
+      // Check localStorage (keys are stored by tabKey, not objectName)
+      const tabKey = await page.locator('.tab-panel.active').getAttribute('data-name');
       const pinnedIds = await page.evaluate(() => {
         const stored = localStorage.getItem('uniset-panel-mbs-pinned');
         return stored ? JSON.parse(stored) : {};
       });
 
-      expect(pinnedIds[MBS_OBJECT]).toContain(registerId);
+      expect(pinnedIds[tabKey!]).toContain(registerId);
 
       // Reload page
       await page.reload();

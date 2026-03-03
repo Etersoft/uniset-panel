@@ -27,7 +27,7 @@ const VirtualScrollMixin = {
 
     // Настройка обработчика скролла
     setupVirtualScrollFor(viewportId) {
-        const viewport = document.getElementById(viewportId);
+        const viewport = this.getEl(viewportId);
         if (!viewport) return;
 
         let ticking = false;
@@ -45,7 +45,7 @@ const VirtualScrollMixin = {
 
     // Обновление видимых строк
     updateVisibleRowsFor(viewportId) {
-        const viewport = document.getElementById(viewportId);
+        const viewport = this.getEl(viewportId);
         if (!viewport) return;
 
         const scrollTop = viewport.scrollTop;
@@ -74,7 +74,7 @@ const VirtualScrollMixin = {
 
     // Показать/скрыть индикатор загрузки
     showLoadingIndicatorFor(elementId, show) {
-        const el = document.getElementById(elementId);
+        const el = this.getEl(elementId);
         if (el) el.style.display = show ? 'block' : 'none';
     },
 
@@ -186,7 +186,7 @@ const ResizableSectionMixin = {
     loadSectionHeight(storageKey, defaultHeight = DEFAULT_SECTION_HEIGHT) {
         try {
             const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            const value = saved[this.objectName];
+            const value = saved[this.tabKey] ?? saved[this.objectName];
             if (typeof value === 'number' && value > 0) {
                 return value;
             }
@@ -200,7 +200,7 @@ const ResizableSectionMixin = {
     saveSectionHeight(storageKey, value) {
         try {
             const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            saved[this.objectName] = value;
+            saved[this.tabKey] = value;
             localStorage.setItem(storageKey, JSON.stringify(saved));
         } catch (err) {
             console.warn('Failed to save section height:', err);
@@ -214,8 +214,8 @@ const ResizableSectionMixin = {
     // heightProp - имя свойства для высоты (например 'sensorsHeight')
     // options - дополнительные параметры { minHeight, maxHeight }
     setupSectionResize(handleId, containerId, storageKey, heightProp, options = {}) {
-        const handle = document.getElementById(handleId);
-        const container = document.getElementById(containerId);
+        const handle = this.getEl(handleId);
+        const container = this.getEl(containerId);
         if (!handle || !container) return;
 
         const minHeight = options.minHeight || MIN_SECTION_HEIGHT;
@@ -310,7 +310,7 @@ const FilterMixin = {
 
     // Настройка debounced фильтра
     setupFilterInput(inputId, onFilter, delay = FILTER_DEBOUNCE_DELAY) {
-        const input = document.getElementById(inputId);
+        const input = this.getEl(inputId);
         if (!input) return;
 
         input.addEventListener('input', (e) => {
@@ -325,9 +325,9 @@ const FilterMixin = {
     // Полная настройка фильтров с ESC, type filter и опциональным status filter
     // onTextFilter — опциональный отдельный callback для текстового фильтра (если отличается от onFilter)
     setupFilterListeners(filterInputId, typeFilterId, onFilter, delay = FILTER_DEBOUNCE_DELAY, statusFilterId = null, onTextFilter = null) {
-        const filterInput = document.getElementById(filterInputId);
-        const typeFilter = document.getElementById(typeFilterId);
-        const statusFilter = statusFilterId ? document.getElementById(statusFilterId) : null;
+        const filterInput = this.getEl(filterInputId);
+        const typeFilter = this.getEl(typeFilterId);
+        const statusFilter = statusFilterId ? this.getEl(statusFilterId) : null;
         const textCallback = onTextFilter || onFilter;
 
         if (filterInput) {
@@ -371,8 +371,8 @@ const FilterMixin = {
 
     // Настройка ESC на контейнере для сброса фильтра
     setupContainerEscHandler(containerId, filterInputId, onFilter) {
-        const container = document.getElementById(containerId);
-        const filterInput = document.getElementById(filterInputId);
+        const container = this.getEl(containerId);
+        const filterInput = this.getEl(filterInputId);
         if (!container || !filterInput) return;
 
         container.setAttribute('tabindex', '0');
@@ -413,7 +413,7 @@ const ParamsAccessibilityMixin = {
         const explicitlyDisabled = val === false || val === 0;
 
         // Заблокировать кнопку "Apply" (учитываем и httpEnabledSetParams, и control token)
-        const saveBtn = document.getElementById(`${prefix}-params-save-${this.objectName}`);
+        const saveBtn = this.getEl(`${prefix}-params-save-${this.objectName}`);
         if (saveBtn) {
             const blocked = explicitlyDisabled || !canControl();
             saveBtn.disabled = blocked;
@@ -427,7 +427,7 @@ const ParamsAccessibilityMixin = {
         }
 
         // Заблокировать все input в таблице параметров
-        const paramsTable = document.getElementById(`${prefix}-params-${this.objectName}`);
+        const paramsTable = this.getEl(`${prefix}-params-${this.objectName}`);
         if (paramsTable) {
             const inputs = paramsTable.querySelectorAll('input, select');
             inputs.forEach(input => {
@@ -436,7 +436,7 @@ const ParamsAccessibilityMixin = {
         }
 
         // Обновить индикатор в шапке (если есть)
-        const indParams = document.getElementById(`${prefix}-ind-params-${this.objectName}`);
+        const indParams = this.getEl(`${prefix}-ind-params-${this.objectName}`);
         if (indParams) {
             indParams.className = `header-indicator-dot ${enabled ? 'ok' : 'fail'}`;
             indParams.title = enabled ? 'Parameters: Yes' : 'Parameters: No';
@@ -474,8 +474,8 @@ const ParamsManagerMixin = {
     // Сохранение изменённых параметров на сервер
     async saveParams() {
         // Контейнер: ${prefix}-params-${obj} или ${prefix}-params-writable-${obj} (OPCUA Exchange)
-        const container = document.getElementById(`${this.paramsPrefix}-params-${this.objectName}`)
-            || document.getElementById(`${this.paramsPrefix}-params-writable-${this.objectName}`);
+        const container = this.getEl(`${this.paramsPrefix}-params-${this.objectName}`)
+            || this.getEl(`${this.paramsPrefix}-params-writable-${this.objectName}`);
         if (!container) return;
 
         const changed = {};
@@ -534,11 +534,11 @@ const ParamsManagerMixin = {
 
     // Подключение кнопок Refresh и Apply
     setupParamsListeners() {
-        const refreshBtn = document.getElementById(`${this.paramsPrefix}-params-refresh-${this.objectName}`);
+        const refreshBtn = this.getEl(`${this.paramsPrefix}-params-refresh-${this.objectName}`);
         if (refreshBtn) {
             refreshBtn.addEventListener('click', () => this.loadParams());
         }
-        const saveBtn = document.getElementById(`${this.paramsPrefix}-params-save-${this.objectName}`);
+        const saveBtn = this.getEl(`${this.paramsPrefix}-params-save-${this.objectName}`);
         if (saveBtn) {
             saveBtn.addEventListener('click', () => this.saveParams());
         }
@@ -557,7 +557,7 @@ const ItemCounterMixin = {
      * @param {number} total - Общее количество элементов
      */
     updateItemCount(elementId, loaded, total) {
-        const countEl = document.getElementById(elementId);
+        const countEl = this.getEl(elementId);
         if (countEl) {
             countEl.textContent = loaded === total ? `${total}` : `${loaded} / ${total}`;
         }
@@ -577,7 +577,7 @@ const SectionHeightMixin = {
     loadSectionHeight(storageKey, defaultHeight = DEFAULT_SECTION_HEIGHT) {
         try {
             const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            const value = saved[this.objectName];
+            const value = saved[this.tabKey] ?? saved[this.objectName];
             if (typeof value === 'number' && value > 0) {
                 return value;
             }
@@ -595,7 +595,7 @@ const SectionHeightMixin = {
     saveSectionHeight(storageKey, value) {
         try {
             const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            saved[this.objectName] = value;
+            saved[this.tabKey] = value;
             localStorage.setItem(storageKey, JSON.stringify(saved));
         } catch (err) {
             console.warn('Failed to save section height:', err);
@@ -612,7 +612,7 @@ const PinManagementMixin = {
     getPinnedItems(storageKey) {
         try {
             const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            return new Set(saved[this.objectName] || []);
+            return new Set(saved[this.tabKey] || saved[this.objectName] || []);
         } catch (err) {
             return new Set();
         }
@@ -626,7 +626,7 @@ const PinManagementMixin = {
     savePinnedItems(storageKey, pinnedSet) {
         try {
             const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            saved[this.objectName] = Array.from(pinnedSet);
+            saved[this.tabKey] = Array.from(pinnedSet);
             localStorage.setItem(storageKey, JSON.stringify(saved));
         } catch (err) {
             console.warn('Failed to save pinned items:', err);
@@ -697,10 +697,10 @@ const TableSortMixin = {
         this.sortStorageKey = storageKey;
         try {
             const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            const state = saved[this.objectName];
-            if (state) {
-                this.sortColumn = state.column || 'name';
-                this.sortDirection = state.direction || 'asc';
+            const sortState = saved[this.tabKey] || saved[this.objectName];
+            if (sortState) {
+                this.sortColumn = sortState.column || 'name';
+                this.sortDirection = sortState.direction || 'asc';
             }
         } catch (err) {
             console.warn('Failed to load sort state:', err);
@@ -714,7 +714,7 @@ const TableSortMixin = {
         if (!this.sortStorageKey) return;
         try {
             const saved = JSON.parse(localStorage.getItem(this.sortStorageKey) || '{}');
-            saved[this.objectName] = {
+            saved[this.tabKey] = {
                 column: this.sortColumn,
                 direction: this.sortDirection
             };
@@ -890,6 +890,16 @@ class BaseObjectRenderer {
         this.showAddSensorButton = true;
     }
 
+    // Найти элемент по ID внутри панели своей вкладки
+    getEl(id) {
+        return getElementInTab(this.tabKey, id);
+    }
+
+    // Найти все элементы по CSS-селектору внутри панели своей вкладки
+    getEls(selector) {
+        return getElementsInTab(this.tabKey, selector);
+    }
+
     // Получить тип объекта (для отображения)
     static getTypeName() {
         return 'Object';
@@ -949,7 +959,7 @@ class BaseObjectRenderer {
 
     // Обновить отображение относительного времени
     updateStatusDisplay() {
-        const el = document.getElementById(`${this.statusLastIdPrefix}-${this.objectName}`);
+        const el = this.getEl(`${this.statusLastIdPrefix}-${this.objectName}`);
         if (!el) return;
         el.textContent = this.formatTimeAgo(this.statusLastUpdate);
     }
@@ -1048,7 +1058,7 @@ class BaseObjectRenderer {
                                placeholder="Filter..." data-object="${this.objectName}">
                     </div>
                     <label class="io-sequential-toggle" onclick="event.stopPropagation()">
-                        <input type="checkbox" id="io-sequential-${this.objectName}" onchange="toggleIOLayout('${this.objectName}')">
+                        <input type="checkbox" id="io-sequential-${this.objectName}" onchange="toggleIOLayout('${this.tabKey}', '${this.objectName}')">
                         <span>Sequential</span>
                     </label>
                     <div class="section-reorder-buttons" onclick="event.stopPropagation()">
@@ -1171,7 +1181,7 @@ class BaseObjectRenderer {
             return;
         }
 
-        const container = document.getElementById(`logviewer-container-${this.objectName}`);
+        const container = this.getEl(`logviewer-container-${this.objectName}`);
         if (!container) return;
 
         // Создаём LogViewer только если его ещё нет
@@ -1407,7 +1417,7 @@ class BaseObjectRenderer {
 
     // Set текст уведомления
     setNote(id, text, isError = false) {
-        const el = document.getElementById(id);
+        const el = this.getEl(id);
         if (!el) return;
         el.textContent = text || '';
         el.classList.toggle('note-error', !!(text && isError));
@@ -1415,8 +1425,9 @@ class BaseObjectRenderer {
 
     // Базовый resize handler для секций
     setupResize(containerSelector, handleSelector, storageKey, minHeight = 100, maxHeight = 800) {
-        const container = document.querySelector(containerSelector);
-        const handle = document.querySelector(handleSelector);
+        const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
+        const container = panel ? panel.querySelector(containerSelector) : document.querySelector(containerSelector);
+        const handle = panel ? panel.querySelector(handleSelector) : document.querySelector(handleSelector);
         if (!container || !handle) return;
 
         let startY, startHeight;
