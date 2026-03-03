@@ -10,32 +10,47 @@ const objectRenderers = new Map();
 // ============================================================================
 
 /**
- * Миксин для виртуального скролла с infinite loading
- * Требует: viewportId, itemsArray, rowHeight, loadMoreFn, renderFn
+ * Миксин для виртуального скролла и бесконечной подгрузки
+ *
+ * Группа A (полный виртуальный скролл): setupFullVirtualScroll()
+ *   RAF-throttled скролл, расчёт startIndex/endIndex, spacer, бесконечная подгрузка.
+ *   Рендерер должен реализовать: getVScrollItems(), vscrollRenderVisible(), vscrollLoadMore()
+ *
+ * Группа B (простой бесконечный скролл): setupSimpleInfiniteScroll()
+ *   Только подгрузка при приближении к низу, без windowing.
+ *   Рендерер должен реализовать: getVScrollItems(), vscrollLoadMore()
  */
 const VirtualScrollMixin = {
     // Инициализация свойств виртуального скролла
     initVirtualScrollProps() {
-        this.rowHeight = DEFAULT_ROW_HEIGHT;
-        this.bufferRows = DEFAULT_BUFFER_ROWS;
+        this.rowHeight = this.rowHeight || DEFAULT_ROW_HEIGHT;
+        this.bufferRows = this.bufferRows || DEFAULT_BUFFER_ROWS;
         this.startIndex = 0;
         this.endIndex = 0;
-        this.chunkSize = VIRTUAL_SCROLL_CHUNK_SIZE;
+        this.chunkSize = this.chunkSize || VIRTUAL_SCROLL_CHUNK_SIZE;
         this.hasMore = true;
         this.isLoadingChunk = false;
     },
 
-    // Настройка обработчика скролла
-    setupVirtualScrollFor(viewportId) {
-        const viewport = this.getEl(viewportId);
+    // Группа A: RAF-throttled скролл + windowing + infinite scroll
+    // config: { viewportId, threshold?, thresholdType? }
+    //   viewportId - ID viewport-элемента (без objectName, будет добавлен)
+    //   threshold - порог подгрузки (default: VIRTUAL_SCROLL_LOAD_THRESHOLD px или 80%)
+    //   thresholdType - 'px' (default) или 'percent'
+    setupFullVirtualScroll(config) {
+        this._vscrollViewportId = config.viewportId;
+        const viewport = this.getEl(config.viewportId);
         if (!viewport) return;
+
+        const threshold = config.threshold ?? VIRTUAL_SCROLL_LOAD_THRESHOLD;
+        const thresholdType = config.thresholdType || 'px';
 
         let ticking = false;
         viewport.addEventListener('scroll', () => {
             if (!ticking) {
                 requestAnimationFrame(() => {
-                    this.updateVisibleRowsFor(viewportId);
-                    this.checkInfiniteScrollFor(viewport);
+                    this._updateVisibleRows(viewport);
+                    this._checkInfiniteScroll(viewport, threshold, thresholdType);
                     ticking = false;
                 });
                 ticking = true;
@@ -43,45 +58,68 @@ const VirtualScrollMixin = {
         });
     },
 
-    // Обновление видимых строк
-    updateVisibleRowsFor(viewportId) {
-        const viewport = this.getEl(viewportId);
+    // Публичный метод для пересчёта видимых строк (вызывается из loadSensors/loadMoreSensors)
+    updateVisibleRows() {
+        const viewport = this.getEl(this._vscrollViewportId);
+        if (!viewport) return;
+        this._updateVisibleRows(viewport);
+    },
+
+    // Группа B: простой scroll listener для infinite scroll (без windowing)
+    // config: { viewportId, threshold? }
+    setupSimpleInfiniteScroll(config) {
+        const viewport = this.getEl(config.viewportId);
         if (!viewport) return;
 
+        const threshold = config.threshold || 100;
+        viewport.addEventListener('scroll', () => {
+            const scrollTop = viewport.scrollTop;
+            const viewportHeight = viewport.clientHeight;
+            const scrollHeight = viewport.scrollHeight;
+
+            if (scrollHeight - scrollTop - viewportHeight < threshold) {
+                this.vscrollLoadMore();
+            }
+        });
+    },
+
+    // Расчёт видимого диапазона строк
+    _updateVisibleRows(viewport) {
         const scrollTop = viewport.scrollTop;
         const viewportHeight = viewport.clientHeight;
-        const items = this.getVirtualScrollItems();
-        const totalRows = items.length;
+        const totalRows = this.getVScrollItems().length;
         const visibleRows = Math.ceil(viewportHeight / this.rowHeight);
 
         this.startIndex = Math.max(0, Math.floor(scrollTop / this.rowHeight) - this.bufferRows);
         this.endIndex = Math.min(totalRows, this.startIndex + visibleRows + 2 * this.bufferRows);
 
-        this.renderVisibleItems();
+        this.vscrollRenderVisible();
     },
 
     // Проверка необходимости подгрузки
-    checkInfiniteScrollFor(viewport) {
+    _checkInfiniteScroll(viewport, threshold, thresholdType) {
         if (this.isLoadingChunk || !this.hasMore) return;
 
-        const scrollBottom = viewport.scrollTop + viewport.clientHeight;
-        const items = this.getVirtualScrollItems();
-        const totalHeight = items.length * this.rowHeight;
-        if (totalHeight - scrollBottom < VIRTUAL_SCROLL_LOAD_THRESHOLD) {
-            this.loadMoreItems();
+        if (thresholdType === 'percent') {
+            const scrollTop = viewport.scrollTop;
+            const scrollHeight = viewport.scrollHeight;
+            const clientHeight = viewport.clientHeight;
+            if (scrollTop + clientHeight >= scrollHeight * (threshold / 100)) {
+                this.vscrollLoadMore();
+            }
+        } else {
+            const scrollBottom = viewport.scrollTop + viewport.clientHeight;
+            const totalHeight = this.getVScrollItems().length * this.rowHeight;
+            if (totalHeight - scrollBottom < threshold) {
+                this.vscrollLoadMore();
+            }
         }
     },
 
     // Показать/скрыть индикатор загрузки
-    showLoadingIndicatorFor(elementId, show) {
-        const el = this.getEl(elementId);
+    showVScrollLoadingIndicator(loadingId, show) {
+        const el = this.getEl(loadingId);
         if (el) el.style.display = show ? 'block' : 'none';
-    },
-
-    // Получить видимый срез данных
-    getVisibleSlice() {
-        const items = this.getVirtualScrollItems();
-        return items.slice(this.startIndex, this.endIndex);
     }
 };
 
@@ -90,13 +128,6 @@ const VirtualScrollMixin = {
  * Требует: objectName, apiPath, idField
  */
 const SSESubscriptionMixin = {
-    // Инициализация свойств SSE
-    initSSEProps() {
-        this.subscribedSensorIds = new Set();
-        this.pendingUpdates = [];
-        this.renderScheduled = false;
-    },
-
     // Подписка на SSE обновления
     // apiPath - путь API (например '/ionc', '/opcua', '/modbus')
     // ids - массив ID для подписки
@@ -161,20 +192,6 @@ const SSESubscriptionMixin = {
         console.log(`${logPrefix}: Переподписка ${ids.length} элементов для ${this.objectName}`);
         this.subscribedSensorIds.clear(); // Очищаем кэш чтобы subscribeToSSEFor не пропустил
         await this.subscribeToSSEFor(apiPath, ids, idField, logPrefix, extraBody);
-    },
-
-    // Планирование батчевого рендера обновлений
-    scheduleBatchRender(renderFn) {
-        if (this.renderScheduled) return;
-        this.renderScheduled = true;
-
-        requestAnimationFrame(() => {
-            if (this.pendingUpdates.length > 0) {
-                renderFn(this.pendingUpdates);
-                this.pendingUpdates = [];
-            }
-            this.renderScheduled = false;
-        });
     }
 };
 
@@ -265,14 +282,6 @@ const ResizableSectionMixin = {
  * Миксин для фильтрации списка элементов
  */
 const FilterMixin = {
-    // Инициализация свойств фильтрации
-    initFilterProps() {
-        this.filter = '';
-        this.typeFilter = 'all';
-        this.statusFilter = 'all';
-        this.filterDebounce = null;
-    },
-
     // Применение локальных фильтров к списку
     // extraFields - дополнительные поля для текстового поиска (например, ['mbreg'] для Modbus)
     // fieldAccessor - функция для получения значения поля (для вложенных объектов)
@@ -306,20 +315,6 @@ const FilterMixin = {
         }
 
         return result;
-    },
-
-    // Настройка debounced фильтра
-    setupFilterInput(inputId, onFilter, delay = FILTER_DEBOUNCE_DELAY) {
-        const input = this.getEl(inputId);
-        if (!input) return;
-
-        input.addEventListener('input', (e) => {
-            clearTimeout(this.filterDebounce);
-            this.filterDebounce = setTimeout(() => {
-                this.filter = e.target.value;
-                onFilter();
-            }, delay);
-        });
     },
 
     // Полная настройка фильтров с ESC, type filter и опциональным status filter
@@ -669,7 +664,6 @@ const PinManagementMixin = {
 
     // Сокращённые методы, использующие this.pinStorageKey и this.renderAfterPinChange
     getPinned()    { return this.getPinnedItems(this.pinStorageKey); },
-    savePinned(s)  { this.savePinnedItems(this.pinStorageKey, s); },
     togglePin(id)  { this.toggleItemPin(this.pinStorageKey, id, this.renderAfterPinChange); },
     unpinAll()     { this.unpinAllItems(this.pinStorageKey, this.renderAfterPinChange); }
 };
@@ -1297,49 +1291,6 @@ class BaseObjectRenderer {
                 <button class="dashboard-add-btn"
                         data-sensor-name="${escapeHtml(sensorName)}"
                         data-sensor-label="${escapeHtml(label)}"
-                        title="Add to Dashboard">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="7" height="7" rx="1"/>
-                        <rect x="14" y="3" width="7" height="7" rx="1"/>
-                        <rect x="3" y="14" width="7" height="7" rx="1"/>
-                        <rect x="14" y="14" width="7" height="7" rx="1"/>
-                    </svg>
-                </button>
-            </td>
-        `;
-    }
-
-    // Устаревшие методы - оставлены для обратной совместимости
-    renderChartToggleCell(sensorId, sensorName, prefix = 'sensor') {
-        const isOnChart = this.isSensorOnChart(sensorName);
-        const varName = `${prefix}-${sensorId}`;
-        const checkboxId = `chart-${this.objectName}-${varName}`;
-        return `
-            <td class="chart-col">
-                <span class="chart-toggle">
-                    <input type="checkbox"
-                           class="chart-checkbox chart-toggle-input"
-                           id="${checkboxId}"
-                           data-sensor-id="${sensorId}"
-                           data-sensor-name="${escapeHtml(sensorName)}"
-                           ${isOnChart ? 'checked' : ''}>
-                    <label class="chart-toggle-label" for="${checkboxId}" title="Add to Chart">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 3v18h18"/>
-                            <path d="M18 9l-5 5-4-4-3 3"/>
-                        </svg>
-                    </label>
-                </span>
-            </td>
-        `;
-    }
-
-    renderDashboardToggleCell(sensorName, sensorLabel = null) {
-        return `
-            <td class="dashboard-col">
-                <button class="dashboard-add-btn"
-                        data-sensor-name="${escapeHtml(sensorName)}"
-                        data-sensor-label="${escapeHtml(sensorLabel || sensorName)}"
                         title="Add to Dashboard">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="3" width="7" height="7" rx="1"/>

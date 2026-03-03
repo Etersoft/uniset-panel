@@ -23,17 +23,9 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         this.pendingUpdates = new Map(); // id -> sensor
         this.renderScheduled = false;
 
-        // Virtual scroll properties (как в OPCUA)
-        this.allSensors = [];           // Все загруженные сенсоры
-        this.rowHeight = DEFAULT_ROW_HEIGHT; // Высота строки (px)
-        this.bufferRows = DEFAULT_BUFFER_ROWS; // Буфер строк выше/ниже viewport
-        this.startIndex = 0;            // Первая видимая строка
-        this.endIndex = 0;              // Последняя видимая строка
-
-        // Infinite scroll properties
-        this.chunkSize = VIRTUAL_SCROLL_CHUNK_SIZE; // Сенсоров за запрос
-        this.hasMore = true;            // Есть ли ещё данные
-        this.isLoadingChunk = false;    // Идёт загрузка
+        // Virtual scroll properties
+        this.allSensors = [];
+        this.initVirtualScrollProps();
 
         // Генераторы значений: Map<sensorId, GeneratorState>
         this.activeGenerators = new Map();
@@ -72,8 +64,15 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         this.loadLostConsumers();
         setupChartsResize(this.tabKey);
         setupIONCSensorsResize(this.tabKey, this.objectName);
-        this.setupVirtualScroll();
+        this.setupFullVirtualScroll({
+            viewportId: `ionc-sensors-viewport-${this.objectName}`,
+        });
     }
+
+    // Bridge methods for VirtualScrollMixin
+    getVScrollItems() { return this.allSensors; }
+    vscrollRenderVisible() { this.renderVisibleSensors(); }
+    vscrollLoadMore() { this.loadMoreSensors(); }
 
     createSensorsSection() {
         return `
@@ -360,50 +359,6 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         } finally {
             this.isLoadingChunk = false;
             this.showLoadingIndicator(false);
-        }
-    }
-
-    setupVirtualScroll() {
-        const viewport = this.getEl(`ionc-sensors-viewport-${this.objectName}`);
-        if (!viewport) return;
-
-        let ticking = false;
-        viewport.addEventListener('scroll', () => {
-            if (!ticking) {
-                requestAnimationFrame(() => {
-                    this.updateVisibleRows();
-                    this.checkInfiniteScroll(viewport);
-                    ticking = false;
-                });
-                ticking = true;
-            }
-        });
-    }
-
-    updateVisibleRows() {
-        const viewport = this.getEl(`ionc-sensors-viewport-${this.objectName}`);
-        if (!viewport) return;
-
-        const scrollTop = viewport.scrollTop;
-        const viewportHeight = viewport.clientHeight;
-        const totalRows = this.allSensors.length;
-        const visibleRows = Math.ceil(viewportHeight / this.rowHeight);
-
-        this.startIndex = Math.max(0, Math.floor(scrollTop / this.rowHeight) - this.bufferRows);
-        this.endIndex = Math.min(totalRows, this.startIndex + visibleRows + 2 * this.bufferRows);
-
-        this.renderVisibleSensors();
-    }
-
-    checkInfiniteScroll(viewport) {
-        if (this.isLoadingChunk || !this.hasMore) return;
-
-        const scrollBottom = viewport.scrollTop + viewport.clientHeight;
-        const totalHeight = this.allSensors.length * this.rowHeight;
-        const threshold = 200; // Load more when 200px from bottom
-
-        if (totalHeight - scrollBottom < threshold) {
-            this.loadMoreSensors();
         }
     }
 

@@ -31,15 +31,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         this.allRegisters = [];
         this.devicesDict = {};
         this.registersTotal = 0;
-        this.rowHeight = 32;
-        this.bufferRows = 10;
-        this.startIndex = 0;
-        this.endIndex = 0;
-
-        // Infinite scroll properties
-        this.chunkSize = 200;
-        this.hasMore = true;
-        this.isLoadingChunk = false;
+        this.initVirtualScrollProps();
 
         // Filter state
         this.filter = '';
@@ -89,9 +81,16 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         this.reloadAll();
         setupChartsResize(this.tabKey);
         this.setupRegistersResize();
-        this.setupVirtualScroll();
+        this.setupSimpleInfiniteScroll({
+            viewportId: `mbs-registers-viewport-${this.objectName}`,
+            threshold: 100,
+        });
         this.initStatusAutoRefresh();
     }
+
+    // Bridge methods for VirtualScrollMixin
+    getVScrollItems() { return this.allRegisters; }
+    vscrollLoadMore() { this.loadRegisterChunk(this.allRegisters.length); }
 
     destroy() {
         this.stopStatusAutoRefresh();
@@ -525,22 +524,6 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         if (!this.subscribedSensorIds.has(sensorId)) {
             this.subscribedSensorIds.add(sensorId);
         }
-    }
-
-    setupVirtualScroll() {
-        const viewport = this.getEl(`mbs-registers-viewport-${this.objectName}`);
-        if (!viewport) return;
-
-        viewport.addEventListener('scroll', () => {
-            const scrollTop = viewport.scrollTop;
-            const viewportHeight = viewport.clientHeight;
-            const scrollHeight = viewport.scrollHeight;
-
-            // Загружаем следующий чанк когда остается 100px до конца
-            if (scrollHeight - scrollTop - viewportHeight < 100) {
-                this.loadRegisterChunk(this.allRegisters.length);
-            }
-        });
     }
 
     loadRegistersHeight() {

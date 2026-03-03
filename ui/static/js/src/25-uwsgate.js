@@ -24,12 +24,6 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         this.autocompleteResults = [];
         this.selectedAutocompleteIndex = 0;
 
-        // Virtual scroll
-        this.rowHeight = DEFAULT_ROW_HEIGHT;
-        this.bufferRows = 5;
-        this.startIndex = 0;
-        this.endIndex = 0;
-
         // Высота секции датчиков
         this.sensorsHeight = this.loadSectionHeight('uwsgate-sensors-height', 400);
 

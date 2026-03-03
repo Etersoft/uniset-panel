@@ -1363,16 +1363,6 @@ function resubscribeAll() {
     });
 }
 
-// Close SSE соединение
-function closeSSE() {
-    stopServerStatusSync();
-    if (state.sse.eventSource) {
-        state.sse.eventSource.close();
-        state.sse.eventSource = null;
-        state.sse.connected = false;
-    }
-}
-
 // Обновление графиков при возврате на вкладку браузера
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
@@ -1431,32 +1421,47 @@ const objectRenderers = new Map();
 // ============================================================================
 
 /**
- * Миксин для виртуального скролла с infinite loading
- * Требует: viewportId, itemsArray, rowHeight, loadMoreFn, renderFn
+ * Миксин для виртуального скролла и бесконечной подгрузки
+ *
+ * Группа A (полный виртуальный скролл): setupFullVirtualScroll()
+ *   RAF-throttled скролл, расчёт startIndex/endIndex, spacer, бесконечная подгрузка.
+ *   Рендерер должен реализовать: getVScrollItems(), vscrollRenderVisible(), vscrollLoadMore()
+ *
+ * Группа B (простой бесконечный скролл): setupSimpleInfiniteScroll()
+ *   Только подгрузка при приближении к низу, без windowing.
+ *   Рендерер должен реализовать: getVScrollItems(), vscrollLoadMore()
  */
 const VirtualScrollMixin = {
     // Инициализация свойств виртуального скролла
     initVirtualScrollProps() {
-        this.rowHeight = DEFAULT_ROW_HEIGHT;
-        this.bufferRows = DEFAULT_BUFFER_ROWS;
+        this.rowHeight = this.rowHeight || DEFAULT_ROW_HEIGHT;
+        this.bufferRows = this.bufferRows || DEFAULT_BUFFER_ROWS;
         this.startIndex = 0;
         this.endIndex = 0;
-        this.chunkSize = VIRTUAL_SCROLL_CHUNK_SIZE;
+        this.chunkSize = this.chunkSize || VIRTUAL_SCROLL_CHUNK_SIZE;
         this.hasMore = true;
         this.isLoadingChunk = false;
     },
 
-    // Настройка обработчика скролла
-    setupVirtualScrollFor(viewportId) {
-        const viewport = this.getEl(viewportId);
+    // Группа A: RAF-throttled скролл + windowing + infinite scroll
+    // config: { viewportId, threshold?, thresholdType? }
+    //   viewportId - ID viewport-элемента (без objectName, будет добавлен)
+    //   threshold - порог подгрузки (default: VIRTUAL_SCROLL_LOAD_THRESHOLD px или 80%)
+    //   thresholdType - 'px' (default) или 'percent'
+    setupFullVirtualScroll(config) {
+        this._vscrollViewportId = config.viewportId;
+        const viewport = this.getEl(config.viewportId);
         if (!viewport) return;
+
+        const threshold = config.threshold ?? VIRTUAL_SCROLL_LOAD_THRESHOLD;
+        const thresholdType = config.thresholdType || 'px';
 
         let ticking = false;
         viewport.addEventListener('scroll', () => {
             if (!ticking) {
                 requestAnimationFrame(() => {
-                    this.updateVisibleRowsFor(viewportId);
-                    this.checkInfiniteScrollFor(viewport);
+                    this._updateVisibleRows(viewport);
+                    this._checkInfiniteScroll(viewport, threshold, thresholdType);
                     ticking = false;
                 });
                 ticking = true;
@@ -1464,45 +1469,68 @@ const VirtualScrollMixin = {
         });
     },
 
-    // Обновление видимых строк
-    updateVisibleRowsFor(viewportId) {
-        const viewport = this.getEl(viewportId);
+    // Публичный метод для пересчёта видимых строк (вызывается из loadSensors/loadMoreSensors)
+    updateVisibleRows() {
+        const viewport = this.getEl(this._vscrollViewportId);
+        if (!viewport) return;
+        this._updateVisibleRows(viewport);
+    },
+
+    // Группа B: простой scroll listener для infinite scroll (без windowing)
+    // config: { viewportId, threshold? }
+    setupSimpleInfiniteScroll(config) {
+        const viewport = this.getEl(config.viewportId);
         if (!viewport) return;
 
+        const threshold = config.threshold || 100;
+        viewport.addEventListener('scroll', () => {
+            const scrollTop = viewport.scrollTop;
+            const viewportHeight = viewport.clientHeight;
+            const scrollHeight = viewport.scrollHeight;
+
+            if (scrollHeight - scrollTop - viewportHeight < threshold) {
+                this.vscrollLoadMore();
+            }
+        });
+    },
+
+    // Расчёт видимого диапазона строк
+    _updateVisibleRows(viewport) {
         const scrollTop = viewport.scrollTop;
         const viewportHeight = viewport.clientHeight;
-        const items = this.getVirtualScrollItems();
-        const totalRows = items.length;
+        const totalRows = this.getVScrollItems().length;
         const visibleRows = Math.ceil(viewportHeight / this.rowHeight);
 
         this.startIndex = Math.max(0, Math.floor(scrollTop / this.rowHeight) - this.bufferRows);
         this.endIndex = Math.min(totalRows, this.startIndex + visibleRows + 2 * this.bufferRows);
 
-        this.renderVisibleItems();
+        this.vscrollRenderVisible();
     },
 
     // Проверка необходимости подгрузки
-    checkInfiniteScrollFor(viewport) {
+    _checkInfiniteScroll(viewport, threshold, thresholdType) {
         if (this.isLoadingChunk || !this.hasMore) return;
 
-        const scrollBottom = viewport.scrollTop + viewport.clientHeight;
-        const items = this.getVirtualScrollItems();
-        const totalHeight = items.length * this.rowHeight;
-        if (totalHeight - scrollBottom < VIRTUAL_SCROLL_LOAD_THRESHOLD) {
-            this.loadMoreItems();
+        if (thresholdType === 'percent') {
+            const scrollTop = viewport.scrollTop;
+            const scrollHeight = viewport.scrollHeight;
+            const clientHeight = viewport.clientHeight;
+            if (scrollTop + clientHeight >= scrollHeight * (threshold / 100)) {
+                this.vscrollLoadMore();
+            }
+        } else {
+            const scrollBottom = viewport.scrollTop + viewport.clientHeight;
+            const totalHeight = this.getVScrollItems().length * this.rowHeight;
+            if (totalHeight - scrollBottom < threshold) {
+                this.vscrollLoadMore();
+            }
         }
     },
 
     // Показать/скрыть индикатор загрузки
-    showLoadingIndicatorFor(elementId, show) {
-        const el = this.getEl(elementId);
+    showVScrollLoadingIndicator(loadingId, show) {
+        const el = this.getEl(loadingId);
         if (el) el.style.display = show ? 'block' : 'none';
-    },
-
-    // Получить видимый срез данных
-    getVisibleSlice() {
-        const items = this.getVirtualScrollItems();
-        return items.slice(this.startIndex, this.endIndex);
     }
 };
 
@@ -1511,13 +1539,6 @@ const VirtualScrollMixin = {
  * Требует: objectName, apiPath, idField
  */
 const SSESubscriptionMixin = {
-    // Инициализация свойств SSE
-    initSSEProps() {
-        this.subscribedSensorIds = new Set();
-        this.pendingUpdates = [];
-        this.renderScheduled = false;
-    },
-
     // Подписка на SSE обновления
     // apiPath - путь API (например '/ionc', '/opcua', '/modbus')
     // ids - массив ID для подписки
@@ -1582,20 +1603,6 @@ const SSESubscriptionMixin = {
         console.log(`${logPrefix}: Переподписка ${ids.length} элементов для ${this.objectName}`);
         this.subscribedSensorIds.clear(); // Очищаем кэш чтобы subscribeToSSEFor не пропустил
         await this.subscribeToSSEFor(apiPath, ids, idField, logPrefix, extraBody);
-    },
-
-    // Планирование батчевого рендера обновлений
-    scheduleBatchRender(renderFn) {
-        if (this.renderScheduled) return;
-        this.renderScheduled = true;
-
-        requestAnimationFrame(() => {
-            if (this.pendingUpdates.length > 0) {
-                renderFn(this.pendingUpdates);
-                this.pendingUpdates = [];
-            }
-            this.renderScheduled = false;
-        });
     }
 };
 
@@ -1686,14 +1693,6 @@ const ResizableSectionMixin = {
  * Миксин для фильтрации списка элементов
  */
 const FilterMixin = {
-    // Инициализация свойств фильтрации
-    initFilterProps() {
-        this.filter = '';
-        this.typeFilter = 'all';
-        this.statusFilter = 'all';
-        this.filterDebounce = null;
-    },
-
     // Применение локальных фильтров к списку
     // extraFields - дополнительные поля для текстового поиска (например, ['mbreg'] для Modbus)
     // fieldAccessor - функция для получения значения поля (для вложенных объектов)
@@ -1727,20 +1726,6 @@ const FilterMixin = {
         }
 
         return result;
-    },
-
-    // Настройка debounced фильтра
-    setupFilterInput(inputId, onFilter, delay = FILTER_DEBOUNCE_DELAY) {
-        const input = this.getEl(inputId);
-        if (!input) return;
-
-        input.addEventListener('input', (e) => {
-            clearTimeout(this.filterDebounce);
-            this.filterDebounce = setTimeout(() => {
-                this.filter = e.target.value;
-                onFilter();
-            }, delay);
-        });
     },
 
     // Полная настройка фильтров с ESC, type filter и опциональным status filter
@@ -2090,7 +2075,6 @@ const PinManagementMixin = {
 
     // Сокращённые методы, использующие this.pinStorageKey и this.renderAfterPinChange
     getPinned()    { return this.getPinnedItems(this.pinStorageKey); },
-    savePinned(s)  { this.savePinnedItems(this.pinStorageKey, s); },
     togglePin(id)  { this.toggleItemPin(this.pinStorageKey, id, this.renderAfterPinChange); },
     unpinAll()     { this.unpinAllItems(this.pinStorageKey, this.renderAfterPinChange); }
 };
@@ -2730,49 +2714,6 @@ class BaseObjectRenderer {
         `;
     }
 
-    // Устаревшие методы - оставлены для обратной совместимости
-    renderChartToggleCell(sensorId, sensorName, prefix = 'sensor') {
-        const isOnChart = this.isSensorOnChart(sensorName);
-        const varName = `${prefix}-${sensorId}`;
-        const checkboxId = `chart-${this.objectName}-${varName}`;
-        return `
-            <td class="chart-col">
-                <span class="chart-toggle">
-                    <input type="checkbox"
-                           class="chart-checkbox chart-toggle-input"
-                           id="${checkboxId}"
-                           data-sensor-id="${sensorId}"
-                           data-sensor-name="${escapeHtml(sensorName)}"
-                           ${isOnChart ? 'checked' : ''}>
-                    <label class="chart-toggle-label" for="${checkboxId}" title="Add to Chart">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 3v18h18"/>
-                            <path d="M18 9l-5 5-4-4-3 3"/>
-                        </svg>
-                    </label>
-                </span>
-            </td>
-        `;
-    }
-
-    renderDashboardToggleCell(sensorName, sensorLabel = null) {
-        return `
-            <td class="dashboard-col">
-                <button class="dashboard-add-btn"
-                        data-sensor-name="${escapeHtml(sensorName)}"
-                        data-sensor-label="${escapeHtml(sensorLabel || sensorName)}"
-                        title="Add to Dashboard">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="7" height="7" rx="1"/>
-                        <rect x="14" y="3" width="7" height="7" rx="1"/>
-                        <rect x="3" y="14" width="7" height="7" rx="1"/>
-                        <rect x="14" y="14" width="7" height="7" rx="1"/>
-                    </svg>
-                </button>
-            </td>
-        `;
-    }
-
     // Привязать обработчики событий для checkbox графиков
     // sensorMap - Map с данными датчиков по id
     attachChartToggleListeners(container, sensorMap) {
@@ -3111,17 +3052,9 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         this.pendingUpdates = new Map(); // id -> sensor
         this.renderScheduled = false;
 
-        // Virtual scroll properties (как в OPCUA)
-        this.allSensors = [];           // Все загруженные сенсоры
-        this.rowHeight = DEFAULT_ROW_HEIGHT; // Высота строки (px)
-        this.bufferRows = DEFAULT_BUFFER_ROWS; // Буфер строк выше/ниже viewport
-        this.startIndex = 0;            // Первая видимая строка
-        this.endIndex = 0;              // Последняя видимая строка
-
-        // Infinite scroll properties
-        this.chunkSize = VIRTUAL_SCROLL_CHUNK_SIZE; // Сенсоров за запрос
-        this.hasMore = true;            // Есть ли ещё данные
-        this.isLoadingChunk = false;    // Идёт загрузка
+        // Virtual scroll properties
+        this.allSensors = [];
+        this.initVirtualScrollProps();
 
         // Генераторы значений: Map<sensorId, GeneratorState>
         this.activeGenerators = new Map();
@@ -3160,8 +3093,15 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         this.loadLostConsumers();
         setupChartsResize(this.tabKey);
         setupIONCSensorsResize(this.tabKey, this.objectName);
-        this.setupVirtualScroll();
+        this.setupFullVirtualScroll({
+            viewportId: `ionc-sensors-viewport-${this.objectName}`,
+        });
     }
+
+    // Bridge methods for VirtualScrollMixin
+    getVScrollItems() { return this.allSensors; }
+    vscrollRenderVisible() { this.renderVisibleSensors(); }
+    vscrollLoadMore() { this.loadMoreSensors(); }
 
     createSensorsSection() {
         return `
@@ -3448,50 +3388,6 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         } finally {
             this.isLoadingChunk = false;
             this.showLoadingIndicator(false);
-        }
-    }
-
-    setupVirtualScroll() {
-        const viewport = this.getEl(`ionc-sensors-viewport-${this.objectName}`);
-        if (!viewport) return;
-
-        let ticking = false;
-        viewport.addEventListener('scroll', () => {
-            if (!ticking) {
-                requestAnimationFrame(() => {
-                    this.updateVisibleRows();
-                    this.checkInfiniteScroll(viewport);
-                    ticking = false;
-                });
-                ticking = true;
-            }
-        });
-    }
-
-    updateVisibleRows() {
-        const viewport = this.getEl(`ionc-sensors-viewport-${this.objectName}`);
-        if (!viewport) return;
-
-        const scrollTop = viewport.scrollTop;
-        const viewportHeight = viewport.clientHeight;
-        const totalRows = this.allSensors.length;
-        const visibleRows = Math.ceil(viewportHeight / this.rowHeight);
-
-        this.startIndex = Math.max(0, Math.floor(scrollTop / this.rowHeight) - this.bufferRows);
-        this.endIndex = Math.min(totalRows, this.startIndex + visibleRows + 2 * this.bufferRows);
-
-        this.renderVisibleSensors();
-    }
-
-    checkInfiniteScroll(viewport) {
-        if (this.isLoadingChunk || !this.hasMore) return;
-
-        const scrollBottom = viewport.scrollTop + viewport.clientHeight;
-        const totalHeight = this.allSensors.length * this.rowHeight;
-        const threshold = 200; // Load more when 200px from bottom
-
-        if (totalHeight - scrollBottom < threshold) {
-            this.loadMoreSensors();
         }
     }
 
@@ -5005,15 +4901,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         // Virtual scroll properties
         this.allSensors = [];
         this.sensorsTotal = 0;
-        this.rowHeight = 32;
-        this.bufferRows = 10;
-        this.startIndex = 0;
-        this.endIndex = 0;
-
-        // Infinite scroll properties
-        this.chunkSize = 200;
-        this.hasMore = true;
-        this.isLoadingChunk = false;
+        this.initVirtualScrollProps();
 
         // Filter state
         this.filter = '';
@@ -5062,9 +4950,16 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         setupChartsResize(this.tabKey);
         this.setupDiagnosticsResize();
         this.setupSensorsResize();
-        this.setupVirtualScroll();
+        this.setupFullVirtualScroll({
+            viewportId: `opcua-sensors-viewport-${this.objectName}`,
+        });
         this.initStatusAutoRefresh();
     }
+
+    // Bridge methods for VirtualScrollMixin
+    getVScrollItems() { return this.allSensors; }
+    vscrollRenderVisible() { this.renderVisibleSensors(); }
+    vscrollLoadMore() { this.loadMoreSensors(); }
 
     destroy() {
         this.stopStatusAutoRefresh();
@@ -5675,38 +5570,6 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         }
     }
 
-    setupVirtualScroll() {
-        const viewport = this.getEl(`opcua-sensors-viewport-${this.objectName}`);
-        if (!viewport) return;
-
-        let ticking = false;
-        viewport.addEventListener('scroll', () => {
-            if (!ticking) {
-                requestAnimationFrame(() => {
-                    this.updateVisibleRows();
-                    this.checkInfiniteScroll(viewport);
-                    ticking = false;
-                });
-                ticking = true;
-            }
-        });
-    }
-
-    updateVisibleRows() {
-        const viewport = this.getEl(`opcua-sensors-viewport-${this.objectName}`);
-        if (!viewport) return;
-
-        const scrollTop = viewport.scrollTop;
-        const viewportHeight = viewport.clientHeight;
-        const totalRows = this.allSensors.length;
-        const visibleRows = Math.ceil(viewportHeight / this.rowHeight);
-
-        this.startIndex = Math.max(0, Math.floor(scrollTop / this.rowHeight) - this.bufferRows);
-        this.endIndex = Math.min(totalRows, this.startIndex + visibleRows + 2 * this.bufferRows);
-
-        this.renderVisibleSensors();
-    }
-
     renderVisibleSensors() {
         const tbody = this.getEl(`opcua-sensors-${this.objectName}`);
         const spacer = this.getEl(`opcua-sensors-spacer-${this.objectName}`);
@@ -5812,18 +5675,6 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         // Just ensure the sensor is in our subscription list
         if (!this.subscribedSensorIds.has(sensorId)) {
             this.subscribedSensorIds.add(sensorId);
-        }
-    }
-
-    checkInfiniteScroll(viewport) {
-        if (this.isLoadingChunk || !this.hasMore) return;
-
-        const scrollBottom = viewport.scrollTop + viewport.clientHeight;
-        const totalHeight = this.allSensors.length * this.rowHeight;
-        const threshold = 200; // Load more when 200px from bottom
-
-        if (totalHeight - scrollBottom < threshold) {
-            this.loadMoreSensors();
         }
     }
 
@@ -6195,15 +6046,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         this.allRegisters = [];
         this.devicesDict = {};
         this.registersTotal = 0;
-        this.rowHeight = 32;
-        this.bufferRows = 10;
-        this.startIndex = 0;
-        this.endIndex = 0;
-
-        // Infinite scroll properties
-        this.chunkSize = 200;
-        this.hasMore = true;
-        this.isLoadingChunk = false;
+        this.initVirtualScrollProps();
 
         // Filter state
         this.filter = '';
@@ -6250,9 +6093,16 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         this.reloadAll();
         setupChartsResize(this.tabKey);
         this.setupRegistersResize();
-        this.setupVirtualScroll();
+        this.setupSimpleInfiniteScroll({
+            viewportId: `mb-registers-viewport-${this.objectName}`,
+            threshold: 100,
+        });
         this.initStatusAutoRefresh();
     }
+
+    // Bridge methods for VirtualScrollMixin
+    getVScrollItems() { return this.allRegisters; }
+    vscrollLoadMore() { this.loadRegisterChunk(this.allRegisters.length); }
 
     destroy() {
         this.stopStatusAutoRefresh();
@@ -6858,22 +6708,6 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         }
     }
 
-    setupVirtualScroll() {
-        const viewport = this.getEl(`mb-registers-viewport-${this.objectName}`);
-        if (!viewport) return;
-
-        viewport.addEventListener('scroll', () => {
-            const scrollTop = viewport.scrollTop;
-            const viewportHeight = viewport.clientHeight;
-            const scrollHeight = viewport.scrollHeight;
-
-            // Загружаем следующий чанк когда остается 100px до конца
-            if (scrollHeight - scrollTop - viewportHeight < 100) {
-                this.loadRegisterChunk(this.allRegisters.length);
-            }
-        });
-    }
-
     loadRegistersHeight() {
         return this.loadSectionHeight('uniset-panel-mb-registers', 320);
     }
@@ -7078,15 +6912,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         this.allRegisters = [];
         this.devicesDict = {};
         this.registersTotal = 0;
-        this.rowHeight = 32;
-        this.bufferRows = 10;
-        this.startIndex = 0;
-        this.endIndex = 0;
-
-        // Infinite scroll properties
-        this.chunkSize = 200;
-        this.hasMore = true;
-        this.isLoadingChunk = false;
+        this.initVirtualScrollProps();
 
         // Filter state
         this.filter = '';
@@ -7136,9 +6962,16 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         this.reloadAll();
         setupChartsResize(this.tabKey);
         this.setupRegistersResize();
-        this.setupVirtualScroll();
+        this.setupSimpleInfiniteScroll({
+            viewportId: `mbs-registers-viewport-${this.objectName}`,
+            threshold: 100,
+        });
         this.initStatusAutoRefresh();
     }
+
+    // Bridge methods for VirtualScrollMixin
+    getVScrollItems() { return this.allRegisters; }
+    vscrollLoadMore() { this.loadRegisterChunk(this.allRegisters.length); }
 
     destroy() {
         this.stopStatusAutoRefresh();
@@ -7574,22 +7407,6 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         }
     }
 
-    setupVirtualScroll() {
-        const viewport = this.getEl(`mbs-registers-viewport-${this.objectName}`);
-        if (!viewport) return;
-
-        viewport.addEventListener('scroll', () => {
-            const scrollTop = viewport.scrollTop;
-            const viewportHeight = viewport.clientHeight;
-            const scrollHeight = viewport.scrollHeight;
-
-            // Загружаем следующий чанк когда остается 100px до конца
-            if (scrollHeight - scrollTop - viewportHeight < 100) {
-                this.loadRegisterChunk(this.allRegisters.length);
-            }
-        });
-    }
-
     loadRegistersHeight() {
         return this.loadSectionHeight('uniset-panel-mbs-registers', 320);
     }
@@ -7773,15 +7590,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         // Virtual scroll properties
         this.allSensors = [];
         this.sensorsTotal = 0;
-        this.rowHeight = 32;
-        this.bufferRows = 10;
-        this.startIndex = 0;
-        this.endIndex = 0;
-
-        // Infinite scroll properties
-        this.chunkSize = 200;
-        this.hasMore = true;
-        this.isLoadingChunk = false;
+        this.initVirtualScrollProps();
 
         // Filter state
         this.filter = '';
@@ -7825,9 +7634,18 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         this.reloadAll();
         setupChartsResize(this.tabKey);
         this.setupSensorsResize();
-        this.setupVirtualScroll();
+        this.setupFullVirtualScroll({
+            viewportId: `opcuasrv-sensors-viewport-${this.objectName}`,
+            threshold: 80,
+            thresholdType: 'percent',
+        });
         this.initStatusAutoRefresh();
     }
+
+    // Bridge methods for VirtualScrollMixin
+    getVScrollItems() { return this.allSensors; }
+    vscrollRenderVisible() { this.renderVisibleSensors(); }
+    vscrollLoadMore() { this.loadMoreSensors(); }
 
     destroy() {
         this.stopStatusAutoRefresh();
@@ -8184,38 +8002,6 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         }
     }
 
-    setupVirtualScroll() {
-        const viewport = this.getEl(`opcuasrv-sensors-viewport-${this.objectName}`);
-        if (!viewport) return;
-
-        let ticking = false;
-        viewport.addEventListener('scroll', () => {
-            if (!ticking) {
-                requestAnimationFrame(() => {
-                    this.updateVisibleRows();
-                    this.checkInfiniteScroll(viewport);
-                    ticking = false;
-                });
-                ticking = true;
-            }
-        });
-    }
-
-    updateVisibleRows() {
-        const viewport = this.getEl(`opcuasrv-sensors-viewport-${this.objectName}`);
-        if (!viewport) return;
-
-        const scrollTop = viewport.scrollTop;
-        const viewportHeight = viewport.clientHeight;
-        const totalRows = this.allSensors.length;
-        const visibleRows = Math.ceil(viewportHeight / this.rowHeight);
-
-        this.startIndex = Math.max(0, Math.floor(scrollTop / this.rowHeight) - this.bufferRows);
-        this.endIndex = Math.min(totalRows, this.startIndex + visibleRows + 2 * this.bufferRows);
-
-        this.renderVisibleSensors();
-    }
-
     renderVisibleSensors() {
         const tbody = this.getEl(`opcuasrv-sensors-${this.objectName}`);
         const spacer = this.getEl(`opcuasrv-sensors-spacer-${this.objectName}`);
@@ -8311,17 +8097,6 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         // OPCUAServer sensors are already subscribed through main SSE
         if (!this.subscribedSensorIds.has(sensorId)) {
             this.subscribedSensorIds.add(sensorId);
-        }
-    }
-
-    checkInfiniteScroll(viewport) {
-        const scrollTop = viewport.scrollTop;
-        const scrollHeight = viewport.scrollHeight;
-        const clientHeight = viewport.clientHeight;
-
-        // Load more when scrolled to 80% of content
-        if (scrollTop + clientHeight >= scrollHeight * 0.8) {
-            this.loadMoreSensors();
         }
     }
 
@@ -8489,12 +8264,6 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         // Autocomplete состояние
         this.autocompleteResults = [];
         this.selectedAutocompleteIndex = 0;
-
-        // Virtual scroll
-        this.rowHeight = DEFAULT_ROW_HEIGHT;
-        this.bufferRows = 5;
-        this.startIndex = 0;
-        this.endIndex = 0;
 
         // Высота секции датчиков
         this.sensorsHeight = this.loadSectionHeight('uwsgate-sensors-height', 400);
@@ -12629,11 +12398,6 @@ function showIoncDialogError(message) {
     errorEl.textContent = message;
 }
 
-function clearIoncDialogError() {
-    const errorEl = document.getElementById('ionc-dialog-error');
-    errorEl.textContent = '';
-}
-
 // === Sensor Dialog ===
 
 // Status диалога датчиков
@@ -12723,12 +12487,6 @@ function handleSensorDialogKeydown(e) {
         }
         e.preventDefault();
     }
-}
-
-// Подготовить список датчиков из XML конфига
-function prepareSensorList() {
-    sensorDialogState.allSensors = Array.from(state.sensors.values());
-    sensorDialogState.filteredSensors = [...sensorDialogState.allSensors];
 }
 
 // Подготовить список датчиков из IONC таблицы
@@ -14900,14 +14658,6 @@ function startTimerUpdateInterval() {
     }, UPDATE_INTERVAL);
 }
 
-// Остановка интервала обновления таймеров
-function stopTimerUpdateInterval() {
-    if (timerUpdateInterval) {
-        clearInterval(timerUpdateInterval);
-        timerUpdateInterval = null;
-    }
-}
-
 // Рендеринг информации об объекте
 function renderObjectInfo(tabKey, objectData) {
     const tabState = state.tabs.get(tabKey);
@@ -15341,19 +15091,6 @@ function toggleChartSmooth(tabKey, varName, smoothEnabled) {
     if (!chartData) return;
 
     chartData.chart.data.datasets[0].tension = smoothEnabled ? 0.3 : 0;
-    chartData.chart.update('none');
-}
-
-// Переключение stepped режима графика (меандр)
-// tabKey - ключ вкладки (serverId:objectName)
-function toggleChartStepped(tabKey, varName, steppedEnabled) {
-    const tabState = state.tabs.get(tabKey);
-    if (!tabState) return;
-
-    const chartData = tabState.charts.get(varName);
-    if (!chartData) return;
-
-    chartData.chart.data.datasets[0].stepped = steppedEnabled ? 'before' : false;
     chartData.chart.update('none');
 }
 
@@ -21745,14 +21482,6 @@ function updateChartSensorColor(zoneIdx, sensorIdx, color) {
     const colorInput = row?.querySelector('input[name$="-color"]');
     if (colorInput) {
         colorInput.value = color;
-    }
-}
-
-function updateChartSensorFill(zoneIdx, sensorIdx, fill) {
-    const row = document.querySelector(`.chart-sensor-row[data-zone-idx="${zoneIdx}"][data-sensor-idx="${sensorIdx}"]`);
-    const fillInput = row?.querySelector('input[name$="-fill"]');
-    if (fillInput) {
-        fillInput.value = fill ? '1' : '0';
     }
 }
 

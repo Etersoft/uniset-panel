@@ -24,15 +24,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         // Virtual scroll properties
         this.allSensors = [];
         this.sensorsTotal = 0;
-        this.rowHeight = 32;
-        this.bufferRows = 10;
-        this.startIndex = 0;
-        this.endIndex = 0;
-
-        // Infinite scroll properties
-        this.chunkSize = 200;
-        this.hasMore = true;
-        this.isLoadingChunk = false;
+        this.initVirtualScrollProps();
 
         // Filter state
         this.filter = '';
@@ -76,9 +68,18 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         this.reloadAll();
         setupChartsResize(this.tabKey);
         this.setupSensorsResize();
-        this.setupVirtualScroll();
+        this.setupFullVirtualScroll({
+            viewportId: `opcuasrv-sensors-viewport-${this.objectName}`,
+            threshold: 80,
+            thresholdType: 'percent',
+        });
         this.initStatusAutoRefresh();
     }
+
+    // Bridge methods for VirtualScrollMixin
+    getVScrollItems() { return this.allSensors; }
+    vscrollRenderVisible() { this.renderVisibleSensors(); }
+    vscrollLoadMore() { this.loadMoreSensors(); }
 
     destroy() {
         this.stopStatusAutoRefresh();
@@ -435,38 +436,6 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         }
     }
 
-    setupVirtualScroll() {
-        const viewport = this.getEl(`opcuasrv-sensors-viewport-${this.objectName}`);
-        if (!viewport) return;
-
-        let ticking = false;
-        viewport.addEventListener('scroll', () => {
-            if (!ticking) {
-                requestAnimationFrame(() => {
-                    this.updateVisibleRows();
-                    this.checkInfiniteScroll(viewport);
-                    ticking = false;
-                });
-                ticking = true;
-            }
-        });
-    }
-
-    updateVisibleRows() {
-        const viewport = this.getEl(`opcuasrv-sensors-viewport-${this.objectName}`);
-        if (!viewport) return;
-
-        const scrollTop = viewport.scrollTop;
-        const viewportHeight = viewport.clientHeight;
-        const totalRows = this.allSensors.length;
-        const visibleRows = Math.ceil(viewportHeight / this.rowHeight);
-
-        this.startIndex = Math.max(0, Math.floor(scrollTop / this.rowHeight) - this.bufferRows);
-        this.endIndex = Math.min(totalRows, this.startIndex + visibleRows + 2 * this.bufferRows);
-
-        this.renderVisibleSensors();
-    }
-
     renderVisibleSensors() {
         const tbody = this.getEl(`opcuasrv-sensors-${this.objectName}`);
         const spacer = this.getEl(`opcuasrv-sensors-spacer-${this.objectName}`);
@@ -562,17 +531,6 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         // OPCUAServer sensors are already subscribed through main SSE
         if (!this.subscribedSensorIds.has(sensorId)) {
             this.subscribedSensorIds.add(sensorId);
-        }
-    }
-
-    checkInfiniteScroll(viewport) {
-        const scrollTop = viewport.scrollTop;
-        const scrollHeight = viewport.scrollHeight;
-        const clientHeight = viewport.clientHeight;
-
-        // Load more when scrolled to 80% of content
-        if (scrollTop + clientHeight >= scrollHeight * 0.8) {
-            this.loadMoreSensors();
         }
     }
 
