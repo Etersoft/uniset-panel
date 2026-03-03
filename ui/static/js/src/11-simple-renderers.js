@@ -18,7 +18,7 @@ class UniSetManagerRenderer extends BaseObjectRenderer {
     initialize() {
         setupFilterHandlers(this.tabKey);
         setupChartsResize(this.tabKey);
-        loadIOLayoutState(this.objectName);
+        loadIOLayoutState(this.tabKey, this.objectName);
         setupIOSections(this.tabKey);
     }
 
@@ -119,7 +119,7 @@ class FallbackRenderer extends BaseObjectRenderer {
         }
 
         // Выводим JSON - используем raw_data если есть, иначе весь data
-        const jsonPre = document.getElementById(`fallback-json-${this.objectName}`);
+        const jsonPre = this.getEl(`fallback-json-${this.objectName}`);
         if (jsonPre) {
             const displayData = data.raw_data || data;
             jsonPre.textContent = JSON.stringify(displayData, null, 2);

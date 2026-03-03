@@ -142,17 +142,17 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             `opcua-status-filter-${this.objectName}`
         );
 
-        const refreshDiag = document.getElementById(`opcua-diagnostics-refresh-${this.objectName}`);
+        const refreshDiag = this.getEl(`opcua-diagnostics-refresh-${this.objectName}`);
         if (refreshDiag) {
             refreshDiag.addEventListener('click', () => this.loadDiagnostics());
         }
 
-        const takeControl = document.getElementById(`opcua-control-take-${this.objectName}`);
+        const takeControl = this.getEl(`opcua-control-take-${this.objectName}`);
         if (takeControl) {
             takeControl.addEventListener('click', () => this.takeControl());
         }
 
-        const releaseControl = document.getElementById(`opcua-control-release-${this.objectName}`);
+        const releaseControl = this.getEl(`opcua-control-release-${this.objectName}`);
         if (releaseControl) {
             releaseControl.addEventListener('click', () => this.releaseControl());
         }
@@ -301,9 +301,9 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     renderStatus() {
-        const statsContainer = document.getElementById(`opcua-stats-${this.objectName}`);
-        const monitorContainer = document.getElementById(`opcua-monitor-${this.objectName}`);
-        const headerChannels = document.getElementById(`opcua-header-channels-${this.objectName}`);
+        const statsContainer = this.getEl(`opcua-stats-${this.objectName}`);
+        const monitorContainer = this.getEl(`opcua-monitor-${this.objectName}`);
+        const headerChannels = this.getEl(`opcua-header-channels-${this.objectName}`);
 
         if (!statsContainer || !monitorContainer) return;
 
@@ -399,9 +399,9 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         const allowText = allow ? 'Take control' : (!canControl() ? 'Read-only mode' : 'Control not allowed');
 
         // Обновляем индикаторы в шапке
-        const indAllow = document.getElementById(`opcua-ind-allow-${this.objectName}`);
-        const indActive = document.getElementById(`opcua-ind-active-${this.objectName}`);
-        const indParams = document.getElementById(`opcua-ind-params-${this.objectName}`);
+        const indAllow = this.getEl(`opcua-ind-allow-${this.objectName}`);
+        const indActive = this.getEl(`opcua-ind-active-${this.objectName}`);
+        const indParams = this.getEl(`opcua-ind-params-${this.objectName}`);
 
         if (indAllow) {
             indAllow.className = `header-indicator-dot ${allow ? 'ok' : 'fail'}`;
@@ -417,9 +417,9 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         }
 
         // Обновляем кнопки
-        const takeBtn = document.getElementById(`opcua-control-take-${this.objectName}`);
-        const releaseBtn = document.getElementById(`opcua-control-release-${this.objectName}`);
-        const noteEl = document.getElementById(`opcua-control-note-${this.objectName}`);
+        const takeBtn = this.getEl(`opcua-control-take-${this.objectName}`);
+        const releaseBtn = this.getEl(`opcua-control-release-${this.objectName}`);
+        const noteEl = this.getEl(`opcua-control-note-${this.objectName}`);
 
         if (takeBtn) {
             takeBtn.disabled = !allow;
@@ -462,8 +462,8 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     renderParams() {
-        const readonlyTbody = document.getElementById(`opcua-params-readonly-${this.objectName}`);
-        const writableTbody = document.getElementById(`opcua-params-writable-${this.objectName}`);
+        const readonlyTbody = this.getEl(`opcua-params-readonly-${this.objectName}`);
+        const writableTbody = this.getEl(`opcua-params-writable-${this.objectName}`);
         if (!readonlyTbody || !writableTbody) return;
 
         readonlyTbody.innerHTML = '';
@@ -556,7 +556,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         this.endIndex = 0;
 
         // Reset viewport scroll position
-        const viewport = document.getElementById(`opcua-sensors-viewport-${this.objectName}`);
+        const viewport = this.getEl(`opcua-sensors-viewport-${this.objectName}`);
         if (viewport) viewport.scrollTop = 0;
 
         // Проверяем режим фильтрации: false = серверная (default), true = UI
@@ -607,7 +607,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             this.subscribeToSSE();
 
             // Обработчики сортировки
-            const table = document.getElementById(`opcua-sensors-table-${this.objectName}`);
+            const table = this.getEl(`opcua-sensors-table-${this.objectName}`);
             if (table) {
                 this.attachSortHandlers(table);
                 this.updateSortHeaders();
@@ -725,7 +725,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     setupVirtualScroll() {
-        const viewport = document.getElementById(`opcua-sensors-viewport-${this.objectName}`);
+        const viewport = this.getEl(`opcua-sensors-viewport-${this.objectName}`);
         if (!viewport) return;
 
         let ticking = false;
@@ -742,7 +742,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     updateVisibleRows() {
-        const viewport = document.getElementById(`opcua-sensors-viewport-${this.objectName}`);
+        const viewport = this.getEl(`opcua-sensors-viewport-${this.objectName}`);
         if (!viewport) return;
 
         const scrollTop = viewport.scrollTop;
@@ -757,8 +757,8 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     renderVisibleSensors() {
-        const tbody = document.getElementById(`opcua-sensors-${this.objectName}`);
-        const spacer = document.getElementById(`opcua-sensors-spacer-${this.objectName}`);
+        const tbody = this.getEl(`opcua-sensors-${this.objectName}`);
+        const spacer = this.getEl(`opcua-sensors-spacer-${this.objectName}`);
         if (!tbody || !spacer) return;
 
         // Получаем закрепленные датчики
@@ -766,7 +766,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         const hasPinned = pinnedSensors.size > 0;
 
         // Показываем/скрываем кнопку "снять все"
-        const unpinBtn = document.getElementById(`opcua-unpin-${this.objectName}`);
+        const unpinBtn = this.getEl(`opcua-unpin-${this.objectName}`);
         if (unpinBtn) {
             unpinBtn.style.display = hasPinned ? 'inline' : 'none';
         }
@@ -881,7 +881,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     showLoadingIndicator(show) {
-        const el = document.getElementById(`opcua-loading-more-${this.objectName}`);
+        const el = this.getEl(`opcua-loading-more-${this.objectName}`);
         if (el) {
             el.style.display = show ? 'block' : 'none';
         }
@@ -897,7 +897,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     renderSensorDetails(sensor) {
-        const container = document.getElementById(`opcua-sensor-details-${this.objectName}`);
+        const container = this.getEl(`opcua-sensor-details-${this.objectName}`);
         if (!container) return;
 
         if (!sensor) {
@@ -940,7 +940,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     renderDiagnostics() {
-        const container = document.getElementById(`opcua-diagnostics-${this.objectName}`);
+        const container = this.getEl(`opcua-diagnostics-${this.objectName}`);
         if (!container) return;
 
         if (!this.diagnostics) {
@@ -1160,7 +1160,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
     // Обновление визуальных индикаторов сортировки
     updateSortHeaders() {
-        const table = document.getElementById(`opcua-sensors-table-${this.objectName}`);
+        const table = this.getEl(`opcua-sensors-table-${this.objectName}`);
         if (!table) return;
 
         table.querySelectorAll('th.th-sortable').forEach(th => {

@@ -198,9 +198,9 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     renderStatus() {
-        const tbody = document.getElementById(`opcuasrv-status-${this.objectName}`);
-        const endpointsContainer = document.getElementById(`opcuasrv-endpoints-${this.objectName}`);
-        const configContainer = document.getElementById(`opcuasrv-config-${this.objectName}`);
+        const tbody = this.getEl(`opcuasrv-status-${this.objectName}`);
+        const endpointsContainer = this.getEl(`opcuasrv-endpoints-${this.objectName}`);
+        const configContainer = this.getEl(`opcuasrv-config-${this.objectName}`);
         if (!tbody || !endpointsContainer || !configContainer) return;
 
         tbody.innerHTML = '';
@@ -290,7 +290,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     renderParams() {
-        const tbody = document.getElementById(`opcuasrv-params-${this.objectName}`);
+        const tbody = this.getEl(`opcuasrv-params-${this.objectName}`);
         if (!tbody) return;
 
         tbody.innerHTML = '';
@@ -319,7 +319,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         this.endIndex = 0;
 
         // Reset viewport scroll position
-        const viewport = document.getElementById(`opcuasrv-sensors-viewport-${this.objectName}`);
+        const viewport = this.getEl(`opcuasrv-sensors-viewport-${this.objectName}`);
         if (viewport) viewport.scrollTop = 0;
 
         try {
@@ -354,7 +354,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
             this.subscribeToSSE();
 
             // Обработчики сортировки
-            const table = document.getElementById(`opcuasrv-sensors-table-${this.objectName}`);
+            const table = this.getEl(`opcuasrv-sensors-table-${this.objectName}`);
             if (table) {
                 this.attachSortHandlers(table);
                 this.updateSortHeaders();
@@ -436,7 +436,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     setupVirtualScroll() {
-        const viewport = document.getElementById(`opcuasrv-sensors-viewport-${this.objectName}`);
+        const viewport = this.getEl(`opcuasrv-sensors-viewport-${this.objectName}`);
         if (!viewport) return;
 
         let ticking = false;
@@ -453,7 +453,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     updateVisibleRows() {
-        const viewport = document.getElementById(`opcuasrv-sensors-viewport-${this.objectName}`);
+        const viewport = this.getEl(`opcuasrv-sensors-viewport-${this.objectName}`);
         if (!viewport) return;
 
         const scrollTop = viewport.scrollTop;
@@ -468,8 +468,8 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     renderVisibleSensors() {
-        const tbody = document.getElementById(`opcuasrv-sensors-${this.objectName}`);
-        const spacer = document.getElementById(`opcuasrv-sensors-spacer-${this.objectName}`);
+        const tbody = this.getEl(`opcuasrv-sensors-${this.objectName}`);
+        const spacer = this.getEl(`opcuasrv-sensors-spacer-${this.objectName}`);
         if (!tbody || !spacer) return;
 
         // Получаем закрепленные датчики
@@ -477,7 +477,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         const hasPinned = pinnedSensors.size > 0;
 
         // Показываем/скрываем кнопку "снять все"
-        const unpinBtn = document.getElementById(`opcuasrv-unpin-${this.objectName}`);
+        const unpinBtn = this.getEl(`opcuasrv-unpin-${this.objectName}`);
         if (unpinBtn) {
             unpinBtn.style.display = hasPinned ? 'inline' : 'none';
         }
@@ -577,7 +577,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     showLoadingIndicator(show) {
-        const indicator = document.getElementById(`opcuasrv-loading-more-${this.objectName}`);
+        const indicator = this.getEl(`opcuasrv-loading-more-${this.objectName}`);
         if (indicator) {
             indicator.style.display = show ? 'block' : 'none';
         }
@@ -679,7 +679,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
     // Обновление визуальных индикаторов сортировки
     updateSortHeaders() {
-        const table = document.getElementById(`opcuasrv-sensors-table-${this.objectName}`);
+        const table = this.getEl(`opcuasrv-sensors-table-${this.objectName}`);
         if (!table) return;
 
         table.querySelectorAll('th.th-sortable').forEach(th => {

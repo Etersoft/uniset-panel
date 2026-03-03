@@ -71,7 +71,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         this.loadSensors();
         this.loadLostConsumers();
         setupChartsResize(this.tabKey);
-        setupIONCSensorsResize(this.objectName);
+        setupIONCSensorsResize(this.tabKey, this.objectName);
         this.setupVirtualScroll();
     }
 
@@ -186,10 +186,10 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         this.startIndex = 0;
         this.endIndex = 0;
 
-        const viewport = document.getElementById(`ionc-sensors-viewport-${this.objectName}`);
+        const viewport = this.getEl(`ionc-sensors-viewport-${this.objectName}`);
         if (viewport) viewport.scrollTop = 0;
 
-        const tbody = document.getElementById(`ionc-sensors-tbody-${this.objectName}`);
+        const tbody = this.getEl(`ionc-sensors-tbody-${this.objectName}`);
         if (tbody) {
             tbody.innerHTML = '<tr><td colspan="11" class="ionc-loading">Loading...</td></tr>';
         }
@@ -244,7 +244,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             this.setupDashboardClickHandler();
 
             // Привязываем обработчики сортировки
-            const table = document.getElementById(`ionc-sensors-table-${this.objectName}`);
+            const table = this.getEl(`ionc-sensors-table-${this.objectName}`);
             this.attachSortHandlers(table);
         } catch (err) {
             console.error('Error loading IONC sensors:', err);
@@ -364,7 +364,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     setupVirtualScroll() {
-        const viewport = document.getElementById(`ionc-sensors-viewport-${this.objectName}`);
+        const viewport = this.getEl(`ionc-sensors-viewport-${this.objectName}`);
         if (!viewport) return;
 
         let ticking = false;
@@ -381,7 +381,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     updateVisibleRows() {
-        const viewport = document.getElementById(`ionc-sensors-viewport-${this.objectName}`);
+        const viewport = this.getEl(`ionc-sensors-viewport-${this.objectName}`);
         if (!viewport) return;
 
         const scrollTop = viewport.scrollTop;
@@ -408,13 +408,13 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     showLoadingIndicator(show) {
-        const el = document.getElementById(`ionc-loading-more-${this.objectName}`);
+        const el = this.getEl(`ionc-loading-more-${this.objectName}`);
         if (el) el.style.display = show ? 'block' : 'none';
     }
 
     renderVisibleSensors() {
-        const tbody = document.getElementById(`ionc-sensors-tbody-${this.objectName}`);
-        const spacer = document.getElementById(`ionc-sensors-spacer-${this.objectName}`);
+        const tbody = this.getEl(`ionc-sensors-tbody-${this.objectName}`);
+        const spacer = this.getEl(`ionc-sensors-spacer-${this.objectName}`);
         if (!tbody || !spacer) return;
 
         // Set высоту spacer для позиционирования
@@ -425,7 +425,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         const hasPinned = pinnedSensors.size > 0;
 
         // Показываем/скрываем кнопку "снять все"
-        const unpinBtn = document.getElementById(`ionc-unpin-${this.objectName}`);
+        const unpinBtn = this.getEl(`ionc-unpin-${this.objectName}`);
         if (unpinBtn) {
             unpinBtn.style.display = hasPinned ? 'inline' : 'none';
         }
@@ -533,7 +533,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
     // Обновление заголовков таблицы с индикаторами сортировки
     updateSortHeaders() {
-        const table = document.getElementById(`ionc-sensors-table-${this.objectName}`);
+        const table = this.getEl(`ionc-sensors-table-${this.objectName}`);
         if (!table) return;
 
         table.querySelectorAll('th.th-sortable').forEach(th => {
@@ -662,7 +662,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     getPinnedSensors() {
         try {
             const saved = JSON.parse(localStorage.getItem('uniset-panel-ionc-pinned') || '{}');
-            return new Set(saved[this.objectName] || []);
+            return new Set(saved[this.tabKey] || saved[this.objectName] || []);
         } catch (err) {
             return new Set();
         }
@@ -671,7 +671,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     savePinnedSensors(pinnedSet) {
         try {
             const saved = JSON.parse(localStorage.getItem('uniset-panel-ionc-pinned') || '{}');
-            saved[this.objectName] = Array.from(pinnedSet);
+            saved[this.tabKey] = Array.from(pinnedSet);
             localStorage.setItem('uniset-panel-ionc-pinned', JSON.stringify(saved));
         } catch (err) {
             console.warn('Failed to save pinned sensors:', err);
@@ -1724,8 +1724,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             const data = await response.json();
             const lost = data['lost consumers'] || [];
 
-            const listEl = document.getElementById(`ionc-lost-list-${this.objectName}`);
-            const countEl = document.getElementById(`ionc-lost-count-${this.objectName}`);
+            const listEl = this.getEl(`ionc-lost-list-${this.objectName}`);
+            const countEl = this.getEl(`ionc-lost-count-${this.objectName}`);
 
             if (countEl) countEl.textContent = lost.length;
 

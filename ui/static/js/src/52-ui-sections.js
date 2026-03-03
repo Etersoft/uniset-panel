@@ -718,9 +718,9 @@ function loadChartsHeight(tabKey) {
 }
 
 // Настройка resize для IONC секции датчиков
-function setupIONCSensorsResize(objectName) {
-    const resizeHandle = document.getElementById(`ionc-resize-${objectName}`);
-    const sensorsContainer = document.getElementById(`ionc-sensors-container-${objectName}`);
+function setupIONCSensorsResize(tabKey, objectName) {
+    const resizeHandle = getElementInTab(tabKey, `ionc-resize-${objectName}`);
+    const sensorsContainer = getElementInTab(tabKey, `ionc-sensors-container-${objectName}`);
 
     if (!resizeHandle || !sensorsContainer) return;
 
@@ -744,7 +744,7 @@ function setupIONCSensorsResize(objectName) {
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
         // Сохраняем высоту
-        saveIONCSensorsHeight(objectName, sensorsContainer.offsetHeight);
+        saveIONCSensorsHeight(tabKey, sensorsContainer.offsetHeight);
     };
 
     resizeHandle.addEventListener('mousedown', (e) => {
@@ -759,17 +759,17 @@ function setupIONCSensorsResize(objectName) {
     });
 
     // Загружаем сохранённую высоту
-    loadIONCSensorsHeight(objectName);
+    loadIONCSensorsHeight(tabKey, objectName);
 }
 
-function saveIONCSensorsHeight(objectName, height) {
+function saveIONCSensorsHeight(tabKey, height) {
     try {
         const saved = JSON.parse(localStorage.getItem('uniset-panel-ionc-height') || '{}');
-        saved[objectName] = height;
+        saved[tabKey] = height;
         localStorage.setItem('uniset-panel-ionc-height', JSON.stringify(saved));
     } catch (err) {
         console.warn('Failed to save IONC sensors height:', err);
     }
 }
 
-function loadIONCSensorsHeight(objectName) {
+function loadIONCSensorsHeight(tabKey, objectName) {

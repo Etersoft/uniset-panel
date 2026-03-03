@@ -61,6 +61,11 @@ class LogViewer {
         this.init();
     }
 
+    // Найти элемент по ID внутри панели своей вкладки
+    getEl(id) {
+        return getElementInTab(this.tabKey, id);
+    }
+
     init() {
         this.render();
         this.setupEventHandlers();
@@ -182,7 +187,7 @@ class LogViewer {
         });
 
         // Connect button
-        const connectBtn = document.getElementById(`log-connect-${this.objectName}`);
+        const connectBtn = this.getEl(`log-connect-${this.objectName}`);
         connectBtn.addEventListener('click', () => {
             if (this.isActive) {
                 this.disconnect();
@@ -192,22 +197,22 @@ class LogViewer {
         });
 
         // Clear button
-        const clearBtn = document.getElementById(`log-clear-${this.objectName}`);
+        const clearBtn = this.getEl(`log-clear-${this.objectName}`);
         clearBtn.addEventListener('click', () => this.clear());
 
         // Download button
-        const downloadBtn = document.getElementById(`log-download-${this.objectName}`);
+        const downloadBtn = this.getEl(`log-download-${this.objectName}`);
         downloadBtn.addEventListener('click', () => this.downloadLogs());
 
         // Pause button
-        const pauseBtn = document.getElementById(`log-pause-${this.objectName}`);
+        const pauseBtn = this.getEl(`log-pause-${this.objectName}`);
         pauseBtn.addEventListener('click', () => this.togglePause());
 
         // Level dropdown
         this.setupLevelDropdown();
 
         // Filter input with local filtering
-        const filterInput = document.getElementById(`log-filter-${this.objectName}`);
+        const filterInput = this.getEl(`log-filter-${this.objectName}`);
         let filterTimeout = null;
         filterInput.addEventListener('input', (e) => {
             clearTimeout(filterTimeout);
@@ -218,21 +223,21 @@ class LogViewer {
         });
 
         // Filter options
-        const regexCheckbox = document.getElementById(`log-filter-regex-${this.objectName}`);
+        const regexCheckbox = this.getEl(`log-filter-regex-${this.objectName}`);
         regexCheckbox.addEventListener('change', (e) => {
             this.filterRegex = e.target.checked;
             this.saveFilterOptions();
             this.applyFilter();
         });
 
-        const caseCheckbox = document.getElementById(`log-filter-case-${this.objectName}`);
+        const caseCheckbox = this.getEl(`log-filter-case-${this.objectName}`);
         caseCheckbox.addEventListener('change', (e) => {
             this.filterCase = e.target.checked;
             this.saveFilterOptions();
             this.applyFilter();
         });
 
-        const onlyCheckbox = document.getElementById(`log-filter-only-${this.objectName}`);
+        const onlyCheckbox = this.getEl(`log-filter-only-${this.objectName}`);
         onlyCheckbox.addEventListener('change', (e) => {
             this.filterOnlyMatches = e.target.checked;
             this.saveFilterOptions();
@@ -242,7 +247,7 @@ class LogViewer {
         // Hotkey "/" for filter focus, Esc for pause toggle
         document.addEventListener('keydown', (e) => {
             // Check if LogViewer section is visible
-            const section = document.getElementById(`logviewer-section-${this.objectName}`);
+            const section = this.getEl(`logviewer-section-${this.objectName}`);
             if (!section || section.classList.contains('collapsed')) return;
 
             if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
@@ -264,7 +269,7 @@ class LogViewer {
         });
 
         // Buffer size select
-        const bufferSelect = document.getElementById(`log-buffer-${this.objectName}`);
+        const bufferSelect = this.getEl(`log-buffer-${this.objectName}`);
         bufferSelect.addEventListener('change', (e) => {
             this.maxLines = parseInt(e.target.value);
             this.saveBufferSize();
@@ -275,7 +280,7 @@ class LogViewer {
         this.setupResize();
 
         // Auto-scroll on container scroll
-        const logContainer = document.getElementById(`log-container-${this.objectName}`);
+        const logContainer = this.getEl(`log-container-${this.objectName}`);
         logContainer.addEventListener('scroll', () => {
             const { scrollTop, scrollHeight, clientHeight } = logContainer;
             this.autoScroll = scrollHeight - scrollTop - clientHeight < 50;
@@ -290,7 +295,7 @@ class LogViewer {
     saveFilterOptions() {
         try {
             const saved = JSON.parse(localStorage.getItem('uniset-panel-filter-options') || '{}');
-            saved[this.objectName] = {
+            saved[this.tabKey] = {
                 regex: this.filterRegex,
                 case: this.filterCase,
                 only: this.filterOnlyMatches
@@ -304,16 +309,16 @@ class LogViewer {
     loadFilterOptions() {
         try {
             const saved = JSON.parse(localStorage.getItem('uniset-panel-filter-options') || '{}');
-            if (saved[this.objectName]) {
-                const opts = saved[this.objectName];
+            const opts = saved[this.tabKey] || saved[this.objectName];
+            if (opts) {
                 this.filterRegex = opts.regex !== undefined ? opts.regex : true;
                 this.filterCase = opts.case !== undefined ? opts.case : false;
                 this.filterOnlyMatches = opts.only !== undefined ? opts.only : false;
 
                 // Update checkboxes
-                const regexCheckbox = document.getElementById(`log-filter-regex-${this.objectName}`);
-                const caseCheckbox = document.getElementById(`log-filter-case-${this.objectName}`);
-                const onlyCheckbox = document.getElementById(`log-filter-only-${this.objectName}`);
+                const regexCheckbox = this.getEl(`log-filter-regex-${this.objectName}`);
+                const caseCheckbox = this.getEl(`log-filter-case-${this.objectName}`);
+                const onlyCheckbox = this.getEl(`log-filter-only-${this.objectName}`);
 
                 if (regexCheckbox) regexCheckbox.checked = this.filterRegex;
                 if (caseCheckbox) caseCheckbox.checked = this.filterCase;
@@ -327,7 +332,7 @@ class LogViewer {
     saveBufferSize() {
         try {
             const saved = JSON.parse(localStorage.getItem('uniset-panel-buffersize') || '{}');
-            saved[this.objectName] = this.maxLines;
+            saved[this.tabKey] = this.maxLines;
             localStorage.setItem('uniset-panel-buffersize', JSON.stringify(saved));
         } catch (err) {
             console.warn('Failed to save buffer size:', err);
@@ -337,9 +342,10 @@ class LogViewer {
     loadSavedBufferSize() {
         try {
             const saved = JSON.parse(localStorage.getItem('uniset-panel-buffersize') || '{}');
-            if (saved[this.objectName]) {
-                this.maxLines = saved[this.objectName];
-                const bufferSelect = document.getElementById(`log-buffer-${this.objectName}`);
+            const bufSize = saved[this.tabKey] ?? saved[this.objectName];
+            if (bufSize) {
+                this.maxLines = bufSize;
+                const bufferSelect = this.getEl(`log-buffer-${this.objectName}`);
                 if (bufferSelect) {
                     bufferSelect.value = this.maxLines;
                 }
@@ -350,9 +356,9 @@ class LogViewer {
     }
 
     setupLevelDropdown() {
-        const btn = document.getElementById(`log-level-btn-${this.objectName}`);
-        const dropdown = document.getElementById(`log-level-dropdown-${this.objectName}`);
-        const wrapper = document.getElementById(`log-level-wrapper-${this.objectName}`);
+        const btn = this.getEl(`log-level-btn-${this.objectName}`);
+        const dropdown = this.getEl(`log-level-dropdown-${this.objectName}`);
+        const wrapper = this.getEl(`log-level-wrapper-${this.objectName}`);
 
         // Toggle dropdown
         btn.addEventListener('click', (e) => {
@@ -425,7 +431,7 @@ class LogViewer {
         });
 
         // Apply button
-        const applyBtn = document.getElementById(`log-level-apply-${this.objectName}`);
+        const applyBtn = this.getEl(`log-level-apply-${this.objectName}`);
         applyBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             this.applyLevelSelection();
@@ -435,7 +441,7 @@ class LogViewer {
     }
 
     updatePillsUI() {
-        const dropdown = document.getElementById(`log-level-dropdown-${this.objectName}`);
+        const dropdown = this.getEl(`log-level-dropdown-${this.objectName}`);
         const pills = dropdown.querySelectorAll('.log-level-pill');
         pills.forEach(pill => {
             const level = pill.dataset.level;
@@ -443,7 +449,7 @@ class LogViewer {
         });
 
         // Update button text to show selected count
-        const btn = document.getElementById(`log-level-btn-${this.objectName}`);
+        const btn = this.getEl(`log-level-btn-${this.objectName}`);
         if (this.selectedLevels.size === 0) {
             btn.textContent = 'Levels ▼';
         } else if (this.selectedLevels.has('ANY')) {
@@ -478,7 +484,7 @@ class LogViewer {
     saveLevels() {
         try {
             const saved = JSON.parse(localStorage.getItem('uniset-panel-loglevels') || '{}');
-            saved[this.objectName] = Array.from(this.selectedLevels);
+            saved[this.tabKey] = Array.from(this.selectedLevels);
             localStorage.setItem('uniset-panel-loglevels', JSON.stringify(saved));
         } catch (err) {
             console.warn('Failed to save log levels:', err);
@@ -488,8 +494,9 @@ class LogViewer {
     loadSavedLevels() {
         try {
             const saved = JSON.parse(localStorage.getItem('uniset-panel-loglevels') || '{}');
-            if (saved[this.objectName]) {
-                this.selectedLevels = new Set(saved[this.objectName]);
+            const levels = saved[this.tabKey] || saved[this.objectName];
+            if (levels) {
+                this.selectedLevels = new Set(levels);
                 this.updatePillsUI();
                 // Calculate mask for currentLevel
                 let mask = 0;
@@ -510,8 +517,8 @@ class LogViewer {
     }
 
     setupResize() {
-        const resizeHandle = document.getElementById(`log-resize-${this.objectName}`);
-        const logContainer = document.getElementById(`log-container-${this.objectName}`);
+        const resizeHandle = this.getEl(`log-resize-${this.objectName}`);
+        const logContainer = this.getEl(`log-container-${this.objectName}`);
 
         let startY = 0;
         let startHeight = 0;
@@ -548,7 +555,7 @@ class LogViewer {
     }
 
     toggleCollapse() {
-        const section = document.getElementById(`logviewer-section-${this.objectName}`);
+        const section = this.getEl(`logviewer-section-${this.objectName}`);
         section.classList.toggle('collapsed');
         this.saveCollapsedState();
     }
@@ -727,7 +734,7 @@ class LogViewer {
         if (this.lines.length > this.maxLines) {
             this.lines = this.lines.slice(-this.maxLines);
             // Remove old lines from DOM
-            const linesContainer = document.getElementById(`log-lines-${this.objectName}`);
+            const linesContainer = this.getEl(`log-lines-${this.objectName}`);
             if (linesContainer && linesContainer.children.length > this.maxLines) {
                 const toRemove = linesContainer.children.length - this.maxLines;
                 for (let i = 0; i < toRemove; i++) {
@@ -772,7 +779,7 @@ class LogViewer {
             const excess = this.lines.length - this.maxLines;
             this.lines = this.lines.slice(-this.maxLines);
             // Remove old lines from DOM
-            const linesContainer = document.getElementById(`log-lines-${this.objectName}`);
+            const linesContainer = this.getEl(`log-lines-${this.objectName}`);
             if (linesContainer) {
                 const toRemove = Math.min(excess, linesContainer.children.length);
                 for (let i = 0; i < toRemove; i++) {
@@ -782,7 +789,7 @@ class LogViewer {
         }
 
         // Render all new lines using DocumentFragment for better performance
-        const linesContainer = document.getElementById(`log-lines-${this.objectName}`);
+        const linesContainer = this.getEl(`log-lines-${this.objectName}`);
         if (!linesContainer) return;
 
         const fragment = document.createDocumentFragment();
@@ -824,7 +831,7 @@ class LogViewer {
     }
 
     renderLine(line, index = -1) {
-        const linesContainer = document.getElementById(`log-lines-${this.objectName}`);
+        const linesContainer = this.getEl(`log-lines-${this.objectName}`);
         if (!linesContainer) return;
 
         const div = document.createElement('div');
@@ -888,7 +895,7 @@ class LogViewer {
     }
 
     applyFilter() {
-        const linesContainer = document.getElementById(`log-lines-${this.objectName}`);
+        const linesContainer = this.getEl(`log-lines-${this.objectName}`);
         if (!linesContainer) return;
 
         // Re-render all lines with filter
@@ -909,7 +916,7 @@ class LogViewer {
     }
 
     updateMatchCount() {
-        const countEl = document.getElementById(`log-match-count-${this.objectName}`);
+        const countEl = this.getEl(`log-match-count-${this.objectName}`);
         if (countEl) {
             if (this.filter && this.matchCount > 0) {
                 countEl.textContent = `${this.matchCount} matches`;
@@ -925,7 +932,7 @@ class LogViewer {
     }
 
     updateStats() {
-        const statsEl = document.getElementById(`log-stats-${this.objectName}`);
+        const statsEl = this.getEl(`log-stats-${this.objectName}`);
         if (statsEl) {
             statsEl.textContent = `${this.lines.length} / ${this.maxLines}`;
         }
@@ -942,7 +949,7 @@ class LogViewer {
     }
 
     updatePauseUI() {
-        const pauseBtn = document.getElementById(`log-pause-${this.objectName}`);
+        const pauseBtn = this.getEl(`log-pause-${this.objectName}`);
         const pauseIcon = pauseBtn?.querySelector('.pause-icon');
 
         if (pauseBtn) {
@@ -955,7 +962,7 @@ class LogViewer {
     }
 
     updatePauseCount() {
-        const countEl = document.getElementById(`log-pause-count-${this.objectName}`);
+        const countEl = this.getEl(`log-pause-count-${this.objectName}`);
         if (countEl) {
             if (this.paused && this.pausedBuffer.length > 0) {
                 countEl.textContent = `+${this.pausedBuffer.length}`;
@@ -1026,25 +1033,25 @@ class LogViewer {
 
     scrollToBottom() {
         if (!this.autoScroll) return;
-        const container = document.getElementById(`log-container-${this.objectName}`);
+        const container = this.getEl(`log-container-${this.objectName}`);
         if (container) {
             container.scrollTop = container.scrollHeight;
         }
     }
 
     showWaiting() {
-        const placeholder = document.getElementById(`log-placeholder-${this.objectName}`);
-        const waiting = document.getElementById(`log-waiting-${this.objectName}`);
-        const lines = document.getElementById(`log-lines-${this.objectName}`);
+        const placeholder = this.getEl(`log-placeholder-${this.objectName}`);
+        const waiting = this.getEl(`log-waiting-${this.objectName}`);
+        const lines = this.getEl(`log-lines-${this.objectName}`);
         if (placeholder) placeholder.style.display = 'none';
         if (waiting) waiting.style.display = 'flex';
         if (lines) lines.style.display = 'none';
     }
 
     showLogLines() {
-        const placeholder = document.getElementById(`log-placeholder-${this.objectName}`);
-        const waiting = document.getElementById(`log-waiting-${this.objectName}`);
-        const lines = document.getElementById(`log-lines-${this.objectName}`);
+        const placeholder = this.getEl(`log-placeholder-${this.objectName}`);
+        const waiting = this.getEl(`log-waiting-${this.objectName}`);
+        const lines = this.getEl(`log-lines-${this.objectName}`);
         if (placeholder) placeholder.style.display = 'none';
         if (waiting) waiting.style.display = 'none';
         if (lines) lines.style.display = 'block';
@@ -1052,16 +1059,16 @@ class LogViewer {
 
     clear() {
         this.lines = [];
-        const linesContainer = document.getElementById(`log-lines-${this.objectName}`);
+        const linesContainer = this.getEl(`log-lines-${this.objectName}`);
         if (linesContainer) {
             linesContainer.innerHTML = '';
         }
     }
 
     updateStatus(status) {
-        const dot = document.getElementById(`log-status-dot-${this.objectName}`);
-        const text = document.getElementById(`log-status-text-${this.objectName}`);
-        const btn = document.getElementById(`log-connect-${this.objectName}`);
+        const dot = this.getEl(`log-status-dot-${this.objectName}`);
+        const text = this.getEl(`log-status-text-${this.objectName}`);
+        const btn = this.getEl(`log-connect-${this.objectName}`);
 
         if (!dot || !text || !btn) return;
 
@@ -1095,7 +1102,7 @@ class LogViewer {
     saveHeight() {
         try {
             const heights = JSON.parse(localStorage.getItem('uniset-panel-logheights') || '{}');
-            heights[this.objectName] = this.height;
+            heights[this.tabKey] = this.height;
             localStorage.setItem('uniset-panel-logheights', JSON.stringify(heights));
         } catch (err) {
             console.warn('Failed to save log height:', err);
@@ -1105,9 +1112,10 @@ class LogViewer {
     loadSavedHeight() {
         try {
             const heights = JSON.parse(localStorage.getItem('uniset-panel-logheights') || '{}');
-            if (heights[this.objectName]) {
-                this.height = heights[this.objectName];
-                const container = document.getElementById(`log-container-${this.objectName}`);
+            const h = heights[this.tabKey] ?? heights[this.objectName];
+            if (h) {
+                this.height = h;
+                const container = this.getEl(`log-container-${this.objectName}`);
                 if (container) {
                     container.style.height = `${this.height}px`;
                 }
@@ -1118,7 +1126,7 @@ class LogViewer {
     }
 
     saveCollapsedState() {
-        const section = document.getElementById(`logviewer-section-${this.objectName}`);
+        const section = this.getEl(`logviewer-section-${this.objectName}`);
         const collapsed = section.classList.contains('collapsed');
         state.collapsedSections[`logviewer-${this.objectName}`] = collapsed;
         saveCollapsedSections();
@@ -1126,7 +1134,7 @@ class LogViewer {
 
     restoreCollapsedState() {
         if (state.collapsedSections[`logviewer-${this.objectName}`]) {
-            const section = document.getElementById(`logviewer-section-${this.objectName}`);
+            const section = this.getEl(`logviewer-section-${this.objectName}`);
             section?.classList.add('collapsed');
         }
     }

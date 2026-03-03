@@ -1,10 +1,11 @@
     try {
         const saved = JSON.parse(localStorage.getItem('uniset-panel-ionc-height') || '{}');
-        if (saved[objectName]) {
-            const sensorsContainer = document.getElementById(`ionc-sensors-container-${objectName}`);
+        const height = saved[tabKey] ?? saved[objectName];
+        if (height) {
+            const sensorsContainer = getElementInTab(tabKey, `ionc-sensors-container-${objectName}`);
             if (sensorsContainer) {
-                sensorsContainer.style.height = `${saved[objectName]}px`;
-                sensorsContainer.style.maxHeight = `${saved[objectName]}px`;
+                sensorsContainer.style.height = `${height}px`;
+                sensorsContainer.style.maxHeight = `${height}px`;
             }
         }
     } catch (err) {
@@ -13,9 +14,9 @@
 }
 
 // Переключение режима отображения IO (горизонтально/вертикально)
-function toggleIOLayout(objectName) {
-    const checkbox = document.getElementById(`io-sequential-${objectName}`);
-    const ioGrid = document.getElementById(`io-grid-${objectName}`);
+function toggleIOLayout(tabKey, objectName) {
+    const checkbox = getElementInTab(tabKey, `io-sequential-${objectName}`);
+    const ioGrid = getElementInTab(tabKey, `io-grid-${objectName}`);
 
     if (!checkbox || !ioGrid) return;
 
@@ -26,25 +27,25 @@ function toggleIOLayout(objectName) {
     }
 
     // Сохраняем состояние
-    saveIOLayoutState(objectName, checkbox.checked);
+    saveIOLayoutState(tabKey, checkbox.checked);
 }
 
-function saveIOLayoutState(objectName, isSequential) {
+function saveIOLayoutState(tabKey, isSequential) {
     try {
         const saved = JSON.parse(localStorage.getItem('uniset-panel-io-layout') || '{}');
-        saved[objectName] = isSequential;
+        saved[tabKey] = isSequential;
         localStorage.setItem('uniset-panel-io-layout', JSON.stringify(saved));
     } catch (err) {
         console.warn('Failed to save IO layout state:', err);
     }
 }
 
-function loadIOLayoutState(objectName) {
+function loadIOLayoutState(tabKey, objectName) {
     try {
         const saved = JSON.parse(localStorage.getItem('uniset-panel-io-layout') || '{}');
-        if (saved[objectName]) {
-            const checkbox = document.getElementById(`io-sequential-${objectName}`);
-            const ioGrid = document.getElementById(`io-grid-${objectName}`);
+        if (saved[tabKey] ?? saved[objectName]) {
+            const checkbox = getElementInTab(tabKey, `io-sequential-${objectName}`);
+            const ioGrid = getElementInTab(tabKey, `io-grid-${objectName}`);
             if (checkbox && ioGrid) {
                 checkbox.checked = true;
                 ioGrid.classList.add('io-sequential');
@@ -168,7 +169,7 @@ function loadSectionOrder(tabKey) {
             anchor = orderedSections[i];
         }
 
-        updateReorderButtons(objectName);
+        updateReorderButtons(tabKey);
     } catch (err) {
         console.warn('Failed to load section order:', err);
     }
@@ -206,20 +207,23 @@ function setupIOSections(tabKey) {
     setupIOGlobalFilter(tabKey, objectName);
 
     ['inputs', 'outputs', 'timers'].forEach(type => {
-        setupIOResize(objectName, type);
+        setupIOResize(tabKey, objectName, type);
         setupIOUnpinAll(tabKey, objectName, type);
-        setupIOCollapse(objectName, type);
+        setupIOCollapse(tabKey, objectName, type);
     });
 }
 
-function setupIOCollapse(objectName, type) {
-    const toggleEl = document.querySelector(`.io-section-toggle[data-section="${type}-${objectName}"]`);
-    const section = document.getElementById(`${type}-section-${objectName}`);
+function setupIOCollapse(tabKey, objectName, type) {
+    const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+    if (!panel) return;
+
+    const toggleEl = panel.querySelector(`.io-section-toggle[data-section="${type}-${objectName}"]`);
+    const section = getElementInTab(tabKey, `${type}-section-${objectName}`);
 
     if (!toggleEl || !section) return;
 
     // Load saved state
-    const savedState = loadIOCollapseState(objectName, type);
+    const savedState = loadIOCollapseState(tabKey, type);
     if (savedState === 'collapsed') {
         section.classList.add('collapsed');
     }
@@ -227,14 +231,14 @@ function setupIOCollapse(objectName, type) {
     toggleEl.addEventListener('click', (e) => {
         e.stopPropagation();
         section.classList.toggle('collapsed');
-        saveIOCollapseState(objectName, type, section.classList.contains('collapsed'));
+        saveIOCollapseState(tabKey, type, section.classList.contains('collapsed'));
     });
 }
 
-function saveIOCollapseState(objectName, type, collapsed) {
+function saveIOCollapseState(tabKey, type, collapsed) {
     try {
         const saved = JSON.parse(localStorage.getItem('uniset-panel-io-collapse') || '{}');
-        const key = `${objectName}-${type}`;
+        const key = `${tabKey}-${type}`;
         saved[key] = collapsed ? 'collapsed' : 'expanded';
         localStorage.setItem('uniset-panel-io-collapse', JSON.stringify(saved));
     } catch (err) {
@@ -242,10 +246,10 @@ function saveIOCollapseState(objectName, type, collapsed) {
     }
 }
 
-function loadIOCollapseState(objectName, type) {
+function loadIOCollapseState(tabKey, type) {
     try {
         const saved = JSON.parse(localStorage.getItem('uniset-panel-io-collapse') || '{}');
-        const key = `${objectName}-${type}`;
+        const key = `${tabKey}-${type}`;
         return saved[key] || 'expanded';
     } catch (err) {
         console.warn('Failed to load IO collapse state:', err);
@@ -253,9 +257,9 @@ function loadIOCollapseState(objectName, type) {
     }
 }
 
-function setupIOResize(objectName, type) {
-    const resizeHandle = document.getElementById(`io-resize-${type}-${objectName}`);
-    const container = document.getElementById(`io-container-${type}-${objectName}`);
+function setupIOResize(tabKey, objectName, type) {
+    const resizeHandle = getElementInTab(tabKey, `io-resize-${type}-${objectName}`);
+    const container = getElementInTab(tabKey, `io-container-${type}-${objectName}`);
 
     if (!resizeHandle || !container) return;
 
@@ -278,7 +282,7 @@ function setupIOResize(objectName, type) {
         document.removeEventListener('mouseup', onMouseUp);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
-        saveIOHeight(objectName, type, container.offsetHeight);
+        saveIOHeight(tabKey, type, container.offsetHeight);
     };
 
     resizeHandle.addEventListener('mousedown', (e) => {
@@ -292,13 +296,13 @@ function setupIOResize(objectName, type) {
         document.body.style.userSelect = 'none';
     });
 
-    loadIOHeight(objectName, type);
+    loadIOHeight(tabKey, objectName, type);
 }
 
-function saveIOHeight(objectName, type, height) {
+function saveIOHeight(tabKey, type, height) {
     try {
         const saved = JSON.parse(localStorage.getItem('uniset-panel-io-heights') || '{}');
-        const key = `${objectName}-${type}`;
+        const key = `${tabKey}-${type}`;
         saved[key] = height;
         localStorage.setItem('uniset-panel-io-heights', JSON.stringify(saved));
     } catch (err) {
@@ -306,12 +310,12 @@ function saveIOHeight(objectName, type, height) {
     }
 }
 
-function loadIOHeight(objectName, type) {
+function loadIOHeight(tabKey, objectName, type) {
     try {
         const saved = JSON.parse(localStorage.getItem('uniset-panel-io-heights') || '{}');
-        const key = `${objectName}-${type}`;
+        const key = `${tabKey}-${type}`;
         if (saved[key]) {
-            const container = document.getElementById(`io-container-${type}-${objectName}`);
+            const container = getElementInTab(tabKey, `io-container-${type}-${objectName}`);
             if (container) {
                 container.style.height = `${saved[key]}px`;
                 container.style.maxHeight = `${saved[key]}px`;
@@ -324,7 +328,7 @@ function loadIOHeight(objectName, type) {
 
 // tabKey - ключ вкладки, objectName - displayName для DOM селекторов
 function setupIOGlobalFilter(tabKey, objectName) {
-    const filterInput = document.getElementById(`io-filter-global-${objectName}`);
+    const filterInput = getElementInTab(tabKey, `io-filter-global-${objectName}`);
     if (!filterInput) return;
 
     let filterTimeout = null;
@@ -361,7 +365,7 @@ function setupIOGlobalFilter(tabKey, objectName) {
 
 // tabKey - ключ вкладки, objectName - displayName для DOM селекторов
 function setupIOUnpinAll(tabKey, objectName, type) {
-    const unpinBtn = document.getElementById(`io-unpin-${type}-${objectName}`);
+    const unpinBtn = getElementInTab(tabKey, `io-unpin-${type}-${objectName}`);
     if (!unpinBtn) return;
 
     unpinBtn.addEventListener('click', (e) => {
