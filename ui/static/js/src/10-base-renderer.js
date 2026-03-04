@@ -10,32 +10,47 @@ const objectRenderers = new Map();
 // ============================================================================
 
 /**
- * Миксин для виртуального скролла с infinite loading
- * Требует: viewportId, itemsArray, rowHeight, loadMoreFn, renderFn
+ * Миксин для виртуального скролла и бесконечной подгрузки
+ *
+ * Группа A (полный виртуальный скролл): setupFullVirtualScroll()
+ *   RAF-throttled скролл, расчёт startIndex/endIndex, spacer, бесконечная подгрузка.
+ *   Рендерер должен реализовать: getVScrollItems(), vscrollRenderVisible(), vscrollLoadMore()
+ *
+ * Группа B (простой бесконечный скролл): setupSimpleInfiniteScroll()
+ *   Только подгрузка при приближении к низу, без windowing.
+ *   Рендерер должен реализовать: getVScrollItems(), vscrollLoadMore()
  */
 const VirtualScrollMixin = {
     // Инициализация свойств виртуального скролла
     initVirtualScrollProps() {
-        this.rowHeight = DEFAULT_ROW_HEIGHT;
-        this.bufferRows = DEFAULT_BUFFER_ROWS;
+        this.rowHeight = this.rowHeight || DEFAULT_ROW_HEIGHT;
+        this.bufferRows = this.bufferRows || DEFAULT_BUFFER_ROWS;
         this.startIndex = 0;
         this.endIndex = 0;
-        this.chunkSize = VIRTUAL_SCROLL_CHUNK_SIZE;
+        this.chunkSize = this.chunkSize || VIRTUAL_SCROLL_CHUNK_SIZE;
         this.hasMore = true;
         this.isLoadingChunk = false;
     },
 
-    // Настройка обработчика скролла
-    setupVirtualScrollFor(viewportId) {
-        const viewport = this.getEl(viewportId);
+    // Группа A: RAF-throttled скролл + windowing + infinite scroll
+    // config: { viewportId, threshold?, thresholdType? }
+    //   viewportId - ID viewport-элемента (без objectName, будет добавлен)
+    //   threshold - порог подгрузки (default: VIRTUAL_SCROLL_LOAD_THRESHOLD px или 80%)
+    //   thresholdType - 'px' (default) или 'percent'
+    setupFullVirtualScroll(config) {
+        this._vscrollViewportId = config.viewportId;
+        const viewport = this.getEl(config.viewportId);
         if (!viewport) return;
+
+        const threshold = config.threshold ?? VIRTUAL_SCROLL_LOAD_THRESHOLD;
+        const thresholdType = config.thresholdType || 'px';
 
         let ticking = false;
         viewport.addEventListener('scroll', () => {
             if (!ticking) {
                 requestAnimationFrame(() => {
-                    this.updateVisibleRowsFor(viewportId);
-                    this.checkInfiniteScrollFor(viewport);
+                    this._updateVisibleRows(viewport);
+                    this._checkInfiniteScroll(viewport, threshold, thresholdType);
                     ticking = false;
                 });
                 ticking = true;
@@ -43,45 +58,68 @@ const VirtualScrollMixin = {
         });
     },
 
-    // Обновление видимых строк
-    updateVisibleRowsFor(viewportId) {
-        const viewport = this.getEl(viewportId);
+    // Публичный метод для пересчёта видимых строк (вызывается из loadSensors/loadMoreSensors)
+    updateVisibleRows() {
+        const viewport = this.getEl(this._vscrollViewportId);
+        if (!viewport) return;
+        this._updateVisibleRows(viewport);
+    },
+
+    // Группа B: простой scroll listener для infinite scroll (без windowing)
+    // config: { viewportId, threshold? }
+    setupSimpleInfiniteScroll(config) {
+        const viewport = this.getEl(config.viewportId);
         if (!viewport) return;
 
+        const threshold = config.threshold || 100;
+        viewport.addEventListener('scroll', () => {
+            const scrollTop = viewport.scrollTop;
+            const viewportHeight = viewport.clientHeight;
+            const scrollHeight = viewport.scrollHeight;
+
+            if (scrollHeight - scrollTop - viewportHeight < threshold) {
+                this.vscrollLoadMore();
+            }
+        });
+    },
+
+    // Расчёт видимого диапазона строк
+    _updateVisibleRows(viewport) {
         const scrollTop = viewport.scrollTop;
         const viewportHeight = viewport.clientHeight;
-        const items = this.getVirtualScrollItems();
-        const totalRows = items.length;
+        const totalRows = this.getVScrollItems().length;
         const visibleRows = Math.ceil(viewportHeight / this.rowHeight);
 
         this.startIndex = Math.max(0, Math.floor(scrollTop / this.rowHeight) - this.bufferRows);
         this.endIndex = Math.min(totalRows, this.startIndex + visibleRows + 2 * this.bufferRows);
 
-        this.renderVisibleItems();
+        this.vscrollRenderVisible();
     },
 
     // Проверка необходимости подгрузки
-    checkInfiniteScrollFor(viewport) {
+    _checkInfiniteScroll(viewport, threshold, thresholdType) {
         if (this.isLoadingChunk || !this.hasMore) return;
 
-        const scrollBottom = viewport.scrollTop + viewport.clientHeight;
-        const items = this.getVirtualScrollItems();
-        const totalHeight = items.length * this.rowHeight;
-        if (totalHeight - scrollBottom < VIRTUAL_SCROLL_LOAD_THRESHOLD) {
-            this.loadMoreItems();
+        if (thresholdType === 'percent') {
+            const scrollTop = viewport.scrollTop;
+            const scrollHeight = viewport.scrollHeight;
+            const clientHeight = viewport.clientHeight;
+            if (scrollTop + clientHeight >= scrollHeight * (threshold / 100)) {
+                this.vscrollLoadMore();
+            }
+        } else {
+            const scrollBottom = viewport.scrollTop + viewport.clientHeight;
+            const totalHeight = this.getVScrollItems().length * this.rowHeight;
+            if (totalHeight - scrollBottom < threshold) {
+                this.vscrollLoadMore();
+            }
         }
     },
 
     // Показать/скрыть индикатор загрузки
-    showLoadingIndicatorFor(elementId, show) {
-        const el = this.getEl(elementId);
+    showVScrollLoadingIndicator(loadingId, show) {
+        const el = this.getEl(loadingId);
         if (el) el.style.display = show ? 'block' : 'none';
-    },
-
-    // Получить видимый срез данных
-    getVisibleSlice() {
-        const items = this.getVirtualScrollItems();
-        return items.slice(this.startIndex, this.endIndex);
     }
 };
 
@@ -90,13 +128,6 @@ const VirtualScrollMixin = {
  * Требует: objectName, apiPath, idField
  */
 const SSESubscriptionMixin = {
-    // Инициализация свойств SSE
-    initSSEProps() {
-        this.subscribedSensorIds = new Set();
-        this.pendingUpdates = [];
-        this.renderScheduled = false;
-    },
-
     // Подписка на SSE обновления
     // apiPath - путь API (например '/ionc', '/opcua', '/modbus')
     // ids - массив ID для подписки
@@ -161,20 +192,6 @@ const SSESubscriptionMixin = {
         console.log(`${logPrefix}: Переподписка ${ids.length} элементов для ${this.objectName}`);
         this.subscribedSensorIds.clear(); // Очищаем кэш чтобы subscribeToSSEFor не пропустил
         await this.subscribeToSSEFor(apiPath, ids, idField, logPrefix, extraBody);
-    },
-
-    // Планирование батчевого рендера обновлений
-    scheduleBatchRender(renderFn) {
-        if (this.renderScheduled) return;
-        this.renderScheduled = true;
-
-        requestAnimationFrame(() => {
-            if (this.pendingUpdates.length > 0) {
-                renderFn(this.pendingUpdates);
-                this.pendingUpdates = [];
-            }
-            this.renderScheduled = false;
-        });
     }
 };
 
@@ -265,14 +282,6 @@ const ResizableSectionMixin = {
  * Миксин для фильтрации списка элементов
  */
 const FilterMixin = {
-    // Инициализация свойств фильтрации
-    initFilterProps() {
-        this.filter = '';
-        this.typeFilter = 'all';
-        this.statusFilter = 'all';
-        this.filterDebounce = null;
-    },
-
     // Применение локальных фильтров к списку
     // extraFields - дополнительные поля для текстового поиска (например, ['mbreg'] для Modbus)
     // fieldAccessor - функция для получения значения поля (для вложенных объектов)
@@ -306,20 +315,6 @@ const FilterMixin = {
         }
 
         return result;
-    },
-
-    // Настройка debounced фильтра
-    setupFilterInput(inputId, onFilter, delay = FILTER_DEBOUNCE_DELAY) {
-        const input = this.getEl(inputId);
-        if (!input) return;
-
-        input.addEventListener('input', (e) => {
-            clearTimeout(this.filterDebounce);
-            this.filterDebounce = setTimeout(() => {
-                this.filter = e.target.value;
-                onFilter();
-            }, delay);
-        });
     },
 
     // Полная настройка фильтров с ESC, type filter и опциональным status filter
@@ -564,45 +559,6 @@ const ItemCounterMixin = {
     }
 };
 
-/**
- * Миксин для сохранения/загрузки высоты секций в localStorage
- */
-const SectionHeightMixin = {
-    /**
-     * Загружает сохранённую высоту секции
-     * @param {string} storageKey - Ключ в localStorage
-     * @param {number} defaultHeight - Value по умолчанию
-     * @returns {number}
-     */
-    loadSectionHeight(storageKey, defaultHeight = DEFAULT_SECTION_HEIGHT) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            const value = saved[this.tabKey] ?? saved[this.objectName];
-            if (typeof value === 'number' && value > 0) {
-                return value;
-            }
-        } catch (err) {
-            console.warn('Failed to load section height:', err);
-        }
-        return defaultHeight;
-    },
-
-    /**
-     * Сохраняет высоту секции
-     * @param {string} storageKey - Ключ в localStorage
-     * @param {number} value - Value высоты
-     */
-    saveSectionHeight(storageKey, value) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            saved[this.tabKey] = value;
-            localStorage.setItem(storageKey, JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save section height:', err);
-        }
-    }
-};
-
 const PinManagementMixin = {
     /**
      * Получает закрепленные элементы (датчики/регистры)
@@ -669,7 +625,6 @@ const PinManagementMixin = {
 
     // Сокращённые методы, использующие this.pinStorageKey и this.renderAfterPinChange
     getPinned()    { return this.getPinnedItems(this.pinStorageKey); },
-    savePinned(s)  { this.savePinnedItems(this.pinStorageKey, s); },
     togglePin(id)  { this.toggleItemPin(this.pinStorageKey, id, this.renderAfterPinChange); },
     unpinAll()     { this.unpinAllItems(this.pinStorageKey, this.renderAfterPinChange); }
 };
@@ -854,6 +809,228 @@ const TableSortMixin = {
             th._sortHandler = handler;
             th.addEventListener('click', handler);
         });
+    },
+
+    /**
+     * Обновление визуальных индикаторов сортировки
+     * Требует: this.sortTableId — полный ID таблицы (задаётся в конструкторе рендерера)
+     */
+    updateSortHeaders() {
+        const table = this.getEl(this.sortTableId);
+        if (!table) return;
+        table.querySelectorAll('th.th-sortable').forEach(th => {
+            const column = th.dataset.column;
+            th.classList.toggle('th-sorted', column === this.sortColumn);
+            const arrow = th.querySelector('.sort-arrow');
+            if (arrow) {
+                if (column === this.sortColumn) {
+                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
+                } else {
+                    arrow.textContent = '';
+                }
+            }
+        });
+    },
+
+    /**
+     * Перерисовка таблицы после смены сортировки
+     * Требует: sortRenderVisible() — мост к render-методу рендерера
+     */
+    renderAfterSort() {
+        this.sortRenderVisible();
+        this.updateSortHeaders();
+    }
+};
+
+/**
+ * Миксин для батчевого рендеринга SSE-обновлений
+ *
+ * Контракт рендерера:
+ *   - this.batchTbodyId  — ID элемента tbody (задаётся в конструкторе)
+ *   - getBatchItems()     — возвращает backing-массив (this.allSensors / this.allRegisters)
+ *   - updateRowCells(row, update) — обновление ячеек конкретной строки (renderer-specific)
+ */
+const BatchRenderMixin = {
+    initBatchRenderProps() {
+        this.pendingUpdates = [];
+        this.renderScheduled = false;
+    },
+
+    /**
+     * Общий SSE-обработчик: валидация, добавление в очередь, планирование RAF
+     * @param {Array} items - Массив обновлений из SSE
+     */
+    handleBatchUpdates(items) {
+        if (!Array.isArray(items) || items.length === 0) return;
+        this.pendingUpdates.push(...items);
+        if (!this.renderScheduled) {
+            this.renderScheduled = true;
+            requestAnimationFrame(() => this.batchRenderUpdates());
+        }
+    },
+
+    /**
+     * Общий batchRenderUpdates: drain → tbody → iterate rows → updateRowCells
+     * Рендерер может переопределить если нужна нестандартная логика.
+     */
+    batchRenderUpdates() {
+        const updateMap = this._drainPendingUpdates(this.getBatchItems());
+        if (!updateMap) return;
+
+        const tbody = this.getEl(this.batchTbodyId);
+        if (!tbody) return;
+
+        tbody.querySelectorAll('tr[data-sensor-id]').forEach(row => {
+            const id = parseInt(row.dataset.sensorId);
+            if (!id) return;
+
+            const update = updateMap.get(id);
+            if (!update) return;
+
+            this.updateRowCells(row, update);
+        });
+    },
+
+    /**
+     * Утилита: обновить текст ячейки с CSS-анимацией при изменении
+     * @param {HTMLElement} row - Строка таблицы
+     * @param {string} selector - CSS-селектор ячейки
+     * @param {string} newValue - Новое значение
+     * @param {string} animationClass - CSS-класс для анимации
+     */
+    _animateCellValue(row, selector, newValue, animationClass) {
+        const cell = row.querySelector(selector);
+        if (!cell) return;
+        if (cell.textContent !== newValue) {
+            cell.textContent = newValue;
+            cell.classList.remove(animationClass);
+            void cell.offsetWidth;
+            cell.classList.add(animationClass);
+        }
+    },
+
+    /**
+     * Слить очередь → обновить backing-массив → вернуть updateMap
+     * @param {Array} items - Backing-массив (this.allSensors / this.allRegisters)
+     * @returns {Map|null} updateMap или null если очередь пуста
+     */
+    _drainPendingUpdates(items) {
+        this.renderScheduled = false;
+        if (this.pendingUpdates.length === 0) return null;
+
+        const updates = this.pendingUpdates;
+        this.pendingUpdates = [];
+
+        const updateMap = new Map();
+        updates.forEach(item => updateMap.set(item.id, item));
+
+        items.forEach((item, index) => {
+            const update = updateMap.get(item.id);
+            if (update) {
+                items[index] = { ...item, ...update };
+            }
+        });
+
+        return updateMap;
+    }
+};
+
+const ModbusRegistersMixin = {
+    async loadRegisterChunk(offset) {
+        if (this.isLoadingChunk || !this.hasMore) return;
+        this.isLoadingChunk = true;
+
+        const prefix = this.paramsPrefix;
+        const loadingEl = this.getEl(`${prefix}-loading-more-${this.objectName}`);
+        if (loadingEl) loadingEl.style.display = 'block';
+
+        try {
+            let url = `/api/objects/${encodeURIComponent(this.objectName)}/modbus/registers?offset=${offset}&limit=${this.chunkSize}`;
+            if (this.typeFilter && this.typeFilter !== 'all') {
+                url += `&iotype=${encodeURIComponent(this.typeFilter)}`;
+            }
+
+            const data = await this.fetchJSON(url);
+            const registers = data.registers || [];
+            this.registersTotal = data.total || 0;
+
+            // Merge devices dictionary
+            if (data.devices) {
+                Object.assign(this.devicesDict, data.devices);
+            }
+
+            if (offset === 0) {
+                this.allRegisters = registers;
+                this.registerMap.clear();
+                registers.forEach(r => this.registerMap.set(r.id, r));
+
+                // Если нет фильтра и есть закреплённые регистры - загрузить их отдельно
+                if (!this.filter) {
+                    await this.loadPinnedRegisters();
+                }
+            } else {
+                this.allRegisters = this.allRegisters.concat(registers);
+                registers.forEach(r => this.registerMap.set(r.id, r));
+            }
+
+            this.hasMore = this.allRegisters.length < this.registersTotal;
+            this.renderRegisters();
+            this.setNote(`${prefix}-registers-note-${this.objectName}`, '');
+
+            this.updateItemCount(`${prefix}-register-count-${this.objectName}`, this.allRegisters.length, this.registersTotal);
+
+            // Подписываемся на SSE обновления после загрузки
+            this.subscribeToSSE();
+
+            // Обработчики сортировки (только при первой загрузке)
+            if (offset === 0) {
+                const table = this.getEl(`${prefix}-registers-table-${this.objectName}`);
+                if (table) {
+                    this.attachSortHandlers(table);
+                    this.updateSortHeaders();
+                }
+            }
+        } catch (err) {
+            this.setNote(`${prefix}-registers-note-${this.objectName}`, err.message, true);
+        } finally {
+            this.isLoadingChunk = false;
+            if (loadingEl) loadingEl.style.display = 'none';
+        }
+    },
+
+    // Загружает закреплённые регистры, если они не в текущем списке
+    async loadPinnedRegisters() {
+        const pinnedIds = this.getPinned();
+        if (pinnedIds.size === 0) return;
+
+        // Найти ID, которых нет в загруженных регистрах
+        const missingIds = [];
+        for (const idStr of pinnedIds) {
+            const id = parseInt(idStr);
+            if (!this.registerMap.has(id)) {
+                missingIds.push(id);
+            }
+        }
+
+        if (missingIds.length === 0) return;
+
+        // Загрузить отсутствующие регистры по ID
+        try {
+            const idsParam = missingIds.join(',');
+            const url = `/api/objects/${encodeURIComponent(this.objectName)}/modbus/get?filter=${idsParam}`;
+            const response = await this.fetchJSON(url);
+            const pinnedRegisters = response.registers || [];
+
+            // Добавить закреплённые регистры в начало списка
+            for (const reg of pinnedRegisters) {
+                if (!this.registerMap.has(reg.id)) {
+                    this.allRegisters.unshift(reg);
+                    this.registerMap.set(reg.id, reg);
+                }
+            }
+        } catch (err) {
+            console.warn('Failed to load pinned registers:', err);
+        }
     }
 };
 
@@ -1297,49 +1474,6 @@ class BaseObjectRenderer {
                 <button class="dashboard-add-btn"
                         data-sensor-name="${escapeHtml(sensorName)}"
                         data-sensor-label="${escapeHtml(label)}"
-                        title="Add to Dashboard">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="7" height="7" rx="1"/>
-                        <rect x="14" y="3" width="7" height="7" rx="1"/>
-                        <rect x="3" y="14" width="7" height="7" rx="1"/>
-                        <rect x="14" y="14" width="7" height="7" rx="1"/>
-                    </svg>
-                </button>
-            </td>
-        `;
-    }
-
-    // Устаревшие методы - оставлены для обратной совместимости
-    renderChartToggleCell(sensorId, sensorName, prefix = 'sensor') {
-        const isOnChart = this.isSensorOnChart(sensorName);
-        const varName = `${prefix}-${sensorId}`;
-        const checkboxId = `chart-${this.objectName}-${varName}`;
-        return `
-            <td class="chart-col">
-                <span class="chart-toggle">
-                    <input type="checkbox"
-                           class="chart-checkbox chart-toggle-input"
-                           id="${checkboxId}"
-                           data-sensor-id="${sensorId}"
-                           data-sensor-name="${escapeHtml(sensorName)}"
-                           ${isOnChart ? 'checked' : ''}>
-                    <label class="chart-toggle-label" for="${checkboxId}" title="Add to Chart">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 3v18h18"/>
-                            <path d="M18 9l-5 5-4-4-3 3"/>
-                        </svg>
-                    </label>
-                </span>
-            </td>
-        `;
-    }
-
-    renderDashboardToggleCell(sensorName, sensorLabel = null) {
-        return `
-            <td class="dashboard-col">
-                <button class="dashboard-add-btn"
-                        data-sensor-name="${escapeHtml(sensorName)}"
-                        data-sensor-label="${escapeHtml(sensorLabel || sensorName)}"
                         title="Add to Dashboard">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="3" width="7" height="7" rx="1"/>

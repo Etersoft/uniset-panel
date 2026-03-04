@@ -140,14 +140,6 @@ function startTimerUpdateInterval() {
     }, UPDATE_INTERVAL);
 }
 
-// Остановка интервала обновления таймеров
-function stopTimerUpdateInterval() {
-    if (timerUpdateInterval) {
-        clearInterval(timerUpdateInterval);
-        timerUpdateInterval = null;
-    }
-}
-
 // Рендеринг информации об объекте
 function renderObjectInfo(tabKey, objectData) {
     const tabState = state.tabs.get(tabKey);
@@ -190,7 +182,7 @@ function renderObjectInfo(tabKey, objectData) {
     fields.forEach(({ key, label, format }) => {
         if (objectData[key] !== undefined) {
             const tr = document.createElement('tr');
-            const value = format ? format(objectData[key]) : objectData[key];
+            const value = format ? format(objectData[key]) : escapeHtml(String(objectData[key]));
             tr.innerHTML = `
                 <td class="info-label">${label}</td>
                 <td class="info-value">${value}</td>
@@ -234,9 +226,9 @@ function renderLogServer(tabKey, logServerData) {
                 // Проверяем с учётом возможных опечаток (RUNNIG вместо RUNNING)
                 const stateClass = stateValue.startsWith('RUNN') ? 'state-running' :
                                    stateValue === 'STOPPED' ? 'state-stopped' : '';
-                valueHtml = `<span class="state-badge ${stateClass}">${logServerData[key]}</span>`;
+                valueHtml = `<span class="state-badge ${stateClass}">${escapeHtml(String(logServerData[key]))}</span>`;
             } else {
-                valueHtml = logServerData[key];
+                valueHtml = escapeHtml(String(logServerData[key]));
             }
             tr.innerHTML = `
                 <td class="info-label">${label}</td>
@@ -255,7 +247,7 @@ function renderLogServer(tabKey, logServerData) {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="info-label">Макс. сессий</td>
-                <td class="info-value">${info.sessMaxCount}</td>
+                <td class="info-value">${escapeHtml(String(info.sessMaxCount))}</td>
             `;
             tbody.appendChild(tr);
         }
@@ -278,7 +270,7 @@ function renderLogServer(tabKey, logServerData) {
                         JSON.stringify(session) : String(session);
                     sessionTr.innerHTML = `
                         <td class="info-label" style="padding-left: 1.5rem">Сессия ${idx + 1}</td>
-                        <td class="info-value">${sessionInfo}</td>
+                        <td class="info-value">${escapeHtml(sessionInfo)}</td>
                     `;
                     tbody.appendChild(sessionTr);
                 });
@@ -367,8 +359,8 @@ function renderStatistics(tabKey, statsData) {
         }
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td class="info-label">${key}</td>
-            <td class="info-value">${formatValue(value)}</td>
+            <td class="info-label">${escapeHtml(key)}</td>
+            <td class="info-value">${escapeHtml(String(formatValue(value)))}</td>
         `;
         generalTbody.appendChild(tr);
     });
@@ -423,9 +415,9 @@ function renderStatisticsSensors(tabKey, filterText = '') {
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${sensorId}</td>
-            <td class="variable-name">${sensorName}</td>
-            <td class="variable-value">${formatValue(sensorCount)}</td>
+            <td>${escapeHtml(String(sensorId))}</td>
+            <td class="variable-name">${escapeHtml(String(sensorName))}</td>
+            <td class="variable-value">${escapeHtml(String(formatValue(sensorCount)))}</td>
         `;
         tbody.appendChild(tr);
     });
@@ -584,19 +576,6 @@ function toggleChartSmooth(tabKey, varName, smoothEnabled) {
     chartData.chart.update('none');
 }
 
-// Переключение stepped режима графика (меандр)
-// tabKey - ключ вкладки (serverId:objectName)
-function toggleChartStepped(tabKey, varName, steppedEnabled) {
-    const tabState = state.tabs.get(tabKey);
-    if (!tabState) return;
-
-    const chartData = tabState.charts.get(varName);
-    if (!chartData) return;
-
-    chartData.chart.data.datasets[0].stepped = steppedEnabled ? 'before' : false;
-    chartData.chart.update('none');
-}
-
 // Делегирование события для color picker
 document.addEventListener('click', (e) => {
     if (e.target.classList.contains('legend-color-picker')) {
@@ -644,46 +623,13 @@ function setupChartsResize(tabKey) {
 
     const displayName = tabState.displayName || tabKey;
 
-    const resizeHandle = getElementInTab(tabKey, `charts-resize-${displayName}`);
-    const chartsContainer = getElementInTab(tabKey, `charts-container-${displayName}`);
+    setupResizeHandle(
+        getElementInTab(tabKey, `charts-resize-${displayName}`),
+        getElementInTab(tabKey, `charts-container-${displayName}`),
+        CHARTS_CONTAINER_MIN_HEIGHT,
+        (height) => saveChartsHeight(tabKey, height)
+    );
 
-    if (!resizeHandle || !chartsContainer) return;
-
-    let startY = 0;
-    let startHeight = 0;
-    let isResizing = false;
-
-    const onMouseMove = (e) => {
-        if (!isResizing) return;
-        const delta = e.clientY - startY;
-        const newHeight = Math.max(CHARTS_CONTAINER_MIN_HEIGHT, startHeight + delta);
-        chartsContainer.style.height = `${newHeight}px`;
-        chartsContainer.style.maxHeight = `${newHeight}px`;
-    };
-
-    const onMouseUp = () => {
-        if (!isResizing) return;
-        isResizing = false;
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        // Сохраняем высоту
-        saveChartsHeight(tabKey, chartsContainer.offsetHeight);
-    };
-
-    resizeHandle.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        isResizing = true;
-        startY = e.clientY;
-        startHeight = chartsContainer.offsetHeight || CHARTS_CONTAINER_DEFAULT_HEIGHT;
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = 'ns-resize';
-        document.body.style.userSelect = 'none';
-    });
-
-    // Загружаем сохранённую высоту
     loadChartsHeight(tabKey);
 }
 
@@ -719,46 +665,13 @@ function loadChartsHeight(tabKey) {
 
 // Настройка resize для IONC секции датчиков
 function setupIONCSensorsResize(tabKey, objectName) {
-    const resizeHandle = getElementInTab(tabKey, `ionc-resize-${objectName}`);
-    const sensorsContainer = getElementInTab(tabKey, `ionc-sensors-container-${objectName}`);
+    setupResizeHandle(
+        getElementInTab(tabKey, `ionc-resize-${objectName}`),
+        getElementInTab(tabKey, `ionc-sensors-container-${objectName}`),
+        SENSORS_CONTAINER_MIN_HEIGHT,
+        (height) => saveIONCSensorsHeight(tabKey, height)
+    );
 
-    if (!resizeHandle || !sensorsContainer) return;
-
-    let startY = 0;
-    let startHeight = 0;
-    let isResizing = false;
-
-    const onMouseMove = (e) => {
-        if (!isResizing) return;
-        const delta = e.clientY - startY;
-        const newHeight = Math.max(SENSORS_CONTAINER_MIN_HEIGHT, startHeight + delta);
-        sensorsContainer.style.height = `${newHeight}px`;
-        sensorsContainer.style.maxHeight = `${newHeight}px`;
-    };
-
-    const onMouseUp = () => {
-        if (!isResizing) return;
-        isResizing = false;
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        // Сохраняем высоту
-        saveIONCSensorsHeight(tabKey, sensorsContainer.offsetHeight);
-    };
-
-    resizeHandle.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        isResizing = true;
-        startY = e.clientY;
-        startHeight = sensorsContainer.offsetHeight || 400;
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = 'ns-resize';
-        document.body.style.userSelect = 'none';
-    });
-
-    // Загружаем сохранённую высоту
     loadIONCSensorsHeight(tabKey, objectName);
 }
 

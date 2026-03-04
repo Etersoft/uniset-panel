@@ -24,17 +24,12 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         this.autocompleteResults = [];
         this.selectedAutocompleteIndex = 0;
 
-        // Virtual scroll
-        this.rowHeight = DEFAULT_ROW_HEIGHT;
-        this.bufferRows = 5;
-        this.startIndex = 0;
-        this.endIndex = 0;
-
         // Высота секции датчиков
         this.sensorsHeight = this.loadSectionHeight('uwsgate-sensors-height', 400);
 
         // Инициализация сортировки
         this.initSortProps();
+        this.sortTableId = `uwsgate-sensors-table-${objectName}`;
         this.sortColumnDefs = {
             id: { field: 'id', type: 'number' },
             name: { field: 'name', type: 'string' },
@@ -770,34 +765,12 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         }
     }
 
-    // Перерисовка после смены сортировки
-    renderAfterSort() {
-        this.renderSensorsTable();
-        this.updateSortHeaders();
-    }
-
-    // Обновление визуальных индикаторов сортировки
-    updateSortHeaders() {
-        const table = getElementInTab(this.tabKey, `uwsgate-sensors-table-${this.objectName}`);
-        if (!table) return;
-
-        table.querySelectorAll('th.th-sortable').forEach(th => {
-            const column = th.dataset.column;
-            th.classList.toggle('th-sorted', column === this.sortColumn);
-            const arrow = th.querySelector('.sort-arrow');
-            if (arrow) {
-                if (column === this.sortColumn) {
-                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
-                } else {
-                    arrow.textContent = '';
-                }
-            }
-        });
-    }
+    // Bridge для TableSortMixin.renderAfterSort()
+    sortRenderVisible() { this.renderSensorsTable(); }
 }
 
 // Apply mixins
-applyMixin(UWebSocketGateRenderer, SectionHeightMixin);
+applyMixin(UWebSocketGateRenderer, ResizableSectionMixin);
 applyMixin(UWebSocketGateRenderer, TableSortMixin);
 
 // UWebSocketGate рендерер (по extensionType)

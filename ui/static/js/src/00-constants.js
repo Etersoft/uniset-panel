@@ -23,6 +23,9 @@ const SETTINGS_FILTER_DEBOUNCE_DELAY = 200;
 const SSE_RESUBSCRIBE_DELAY = 1000;
 const SSE_RECOVERY_PROBE_INTERVAL = 30000;
 
+// === Retry ===
+const RESTORE_SENSORS_MAX_ATTEMPTS = 30; // × 100ms = 3s max wait for tab init
+
 // === Лимиты данных ===
 const MAX_CHART_POINTS = 1000;
 const MAX_LOG_LINES = 10000;

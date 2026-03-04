@@ -160,13 +160,10 @@ function toggleServerGroup(serverId) {
     const group = document.querySelector(`.server-group[data-server-id="${serverId}"]`);
     if (!group) return;
 
-    if (state.collapsedServerGroups.has(serverId)) {
-        state.collapsedServerGroups.delete(serverId);
-        group.classList.remove('collapsed');
-    } else {
-        state.collapsedServerGroups.add(serverId);
-        group.classList.add('collapsed');
-    }
+    const collapsed = !state.collapsedServerGroups.has(serverId);
+    if (collapsed) state.collapsedServerGroups.add(serverId);
+    else state.collapsedServerGroups.delete(serverId);
+    group.classList.toggle('collapsed', collapsed);
     saveSettings();
 }
 
@@ -180,11 +177,7 @@ function renderServersSection() {
     if (!section || !list) return;
 
     // Применяем сохранённое состояние свёрнутости
-    if (state.serversSectionCollapsed) {
-        section.classList.add('collapsed');
-    } else {
-        section.classList.remove('collapsed');
-    }
+    section.classList.toggle('collapsed', state.serversSectionCollapsed);
 
     // Обработчик клика на заголовок секции
     if (!header.dataset.listenerAdded) {

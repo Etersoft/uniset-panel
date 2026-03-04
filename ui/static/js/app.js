@@ -27,6 +27,9 @@ const SETTINGS_FILTER_DEBOUNCE_DELAY = 200;
 const SSE_RESUBSCRIBE_DELAY = 1000;
 const SSE_RECOVERY_PROBE_INTERVAL = 30000;
 
+// === Retry ===
+const RESTORE_SENSORS_MAX_ATTEMPTS = 30; // × 100ms = 3s max wait for tab init
+
 // === Лимиты данных ===
 const MAX_CHART_POINTS = 1000;
 const MAX_LOG_LINES = 10000;
@@ -230,34 +233,12 @@ function updateServerStatus(serverId, connected) {
     }
 
     // Обновляем бейджи серверов в табах
-    const tabBadges = document.querySelectorAll(`.tab-server-badge[data-server-id="${serverId}"]`);
-    tabBadges.forEach(badge => {
-        if (connected) {
-            badge.classList.remove('disconnected');
-        } else {
-            badge.classList.add('disconnected');
-        }
-    });
+    document.querySelectorAll(`.tab-server-badge[data-server-id="${serverId}"]`)
+        .forEach(el => el.classList.toggle('disconnected', !connected));
 
-    // Обновляем состояние кнопок табов (заголовки)
-    const tabButtons = document.querySelectorAll(`.tab-btn[data-server-id="${serverId}"]`);
-    tabButtons.forEach(btn => {
-        if (connected) {
-            btn.classList.remove('server-disconnected');
-        } else {
-            btn.classList.add('server-disconnected');
-        }
-    });
-
-    // Обновляем состояние панелей табов (контент)
-    const tabPanels = document.querySelectorAll(`.tab-panel[data-server-id="${serverId}"]`);
-    tabPanels.forEach(panel => {
-        if (connected) {
-            panel.classList.remove('server-disconnected');
-        } else {
-            panel.classList.add('server-disconnected');
-        }
-    });
+    // Обновляем состояние кнопок и панелей табов
+    document.querySelectorAll(`.tab-btn[data-server-id="${serverId}"], .tab-panel[data-server-id="${serverId}"]`)
+        .forEach(el => el.classList.toggle('server-disconnected', !connected));
 
     // Обновляем статус в sidebar группах
     if (typeof updateGroupEntityStatus === 'function') {
@@ -349,17 +330,14 @@ function updateControlUI() {
 // Обновление всех кнопок управления (disabled состояние)
 function updateAllControlButtons() {
     const canCtrl = canControl();
+    const readonlyTitle = canCtrl ? '' : 'Read-only mode - take control first';
 
     // IONC кнопки
     document.querySelectorAll('.ionc-btn-set, .ionc-btn-freeze, .ionc-btn-unfreeze, .ionc-btn-gen, .ionc-btn-gen-stop').forEach(btn => {
         // Не трогаем readonly сенсоры - они всегда disabled
         if (btn.closest('tr')?.classList.contains('ionc-sensor-readonly')) return;
         btn.disabled = !canCtrl;
-        if (!canCtrl) {
-            btn.title = 'Read-only mode - take control first';
-        } else {
-            btn.title = '';
-        }
+        btn.title = readonlyTitle;
     });
 
     // Modbus/OPCUA control кнопки
@@ -367,26 +345,11 @@ function updateAllControlButtons() {
         btn.disabled = !canCtrl;
     });
 
-    // Кнопки сохранения параметров (Modbus, OPCUA)
-    document.querySelectorAll('[id^="mb-params-save-"], [id^="mbs-params-save-"], [id^="opcua-params-save-"], [id^="opcuasrv-params-save-"]').forEach(btn => {
+    // Кнопки сохранения параметров и команд логера
+    document.querySelectorAll('[id^="mb-params-save-"], [id^="mbs-params-save-"], [id^="opcua-params-save-"], [id^="opcuasrv-params-save-"], .log-command-btn').forEach(btn => {
         btn.disabled = !canCtrl;
-        if (!canCtrl) {
-            btn.title = 'Read-only mode - take control first';
-        } else {
-            btn.title = '';
-        }
+        btn.title = readonlyTitle;
     });
-
-    // Кнопки команд логера
-    document.querySelectorAll('.log-command-btn').forEach(btn => {
-        btn.disabled = !canCtrl;
-        if (!canCtrl) {
-            btn.title = 'Read-only mode - take control first';
-        } else {
-            btn.title = '';
-        }
-    });
-
 }
 
 // Показать диалог ввода токена
@@ -709,23 +672,15 @@ function updateRecordingUI() {
     statusEl.classList.remove('hidden');
 
     // Update recording state
-    if (recordingState.isRecording) {
-        statusEl.classList.add('recording');
-        toggleBtn.textContent = 'Stop';
-        toggleBtn.title = 'Stop recording';
-        badge.classList.remove('hidden');
+    const isRec = recordingState.isRecording;
+    const hasData = isRec || recordingState.recordCount > 0;
+
+    statusEl.classList.toggle('recording', isRec);
+    toggleBtn.textContent = isRec ? 'Stop' : 'Record';
+    toggleBtn.title = isRec ? 'Stop recording' : 'Start recording';
+    badge.classList.toggle('hidden', !hasData);
+    if (hasData) {
         badge.textContent = `${formatNumber(recordingState.recordCount)} / ${formatBytes(recordingState.sizeBytes)}`;
-    } else {
-        statusEl.classList.remove('recording');
-        toggleBtn.textContent = 'Record';
-        toggleBtn.title = 'Start recording';
-        // Show badge if there's data
-        if (recordingState.recordCount > 0) {
-            badge.classList.remove('hidden');
-            badge.textContent = `${formatNumber(recordingState.recordCount)} / ${formatBytes(recordingState.sizeBytes)}`;
-        } else {
-            badge.classList.add('hidden');
-        }
     }
 }
 
@@ -758,12 +713,15 @@ function updateChartsFromBatch(tabKey, items, prefix, timestamp, options = {}) {
         }
     }
     if (chartsToUpdate.size > 0) {
-        syncAllChartsTimeRange(tabKey);
-        tabState.charts.forEach((chartData) => {
+        // Обрезаем данные только у обновлённых графиков
+        chartsToUpdate.forEach(varName => {
+            const chartData = tabState.charts.get(varName);
+            if (!chartData) return;
             const data = chartData.chart.data.datasets[0].data;
             while (data.length > MAX_CHART_POINTS) data.shift();
-            chartData.chart.update('none');
         });
+        // syncAllChartsTimeRange обновляет min/max и вызывает update('none') для всех графиков
+        syncAllChartsTimeRange(tabKey);
     }
 }
 
@@ -1363,16 +1321,6 @@ function resubscribeAll() {
     });
 }
 
-// Close SSE соединение
-function closeSSE() {
-    stopServerStatusSync();
-    if (state.sse.eventSource) {
-        state.sse.eventSource.close();
-        state.sse.eventSource = null;
-        state.sse.connected = false;
-    }
-}
-
 // Обновление графиков при возврате на вкладку браузера
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
@@ -1408,6 +1356,38 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Универсальный resize-handle: mousedown → mousemove → mouseup паттерн
+function setupResizeHandle(handle, container, minHeight, onSave) {
+    if (!handle || !container) return;
+    let startY = 0, startHeight = 0, isResizing = false;
+
+    const onMouseMove = (e) => {
+        if (!isResizing) return;
+        const newHeight = Math.max(minHeight, startHeight + e.clientY - startY);
+        container.style.height = `${newHeight}px`;
+        container.style.maxHeight = `${newHeight}px`;
+    };
+    const onMouseUp = () => {
+        if (!isResizing) return;
+        isResizing = false;
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        onSave(container.offsetHeight);
+    };
+    handle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        isResizing = true;
+        startY = e.clientY;
+        startHeight = container.offsetHeight;
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = 'ns-resize';
+        document.body.style.userSelect = 'none';
+    });
+}
+
 // Универсальный debounce — возвращает обёртку, откладывающую вызов fn на delay мс
 function debounce(fn, delay) {
     let timer = null;
@@ -1431,32 +1411,47 @@ const objectRenderers = new Map();
 // ============================================================================
 
 /**
- * Миксин для виртуального скролла с infinite loading
- * Требует: viewportId, itemsArray, rowHeight, loadMoreFn, renderFn
+ * Миксин для виртуального скролла и бесконечной подгрузки
+ *
+ * Группа A (полный виртуальный скролл): setupFullVirtualScroll()
+ *   RAF-throttled скролл, расчёт startIndex/endIndex, spacer, бесконечная подгрузка.
+ *   Рендерер должен реализовать: getVScrollItems(), vscrollRenderVisible(), vscrollLoadMore()
+ *
+ * Группа B (простой бесконечный скролл): setupSimpleInfiniteScroll()
+ *   Только подгрузка при приближении к низу, без windowing.
+ *   Рендерер должен реализовать: getVScrollItems(), vscrollLoadMore()
  */
 const VirtualScrollMixin = {
     // Инициализация свойств виртуального скролла
     initVirtualScrollProps() {
-        this.rowHeight = DEFAULT_ROW_HEIGHT;
-        this.bufferRows = DEFAULT_BUFFER_ROWS;
+        this.rowHeight = this.rowHeight || DEFAULT_ROW_HEIGHT;
+        this.bufferRows = this.bufferRows || DEFAULT_BUFFER_ROWS;
         this.startIndex = 0;
         this.endIndex = 0;
-        this.chunkSize = VIRTUAL_SCROLL_CHUNK_SIZE;
+        this.chunkSize = this.chunkSize || VIRTUAL_SCROLL_CHUNK_SIZE;
         this.hasMore = true;
         this.isLoadingChunk = false;
     },
 
-    // Настройка обработчика скролла
-    setupVirtualScrollFor(viewportId) {
-        const viewport = this.getEl(viewportId);
+    // Группа A: RAF-throttled скролл + windowing + infinite scroll
+    // config: { viewportId, threshold?, thresholdType? }
+    //   viewportId - ID viewport-элемента (без objectName, будет добавлен)
+    //   threshold - порог подгрузки (default: VIRTUAL_SCROLL_LOAD_THRESHOLD px или 80%)
+    //   thresholdType - 'px' (default) или 'percent'
+    setupFullVirtualScroll(config) {
+        this._vscrollViewportId = config.viewportId;
+        const viewport = this.getEl(config.viewportId);
         if (!viewport) return;
+
+        const threshold = config.threshold ?? VIRTUAL_SCROLL_LOAD_THRESHOLD;
+        const thresholdType = config.thresholdType || 'px';
 
         let ticking = false;
         viewport.addEventListener('scroll', () => {
             if (!ticking) {
                 requestAnimationFrame(() => {
-                    this.updateVisibleRowsFor(viewportId);
-                    this.checkInfiniteScrollFor(viewport);
+                    this._updateVisibleRows(viewport);
+                    this._checkInfiniteScroll(viewport, threshold, thresholdType);
                     ticking = false;
                 });
                 ticking = true;
@@ -1464,45 +1459,68 @@ const VirtualScrollMixin = {
         });
     },
 
-    // Обновление видимых строк
-    updateVisibleRowsFor(viewportId) {
-        const viewport = this.getEl(viewportId);
+    // Публичный метод для пересчёта видимых строк (вызывается из loadSensors/loadMoreSensors)
+    updateVisibleRows() {
+        const viewport = this.getEl(this._vscrollViewportId);
+        if (!viewport) return;
+        this._updateVisibleRows(viewport);
+    },
+
+    // Группа B: простой scroll listener для infinite scroll (без windowing)
+    // config: { viewportId, threshold? }
+    setupSimpleInfiniteScroll(config) {
+        const viewport = this.getEl(config.viewportId);
         if (!viewport) return;
 
+        const threshold = config.threshold || 100;
+        viewport.addEventListener('scroll', () => {
+            const scrollTop = viewport.scrollTop;
+            const viewportHeight = viewport.clientHeight;
+            const scrollHeight = viewport.scrollHeight;
+
+            if (scrollHeight - scrollTop - viewportHeight < threshold) {
+                this.vscrollLoadMore();
+            }
+        });
+    },
+
+    // Расчёт видимого диапазона строк
+    _updateVisibleRows(viewport) {
         const scrollTop = viewport.scrollTop;
         const viewportHeight = viewport.clientHeight;
-        const items = this.getVirtualScrollItems();
-        const totalRows = items.length;
+        const totalRows = this.getVScrollItems().length;
         const visibleRows = Math.ceil(viewportHeight / this.rowHeight);
 
         this.startIndex = Math.max(0, Math.floor(scrollTop / this.rowHeight) - this.bufferRows);
         this.endIndex = Math.min(totalRows, this.startIndex + visibleRows + 2 * this.bufferRows);
 
-        this.renderVisibleItems();
+        this.vscrollRenderVisible();
     },
 
     // Проверка необходимости подгрузки
-    checkInfiniteScrollFor(viewport) {
+    _checkInfiniteScroll(viewport, threshold, thresholdType) {
         if (this.isLoadingChunk || !this.hasMore) return;
 
-        const scrollBottom = viewport.scrollTop + viewport.clientHeight;
-        const items = this.getVirtualScrollItems();
-        const totalHeight = items.length * this.rowHeight;
-        if (totalHeight - scrollBottom < VIRTUAL_SCROLL_LOAD_THRESHOLD) {
-            this.loadMoreItems();
+        if (thresholdType === 'percent') {
+            const scrollTop = viewport.scrollTop;
+            const scrollHeight = viewport.scrollHeight;
+            const clientHeight = viewport.clientHeight;
+            if (scrollTop + clientHeight >= scrollHeight * (threshold / 100)) {
+                this.vscrollLoadMore();
+            }
+        } else {
+            const scrollBottom = viewport.scrollTop + viewport.clientHeight;
+            const totalHeight = this.getVScrollItems().length * this.rowHeight;
+            if (totalHeight - scrollBottom < threshold) {
+                this.vscrollLoadMore();
+            }
         }
     },
 
     // Показать/скрыть индикатор загрузки
-    showLoadingIndicatorFor(elementId, show) {
-        const el = this.getEl(elementId);
+    showVScrollLoadingIndicator(loadingId, show) {
+        const el = this.getEl(loadingId);
         if (el) el.style.display = show ? 'block' : 'none';
-    },
-
-    // Получить видимый срез данных
-    getVisibleSlice() {
-        const items = this.getVirtualScrollItems();
-        return items.slice(this.startIndex, this.endIndex);
     }
 };
 
@@ -1511,13 +1529,6 @@ const VirtualScrollMixin = {
  * Требует: objectName, apiPath, idField
  */
 const SSESubscriptionMixin = {
-    // Инициализация свойств SSE
-    initSSEProps() {
-        this.subscribedSensorIds = new Set();
-        this.pendingUpdates = [];
-        this.renderScheduled = false;
-    },
-
     // Подписка на SSE обновления
     // apiPath - путь API (например '/ionc', '/opcua', '/modbus')
     // ids - массив ID для подписки
@@ -1582,20 +1593,6 @@ const SSESubscriptionMixin = {
         console.log(`${logPrefix}: Переподписка ${ids.length} элементов для ${this.objectName}`);
         this.subscribedSensorIds.clear(); // Очищаем кэш чтобы subscribeToSSEFor не пропустил
         await this.subscribeToSSEFor(apiPath, ids, idField, logPrefix, extraBody);
-    },
-
-    // Планирование батчевого рендера обновлений
-    scheduleBatchRender(renderFn) {
-        if (this.renderScheduled) return;
-        this.renderScheduled = true;
-
-        requestAnimationFrame(() => {
-            if (this.pendingUpdates.length > 0) {
-                renderFn(this.pendingUpdates);
-                this.pendingUpdates = [];
-            }
-            this.renderScheduled = false;
-        });
     }
 };
 
@@ -1686,14 +1683,6 @@ const ResizableSectionMixin = {
  * Миксин для фильтрации списка элементов
  */
 const FilterMixin = {
-    // Инициализация свойств фильтрации
-    initFilterProps() {
-        this.filter = '';
-        this.typeFilter = 'all';
-        this.statusFilter = 'all';
-        this.filterDebounce = null;
-    },
-
     // Применение локальных фильтров к списку
     // extraFields - дополнительные поля для текстового поиска (например, ['mbreg'] для Modbus)
     // fieldAccessor - функция для получения значения поля (для вложенных объектов)
@@ -1727,20 +1716,6 @@ const FilterMixin = {
         }
 
         return result;
-    },
-
-    // Настройка debounced фильтра
-    setupFilterInput(inputId, onFilter, delay = FILTER_DEBOUNCE_DELAY) {
-        const input = this.getEl(inputId);
-        if (!input) return;
-
-        input.addEventListener('input', (e) => {
-            clearTimeout(this.filterDebounce);
-            this.filterDebounce = setTimeout(() => {
-                this.filter = e.target.value;
-                onFilter();
-            }, delay);
-        });
     },
 
     // Полная настройка фильтров с ESC, type filter и опциональным status filter
@@ -1985,45 +1960,6 @@ const ItemCounterMixin = {
     }
 };
 
-/**
- * Миксин для сохранения/загрузки высоты секций в localStorage
- */
-const SectionHeightMixin = {
-    /**
-     * Загружает сохранённую высоту секции
-     * @param {string} storageKey - Ключ в localStorage
-     * @param {number} defaultHeight - Value по умолчанию
-     * @returns {number}
-     */
-    loadSectionHeight(storageKey, defaultHeight = DEFAULT_SECTION_HEIGHT) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            const value = saved[this.tabKey] ?? saved[this.objectName];
-            if (typeof value === 'number' && value > 0) {
-                return value;
-            }
-        } catch (err) {
-            console.warn('Failed to load section height:', err);
-        }
-        return defaultHeight;
-    },
-
-    /**
-     * Сохраняет высоту секции
-     * @param {string} storageKey - Ключ в localStorage
-     * @param {number} value - Value высоты
-     */
-    saveSectionHeight(storageKey, value) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            saved[this.tabKey] = value;
-            localStorage.setItem(storageKey, JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save section height:', err);
-        }
-    }
-};
-
 const PinManagementMixin = {
     /**
      * Получает закрепленные элементы (датчики/регистры)
@@ -2090,7 +2026,6 @@ const PinManagementMixin = {
 
     // Сокращённые методы, использующие this.pinStorageKey и this.renderAfterPinChange
     getPinned()    { return this.getPinnedItems(this.pinStorageKey); },
-    savePinned(s)  { this.savePinnedItems(this.pinStorageKey, s); },
     togglePin(id)  { this.toggleItemPin(this.pinStorageKey, id, this.renderAfterPinChange); },
     unpinAll()     { this.unpinAllItems(this.pinStorageKey, this.renderAfterPinChange); }
 };
@@ -2275,6 +2210,228 @@ const TableSortMixin = {
             th._sortHandler = handler;
             th.addEventListener('click', handler);
         });
+    },
+
+    /**
+     * Обновление визуальных индикаторов сортировки
+     * Требует: this.sortTableId — полный ID таблицы (задаётся в конструкторе рендерера)
+     */
+    updateSortHeaders() {
+        const table = this.getEl(this.sortTableId);
+        if (!table) return;
+        table.querySelectorAll('th.th-sortable').forEach(th => {
+            const column = th.dataset.column;
+            th.classList.toggle('th-sorted', column === this.sortColumn);
+            const arrow = th.querySelector('.sort-arrow');
+            if (arrow) {
+                if (column === this.sortColumn) {
+                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
+                } else {
+                    arrow.textContent = '';
+                }
+            }
+        });
+    },
+
+    /**
+     * Перерисовка таблицы после смены сортировки
+     * Требует: sortRenderVisible() — мост к render-методу рендерера
+     */
+    renderAfterSort() {
+        this.sortRenderVisible();
+        this.updateSortHeaders();
+    }
+};
+
+/**
+ * Миксин для батчевого рендеринга SSE-обновлений
+ *
+ * Контракт рендерера:
+ *   - this.batchTbodyId  — ID элемента tbody (задаётся в конструкторе)
+ *   - getBatchItems()     — возвращает backing-массив (this.allSensors / this.allRegisters)
+ *   - updateRowCells(row, update) — обновление ячеек конкретной строки (renderer-specific)
+ */
+const BatchRenderMixin = {
+    initBatchRenderProps() {
+        this.pendingUpdates = [];
+        this.renderScheduled = false;
+    },
+
+    /**
+     * Общий SSE-обработчик: валидация, добавление в очередь, планирование RAF
+     * @param {Array} items - Массив обновлений из SSE
+     */
+    handleBatchUpdates(items) {
+        if (!Array.isArray(items) || items.length === 0) return;
+        this.pendingUpdates.push(...items);
+        if (!this.renderScheduled) {
+            this.renderScheduled = true;
+            requestAnimationFrame(() => this.batchRenderUpdates());
+        }
+    },
+
+    /**
+     * Общий batchRenderUpdates: drain → tbody → iterate rows → updateRowCells
+     * Рендерер может переопределить если нужна нестандартная логика.
+     */
+    batchRenderUpdates() {
+        const updateMap = this._drainPendingUpdates(this.getBatchItems());
+        if (!updateMap) return;
+
+        const tbody = this.getEl(this.batchTbodyId);
+        if (!tbody) return;
+
+        tbody.querySelectorAll('tr[data-sensor-id]').forEach(row => {
+            const id = parseInt(row.dataset.sensorId);
+            if (!id) return;
+
+            const update = updateMap.get(id);
+            if (!update) return;
+
+            this.updateRowCells(row, update);
+        });
+    },
+
+    /**
+     * Утилита: обновить текст ячейки с CSS-анимацией при изменении
+     * @param {HTMLElement} row - Строка таблицы
+     * @param {string} selector - CSS-селектор ячейки
+     * @param {string} newValue - Новое значение
+     * @param {string} animationClass - CSS-класс для анимации
+     */
+    _animateCellValue(row, selector, newValue, animationClass) {
+        const cell = row.querySelector(selector);
+        if (!cell) return;
+        if (cell.textContent !== newValue) {
+            cell.textContent = newValue;
+            cell.classList.remove(animationClass);
+            void cell.offsetWidth;
+            cell.classList.add(animationClass);
+        }
+    },
+
+    /**
+     * Слить очередь → обновить backing-массив → вернуть updateMap
+     * @param {Array} items - Backing-массив (this.allSensors / this.allRegisters)
+     * @returns {Map|null} updateMap или null если очередь пуста
+     */
+    _drainPendingUpdates(items) {
+        this.renderScheduled = false;
+        if (this.pendingUpdates.length === 0) return null;
+
+        const updates = this.pendingUpdates;
+        this.pendingUpdates = [];
+
+        const updateMap = new Map();
+        updates.forEach(item => updateMap.set(item.id, item));
+
+        items.forEach((item, index) => {
+            const update = updateMap.get(item.id);
+            if (update) {
+                items[index] = { ...item, ...update };
+            }
+        });
+
+        return updateMap;
+    }
+};
+
+const ModbusRegistersMixin = {
+    async loadRegisterChunk(offset) {
+        if (this.isLoadingChunk || !this.hasMore) return;
+        this.isLoadingChunk = true;
+
+        const prefix = this.paramsPrefix;
+        const loadingEl = this.getEl(`${prefix}-loading-more-${this.objectName}`);
+        if (loadingEl) loadingEl.style.display = 'block';
+
+        try {
+            let url = `/api/objects/${encodeURIComponent(this.objectName)}/modbus/registers?offset=${offset}&limit=${this.chunkSize}`;
+            if (this.typeFilter && this.typeFilter !== 'all') {
+                url += `&iotype=${encodeURIComponent(this.typeFilter)}`;
+            }
+
+            const data = await this.fetchJSON(url);
+            const registers = data.registers || [];
+            this.registersTotal = data.total || 0;
+
+            // Merge devices dictionary
+            if (data.devices) {
+                Object.assign(this.devicesDict, data.devices);
+            }
+
+            if (offset === 0) {
+                this.allRegisters = registers;
+                this.registerMap.clear();
+                registers.forEach(r => this.registerMap.set(r.id, r));
+
+                // Если нет фильтра и есть закреплённые регистры - загрузить их отдельно
+                if (!this.filter) {
+                    await this.loadPinnedRegisters();
+                }
+            } else {
+                this.allRegisters = this.allRegisters.concat(registers);
+                registers.forEach(r => this.registerMap.set(r.id, r));
+            }
+
+            this.hasMore = this.allRegisters.length < this.registersTotal;
+            this.renderRegisters();
+            this.setNote(`${prefix}-registers-note-${this.objectName}`, '');
+
+            this.updateItemCount(`${prefix}-register-count-${this.objectName}`, this.allRegisters.length, this.registersTotal);
+
+            // Подписываемся на SSE обновления после загрузки
+            this.subscribeToSSE();
+
+            // Обработчики сортировки (только при первой загрузке)
+            if (offset === 0) {
+                const table = this.getEl(`${prefix}-registers-table-${this.objectName}`);
+                if (table) {
+                    this.attachSortHandlers(table);
+                    this.updateSortHeaders();
+                }
+            }
+        } catch (err) {
+            this.setNote(`${prefix}-registers-note-${this.objectName}`, err.message, true);
+        } finally {
+            this.isLoadingChunk = false;
+            if (loadingEl) loadingEl.style.display = 'none';
+        }
+    },
+
+    // Загружает закреплённые регистры, если они не в текущем списке
+    async loadPinnedRegisters() {
+        const pinnedIds = this.getPinned();
+        if (pinnedIds.size === 0) return;
+
+        // Найти ID, которых нет в загруженных регистрах
+        const missingIds = [];
+        for (const idStr of pinnedIds) {
+            const id = parseInt(idStr);
+            if (!this.registerMap.has(id)) {
+                missingIds.push(id);
+            }
+        }
+
+        if (missingIds.length === 0) return;
+
+        // Загрузить отсутствующие регистры по ID
+        try {
+            const idsParam = missingIds.join(',');
+            const url = `/api/objects/${encodeURIComponent(this.objectName)}/modbus/get?filter=${idsParam}`;
+            const response = await this.fetchJSON(url);
+            const pinnedRegisters = response.registers || [];
+
+            // Добавить закреплённые регистры в начало списка
+            for (const reg of pinnedRegisters) {
+                if (!this.registerMap.has(reg.id)) {
+                    this.allRegisters.unshift(reg);
+                    this.registerMap.set(reg.id, reg);
+                }
+            }
+        } catch (err) {
+            console.warn('Failed to load pinned registers:', err);
+        }
     }
 };
 
@@ -2730,49 +2887,6 @@ class BaseObjectRenderer {
         `;
     }
 
-    // Устаревшие методы - оставлены для обратной совместимости
-    renderChartToggleCell(sensorId, sensorName, prefix = 'sensor') {
-        const isOnChart = this.isSensorOnChart(sensorName);
-        const varName = `${prefix}-${sensorId}`;
-        const checkboxId = `chart-${this.objectName}-${varName}`;
-        return `
-            <td class="chart-col">
-                <span class="chart-toggle">
-                    <input type="checkbox"
-                           class="chart-checkbox chart-toggle-input"
-                           id="${checkboxId}"
-                           data-sensor-id="${sensorId}"
-                           data-sensor-name="${escapeHtml(sensorName)}"
-                           ${isOnChart ? 'checked' : ''}>
-                    <label class="chart-toggle-label" for="${checkboxId}" title="Add to Chart">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 3v18h18"/>
-                            <path d="M18 9l-5 5-4-4-3 3"/>
-                        </svg>
-                    </label>
-                </span>
-            </td>
-        `;
-    }
-
-    renderDashboardToggleCell(sensorName, sensorLabel = null) {
-        return `
-            <td class="dashboard-col">
-                <button class="dashboard-add-btn"
-                        data-sensor-name="${escapeHtml(sensorName)}"
-                        data-sensor-label="${escapeHtml(sensorLabel || sensorName)}"
-                        title="Add to Dashboard">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="7" height="7" rx="1"/>
-                        <rect x="14" y="3" width="7" height="7" rx="1"/>
-                        <rect x="3" y="14" width="7" height="7" rx="1"/>
-                        <rect x="14" y="14" width="7" height="7" rx="1"/>
-                    </svg>
-                </button>
-            </td>
-        `;
-    }
-
     // Привязать обработчики событий для checkbox графиков
     // sensorMap - Map с данными датчиков по id
     attachChartToggleListeners(container, sensorMap) {
@@ -3111,23 +3225,16 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         this.pendingUpdates = new Map(); // id -> sensor
         this.renderScheduled = false;
 
-        // Virtual scroll properties (как в OPCUA)
-        this.allSensors = [];           // Все загруженные сенсоры
-        this.rowHeight = DEFAULT_ROW_HEIGHT; // Высота строки (px)
-        this.bufferRows = DEFAULT_BUFFER_ROWS; // Буфер строк выше/ниже viewport
-        this.startIndex = 0;            // Первая видимая строка
-        this.endIndex = 0;              // Последняя видимая строка
-
-        // Infinite scroll properties
-        this.chunkSize = VIRTUAL_SCROLL_CHUNK_SIZE; // Сенсоров за запрос
-        this.hasMore = true;            // Есть ли ещё данные
-        this.isLoadingChunk = false;    // Идёт загрузка
+        // Virtual scroll properties
+        this.allSensors = [];
+        this.initVirtualScrollProps();
 
         // Генераторы значений: Map<sensorId, GeneratorState>
         this.activeGenerators = new Map();
 
         // Инициализация сортировки
         this.initSortProps();
+        this.sortTableId = `ionc-sensors-table-${objectName}`;
         // Определение колонок для сортировки
         this.sortColumnDefs = {
             id: { field: 'id', type: 'number' },
@@ -3160,8 +3267,15 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         this.loadLostConsumers();
         setupChartsResize(this.tabKey);
         setupIONCSensorsResize(this.tabKey, this.objectName);
-        this.setupVirtualScroll();
+        this.setupFullVirtualScroll({
+            viewportId: `ionc-sensors-viewport-${this.objectName}`,
+        });
     }
+
+    // Bridge methods for VirtualScrollMixin
+    getVScrollItems() { return this.allSensors; }
+    vscrollRenderVisible() { this.renderVisibleSensors(); }
+    vscrollLoadMore() { this.loadMoreSensors(); }
 
     createSensorsSection() {
         return `
@@ -3451,50 +3565,6 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         }
     }
 
-    setupVirtualScroll() {
-        const viewport = this.getEl(`ionc-sensors-viewport-${this.objectName}`);
-        if (!viewport) return;
-
-        let ticking = false;
-        viewport.addEventListener('scroll', () => {
-            if (!ticking) {
-                requestAnimationFrame(() => {
-                    this.updateVisibleRows();
-                    this.checkInfiniteScroll(viewport);
-                    ticking = false;
-                });
-                ticking = true;
-            }
-        });
-    }
-
-    updateVisibleRows() {
-        const viewport = this.getEl(`ionc-sensors-viewport-${this.objectName}`);
-        if (!viewport) return;
-
-        const scrollTop = viewport.scrollTop;
-        const viewportHeight = viewport.clientHeight;
-        const totalRows = this.allSensors.length;
-        const visibleRows = Math.ceil(viewportHeight / this.rowHeight);
-
-        this.startIndex = Math.max(0, Math.floor(scrollTop / this.rowHeight) - this.bufferRows);
-        this.endIndex = Math.min(totalRows, this.startIndex + visibleRows + 2 * this.bufferRows);
-
-        this.renderVisibleSensors();
-    }
-
-    checkInfiniteScroll(viewport) {
-        if (this.isLoadingChunk || !this.hasMore) return;
-
-        const scrollBottom = viewport.scrollTop + viewport.clientHeight;
-        const totalHeight = this.allSensors.length * this.rowHeight;
-        const threshold = 200; // Load more when 200px from bottom
-
-        if (totalHeight - scrollBottom < threshold) {
-            this.loadMoreSensors();
-        }
-    }
-
     showLoadingIndicator(show) {
         const el = this.getEl(`ionc-loading-more-${this.objectName}`);
         if (el) el.style.display = show ? 'block' : 'none';
@@ -3611,32 +3681,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         this.renderVisibleSensors();
     }
 
-    // Метод для перерисовки после изменения сортировки
-    renderAfterSort() {
-        // Обновляем заголовки таблицы
-        this.updateSortHeaders();
-        // Перерисовываем данные
-        this.renderVisibleSensors();
-    }
-
-    // Обновление заголовков таблицы с индикаторами сортировки
-    updateSortHeaders() {
-        const table = this.getEl(`ionc-sensors-table-${this.objectName}`);
-        if (!table) return;
-
-        table.querySelectorAll('th.th-sortable').forEach(th => {
-            const column = th.dataset.column;
-            th.classList.toggle('th-sorted', column === this.sortColumn);
-            const arrow = th.querySelector('.sort-arrow');
-            if (arrow) {
-                if (column === this.sortColumn) {
-                    arrow.textContent = this.sortDirection === 'asc' ? ' ↑' : ' ↓';
-                } else {
-                    arrow.textContent = '';
-                }
-            }
-        });
-    }
+    // Bridge для TableSortMixin.renderAfterSort()
+    sortRenderVisible() { this.renderVisibleSensors(); }
 
     renderSensorRow(sensor, isPinned) {
         // Получаем textname из справочника сенсоров (конфигурации)
@@ -4943,7 +4989,6 @@ applyMixin(IONotifyControllerRenderer, SSESubscriptionMixin);
 applyMixin(IONotifyControllerRenderer, ResizableSectionMixin);
 applyMixin(IONotifyControllerRenderer, FilterMixin);
 applyMixin(IONotifyControllerRenderer, ItemCounterMixin);
-applyMixin(IONotifyControllerRenderer, SectionHeightMixin);
 applyMixin(IONotifyControllerRenderer, TableSortMixin);
 
 
@@ -4999,21 +5044,13 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
         // SSE подписки
         this.subscribedSensorIds = new Set();
-        this.pendingUpdates = [];
-        this.renderScheduled = false;
+        this.batchTbodyId = `opcua-sensors-${objectName}`;
+        this.initBatchRenderProps();
 
         // Virtual scroll properties
         this.allSensors = [];
         this.sensorsTotal = 0;
-        this.rowHeight = 32;
-        this.bufferRows = 10;
-        this.startIndex = 0;
-        this.endIndex = 0;
-
-        // Infinite scroll properties
-        this.chunkSize = 200;
-        this.hasMore = true;
-        this.isLoadingChunk = false;
+        this.initVirtualScrollProps();
 
         // Filter state
         this.filter = '';
@@ -5029,6 +5066,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
         // Инициализация сортировки
         this.initSortProps();
+        this.sortTableId = `opcua-sensors-table-${objectName}`;
         this.sortColumnDefs = {
             id: { field: 'id', type: 'number' },
             name: { field: 'name', type: 'string' },
@@ -5062,9 +5100,16 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         setupChartsResize(this.tabKey);
         this.setupDiagnosticsResize();
         this.setupSensorsResize();
-        this.setupVirtualScroll();
+        this.setupFullVirtualScroll({
+            viewportId: `opcua-sensors-viewport-${this.objectName}`,
+        });
         this.initStatusAutoRefresh();
     }
+
+    // Bridge methods for VirtualScrollMixin
+    getVScrollItems() { return this.allSensors; }
+    vscrollRenderVisible() { this.renderVisibleSensors(); }
+    vscrollLoadMore() { this.loadMoreSensors(); }
 
     destroy() {
         this.stopStatusAutoRefresh();
@@ -5675,38 +5720,6 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         }
     }
 
-    setupVirtualScroll() {
-        const viewport = this.getEl(`opcua-sensors-viewport-${this.objectName}`);
-        if (!viewport) return;
-
-        let ticking = false;
-        viewport.addEventListener('scroll', () => {
-            if (!ticking) {
-                requestAnimationFrame(() => {
-                    this.updateVisibleRows();
-                    this.checkInfiniteScroll(viewport);
-                    ticking = false;
-                });
-                ticking = true;
-            }
-        });
-    }
-
-    updateVisibleRows() {
-        const viewport = this.getEl(`opcua-sensors-viewport-${this.objectName}`);
-        if (!viewport) return;
-
-        const scrollTop = viewport.scrollTop;
-        const viewportHeight = viewport.clientHeight;
-        const totalRows = this.allSensors.length;
-        const visibleRows = Math.ceil(viewportHeight / this.rowHeight);
-
-        this.startIndex = Math.max(0, Math.floor(scrollTop / this.rowHeight) - this.bufferRows);
-        this.endIndex = Math.min(totalRows, this.startIndex + visibleRows + 2 * this.bufferRows);
-
-        this.renderVisibleSensors();
-    }
-
     renderVisibleSensors() {
         const tbody = this.getEl(`opcua-sensors-${this.objectName}`);
         const spacer = this.getEl(`opcua-sensors-spacer-${this.objectName}`);
@@ -5812,18 +5825,6 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         // Just ensure the sensor is in our subscription list
         if (!this.subscribedSensorIds.has(sensorId)) {
             this.subscribedSensorIds.add(sensorId);
-        }
-    }
-
-    checkInfiniteScroll(viewport) {
-        if (this.isLoadingChunk || !this.hasMore) return;
-
-        const scrollBottom = viewport.scrollTop + viewport.clientHeight;
-        const totalHeight = this.allSensors.length * this.rowHeight;
-        const threshold = 200; // Load more when 200px from bottom
-
-        if (totalHeight - scrollBottom < threshold) {
-            this.loadMoreSensors();
         }
     }
 
@@ -6009,135 +6010,62 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     handleOPCUASensorUpdates(sensors) {
-        if (!Array.isArray(sensors) || sensors.length === 0) return;
-
-        // Добавляем в очередь на обновление
-        this.pendingUpdates.push(...sensors);
-
-        // Планируем батчевый рендеринг
-        if (!this.renderScheduled) {
-            this.renderScheduled = true;
-            requestAnimationFrame(() => this.batchRenderUpdates());
-        }
+        this.handleBatchUpdates(sensors);
     }
 
-    batchRenderUpdates() {
-        this.renderScheduled = false;
+    // Bridge для BatchRenderMixin
+    getBatchItems() { return this.allSensors; }
 
-        if (this.pendingUpdates.length === 0) return;
-
-        const updates = this.pendingUpdates;
-        this.pendingUpdates = [];
-
-        // Создаём map для быстрого поиска
-        const updateMap = new Map();
-        updates.forEach(sensor => {
-            updateMap.set(sensor.id, sensor);
-        });
-
-        // Обновляем данные в allSensors (все поля)
-        this.allSensors.forEach((sensor, index) => {
-            const update = updateMap.get(sensor.id);
-            if (update) {
-                this.allSensors[index] = { ...sensor, ...update };
+    updateRowCells(row, update) {
+        // Value
+        if (update.value !== undefined) {
+            this._animateCellValue(row, '.col-value', String(update.value), 'value-changed');
+        }
+        // Tick
+        const tickCell = row.querySelector('.col-tick');
+        if (tickCell && update.tick !== undefined) {
+            tickCell.textContent = String(update.tick);
+        }
+        // Status
+        const statusCell = row.querySelector('.col-status');
+        if (statusCell && update.status !== undefined) {
+            statusCell.textContent = update.status || '—';
+            statusCell.title = update.status || '';
+            if (update.status && update.status.toLowerCase() !== 'ok') {
+                statusCell.classList.add('status-bad');
+            } else {
+                statusCell.classList.remove('status-bad');
             }
-        });
-
-        // Обновляем видимые строки в DOM
-        const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
-        if (!panel) return;
-
-        const tbody = panel.querySelector(`#opcua-sensors-${CSS.escape(this.objectName)}`);
-        if (!tbody) return;
-
-        const rows = tbody.querySelectorAll('tr');
-        rows.forEach(row => {
-            const sensorId = parseInt(row.dataset.sensorId);
-            if (!sensorId) return;
-
-            const update = updateMap.get(sensorId);
-            if (!update) return;
-
-            // Value
-            const valueCell = row.querySelector('.col-value');
-            if (valueCell && update.value !== undefined) {
-                const oldValue = valueCell.textContent;
-                const newValue = String(update.value);
-                if (oldValue !== newValue) {
-                    valueCell.textContent = newValue;
-                    valueCell.classList.remove('value-changed');
-                    void valueCell.offsetWidth;
-                    valueCell.classList.add('value-changed');
-                }
-            }
-            // Tick
-            const tickCell = row.querySelector('.col-tick');
-            if (tickCell && update.tick !== undefined) {
-                tickCell.textContent = String(update.tick);
-            }
-            // Status
-            const statusCell = row.querySelector('.col-status');
-            if (statusCell && update.status !== undefined) {
-                statusCell.textContent = update.status || '—';
-                statusCell.title = update.status || '';
-                if (update.status && update.status.toLowerCase() !== 'ok') {
-                    statusCell.classList.add('status-bad');
-                } else {
-                    statusCell.classList.remove('status-bad');
-                }
-            }
-            // VType
-            const vtypeCell = row.querySelector('.col-vtype');
-            if (vtypeCell && update.vtype !== undefined) {
-                vtypeCell.textContent = update.vtype || '—';
-            }
-            // Precision
-            const precisionCell = row.querySelector('.col-precision');
-            if (precisionCell && update.precision !== undefined) {
-                precisionCell.textContent = update.precision ?? '—';
-            }
-        });
+        }
+        // VType
+        const vtypeCell = row.querySelector('.col-vtype');
+        if (vtypeCell && update.vtype !== undefined) {
+            vtypeCell.textContent = update.vtype || '—';
+        }
+        // Precision
+        const precisionCell = row.querySelector('.col-precision');
+        if (precisionCell && update.precision !== undefined) {
+            precisionCell.textContent = update.precision ?? '—';
+        }
     }
 
     // update(data) наследуется из BaseObjectRenderer
 
     // Pin management: pinStorageKey и renderAfterPinChange заданы в конструкторе
 
-    // Перерисовка после смены сортировки
-    renderAfterSort() {
-        this.renderVisibleSensors();
-        this.updateSortHeaders();
-    }
-
-    // Обновление визуальных индикаторов сортировки
-    updateSortHeaders() {
-        const table = this.getEl(`opcua-sensors-table-${this.objectName}`);
-        if (!table) return;
-
-        table.querySelectorAll('th.th-sortable').forEach(th => {
-            const column = th.dataset.column;
-            th.classList.toggle('th-sorted', column === this.sortColumn);
-            const arrow = th.querySelector('.sort-arrow');
-            if (arrow) {
-                if (column === this.sortColumn) {
-                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
-                } else {
-                    arrow.textContent = '';
-                }
-            }
-        });
-    }
+    // Bridge для TableSortMixin.renderAfterSort()
+    sortRenderVisible() { this.renderVisibleSensors(); }
 }
 
 // Apply mixins to OPCUAExchangeRenderer
 applyMixin(OPCUAExchangeRenderer, VirtualScrollMixin);
 applyMixin(OPCUAExchangeRenderer, SSESubscriptionMixin);
+applyMixin(OPCUAExchangeRenderer, BatchRenderMixin);
 applyMixin(OPCUAExchangeRenderer, ResizableSectionMixin);
 applyMixin(OPCUAExchangeRenderer, FilterMixin);
 applyMixin(OPCUAExchangeRenderer, ParamsAccessibilityMixin);
 applyMixin(OPCUAExchangeRenderer, ParamsManagerMixin);
 applyMixin(OPCUAExchangeRenderer, ItemCounterMixin);
-applyMixin(OPCUAExchangeRenderer, SectionHeightMixin);
 applyMixin(OPCUAExchangeRenderer, PinManagementMixin);
 applyMixin(OPCUAExchangeRenderer, TableSortMixin);
 
@@ -6188,22 +6116,14 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
 
         // SSE подписки (используется subscribedSensorIds из миксина)
         this.subscribedSensorIds = new Set();
-        this.pendingUpdates = [];
-        this.renderScheduled = false;
+        this.batchTbodyId = `mb-registers-tbody-${objectName}`;
+        this.initBatchRenderProps();
 
         // Virtual scroll properties
         this.allRegisters = [];
         this.devicesDict = {};
         this.registersTotal = 0;
-        this.rowHeight = 32;
-        this.bufferRows = 10;
-        this.startIndex = 0;
-        this.endIndex = 0;
-
-        // Infinite scroll properties
-        this.chunkSize = 200;
-        this.hasMore = true;
-        this.isLoadingChunk = false;
+        this.initVirtualScrollProps();
 
         // Filter state
         this.filter = '';
@@ -6219,6 +6139,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
 
         // Инициализация сортировки
         this.initSortProps();
+        this.sortTableId = `mb-registers-table-${objectName}`;
         this.sortColumnDefs = {
             id: { field: 'id', type: 'number' },
             name: { field: 'name', type: 'string' },
@@ -6250,9 +6171,16 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         this.reloadAll();
         setupChartsResize(this.tabKey);
         this.setupRegistersResize();
-        this.setupVirtualScroll();
+        this.setupSimpleInfiniteScroll({
+            viewportId: `mb-registers-viewport-${this.objectName}`,
+            threshold: 100,
+        });
         this.initStatusAutoRefresh();
     }
+
+    // Bridge methods for VirtualScrollMixin
+    getVScrollItems() { return this.allRegisters; }
+    vscrollLoadMore() { this.loadRegisterChunk(this.allRegisters.length); }
 
     destroy() {
         this.stopStatusAutoRefresh();
@@ -6669,102 +6597,6 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         await this.loadRegisterChunk(0);
     }
 
-    async loadRegisterChunk(offset) {
-        if (this.isLoadingChunk || !this.hasMore) return;
-        this.isLoadingChunk = true;
-
-        const loadingEl = this.getEl(`mb-loading-more-${this.objectName}`);
-        if (loadingEl) loadingEl.style.display = 'block';
-
-        try {
-            let url = `/api/objects/${encodeURIComponent(this.objectName)}/modbus/registers?offset=${offset}&limit=${this.chunkSize}`;
-            if (this.typeFilter && this.typeFilter !== 'all') {
-                url += `&iotype=${encodeURIComponent(this.typeFilter)}`;
-            }
-
-            const data = await this.fetchJSON(url);
-            const registers = data.registers || [];
-            this.registersTotal = data.total || 0;
-
-            // Merge devices dictionary
-            if (data.devices) {
-                Object.assign(this.devicesDict, data.devices);
-            }
-
-            if (offset === 0) {
-                this.allRegisters = registers;
-                this.registerMap.clear();
-                registers.forEach(r => this.registerMap.set(r.id, r));
-
-                // Если нет фильтра и есть закреплённые регистры - загрузить их отдельно
-                if (!this.filter) {
-                    await this.loadPinnedRegisters();
-                }
-            } else {
-                this.allRegisters = this.allRegisters.concat(registers);
-                registers.forEach(r => this.registerMap.set(r.id, r));
-            }
-
-            this.hasMore = this.allRegisters.length < this.registersTotal;
-            this.renderRegisters();
-            this.setNote(`mb-registers-note-${this.objectName}`, '');
-
-            this.updateItemCount(`mb-register-count-${this.objectName}`, this.allRegisters.length, this.registersTotal);
-
-            // Подписываемся на SSE обновления после загрузки
-            this.subscribeToSSE();
-
-            // Обработчики сортировки (только при первой загрузке)
-            if (offset === 0) {
-                const table = this.getEl(`mb-registers-table-${this.objectName}`);
-                if (table) {
-                    this.attachSortHandlers(table);
-                    this.updateSortHeaders();
-                }
-            }
-        } catch (err) {
-            this.setNote(`mb-registers-note-${this.objectName}`, err.message, true);
-        } finally {
-            this.isLoadingChunk = false;
-            if (loadingEl) loadingEl.style.display = 'none';
-        }
-    }
-
-    // Загружает закреплённые регистры, если они не в текущем списке
-    async loadPinnedRegisters() {
-        const pinnedIds = this.getPinned();
-        if (pinnedIds.size === 0) return;
-
-        // Найти ID, которых нет в загруженных регистрах
-        const missingIds = [];
-        for (const idStr of pinnedIds) {
-            const id = parseInt(idStr);
-            if (!this.registerMap.has(id)) {
-                missingIds.push(id);
-            }
-        }
-
-        if (missingIds.length === 0) return;
-
-        // Загрузить отсутствующие регистры по ID
-        try {
-            const idsParam = missingIds.join(',');
-            const url = `/api/objects/${encodeURIComponent(this.objectName)}/modbus/get?filter=${idsParam}`;
-            const response = await this.fetchJSON(url);
-            const pinnedRegisters = response.registers || [];
-
-            // Добавить закреплённые регистры в начало списка
-            for (const reg of pinnedRegisters) {
-                if (!this.registerMap.has(reg.id)) {
-                    this.allRegisters.unshift(reg);
-                    this.registerMap.set(reg.id, reg);
-                }
-            }
-        } catch (err) {
-            console.warn('Failed to load pinned registers:', err);
-        }
-    }
-
     renderRegisters() {
         const tbody = this.getEl(`mb-registers-tbody-${this.objectName}`);
         if (!tbody) return;
@@ -6858,22 +6690,6 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         }
     }
 
-    setupVirtualScroll() {
-        const viewport = this.getEl(`mb-registers-viewport-${this.objectName}`);
-        if (!viewport) return;
-
-        viewport.addEventListener('scroll', () => {
-            const scrollTop = viewport.scrollTop;
-            const viewportHeight = viewport.clientHeight;
-            const scrollHeight = viewport.scrollHeight;
-
-            // Загружаем следующий чанк когда остается 100px до конца
-            if (scrollHeight - scrollTop - viewportHeight < 100) {
-                this.loadRegisterChunk(this.allRegisters.length);
-            }
-        });
-    }
-
     loadRegistersHeight() {
         return this.loadSectionHeight('uniset-panel-mb-registers', 320);
     }
@@ -6905,82 +6721,30 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     }
 
     handleModbusRegisterUpdates(registers) {
-        if (!Array.isArray(registers) || registers.length === 0) return;
-
-        // Добавляем в очередь на обновление
-        this.pendingUpdates.push(...registers);
-
-        // Планируем батчевый рендеринг
-        if (!this.renderScheduled) {
-            this.renderScheduled = true;
-            requestAnimationFrame(() => this.batchRenderUpdates());
-        }
+        this.handleBatchUpdates(registers);
     }
 
-    batchRenderUpdates() {
-        this.renderScheduled = false;
+    // Bridge для BatchRenderMixin
+    getBatchItems() { return this.allRegisters; }
 
-        if (this.pendingUpdates.length === 0) return;
-
-        const updates = this.pendingUpdates;
-        this.pendingUpdates = [];
-
-        // Создаём map для быстрого поиска
-        const updateMap = new Map();
-        updates.forEach(reg => {
-            updateMap.set(reg.id, reg);
-        });
-
-        // Обновляем данные в allRegisters (все поля)
-        this.allRegisters.forEach((reg, index) => {
-            const update = updateMap.get(reg.id);
-            if (update) {
-                this.allRegisters[index] = { ...reg, ...update };
-            }
-        });
-
-        // Обновляем изменившиеся ячейки в DOM
-        const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
-        if (!panel) return;
-
-        const tbody = panel.querySelector(`#mb-registers-tbody-${CSS.escape(this.objectName)}`);
-        if (!tbody) return;
-
-        const rows = tbody.querySelectorAll('tr');
-        rows.forEach(row => {
-            const regId = parseInt(row.dataset.sensorId);
-            if (!regId) return;
-
-            const update = updateMap.get(regId);
-            if (!update) return;
-
-            // Value
-            const valueCell = row.querySelector('.col-value');
-            if (valueCell) {
-                const newValue = update.value !== undefined ? String(update.value) : '';
-                if (valueCell.textContent !== newValue) {
-                    valueCell.textContent = newValue;
-                    valueCell.classList.remove('value-changed');
-                    void valueCell.offsetWidth;
-                    valueCell.classList.add('value-changed');
-                }
-            }
-
-            // Device respond status
-            const deviceCell = row.querySelector('.col-device .mb-respond');
-            if (deviceCell && update.device !== undefined) {
-                const deviceAddr = update.device;
-                const deviceInfo = this.devicesDict[deviceAddr] || {};
-                deviceCell.className = `mb-respond ${deviceInfo.respond ? 'ok' : 'fail'}`;
-            }
-
-            // MB val (raw modbus value)
-            const mbvalCell = row.querySelector('.col-mbval');
-            if (mbvalCell && update.register) {
-                const newMbval = update.register.mbval !== undefined ? String(update.register.mbval) : '';
-                mbvalCell.textContent = newMbval;
-            }
-        });
+    updateRowCells(row, update) {
+        // Value
+        if (update.value !== undefined) {
+            this._animateCellValue(row, '.col-value', String(update.value), 'value-changed');
+        }
+        // Device respond status
+        const deviceCell = row.querySelector('.col-device .mb-respond');
+        if (deviceCell && update.device !== undefined) {
+            const deviceAddr = update.device;
+            const deviceInfo = this.devicesDict[deviceAddr] || {};
+            deviceCell.className = `mb-respond ${deviceInfo.respond ? 'ok' : 'fail'}`;
+        }
+        // MB val (raw modbus value)
+        const mbvalCell = row.querySelector('.col-mbval');
+        if (mbvalCell && update.register) {
+            const newMbval = update.register.mbval !== undefined ? String(update.register.mbval) : '';
+            mbvalCell.textContent = newMbval;
+        }
     }
 
     // update(data) наследуется из BaseObjectRenderer
@@ -6988,43 +6752,22 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     // Pin management: pinStorageKey и renderAfterPinChange заданы в конструкторе
     // Используются сокращённые методы из PinManagementMixin: getPinned(), togglePin(), unpinAll()
 
-    // Перерисовка после смены сортировки
-    renderAfterSort() {
-        this.renderRegisters();
-        this.updateSortHeaders();
-    }
-
-    // Обновление визуальных индикаторов сортировки
-    updateSortHeaders() {
-        const table = this.getEl(`mb-registers-table-${this.objectName}`);
-        if (!table) return;
-
-        table.querySelectorAll('th.th-sortable').forEach(th => {
-            const column = th.dataset.column;
-            th.classList.toggle('th-sorted', column === this.sortColumn);
-            const arrow = th.querySelector('.sort-arrow');
-            if (arrow) {
-                if (column === this.sortColumn) {
-                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
-                } else {
-                    arrow.textContent = '';
-                }
-            }
-        });
-    }
+    // Bridge для TableSortMixin.renderAfterSort()
+    sortRenderVisible() { this.renderRegisters(); }
 }
 
 // Apply mixins to ModbusMasterRenderer
 applyMixin(ModbusMasterRenderer, VirtualScrollMixin);
 applyMixin(ModbusMasterRenderer, SSESubscriptionMixin);
+applyMixin(ModbusMasterRenderer, BatchRenderMixin);
 applyMixin(ModbusMasterRenderer, ResizableSectionMixin);
 applyMixin(ModbusMasterRenderer, FilterMixin);
 applyMixin(ModbusMasterRenderer, ParamsAccessibilityMixin);
 applyMixin(ModbusMasterRenderer, ParamsManagerMixin);
 applyMixin(ModbusMasterRenderer, ItemCounterMixin);
-applyMixin(ModbusMasterRenderer, SectionHeightMixin);
 applyMixin(ModbusMasterRenderer, PinManagementMixin);
 applyMixin(ModbusMasterRenderer, TableSortMixin);
+applyMixin(ModbusMasterRenderer, ModbusRegistersMixin);
 
 // Регистрируем стандартные рендереры
 registerRenderer('UniSetManager', UniSetManagerRenderer);
@@ -7071,22 +6814,14 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
 
         // SSE подписки (используется subscribedSensorIds из миксина)
         this.subscribedSensorIds = new Set();
-        this.pendingUpdates = [];
-        this.renderScheduled = false;
+        this.batchTbodyId = `mbs-registers-tbody-${objectName}`;
+        this.initBatchRenderProps();
 
         // Virtual scroll properties
         this.allRegisters = [];
         this.devicesDict = {};
         this.registersTotal = 0;
-        this.rowHeight = 32;
-        this.bufferRows = 10;
-        this.startIndex = 0;
-        this.endIndex = 0;
-
-        // Infinite scroll properties
-        this.chunkSize = 200;
-        this.hasMore = true;
-        this.isLoadingChunk = false;
+        this.initVirtualScrollProps();
 
         // Filter state
         this.filter = '';
@@ -7102,6 +6837,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
 
         // Инициализация сортировки
         this.initSortProps();
+        this.sortTableId = `mbs-registers-table-${objectName}`;
         this.sortColumnDefs = {
             id: { field: 'id', type: 'number' },
             name: { field: 'name', type: 'string' },
@@ -7136,9 +6872,16 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         this.reloadAll();
         setupChartsResize(this.tabKey);
         this.setupRegistersResize();
-        this.setupVirtualScroll();
+        this.setupSimpleInfiniteScroll({
+            viewportId: `mbs-registers-viewport-${this.objectName}`,
+            threshold: 100,
+        });
         this.initStatusAutoRefresh();
     }
+
+    // Bridge methods for VirtualScrollMixin
+    getVScrollItems() { return this.allRegisters; }
+    vscrollLoadMore() { this.loadRegisterChunk(this.allRegisters.length); }
 
     destroy() {
         this.stopStatusAutoRefresh();
@@ -7380,102 +7123,6 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         await this.loadRegisterChunk(0);
     }
 
-    async loadRegisterChunk(offset) {
-        if (this.isLoadingChunk || !this.hasMore) return;
-        this.isLoadingChunk = true;
-
-        const loadingEl = this.getEl(`mbs-loading-more-${this.objectName}`);
-        if (loadingEl) loadingEl.style.display = 'block';
-
-        try {
-            let url = `/api/objects/${encodeURIComponent(this.objectName)}/modbus/registers?offset=${offset}&limit=${this.chunkSize}`;
-            if (this.typeFilter && this.typeFilter !== 'all') {
-                url += `&iotype=${encodeURIComponent(this.typeFilter)}`;
-            }
-
-            const data = await this.fetchJSON(url);
-            const registers = data.registers || [];
-            this.registersTotal = data.total || 0;
-
-            // Merge devices dictionary
-            if (data.devices) {
-                Object.assign(this.devicesDict, data.devices);
-            }
-
-            if (offset === 0) {
-                this.allRegisters = registers;
-                this.registerMap.clear();
-                registers.forEach(r => this.registerMap.set(r.id, r));
-
-                // Если нет фильтра и есть закреплённые регистры - загрузить их отдельно
-                if (!this.filter) {
-                    await this.loadPinnedRegisters();
-                }
-            } else {
-                this.allRegisters = this.allRegisters.concat(registers);
-                registers.forEach(r => this.registerMap.set(r.id, r));
-            }
-
-            this.hasMore = this.allRegisters.length < this.registersTotal;
-            this.renderRegisters();
-            this.setNote(`mbs-registers-note-${this.objectName}`, '');
-
-            this.updateItemCount(`mbs-register-count-${this.objectName}`, this.allRegisters.length, this.registersTotal);
-
-            // Подписываемся на SSE обновления после загрузки
-            this.subscribeToSSE();
-
-            // Обработчики сортировки (только при первой загрузке)
-            if (offset === 0) {
-                const table = this.getEl(`mbs-registers-table-${this.objectName}`);
-                if (table) {
-                    this.attachSortHandlers(table);
-                    this.updateSortHeaders();
-                }
-            }
-        } catch (err) {
-            this.setNote(`mbs-registers-note-${this.objectName}`, err.message, true);
-        } finally {
-            this.isLoadingChunk = false;
-            if (loadingEl) loadingEl.style.display = 'none';
-        }
-    }
-
-    // Загружает закреплённые регистры, если они не в текущем списке
-    async loadPinnedRegisters() {
-        const pinnedIds = this.getPinned();
-        if (pinnedIds.size === 0) return;
-
-        // Найти ID, которых нет в загруженных регистрах
-        const missingIds = [];
-        for (const idStr of pinnedIds) {
-            const id = parseInt(idStr);
-            if (!this.registerMap.has(id)) {
-                missingIds.push(id);
-            }
-        }
-
-        if (missingIds.length === 0) return;
-
-        // Загрузить отсутствующие регистры по ID
-        try {
-            const idsParam = missingIds.join(',');
-            const url = `/api/objects/${encodeURIComponent(this.objectName)}/modbus/get?filter=${idsParam}`;
-            const response = await this.fetchJSON(url);
-            const pinnedRegisters = response.registers || [];
-
-            // Добавить закреплённые регистры в начало списка
-            for (const reg of pinnedRegisters) {
-                if (!this.registerMap.has(reg.id)) {
-                    this.allRegisters.unshift(reg);
-                    this.registerMap.set(reg.id, reg);
-                }
-            }
-        } catch (err) {
-            console.warn('Failed to load pinned registers:', err);
-        }
-    }
-
     renderRegisters() {
         const tbody = this.getEl(`mbs-registers-tbody-${this.objectName}`);
         if (!tbody) return;
@@ -7574,22 +7221,6 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         }
     }
 
-    setupVirtualScroll() {
-        const viewport = this.getEl(`mbs-registers-viewport-${this.objectName}`);
-        if (!viewport) return;
-
-        viewport.addEventListener('scroll', () => {
-            const scrollTop = viewport.scrollTop;
-            const viewportHeight = viewport.clientHeight;
-            const scrollHeight = viewport.scrollHeight;
-
-            // Загружаем следующий чанк когда остается 100px до конца
-            if (scrollHeight - scrollTop - viewportHeight < 100) {
-                this.loadRegisterChunk(this.allRegisters.length);
-            }
-        });
-    }
-
     loadRegistersHeight() {
         return this.loadSectionHeight('uniset-panel-mbs-registers', 320);
     }
@@ -7621,118 +7252,46 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     }
 
     handleModbusRegisterUpdates(registers) {
-        if (!Array.isArray(registers) || registers.length === 0) return;
-
-        // Добавляем в очередь на обновление
-        this.pendingUpdates.push(...registers);
-
-        // Планируем батчевый рендеринг
-        if (!this.renderScheduled) {
-            this.renderScheduled = true;
-            requestAnimationFrame(() => this.batchRenderUpdates());
-        }
+        this.handleBatchUpdates(registers);
     }
 
-    batchRenderUpdates() {
-        this.renderScheduled = false;
+    // Bridge для BatchRenderMixin
+    getBatchItems() { return this.allRegisters; }
 
-        if (this.pendingUpdates.length === 0) return;
-
-        const updates = this.pendingUpdates;
-        this.pendingUpdates = [];
-
-        // Создаём map для быстрого поиска
-        const updateMap = new Map();
-        updates.forEach(reg => {
-            updateMap.set(reg.id, reg);
-        });
-
-        // Обновляем данные в allRegisters (все поля)
-        this.allRegisters.forEach((reg, index) => {
-            const update = updateMap.get(reg.id);
-            if (update) {
-                this.allRegisters[index] = { ...reg, ...update };
-            }
-        });
-
-        // Обновляем изменившиеся ячейки в DOM
-        const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
-        if (!panel) return;
-
-        const tbody = panel.querySelector(`#mbs-registers-tbody-${CSS.escape(this.objectName)}`);
-        if (!tbody) return;
-
-        const rows = tbody.querySelectorAll('tr');
-        rows.forEach(row => {
-            const regId = parseInt(row.dataset.sensorId);
-            if (!regId) return;
-
-            const update = updateMap.get(regId);
-            if (!update) return;
-
-            // Value
-            const valueCell = row.querySelector('.col-value');
-            if (valueCell) {
-                const newValue = update.value !== undefined ? String(update.value) : '';
-                if (valueCell.textContent !== newValue) {
-                    valueCell.textContent = newValue;
-                    valueCell.classList.remove('value-changed');
-                    void valueCell.offsetWidth;
-                    valueCell.classList.add('value-changed');
-                }
-            }
-
-            // Device respond status
-            const deviceCell = row.querySelector('.col-device .mb-respond');
-            if (deviceCell && update.device !== undefined) {
-                const deviceAddr = update.device;
-                const deviceInfo = this.devicesDict ? (this.devicesDict[deviceAddr] || {}) : {};
-                deviceCell.className = `mb-respond ${deviceInfo.respond ? 'ok' : 'fail'}`;
-            }
-        });
+    updateRowCells(row, update) {
+        // Value
+        if (update.value !== undefined) {
+            this._animateCellValue(row, '.col-value', String(update.value), 'value-changed');
+        }
+        // Device respond status
+        const deviceCell = row.querySelector('.col-device .mb-respond');
+        if (deviceCell && update.device !== undefined) {
+            const deviceAddr = update.device;
+            const deviceInfo = this.devicesDict ? (this.devicesDict[deviceAddr] || {}) : {};
+            deviceCell.className = `mb-respond ${deviceInfo.respond ? 'ok' : 'fail'}`;
+        }
     }
 
     // update(data) наследуется из BaseObjectRenderer
 
     // Pin management: pinStorageKey и renderAfterPinChange заданы в конструкторе
 
-    // Перерисовка после смены сортировки
-    renderAfterSort() {
-        this.renderRegisters();
-        this.updateSortHeaders();
-    }
-
-    // Обновление визуальных индикаторов сортировки
-    updateSortHeaders() {
-        const table = this.getEl(`mbs-registers-table-${this.objectName}`);
-        if (!table) return;
-
-        table.querySelectorAll('th.th-sortable').forEach(th => {
-            const column = th.dataset.column;
-            th.classList.toggle('th-sorted', column === this.sortColumn);
-            const arrow = th.querySelector('.sort-arrow');
-            if (arrow) {
-                if (column === this.sortColumn) {
-                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
-                } else {
-                    arrow.textContent = '';
-                }
-            }
-        });
-    }
+    // Bridge для TableSortMixin.renderAfterSort()
+    sortRenderVisible() { this.renderRegisters(); }
 }
 
 // Apply mixins to ModbusSlaveRenderer
 applyMixin(ModbusSlaveRenderer, VirtualScrollMixin);
 applyMixin(ModbusSlaveRenderer, SSESubscriptionMixin);
+applyMixin(ModbusSlaveRenderer, BatchRenderMixin);
 applyMixin(ModbusSlaveRenderer, ResizableSectionMixin);
 applyMixin(ModbusSlaveRenderer, FilterMixin);
 applyMixin(ModbusSlaveRenderer, ParamsAccessibilityMixin);
 applyMixin(ModbusSlaveRenderer, ParamsManagerMixin);
 applyMixin(ModbusSlaveRenderer, ItemCounterMixin);
-applyMixin(ModbusSlaveRenderer, SectionHeightMixin);
 applyMixin(ModbusSlaveRenderer, PinManagementMixin);
 applyMixin(ModbusSlaveRenderer, TableSortMixin);
+applyMixin(ModbusSlaveRenderer, ModbusRegistersMixin);
 
 // ModbusSlave рендерер (по extensionType)
 registerRenderer('ModbusSlave', ModbusSlaveRenderer);
@@ -7767,21 +7326,13 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
         // SSE подписки
         this.subscribedSensorIds = new Set();
-        this.pendingUpdates = [];
-        this.renderScheduled = false;
+        this.batchTbodyId = `opcuasrv-sensors-${objectName}`;
+        this.initBatchRenderProps();
 
         // Virtual scroll properties
         this.allSensors = [];
         this.sensorsTotal = 0;
-        this.rowHeight = 32;
-        this.bufferRows = 10;
-        this.startIndex = 0;
-        this.endIndex = 0;
-
-        // Infinite scroll properties
-        this.chunkSize = 200;
-        this.hasMore = true;
-        this.isLoadingChunk = false;
+        this.initVirtualScrollProps();
 
         // Filter state
         this.filter = '';
@@ -7797,6 +7348,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
         // Инициализация сортировки
         this.initSortProps();
+        this.sortTableId = `opcuasrv-sensors-table-${objectName}`;
         this.sortColumnDefs = {
             id: { field: 'id', type: 'number' },
             name: { field: 'name', type: 'string' },
@@ -7825,9 +7377,18 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         this.reloadAll();
         setupChartsResize(this.tabKey);
         this.setupSensorsResize();
-        this.setupVirtualScroll();
+        this.setupFullVirtualScroll({
+            viewportId: `opcuasrv-sensors-viewport-${this.objectName}`,
+            threshold: 80,
+            thresholdType: 'percent',
+        });
         this.initStatusAutoRefresh();
     }
+
+    // Bridge methods for VirtualScrollMixin
+    getVScrollItems() { return this.allSensors; }
+    vscrollRenderVisible() { this.renderVisibleSensors(); }
+    vscrollLoadMore() { this.loadMoreSensors(); }
 
     destroy() {
         this.stopStatusAutoRefresh();
@@ -8184,38 +7745,6 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         }
     }
 
-    setupVirtualScroll() {
-        const viewport = this.getEl(`opcuasrv-sensors-viewport-${this.objectName}`);
-        if (!viewport) return;
-
-        let ticking = false;
-        viewport.addEventListener('scroll', () => {
-            if (!ticking) {
-                requestAnimationFrame(() => {
-                    this.updateVisibleRows();
-                    this.checkInfiniteScroll(viewport);
-                    ticking = false;
-                });
-                ticking = true;
-            }
-        });
-    }
-
-    updateVisibleRows() {
-        const viewport = this.getEl(`opcuasrv-sensors-viewport-${this.objectName}`);
-        if (!viewport) return;
-
-        const scrollTop = viewport.scrollTop;
-        const viewportHeight = viewport.clientHeight;
-        const totalRows = this.allSensors.length;
-        const visibleRows = Math.ceil(viewportHeight / this.rowHeight);
-
-        this.startIndex = Math.max(0, Math.floor(scrollTop / this.rowHeight) - this.bufferRows);
-        this.endIndex = Math.min(totalRows, this.startIndex + visibleRows + 2 * this.bufferRows);
-
-        this.renderVisibleSensors();
-    }
-
     renderVisibleSensors() {
         const tbody = this.getEl(`opcuasrv-sensors-${this.objectName}`);
         const spacer = this.getEl(`opcuasrv-sensors-spacer-${this.objectName}`);
@@ -8314,17 +7843,6 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         }
     }
 
-    checkInfiniteScroll(viewport) {
-        const scrollTop = viewport.scrollTop;
-        const scrollHeight = viewport.scrollHeight;
-        const clientHeight = viewport.clientHeight;
-
-        // Load more when scrolled to 80% of content
-        if (scrollTop + clientHeight >= scrollHeight * 0.8) {
-            this.loadMoreSensors();
-        }
-    }
-
     showLoadingIndicator(show) {
         const indicator = this.getEl(`opcuasrv-loading-more-${this.objectName}`);
         if (indicator) {
@@ -8367,94 +7885,33 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     handleOPCUASensorUpdates(sensors) {
-        if (!sensors || !Array.isArray(sensors)) return;
+        this.handleBatchUpdates(sensors);
+    }
 
-        // Queue updates for batch rendering
-        this.pendingUpdates.push(...sensors);
+    // Bridge для BatchRenderMixin
+    getBatchItems() { return this.allSensors; }
 
-        if (!this.renderScheduled) {
-            this.renderScheduled = true;
-            requestAnimationFrame(() => this.batchRenderUpdates());
+    updateRowCells(row, update) {
+        if (update.value !== undefined) {
+            this._animateCellValue(row, '.sensor-value', formatValue(update.value), 'value-updated');
         }
     }
 
-    batchRenderUpdates() {
-        this.renderScheduled = false;
-
-        if (this.pendingUpdates.length === 0) return;
-
-        const updateMap = new Map();
-        this.pendingUpdates.forEach(u => updateMap.set(u.id, u));
-        this.pendingUpdates = [];
-
-        // Update allSensors array (все поля)
-        this.allSensors.forEach((sensor, index) => {
-            const update = updateMap.get(sensor.id);
-            if (update) {
-                this.allSensors[index] = { ...sensor, ...update };
-            }
-        });
-
-        // Update visible rows in DOM
-        const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
-        if (!panel) return;
-
-        const tbody = panel.querySelector(`#opcuasrv-sensors-${CSS.escape(this.objectName)}`);
-        if (!tbody) return;
-
-        tbody.querySelectorAll('tr[data-sensor-id]').forEach(row => {
-            const sensorId = parseInt(row.dataset.sensorId, 10);
-            const update = updateMap.get(sensorId);
-            if (!update) return;
-
-            const valueCell = row.querySelector('.sensor-value');
-            if (valueCell && update.value !== undefined) {
-                valueCell.textContent = formatValue(update.value);
-                valueCell.classList.remove('value-updated');
-                void valueCell.offsetWidth;
-                valueCell.classList.add('value-updated');
-            }
-        });
-    }
-
-    // Pin management для датчиков
     // Pin management: pinStorageKey и renderAfterPinChange заданы в конструкторе
 
-    // Перерисовка после смены сортировки
-    renderAfterSort() {
-        this.renderVisibleSensors();
-        this.updateSortHeaders();
-    }
-
-    // Обновление визуальных индикаторов сортировки
-    updateSortHeaders() {
-        const table = this.getEl(`opcuasrv-sensors-table-${this.objectName}`);
-        if (!table) return;
-
-        table.querySelectorAll('th.th-sortable').forEach(th => {
-            const column = th.dataset.column;
-            th.classList.toggle('th-sorted', column === this.sortColumn);
-            const arrow = th.querySelector('.sort-arrow');
-            if (arrow) {
-                if (column === this.sortColumn) {
-                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
-                } else {
-                    arrow.textContent = '';
-                }
-            }
-        });
-    }
+    // Bridge для TableSortMixin.renderAfterSort()
+    sortRenderVisible() { this.renderVisibleSensors(); }
 }
 
 // Apply mixins to OPCUAServerRenderer
 applyMixin(OPCUAServerRenderer, VirtualScrollMixin);
 applyMixin(OPCUAServerRenderer, SSESubscriptionMixin);
+applyMixin(OPCUAServerRenderer, BatchRenderMixin);
 applyMixin(OPCUAServerRenderer, ResizableSectionMixin);
 applyMixin(OPCUAServerRenderer, FilterMixin);
 applyMixin(OPCUAServerRenderer, ParamsAccessibilityMixin);
 applyMixin(OPCUAServerRenderer, ParamsManagerMixin);
 applyMixin(OPCUAServerRenderer, ItemCounterMixin);
-applyMixin(OPCUAServerRenderer, SectionHeightMixin);
 applyMixin(OPCUAServerRenderer, PinManagementMixin);
 applyMixin(OPCUAServerRenderer, TableSortMixin);
 
@@ -8490,17 +7947,12 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         this.autocompleteResults = [];
         this.selectedAutocompleteIndex = 0;
 
-        // Virtual scroll
-        this.rowHeight = DEFAULT_ROW_HEIGHT;
-        this.bufferRows = 5;
-        this.startIndex = 0;
-        this.endIndex = 0;
-
         // Высота секции датчиков
         this.sensorsHeight = this.loadSectionHeight('uwsgate-sensors-height', 400);
 
         // Инициализация сортировки
         this.initSortProps();
+        this.sortTableId = `uwsgate-sensors-table-${objectName}`;
         this.sortColumnDefs = {
             id: { field: 'id', type: 'number' },
             name: { field: 'name', type: 'string' },
@@ -9236,34 +8688,12 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         }
     }
 
-    // Перерисовка после смены сортировки
-    renderAfterSort() {
-        this.renderSensorsTable();
-        this.updateSortHeaders();
-    }
-
-    // Обновление визуальных индикаторов сортировки
-    updateSortHeaders() {
-        const table = getElementInTab(this.tabKey, `uwsgate-sensors-table-${this.objectName}`);
-        if (!table) return;
-
-        table.querySelectorAll('th.th-sortable').forEach(th => {
-            const column = th.dataset.column;
-            th.classList.toggle('th-sorted', column === this.sortColumn);
-            const arrow = th.querySelector('.sort-arrow');
-            if (arrow) {
-                if (column === this.sortColumn) {
-                    arrow.textContent = this.sortDirection === 'asc' ? '↑' : '↓';
-                } else {
-                    arrow.textContent = '';
-                }
-            }
-        });
-    }
+    // Bridge для TableSortMixin.renderAfterSort()
+    sortRenderVisible() { this.renderSensorsTable(); }
 }
 
 // Apply mixins
-applyMixin(UWebSocketGateRenderer, SectionHeightMixin);
+applyMixin(UWebSocketGateRenderer, ResizableSectionMixin);
 applyMixin(UWebSocketGateRenderer, TableSortMixin);
 
 // UWebSocketGate рендерер (по extensionType)
@@ -12591,7 +12021,8 @@ function openIoncDialog(options) {
         }, 50);
     }
 
-    // Add ESC handler
+    // Add ESC handler (remove old one first to prevent duplicates)
+    document.removeEventListener('keydown', handleIoncDialogKeydown);
     document.addEventListener('keydown', handleIoncDialogKeydown);
 }
 
@@ -12629,11 +12060,6 @@ function showIoncDialogError(message) {
     errorEl.textContent = message;
 }
 
-function clearIoncDialogError() {
-    const errorEl = document.getElementById('ionc-dialog-error');
-    errorEl.textContent = '';
-}
-
 // === Sensor Dialog ===
 
 // Status диалога датчиков
@@ -12653,8 +12079,8 @@ function openSensorDialog(tabKey) {
     const tabState = state.tabs.get(tabKey);
     const displayName = tabState?.displayName || tabKey;
 
-    // Загрузить список уже добавленных внешних датчиков (по displayName)
-    sensorDialogState.addedSensors = getExternalSensorsFromStorage(displayName);
+    // Загрузить список уже добавленных внешних датчиков (по tabKey, fallback на displayName)
+    sensorDialogState.addedSensors = getExternalSensorsFromStorage(tabKey, displayName);
 
     const overlay = document.getElementById('sensor-dialog-overlay');
     const filterInput = document.getElementById('sensor-filter-input');
@@ -12725,12 +12151,6 @@ function handleSensorDialogKeydown(e) {
     }
 }
 
-// Подготовить список датчиков из XML конфига
-function prepareSensorList() {
-    sensorDialogState.allSensors = Array.from(state.sensors.values());
-    sensorDialogState.filteredSensors = [...sensorDialogState.allSensors];
-}
-
 // Подготовить список датчиков из IONC таблицы
 function prepareSensorListFromIONC(ioncSensors) {
     // Преобразуем формат IONC датчиков в формат диалога
@@ -12785,12 +12205,13 @@ function renderSensorTable() {
             <tr>
                 <td>
                     <button class="sensor-add-btn" ${btnDisabled} title="${btnTitle}"
-                            onclick="addExternalSensor('${sensorDialogState.objectName}', '${sensor.name}')">${btnText}</button>
+                            data-object="${escapeHtml(sensorDialogState.objectName)}"
+                            data-sensor="${escapeHtml(sensor.name)}">${btnText}</button>
                 </td>
                 <td>${sensor.id}</td>
                 <td class="sensor-name">${escapeHtml(sensor.name)}</td>
                 <td>${escapeHtml(sensor.textname || '')}</td>
-                <td class="sensor-type">${sensor.iotype || ''}</td>
+                <td class="sensor-type">${escapeHtml(sensor.iotype || '')}</td>
             </tr>
         `;
     }).join('');
@@ -12809,6 +12230,14 @@ function renderSensorTable() {
             <tbody>${rows}</tbody>
         </table>
     `);
+
+    // Навешиваем обработчики клика программно (вместо inline onclick)
+    const container = document.getElementById('sensor-dialog-content');
+    container.querySelectorAll('.sensor-add-btn:not([disabled])').forEach(btn => {
+        btn.addEventListener('click', () => {
+            addExternalSensor(btn.dataset.object, btn.dataset.sensor);
+        });
+    });
 }
 
 // Экранирование HTML
@@ -12961,8 +12390,8 @@ function addExternalSensor(tabKey, sensorName) {
         value: sensor.value
     });
 
-    // Сохраняем в localStorage (используем displayName для переносимости между сессиями)
-    saveExternalSensorsToStorage(displayName, sensorDialogState.addedSensors);
+    // Сохраняем в localStorage (используем tabKey)
+    saveExternalSensorsToStorage(tabKey, sensorDialogState.addedSensors);
 
     // Создаём график для внешнего датчика (используем tabKey)
     createExternalSensorChart(tabKey, sensor);
@@ -13005,7 +12434,7 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
     const color = getNextColor();
 
     // Создаём панель графика
-    const chartsContainer = document.getElementById(`charts-${objectName}`);
+    const chartsContainer = getElementInTab(tabKey, `charts-${objectName}`);
     if (!chartsContainer) return;
 
     // Используем CSS-безопасный ID (заменяем : на -)
@@ -13065,7 +12494,7 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
     const steppedEnabled = isDiscrete;
 
     // Создаём Chart.js график
-    const ctx = document.getElementById(`canvas-${objectName}-${safeVarName}`).getContext('2d');
+    const ctx = getElementInTab(tabKey, `canvas-${objectName}-${safeVarName}`).getContext('2d');
     const chartConfig = {
         type: 'line',
         data: {
@@ -13169,7 +12598,7 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
         chart.update('none');
 
         // Обновляем легенду
-        const legendEl = document.getElementById(`legend-value-${objectName}-${safeVarName}`);
+        const legendEl = getElementInTab(tabKey, `legend-value-${objectName}-${safeVarName}`);
         if (legendEl) {
             legendEl.textContent = formatValue(sensor.value);
         }
@@ -13181,7 +12610,7 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
     });
 
     // Обработчик чекбокса заливки
-    const fillCheckbox = document.getElementById(`fill-${objectName}-${safeVarName}`);
+    const fillCheckbox = getElementInTab(tabKey, `fill-${objectName}-${safeVarName}`);
     if (fillCheckbox) {
         fillCheckbox.addEventListener('change', (e) => {
             chart.data.datasets[0].fill = e.target.checked;
@@ -13190,7 +12619,7 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
     }
 
     // Обработчик чекбокса сглаживания (только для аналоговых)
-    const smoothCheckbox = document.getElementById(`smooth-${objectName}-${safeVarName}`);
+    const smoothCheckbox = getElementInTab(tabKey, `smooth-${objectName}-${safeVarName}`);
     if (smoothCheckbox) {
         smoothCheckbox.addEventListener('change', (e) => {
             chart.data.datasets[0].tension = e.target.checked ? 0.3 : 0;
@@ -13257,15 +12686,15 @@ function removeExternalSensor(tabKey, sensorName, options = {}) {
     }
 
     // Удаляем DOM элемент (используем safeVarName)
-    const chartPanel = document.getElementById(`chart-panel-${objectName}-${safeVarName}`);
+    const chartPanel = getElementInTab(tabKey, `chart-panel-${objectName}-${safeVarName}`);
     if (chartPanel) {
         chartPanel.remove();
     }
 
-    // Удаляем из localStorage (используем objectName/displayName как ключ)
-    const addedSensors = getExternalSensorsFromStorage(objectName);
+    // Удаляем из localStorage (используем tabKey как ключ)
+    const addedSensors = getExternalSensorsFromStorage(tabKey, objectName);
     addedSensors.delete(sensorName);
-    saveExternalSensorsToStorage(objectName, addedSensors);
+    saveExternalSensorsToStorage(tabKey, addedSensors);
 
     // Находим сенсор для получения ID
     let sensor;
@@ -13280,20 +12709,20 @@ function removeExternalSensor(tabKey, sensorName, options = {}) {
 
     // Снять галочку в таблице IONC (по sensor.id)
     if (sensor) {
-        const ioncCheckbox = document.getElementById(`ionc-chart-${objectName}-ionc-${sensor.id}`);
+        const ioncCheckbox = getElementInTab(tabKey, `ionc-chart-${objectName}-ionc-${sensor.id}`);
         if (ioncCheckbox) {
             ioncCheckbox.checked = false;
         }
     }
 
     // Снять галочку в любой таблице по data-sensor-name (Modbus, OPCUA и др.)
-    const chartCheckbox = document.querySelector(`.chart-checkbox[data-sensor-name="${sensorName}"]`);
+    const chartCheckbox = document.querySelector(`.chart-checkbox[data-sensor-name="${CSS.escape(sensorName)}"]`);
     if (chartCheckbox) {
         chartCheckbox.checked = false;
     }
 
     // Снять галочку в таблице UWebSocketGate (по data-name)
-    const uwsgateCheckbox = getElementsInTab(tabKey, `.uwsgate-chart-checkbox[data-name="${sensorName}"]`);
+    const uwsgateCheckbox = getElementsInTab(tabKey, `.uwsgate-chart-checkbox[data-name="${CSS.escape(sensorName)}"]`);
     if (uwsgateCheckbox && uwsgateCheckbox.length > 0) {
         uwsgateCheckbox[0].checked = false;
     }
@@ -13316,10 +12745,12 @@ function removeExternalSensor(tabKey, sensorName, options = {}) {
 
 // Загрузить внешние датчики из localStorage
 // Возвращает Map<sensorName, sensorData> для обратной совместимости с Set API (.has, .add, .delete)
-function getExternalSensorsFromStorage(objectName) {
+function getExternalSensorsFromStorage(tabKey, objectName) {
     try {
-        const key = `uniset-panel-external-sensors-${objectName}`;
-        const data = localStorage.getItem(key);
+        // Пробуем по tabKey, потом fallback на objectName (обратная совместимость)
+        const keyByTab = `uniset-panel-external-sensors-${tabKey}`;
+        const keyByObj = `uniset-panel-external-sensors-${objectName}`;
+        const data = localStorage.getItem(keyByTab) || (objectName ? localStorage.getItem(keyByObj) : null);
         if (data) {
             const parsed = JSON.parse(data);
             // Обратная совместимость: если это массив строк (старый формат), конвертируем
@@ -13344,9 +12775,9 @@ function getExternalSensorsFromStorage(objectName) {
 }
 
 // Save внешние датчики в localStorage
-function saveExternalSensorsToStorage(objectName, sensors) {
+function saveExternalSensorsToStorage(tabKey, sensors) {
     try {
-        const key = `uniset-panel-external-sensors-${objectName}`;
+        const key = `uniset-panel-external-sensors-${tabKey}`;
         // sensors - это Map<name, sensorData>
         const arr = [...sensors.values()];
         localStorage.setItem(key, JSON.stringify(arr));
@@ -13359,15 +12790,17 @@ function saveExternalSensorsToStorage(objectName, sensors) {
 // tabKey - ключ для state.tabs (формат: serverId:objectName)
 // displayName - имя объекта для отображения и localStorage
 function restoreExternalSensors(tabKey, displayName) {
-    const sensors = getExternalSensorsFromStorage(displayName);
+    const sensors = getExternalSensorsFromStorage(tabKey, displayName);
     if (sensors.size === 0) return;
 
     // Теперь sensors - это Map<name, sensorData>
     // Используем сохранённые данные напрямую, без необходимости искать в state
 
+    let attempts = 0;
     const restoreSensors = () => {
         const tabState = state.tabs.get(tabKey);
         if (!tabState) {
+            if (++attempts > RESTORE_SENSORS_MAX_ATTEMPTS) return;
             setTimeout(restoreSensors, 100);
             return;
         }
@@ -13630,13 +13063,10 @@ function toggleServerGroup(serverId) {
     const group = document.querySelector(`.server-group[data-server-id="${serverId}"]`);
     if (!group) return;
 
-    if (state.collapsedServerGroups.has(serverId)) {
-        state.collapsedServerGroups.delete(serverId);
-        group.classList.remove('collapsed');
-    } else {
-        state.collapsedServerGroups.add(serverId);
-        group.classList.add('collapsed');
-    }
+    const collapsed = !state.collapsedServerGroups.has(serverId);
+    if (collapsed) state.collapsedServerGroups.add(serverId);
+    else state.collapsedServerGroups.delete(serverId);
+    group.classList.toggle('collapsed', collapsed);
     saveSettings();
 }
 
@@ -13650,11 +13080,7 @@ function renderServersSection() {
     if (!section || !list) return;
 
     // Применяем сохранённое состояние свёрнутости
-    if (state.serversSectionCollapsed) {
-        section.classList.add('collapsed');
-    } else {
-        section.classList.remove('collapsed');
-    }
+    section.classList.toggle('collapsed', state.serversSectionCollapsed);
 
     // Обработчик клика на заголовок секции
     if (!header.dataset.listenerAdded) {
@@ -14570,7 +13996,7 @@ async function updateChart(objectName, varName, chart) {
         // Обновить значение в легенде
         if (history.points && history.points.length > 0) {
             const lastValue = history.points[history.points.length - 1].value;
-            const legendEl = document.getElementById(`legend-value-${objectName}-${varName}`);
+            const legendEl = getElementInTab(tabKey, `legend-value-${objectName}-${varName}`);
             if (legendEl) {
                 legendEl.textContent = formatValue(lastValue);
             }
@@ -14898,14 +14324,6 @@ function startTimerUpdateInterval() {
     }, UPDATE_INTERVAL);
 }
 
-// Остановка интервала обновления таймеров
-function stopTimerUpdateInterval() {
-    if (timerUpdateInterval) {
-        clearInterval(timerUpdateInterval);
-        timerUpdateInterval = null;
-    }
-}
-
 // Рендеринг информации об объекте
 function renderObjectInfo(tabKey, objectData) {
     const tabState = state.tabs.get(tabKey);
@@ -14948,7 +14366,7 @@ function renderObjectInfo(tabKey, objectData) {
     fields.forEach(({ key, label, format }) => {
         if (objectData[key] !== undefined) {
             const tr = document.createElement('tr');
-            const value = format ? format(objectData[key]) : objectData[key];
+            const value = format ? format(objectData[key]) : escapeHtml(String(objectData[key]));
             tr.innerHTML = `
                 <td class="info-label">${label}</td>
                 <td class="info-value">${value}</td>
@@ -14992,9 +14410,9 @@ function renderLogServer(tabKey, logServerData) {
                 // Проверяем с учётом возможных опечаток (RUNNIG вместо RUNNING)
                 const stateClass = stateValue.startsWith('RUNN') ? 'state-running' :
                                    stateValue === 'STOPPED' ? 'state-stopped' : '';
-                valueHtml = `<span class="state-badge ${stateClass}">${logServerData[key]}</span>`;
+                valueHtml = `<span class="state-badge ${stateClass}">${escapeHtml(String(logServerData[key]))}</span>`;
             } else {
-                valueHtml = logServerData[key];
+                valueHtml = escapeHtml(String(logServerData[key]));
             }
             tr.innerHTML = `
                 <td class="info-label">${label}</td>
@@ -15013,7 +14431,7 @@ function renderLogServer(tabKey, logServerData) {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="info-label">Макс. сессий</td>
-                <td class="info-value">${info.sessMaxCount}</td>
+                <td class="info-value">${escapeHtml(String(info.sessMaxCount))}</td>
             `;
             tbody.appendChild(tr);
         }
@@ -15036,7 +14454,7 @@ function renderLogServer(tabKey, logServerData) {
                         JSON.stringify(session) : String(session);
                     sessionTr.innerHTML = `
                         <td class="info-label" style="padding-left: 1.5rem">Сессия ${idx + 1}</td>
-                        <td class="info-value">${sessionInfo}</td>
+                        <td class="info-value">${escapeHtml(sessionInfo)}</td>
                     `;
                     tbody.appendChild(sessionTr);
                 });
@@ -15125,8 +14543,8 @@ function renderStatistics(tabKey, statsData) {
         }
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td class="info-label">${key}</td>
-            <td class="info-value">${formatValue(value)}</td>
+            <td class="info-label">${escapeHtml(key)}</td>
+            <td class="info-value">${escapeHtml(String(formatValue(value)))}</td>
         `;
         generalTbody.appendChild(tr);
     });
@@ -15181,9 +14599,9 @@ function renderStatisticsSensors(tabKey, filterText = '') {
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${sensorId}</td>
-            <td class="variable-name">${sensorName}</td>
-            <td class="variable-value">${formatValue(sensorCount)}</td>
+            <td>${escapeHtml(String(sensorId))}</td>
+            <td class="variable-name">${escapeHtml(String(sensorName))}</td>
+            <td class="variable-value">${escapeHtml(String(formatValue(sensorCount)))}</td>
         `;
         tbody.appendChild(tr);
     });
@@ -15342,19 +14760,6 @@ function toggleChartSmooth(tabKey, varName, smoothEnabled) {
     chartData.chart.update('none');
 }
 
-// Переключение stepped режима графика (меандр)
-// tabKey - ключ вкладки (serverId:objectName)
-function toggleChartStepped(tabKey, varName, steppedEnabled) {
-    const tabState = state.tabs.get(tabKey);
-    if (!tabState) return;
-
-    const chartData = tabState.charts.get(varName);
-    if (!chartData) return;
-
-    chartData.chart.data.datasets[0].stepped = steppedEnabled ? 'before' : false;
-    chartData.chart.update('none');
-}
-
 // Делегирование события для color picker
 document.addEventListener('click', (e) => {
     if (e.target.classList.contains('legend-color-picker')) {
@@ -15402,46 +14807,13 @@ function setupChartsResize(tabKey) {
 
     const displayName = tabState.displayName || tabKey;
 
-    const resizeHandle = getElementInTab(tabKey, `charts-resize-${displayName}`);
-    const chartsContainer = getElementInTab(tabKey, `charts-container-${displayName}`);
+    setupResizeHandle(
+        getElementInTab(tabKey, `charts-resize-${displayName}`),
+        getElementInTab(tabKey, `charts-container-${displayName}`),
+        CHARTS_CONTAINER_MIN_HEIGHT,
+        (height) => saveChartsHeight(tabKey, height)
+    );
 
-    if (!resizeHandle || !chartsContainer) return;
-
-    let startY = 0;
-    let startHeight = 0;
-    let isResizing = false;
-
-    const onMouseMove = (e) => {
-        if (!isResizing) return;
-        const delta = e.clientY - startY;
-        const newHeight = Math.max(CHARTS_CONTAINER_MIN_HEIGHT, startHeight + delta);
-        chartsContainer.style.height = `${newHeight}px`;
-        chartsContainer.style.maxHeight = `${newHeight}px`;
-    };
-
-    const onMouseUp = () => {
-        if (!isResizing) return;
-        isResizing = false;
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        // Сохраняем высоту
-        saveChartsHeight(tabKey, chartsContainer.offsetHeight);
-    };
-
-    resizeHandle.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        isResizing = true;
-        startY = e.clientY;
-        startHeight = chartsContainer.offsetHeight || CHARTS_CONTAINER_DEFAULT_HEIGHT;
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = 'ns-resize';
-        document.body.style.userSelect = 'none';
-    });
-
-    // Загружаем сохранённую высоту
     loadChartsHeight(tabKey);
 }
 
@@ -15477,46 +14849,13 @@ function loadChartsHeight(tabKey) {
 
 // Настройка resize для IONC секции датчиков
 function setupIONCSensorsResize(tabKey, objectName) {
-    const resizeHandle = getElementInTab(tabKey, `ionc-resize-${objectName}`);
-    const sensorsContainer = getElementInTab(tabKey, `ionc-sensors-container-${objectName}`);
+    setupResizeHandle(
+        getElementInTab(tabKey, `ionc-resize-${objectName}`),
+        getElementInTab(tabKey, `ionc-sensors-container-${objectName}`),
+        SENSORS_CONTAINER_MIN_HEIGHT,
+        (height) => saveIONCSensorsHeight(tabKey, height)
+    );
 
-    if (!resizeHandle || !sensorsContainer) return;
-
-    let startY = 0;
-    let startHeight = 0;
-    let isResizing = false;
-
-    const onMouseMove = (e) => {
-        if (!isResizing) return;
-        const delta = e.clientY - startY;
-        const newHeight = Math.max(SENSORS_CONTAINER_MIN_HEIGHT, startHeight + delta);
-        sensorsContainer.style.height = `${newHeight}px`;
-        sensorsContainer.style.maxHeight = `${newHeight}px`;
-    };
-
-    const onMouseUp = () => {
-        if (!isResizing) return;
-        isResizing = false;
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        // Сохраняем высоту
-        saveIONCSensorsHeight(tabKey, sensorsContainer.offsetHeight);
-    };
-
-    resizeHandle.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        isResizing = true;
-        startY = e.clientY;
-        startHeight = sensorsContainer.offsetHeight || 400;
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = 'ns-resize';
-        document.body.style.userSelect = 'none';
-    });
-
-    // Загружаем сохранённую высоту
     loadIONCSensorsHeight(tabKey, objectName);
 }
 
@@ -15794,43 +15133,12 @@ function loadIOCollapseState(tabKey, type) {
 }
 
 function setupIOResize(tabKey, objectName, type) {
-    const resizeHandle = getElementInTab(tabKey, `io-resize-${type}-${objectName}`);
-    const container = getElementInTab(tabKey, `io-container-${type}-${objectName}`);
-
-    if (!resizeHandle || !container) return;
-
-    let startY = 0;
-    let startHeight = 0;
-    let isResizing = false;
-
-    const onMouseMove = (e) => {
-        if (!isResizing) return;
-        const delta = e.clientY - startY;
-        const newHeight = Math.max(100, startHeight + delta);
-        container.style.height = `${newHeight}px`;
-        container.style.maxHeight = `${newHeight}px`;
-    };
-
-    const onMouseUp = () => {
-        if (!isResizing) return;
-        isResizing = false;
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        saveIOHeight(tabKey, type, container.offsetHeight);
-    };
-
-    resizeHandle.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        isResizing = true;
-        startY = e.clientY;
-        startHeight = container.offsetHeight || 200;
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = 'ns-resize';
-        document.body.style.userSelect = 'none';
-    });
+    setupResizeHandle(
+        getElementInTab(tabKey, `io-resize-${type}-${objectName}`),
+        getElementInTab(tabKey, `io-container-${type}-${objectName}`),
+        MIN_SECTION_HEIGHT,
+        (height) => saveIOHeight(tabKey, type, height)
+    );
 
     loadIOHeight(tabKey, objectName, type);
 }
@@ -15899,6 +15207,15 @@ function setupIOGlobalFilter(tabKey, objectName) {
     });
 }
 
+// Перерисовка IO секции по типу (inputs/outputs/timers)
+function reRenderIOType(tabKey, type) {
+    const tabState = state.tabs.get(tabKey);
+    if (!tabState) return;
+    if (type === 'inputs' && tabState.ioData?.in) renderIO(tabKey, 'inputs', tabState.ioData.in);
+    else if (type === 'outputs' && tabState.ioData?.out) renderIO(tabKey, 'outputs', tabState.ioData.out);
+    else if (type === 'timers' && tabState.timersData) renderTimers(tabKey, tabState.timersData);
+}
+
 // tabKey - ключ вкладки, objectName - displayName для DOM селекторов
 function setupIOUnpinAll(tabKey, objectName, type) {
     const unpinBtn = getElementInTab(tabKey, `io-unpin-${type}-${objectName}`);
@@ -15907,17 +15224,7 @@ function setupIOUnpinAll(tabKey, objectName, type) {
     unpinBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         clearIOPinnedRows(tabKey, type);
-        // Перерисовываем
-        const tabState = state.tabs.get(tabKey);
-        if (tabState) {
-            if (type === 'inputs' && tabState.ioData?.in) {
-                renderIO(tabKey, 'inputs', tabState.ioData.in);
-            } else if (type === 'outputs' && tabState.ioData?.out) {
-                renderIO(tabKey, 'outputs', tabState.ioData.out);
-            } else if (type === 'timers' && tabState.timersData) {
-                renderTimers(tabKey, tabState.timersData);
-            }
-        }
+        reRenderIOType(tabKey, type);
     });
 }
 
@@ -15954,18 +15261,7 @@ function toggleIOPin(tabKey, type, rowKey) {
     }
 
     saveIOPinnedRows(tabKey, type, pinned);
-
-    // Перерисовываем
-    const tabState = state.tabs.get(tabKey);
-    if (tabState) {
-        if (type === 'inputs' && tabState.ioData?.in) {
-            renderIO(tabKey, 'inputs', tabState.ioData.in);
-        } else if (type === 'outputs' && tabState.ioData?.out) {
-            renderIO(tabKey, 'outputs', tabState.ioData.out);
-        } else if (type === 'timers' && tabState.timersData) {
-            renderTimers(tabKey, tabState.timersData);
-        }
-    }
+    reRenderIOType(tabKey, type);
 }
 
 function clearIOPinnedRows(tabKey, type) {
@@ -21746,14 +21042,6 @@ function updateChartSensorColor(zoneIdx, sensorIdx, color) {
     }
 }
 
-function updateChartSensorFill(zoneIdx, sensorIdx, fill) {
-    const row = document.querySelector(`.chart-sensor-row[data-zone-idx="${zoneIdx}"][data-sensor-idx="${sensorIdx}"]`);
-    const fillInput = row?.querySelector('input[name$="-fill"]');
-    if (fillInput) {
-        fillInput.value = fill ? '1' : '0';
-    }
-}
-
 function setupChartSensorAutocomplete(zoneIdx) {
     const input = document.querySelector(`.chart-sensor-input[data-zone-idx="${zoneIdx}"]`);
     if (!input) return;
@@ -22239,12 +21527,11 @@ function initPollIntervalSelector() {
 
 // Перезапуск автообновления статуса для всех активных табов
 function restartAllStatusAutoRefresh() {
-    for (const tabKey of Object.keys(state.tabs)) {
-        const tab = state.tabs[tabKey];
-        if (tab && tab.renderer && typeof tab.renderer.startStatusAutoRefresh === 'function') {
+    state.tabs.forEach((tab) => {
+        if (tab.renderer && typeof tab.renderer.startStatusAutoRefresh === 'function') {
             tab.renderer.startStatusAutoRefresh();
         }
-    }
+    });
 }
 
 

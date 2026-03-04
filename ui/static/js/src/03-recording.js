@@ -154,22 +154,14 @@ function updateRecordingUI() {
     statusEl.classList.remove('hidden');
 
     // Update recording state
-    if (recordingState.isRecording) {
-        statusEl.classList.add('recording');
-        toggleBtn.textContent = 'Stop';
-        toggleBtn.title = 'Stop recording';
-        badge.classList.remove('hidden');
+    const isRec = recordingState.isRecording;
+    const hasData = isRec || recordingState.recordCount > 0;
+
+    statusEl.classList.toggle('recording', isRec);
+    toggleBtn.textContent = isRec ? 'Stop' : 'Record';
+    toggleBtn.title = isRec ? 'Stop recording' : 'Start recording';
+    badge.classList.toggle('hidden', !hasData);
+    if (hasData) {
         badge.textContent = `${formatNumber(recordingState.recordCount)} / ${formatBytes(recordingState.sizeBytes)}`;
-    } else {
-        statusEl.classList.remove('recording');
-        toggleBtn.textContent = 'Record';
-        toggleBtn.title = 'Start recording';
-        // Show badge if there's data
-        if (recordingState.recordCount > 0) {
-            badge.classList.remove('hidden');
-            badge.textContent = `${formatNumber(recordingState.recordCount)} / ${formatBytes(recordingState.sizeBytes)}`;
-        } else {
-            badge.classList.add('hidden');
-        }
     }
 }

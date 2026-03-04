@@ -215,14 +215,6 @@ function updateChartSensorColor(zoneIdx, sensorIdx, color) {
     }
 }
 
-function updateChartSensorFill(zoneIdx, sensorIdx, fill) {
-    const row = document.querySelector(`.chart-sensor-row[data-zone-idx="${zoneIdx}"][data-sensor-idx="${sensorIdx}"]`);
-    const fillInput = row?.querySelector('input[name$="-fill"]');
-    if (fillInput) {
-        fillInput.value = fill ? '1' : '0';
-    }
-}
-
 function setupChartSensorAutocomplete(zoneIdx) {
     const input = document.querySelector(`.chart-sensor-input[data-zone-idx="${zoneIdx}"]`);
     if (!input) return;

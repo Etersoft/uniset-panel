@@ -37,7 +37,8 @@ function openIoncDialog(options) {
         }, 50);
     }
 
-    // Add ESC handler
+    // Add ESC handler (remove old one first to prevent duplicates)
+    document.removeEventListener('keydown', handleIoncDialogKeydown);
     document.addEventListener('keydown', handleIoncDialogKeydown);
 }
 
@@ -75,11 +76,6 @@ function showIoncDialogError(message) {
     errorEl.textContent = message;
 }
 
-function clearIoncDialogError() {
-    const errorEl = document.getElementById('ionc-dialog-error');
-    errorEl.textContent = '';
-}
-
 // === Sensor Dialog ===
 
 // Status диалога датчиков
@@ -99,8 +95,8 @@ function openSensorDialog(tabKey) {
     const tabState = state.tabs.get(tabKey);
     const displayName = tabState?.displayName || tabKey;
 
-    // Загрузить список уже добавленных внешних датчиков (по displayName)
-    sensorDialogState.addedSensors = getExternalSensorsFromStorage(displayName);
+    // Загрузить список уже добавленных внешних датчиков (по tabKey, fallback на displayName)
+    sensorDialogState.addedSensors = getExternalSensorsFromStorage(tabKey, displayName);
 
     const overlay = document.getElementById('sensor-dialog-overlay');
     const filterInput = document.getElementById('sensor-filter-input');
@@ -171,12 +167,6 @@ function handleSensorDialogKeydown(e) {
     }
 }
 
-// Подготовить список датчиков из XML конфига
-function prepareSensorList() {
-    sensorDialogState.allSensors = Array.from(state.sensors.values());
-    sensorDialogState.filteredSensors = [...sensorDialogState.allSensors];
-}
-
 // Подготовить список датчиков из IONC таблицы
 function prepareSensorListFromIONC(ioncSensors) {
     // Преобразуем формат IONC датчиков в формат диалога
@@ -231,12 +221,13 @@ function renderSensorTable() {
             <tr>
                 <td>
                     <button class="sensor-add-btn" ${btnDisabled} title="${btnTitle}"
-                            onclick="addExternalSensor('${sensorDialogState.objectName}', '${sensor.name}')">${btnText}</button>
+                            data-object="${escapeHtml(sensorDialogState.objectName)}"
+                            data-sensor="${escapeHtml(sensor.name)}">${btnText}</button>
                 </td>
                 <td>${sensor.id}</td>
                 <td class="sensor-name">${escapeHtml(sensor.name)}</td>
                 <td>${escapeHtml(sensor.textname || '')}</td>
-                <td class="sensor-type">${sensor.iotype || ''}</td>
+                <td class="sensor-type">${escapeHtml(sensor.iotype || '')}</td>
             </tr>
         `;
     }).join('');
@@ -255,6 +246,14 @@ function renderSensorTable() {
             <tbody>${rows}</tbody>
         </table>
     `);
+
+    // Навешиваем обработчики клика программно (вместо inline onclick)
+    const container = document.getElementById('sensor-dialog-content');
+    container.querySelectorAll('.sensor-add-btn:not([disabled])').forEach(btn => {
+        btn.addEventListener('click', () => {
+            addExternalSensor(btn.dataset.object, btn.dataset.sensor);
+        });
+    });
 }
 
 // Экранирование HTML
@@ -407,8 +406,8 @@ function addExternalSensor(tabKey, sensorName) {
         value: sensor.value
     });
 
-    // Сохраняем в localStorage (используем displayName для переносимости между сессиями)
-    saveExternalSensorsToStorage(displayName, sensorDialogState.addedSensors);
+    // Сохраняем в localStorage (используем tabKey)
+    saveExternalSensorsToStorage(tabKey, sensorDialogState.addedSensors);
 
     // Создаём график для внешнего датчика (используем tabKey)
     createExternalSensorChart(tabKey, sensor);
@@ -451,7 +450,7 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
     const color = getNextColor();
 
     // Создаём панель графика
-    const chartsContainer = document.getElementById(`charts-${objectName}`);
+    const chartsContainer = getElementInTab(tabKey, `charts-${objectName}`);
     if (!chartsContainer) return;
 
     // Используем CSS-безопасный ID (заменяем : на -)
@@ -511,7 +510,7 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
     const steppedEnabled = isDiscrete;
 
     // Создаём Chart.js график
-    const ctx = document.getElementById(`canvas-${objectName}-${safeVarName}`).getContext('2d');
+    const ctx = getElementInTab(tabKey, `canvas-${objectName}-${safeVarName}`).getContext('2d');
     const chartConfig = {
         type: 'line',
         data: {
@@ -615,7 +614,7 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
         chart.update('none');
 
         // Обновляем легенду
-        const legendEl = document.getElementById(`legend-value-${objectName}-${safeVarName}`);
+        const legendEl = getElementInTab(tabKey, `legend-value-${objectName}-${safeVarName}`);
         if (legendEl) {
             legendEl.textContent = formatValue(sensor.value);
         }
@@ -627,7 +626,7 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
     });
 
     // Обработчик чекбокса заливки
-    const fillCheckbox = document.getElementById(`fill-${objectName}-${safeVarName}`);
+    const fillCheckbox = getElementInTab(tabKey, `fill-${objectName}-${safeVarName}`);
     if (fillCheckbox) {
         fillCheckbox.addEventListener('change', (e) => {
             chart.data.datasets[0].fill = e.target.checked;
@@ -636,7 +635,7 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
     }
 
     // Обработчик чекбокса сглаживания (только для аналоговых)
-    const smoothCheckbox = document.getElementById(`smooth-${objectName}-${safeVarName}`);
+    const smoothCheckbox = getElementInTab(tabKey, `smooth-${objectName}-${safeVarName}`);
     if (smoothCheckbox) {
         smoothCheckbox.addEventListener('change', (e) => {
             chart.data.datasets[0].tension = e.target.checked ? 0.3 : 0;
@@ -703,15 +702,15 @@ function removeExternalSensor(tabKey, sensorName, options = {}) {
     }
 
     // Удаляем DOM элемент (используем safeVarName)
-    const chartPanel = document.getElementById(`chart-panel-${objectName}-${safeVarName}`);
+    const chartPanel = getElementInTab(tabKey, `chart-panel-${objectName}-${safeVarName}`);
     if (chartPanel) {
         chartPanel.remove();
     }
 
-    // Удаляем из localStorage (используем objectName/displayName как ключ)
-    const addedSensors = getExternalSensorsFromStorage(objectName);
+    // Удаляем из localStorage (используем tabKey как ключ)
+    const addedSensors = getExternalSensorsFromStorage(tabKey, objectName);
     addedSensors.delete(sensorName);
-    saveExternalSensorsToStorage(objectName, addedSensors);
+    saveExternalSensorsToStorage(tabKey, addedSensors);
 
     // Находим сенсор для получения ID
     let sensor;
@@ -726,20 +725,20 @@ function removeExternalSensor(tabKey, sensorName, options = {}) {
 
     // Снять галочку в таблице IONC (по sensor.id)
     if (sensor) {
-        const ioncCheckbox = document.getElementById(`ionc-chart-${objectName}-ionc-${sensor.id}`);
+        const ioncCheckbox = getElementInTab(tabKey, `ionc-chart-${objectName}-ionc-${sensor.id}`);
         if (ioncCheckbox) {
             ioncCheckbox.checked = false;
         }
     }
 
     // Снять галочку в любой таблице по data-sensor-name (Modbus, OPCUA и др.)
-    const chartCheckbox = document.querySelector(`.chart-checkbox[data-sensor-name="${sensorName}"]`);
+    const chartCheckbox = document.querySelector(`.chart-checkbox[data-sensor-name="${CSS.escape(sensorName)}"]`);
     if (chartCheckbox) {
         chartCheckbox.checked = false;
     }
 
     // Снять галочку в таблице UWebSocketGate (по data-name)
-    const uwsgateCheckbox = getElementsInTab(tabKey, `.uwsgate-chart-checkbox[data-name="${sensorName}"]`);
+    const uwsgateCheckbox = getElementsInTab(tabKey, `.uwsgate-chart-checkbox[data-name="${CSS.escape(sensorName)}"]`);
     if (uwsgateCheckbox && uwsgateCheckbox.length > 0) {
         uwsgateCheckbox[0].checked = false;
     }
@@ -762,10 +761,12 @@ function removeExternalSensor(tabKey, sensorName, options = {}) {
 
 // Загрузить внешние датчики из localStorage
 // Возвращает Map<sensorName, sensorData> для обратной совместимости с Set API (.has, .add, .delete)
-function getExternalSensorsFromStorage(objectName) {
+function getExternalSensorsFromStorage(tabKey, objectName) {
     try {
-        const key = `uniset-panel-external-sensors-${objectName}`;
-        const data = localStorage.getItem(key);
+        // Пробуем по tabKey, потом fallback на objectName (обратная совместимость)
+        const keyByTab = `uniset-panel-external-sensors-${tabKey}`;
+        const keyByObj = `uniset-panel-external-sensors-${objectName}`;
+        const data = localStorage.getItem(keyByTab) || (objectName ? localStorage.getItem(keyByObj) : null);
         if (data) {
             const parsed = JSON.parse(data);
             // Обратная совместимость: если это массив строк (старый формат), конвертируем
@@ -790,9 +791,9 @@ function getExternalSensorsFromStorage(objectName) {
 }
 
 // Save внешние датчики в localStorage
-function saveExternalSensorsToStorage(objectName, sensors) {
+function saveExternalSensorsToStorage(tabKey, sensors) {
     try {
-        const key = `uniset-panel-external-sensors-${objectName}`;
+        const key = `uniset-panel-external-sensors-${tabKey}`;
         // sensors - это Map<name, sensorData>
         const arr = [...sensors.values()];
         localStorage.setItem(key, JSON.stringify(arr));
@@ -805,15 +806,17 @@ function saveExternalSensorsToStorage(objectName, sensors) {
 // tabKey - ключ для state.tabs (формат: serverId:objectName)
 // displayName - имя объекта для отображения и localStorage
 function restoreExternalSensors(tabKey, displayName) {
-    const sensors = getExternalSensorsFromStorage(displayName);
+    const sensors = getExternalSensorsFromStorage(tabKey, displayName);
     if (sensors.size === 0) return;
 
     // Теперь sensors - это Map<name, sensorData>
     // Используем сохранённые данные напрямую, без необходимости искать в state
 
+    let attempts = 0;
     const restoreSensors = () => {
         const tabState = state.tabs.get(tabKey);
         if (!tabState) {
+            if (++attempts > RESTORE_SENSORS_MAX_ATTEMPTS) return;
             setTimeout(restoreSensors, 100);
             return;
         }
