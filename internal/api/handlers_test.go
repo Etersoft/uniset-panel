@@ -2232,8 +2232,8 @@ func TestSetPollInterval_TooSmall(t *testing.T) {
 
 	handlers := setupTestHandlers(unisetServer)
 
-	// Interval less than 1000ms should be rejected
-	body := `{"interval": 500}`
+	// Interval less than 100ms should be rejected
+	body := `{"interval": 50}`
 	req := httptest.NewRequest("POST", "/api/settings/poll-interval", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()

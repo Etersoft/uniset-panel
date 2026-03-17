@@ -140,9 +140,13 @@ function initPollIntervalSelector() {
 
             // Отправляем на сервер
             try {
+                const headers = { 'Content-Type': 'application/json' };
+                if (state.control.token) {
+                    headers['X-Control-Token'] = state.control.token;
+                }
                 const response = await fetch('/api/settings/poll-interval', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers,
                     body: JSON.stringify({ interval })
                 });
                 if (response.ok) {
