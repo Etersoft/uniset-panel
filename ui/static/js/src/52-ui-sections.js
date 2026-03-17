@@ -616,6 +616,24 @@ function setupFilterHandlers(tabKey) {
     });
 }
 
+// Пауза/возобновление обновления графиков
+function toggleChartsPause(tabKey) {
+    const tabState = state.tabs.get(tabKey);
+    if (!tabState) return;
+    tabState.chartsPaused = !tabState.chartsPaused;
+    const displayName = tabState.displayName || tabKey;
+    const btn = getElementInTab(tabKey, `charts-pause-${displayName}`);
+    if (btn) {
+        btn.textContent = tabState.chartsPaused ? '▶' : '||';
+        btn.title = tabState.chartsPaused ? 'Resume chart updates' : 'Pause chart updates';
+        btn.classList.toggle('paused', tabState.chartsPaused);
+    }
+    // При снятии паузы — отрисовать накопленные данные
+    if (!tabState.chartsPaused) {
+        syncAllChartsTimeRange(tabKey);
+    }
+}
+
 // Настройка resize для графиков
 function setupChartsResize(tabKey) {
     const tabState = state.tabs.get(tabKey);

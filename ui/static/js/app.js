@@ -720,8 +720,10 @@ function updateChartsFromBatch(tabKey, items, prefix, timestamp, options = {}) {
             const data = chartData.chart.data.datasets[0].data;
             while (data.length > MAX_CHART_POINTS) data.shift();
         });
-        // syncAllChartsTimeRange обновляет min/max и вызывает update('none') для всех графиков
-        syncAllChartsTimeRange(tabKey);
+        // Пропускаем отрисовку если на паузе (данные уже накоплены выше)
+        if (!tabState.chartsPaused) {
+            syncAllChartsTimeRange(tabKey);
+        }
     }
 }
 
@@ -814,7 +816,7 @@ function initSSE() {
                     tabState.renderer.update(data);
                 }
 
-                // Обновляем графики напрямую из SSE данных (без запроса истории)
+                // Обновляем графики напрямую из SSE данных (данные копятся всегда, отрисовка — если не на паузе)
                 const eventTimestamp = new Date(timestamp);
                 tabState.charts.forEach((chartData, varName) => {
                     // Пропускаем внешние датчики (ext:) - они обновляются через sensor_data
@@ -851,6 +853,9 @@ function initSSE() {
                         }
                     }
                 });
+
+                // Пропускаем отрисовку если на паузе (данные уже накоплены выше)
+                if (tabState.chartsPaused) return;
 
                 // Синхронизируем временную шкалу для всех графиков объекта
                 syncAllChartsTimeRange(tabKey);
@@ -2600,6 +2605,7 @@ class BaseObjectRenderer {
                             ${!state.capabilities.smEnabled ? 'disabled title="SM not connected (-sm-url not set)"' : ''}>+ Sensor</button>` : ''}
                     <div class="charts-time-range" onclick="event.stopPropagation()">
                         <div class="time-range-selector">
+                            <button class="charts-pause-btn" id="charts-pause-${this.objectName}" onclick="toggleChartsPause('${this.tabKey}')" title="Pause chart updates">||</button>
                             <button class="time-range-btn${state.timeRange === 60 ? ' active' : ''}" onclick="setTimeRange(60)">1m</button>
                             <button class="time-range-btn${state.timeRange === 180 ? ' active' : ''}" onclick="setTimeRange(180)">3m</button>
                             <button class="time-range-btn${state.timeRange === 300 ? ' active' : ''}" onclick="setTimeRange(300)">5m</button>
@@ -14798,6 +14804,24 @@ function setupFilterHandlers(tabKey) {
             }
         }
     });
+}
+
+// Пауза/возобновление обновления графиков
+function toggleChartsPause(tabKey) {
+    const tabState = state.tabs.get(tabKey);
+    if (!tabState) return;
+    tabState.chartsPaused = !tabState.chartsPaused;
+    const displayName = tabState.displayName || tabKey;
+    const btn = getElementInTab(tabKey, `charts-pause-${displayName}`);
+    if (btn) {
+        btn.textContent = tabState.chartsPaused ? '▶' : '||';
+        btn.title = tabState.chartsPaused ? 'Resume chart updates' : 'Pause chart updates';
+        btn.classList.toggle('paused', tabState.chartsPaused);
+    }
+    // При снятии паузы — отрисовать накопленные данные
+    if (!tabState.chartsPaused) {
+        syncAllChartsTimeRange(tabKey);
+    }
 }
 
 // Настройка resize для графиков
