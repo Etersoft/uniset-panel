@@ -32,8 +32,10 @@ function updateChartsFromBatch(tabKey, items, prefix, timestamp, options = {}) {
             const data = chartData.chart.data.datasets[0].data;
             while (data.length > MAX_CHART_POINTS) data.shift();
         });
-        // syncAllChartsTimeRange обновляет min/max и вызывает update('none') для всех графиков
-        syncAllChartsTimeRange(tabKey);
+        // Пропускаем отрисовку если на паузе (данные уже накоплены выше)
+        if (!tabState.chartsPaused) {
+            syncAllChartsTimeRange(tabKey);
+        }
     }
 }
 
@@ -126,7 +128,7 @@ function initSSE() {
                     tabState.renderer.update(data);
                 }
 
-                // Обновляем графики напрямую из SSE данных (без запроса истории)
+                // Обновляем графики напрямую из SSE данных (данные копятся всегда, отрисовка — если не на паузе)
                 const eventTimestamp = new Date(timestamp);
                 tabState.charts.forEach((chartData, varName) => {
                     // Пропускаем внешние датчики (ext:) - они обновляются через sensor_data
@@ -163,6 +165,9 @@ function initSSE() {
                         }
                     }
                 });
+
+                // Пропускаем отрисовку если на паузе (данные уже накоплены выше)
+                if (tabState.chartsPaused) return;
 
                 // Синхронизируем временную шкалу для всех графиков объекта
                 syncAllChartsTimeRange(tabKey);

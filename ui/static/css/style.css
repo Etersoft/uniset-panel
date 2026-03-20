@@ -3598,6 +3598,39 @@ td.ionc-col-add-buttons > *:last-child {
 }
 
 /* Charts time range selector */
+.charts-pause-btn {
+    padding: 4px 10px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.15s ease;
+    margin-right: 10px;
+    position: relative;
+}
+
+.charts-pause-btn::after {
+    content: '';
+    position: absolute;
+    right: -6px;
+    top: 2px;
+    bottom: 2px;
+    width: 1px;
+    background: var(--border-color);
+}
+
+.charts-pause-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.charts-pause-btn.paused {
+    background: rgba(255, 152, 0, 0.15);
+    color: #ff9800;
+    font-size: 15px;
+}
+
 .charts-time-range {
     position: absolute;
     left: 50%;

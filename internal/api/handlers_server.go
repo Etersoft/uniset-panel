@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	minPollIntervalMs = 1000   // минимальный интервал опроса (1 секунда)
+	minPollIntervalMs = 100    // минимальный интервал опроса (100 мс)
 	maxPollIntervalMs = 300000 // максимальный интервал опроса (5 минут)
 )
 
