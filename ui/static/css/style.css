@@ -8667,8 +8667,306 @@ button.rotate-quick-btn:active {
     color: #8a8aaa;
 }
 
+.entity-type-overview {
+    background: #1a2a3a;
+    color: #5ba8d9;
+}
+
+/* System Overview tab — canvas needs fixed height */
+.tab-panel[data-object-type="Overview"] {
+    padding: 0;
+    position: relative;
+}
+
+.tab-panel[data-object-type="Overview"].active {
+    display: flex;
+    flex-direction: column;
+}
+
+.overview-container {
+    flex: 1;
+    position: relative;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.overview-toolbar {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 10;
+    display: flex;
+    gap: 4px;
+}
+
+.overview-fit-btn {
+    background: #2a2a3e;
+    color: #ccc;
+    border: 1px solid #444;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 28px;
+    text-align: center;
+}
+
+.overview-fit-btn:hover {
+    background: #3a3a4e;
+    color: #fff;
+}
+
+.overview-direction-btn {
+    background: #2a2a3e;
+    color: #ccc;
+    border: 1px solid #444;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 28px;
+    text-align: center;
+}
+
+.overview-direction-btn:hover {
+    background: #3a3a4e;
+    color: #fff;
+}
+
+/* Overview View dropdown (Task 14) + SVG export button */
+.overview-view-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.overview-view-btn,
+.overview-svg-export {
+    padding: 4px 10px;
+    background: #2a2a34;
+    color: #ddd;
+    border: 1px solid #333;
+    cursor: pointer;
+    margin-right: 4px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.overview-view-btn:hover,
+.overview-svg-export:hover {
+    background: #353540;
+}
+
+.overview-view-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: #1a1a24;
+    border: 1px solid #333;
+    padding: 6px;
+    z-index: 1000;
+    min-width: 140px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+    border-radius: 4px;
+    margin-top: 2px;
+}
+
+.overview-view-menu.hidden {
+    display: none;
+}
+
+.overview-view-menu label {
+    display: block;
+    padding: 4px 6px;
+    color: #ddd;
+    cursor: pointer;
+    user-select: none;
+    font-size: 12px;
+}
+
+.overview-view-menu label:hover {
+    background: #252530;
+}
+
+.overview-view-menu input[type=checkbox] {
+    margin-right: 6px;
+}
+
+.overview-container canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    outline: none;
+    border: none;
+}
+
+.overview-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #888;
+    font-size: 14px;
+}
 
 /* Sidebar collapsed — скрываем группы */
 .sidebar.collapsed #sidebar-groups {
+    display: none;
+}
+
+/* ============================================================================
+   System Overview — hotkeys help overlay (Spec 3 Task 7)
+   ========================================================================= */
+#overview-help-overlay {
+    position: fixed;
+    top: 20%;
+    left: 30%;
+    width: 40%;
+    background: #222;
+    color: #eee;
+    padding: 20px;
+    border-radius: 8px;
+    z-index: 10000;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    font-family: sans-serif;
+}
+#overview-help-overlay.hidden {
+    display: none;
+}
+#overview-help-overlay h3 {
+    margin: 0 0 12px 0;
+    font-size: 15px;
+    color: #fff;
+}
+#overview-help-overlay kbd {
+    background: #444;
+    color: #eee;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 12px;
+    border: 1px solid #666;
+}
+#overview-help-overlay table {
+    width: 100%;
+    border-collapse: collapse;
+}
+#overview-help-overlay td {
+    padding: 4px 8px;
+    vertical-align: middle;
+}
+#overview-help-overlay td:first-child {
+    width: 120px;
+    text-align: right;
+}
+#overview-help-overlay button {
+    margin-top: 12px;
+    background: #3a3a4e;
+    color: #eee;
+    border: 1px solid #555;
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+#overview-help-overlay button:hover {
+    background: #4a4a5e;
+}
+
+/* Body toggles for Overview values / wires visibility (V / W hotkeys) */
+body.overview-no-values .overview-container .lgraphnode-port-value,
+body.overview-no-values .overview-port-value {
+    display: none;
+}
+body.overview-no-wires .overview-container .lgraphnode-port-connections,
+body.overview-no-wires .overview-port-connections {
+    display: none;
+}
+
+/* Floating minimap for System Overview (M hotkey / Task 8). Parent
+   `.overview-container` is position: relative, so this floats in its
+   bottom-right corner. Hidden by default (body class applied on init). */
+.overview-minimap {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    width: 200px;
+    height: 150px;
+    border: 1px solid #444;
+    background: #111;
+    z-index: 100;
+    cursor: crosshair;
+}
+body.overview-minimap-hidden .overview-minimap {
+    display: none;
+}
+
+/* Overview LOD (level-of-detail): applied via body class based on canvas
+   scale (Task 9). `overview-lod-low` triggers at scale < 0.5,
+   `overview-lod-min` at scale < 0.25. Main effect lives in
+   UniSetProcessNode.onDrawForeground (58-overview-node.js), which skips
+   detail rendering at lod-min. CSS rules below cover DOM overlays (if any
+   future overlays use these classes). */
+body.overview-lod-low .port-label { display: none; }
+body.overview-lod-min .uniset-process-node-details { display: none; }
+
+/* FB Status panel (Task 11, Spec 3). Floats at the top-right of the overview
+   container; minimap sits at the bottom-right so they don't overlap, but we
+   keep a horizontal buffer (right: 220px) equal to the minimap width + gutter
+   to stay clear of the minimap when the panel grows tall. */
+.fb-status-panel {
+    position: absolute;
+    right: 220px;
+    top: 10px;
+    width: 240px;
+    max-height: 80vh;
+    overflow-y: auto;
+    background: #1a1a24;
+    border: 1px solid #333;
+    padding: 10px;
+    z-index: 50;
+    box-sizing: border-box;
+}
+.fb-status-panel h3 {
+    margin: 0 0 8px 0;
+    color: #ddd;
+    font-size: 14px;
+}
+.fb-status-panel .fb-status-search {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 4px 8px;
+    margin-bottom: 8px;
+    background: #0e0e18;
+    color: #ddd;
+    border: 1px solid #333;
+}
+.fb-status-panel .fb-status-search:focus {
+    outline: none;
+    border-color: #4a8cff;
+}
+.fb-status-panel .fb-card {
+    padding: 6px 8px;
+    border-bottom: 1px solid #2a2a34;
+    cursor: pointer;
+    color: #ccc;
+}
+.fb-status-panel .fb-card:hover {
+    background: #252530;
+}
+.fb-status-panel .fb-card .fb-type {
+    color: #888;
+    margin-left: 6px;
+    font-size: 0.85em;
+}
+.fb-status-panel .fb-empty {
+    color: #666;
+    padding: 8px;
+}
+/* When values are hidden via V-hotkey, also hide the supplementary
+   `(type)` annotation to keep the panel visually calm. */
+body.overview-no-values .fb-status-panel .fb-type {
     display: none;
 }

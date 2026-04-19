@@ -349,6 +349,9 @@ func setupHandlers(
 	if cfg.Sidebar != nil {
 		handlers.SetSidebarConfig(cfg.Sidebar)
 	}
+	if cfg.Overview != nil {
+		handlers.SetOverviewConfig(cfg.Overview)
+	}
 
 	return handlers
 }
