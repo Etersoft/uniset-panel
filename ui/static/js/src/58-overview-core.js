@@ -301,6 +301,12 @@ function initOverviewGraph(tabKey, serverId, data) {
     lgCanvas.read_only = true;
     lgCanvas.allow_searchbox = false;
     lgCanvas.allow_interaction = true; // allow pan/zoom
+    // Clamp native LiteGraph zoom to the same [OVERVIEW_SCALE_MIN,
+    // OVERVIEW_SCALE_MAX] range used by Ctrl+wheel (navigation.js), so plain
+    // wheel and Ctrl+wheel behave consistently. Defaults otherwise allow
+    // zoom-out to 10x which is disorienting for the overview.
+    if (typeof OVERVIEW_SCALE_MIN === 'number') lgCanvas.ds.min_scale = OVERVIEW_SCALE_MIN;
+    if (typeof OVERVIEW_SCALE_MAX === 'number') lgCanvas.ds.max_scale = OVERVIEW_SCALE_MAX;
     lgCanvas.show_info = false; // hide debug info (FPS, node count, etc.)
     lgCanvas.render_canvas_border = false; // remove blue border around canvas
     lgCanvas.title_text_font = 'bold 14px sans-serif';
