@@ -15,6 +15,7 @@ import (
 	"github.com/pv/uniset-panel/internal/modbus"
 	"github.com/pv/uniset-panel/internal/opcua"
 	"github.com/pv/uniset-panel/internal/sm"
+	"github.com/pv/uniset-panel/internal/trace"
 	"github.com/pv/uniset-panel/internal/uniset"
 	"github.com/pv/uniset-panel/internal/uwsgate"
 )
@@ -41,6 +42,7 @@ const (
 	EventLauncherConnection = "launcher_connection"
 	EventJournalMessages    = "journal_messages"
 	EventJournalConnection  = "journal_connection"
+	EventTrace              = "trace"
 )
 
 // SSEHub управляет SSE подключениями клиентов
@@ -53,6 +55,7 @@ type SSEHub struct {
 type sseClient struct {
 	objectName   string         // если пусто - получает все события
 	controlToken string         // токен контроля (если клиент контроллер)
+	traceOnly    bool           // если true - получает только trace события (и ничего другого)
 	connectedAt  time.Time      // время подключения (для логирования)
 	events       chan SSEEvent
 	done         chan struct{}
@@ -111,6 +114,26 @@ func (h *SSEHub) AddClientWithToken(objectName, controlToken string) *sseClient 
 	return client
 }
 
+// AddTraceClient добавляет нового SSE клиента, который получает ТОЛЬКО trace события
+// (и не получает object_data, ionc_sensor_batch и другие потоки).
+// objectName задаёт фильтр по объекту; если пусто - клиент получит все trace события.
+func (h *SSEHub) AddTraceClient(objectName string) *sseClient {
+	client := &sseClient{
+		objectName:  objectName,
+		traceOnly:   true,
+		connectedAt: time.Now(),
+		events:      make(chan SSEEvent, sseEventBufferSize),
+		done:        make(chan struct{}),
+	}
+
+	h.mu.Lock()
+	h.clients[client] = true
+	h.mu.Unlock()
+
+	slog.Debug("SSE trace client connected", "object", objectName, "total_clients", len(h.clients))
+	return client
+}
+
 // RemoveClient удаляет SSE клиента
 func (h *SSEHub) RemoveClient(client *sseClient) {
 	h.mu.Lock()
@@ -145,7 +168,20 @@ func (h *SSEHub) Broadcast(event SSEEvent) {
 	isGlobalEvent := event.Type == EventServerStatus || event.Type == EventObjectsList || event.Type == EventControlStatus ||
 		event.Type == EventLauncherStatus || event.Type == EventLauncherConnection || event.Type == EventJournalConnection
 
+	isTraceEvent := event.Type == EventTrace
+
 	for client := range h.clients {
+		// trace-only клиент получает ТОЛЬКО trace события; обычный - всё КРОМЕ trace.
+		if client.traceOnly {
+			if !isTraceEvent {
+				continue
+			}
+		} else {
+			if isTraceEvent {
+				continue
+			}
+		}
+
 		// Отправляем если: глобальное событие ИЛИ клиент подписан на все объекты ИЛИ на конкретный
 		if isGlobalEvent || client.objectName == "" || client.objectName == event.ObjectName {
 			select {
@@ -274,6 +310,19 @@ func (h *SSEHub) BroadcastUWSGateSensorBatchWithServer(serverID, serverName stri
 		func(u uwsgate.SensorUpdate) (string, uwsgate.SensorData, time.Time) {
 			return u.ObjectName, u.Sensor, u.Timestamp
 		})
+}
+
+// BroadcastTraceBatch отправляет батч trace-записей (dispatch-trace) для конкретного UObject.
+// Доставляется только клиентам, зарегистрированным через AddTraceClient.
+func (h *SSEHub) BroadcastTraceBatch(serverID, serverName, objectName string, batch trace.TraceBatch) {
+	h.Broadcast(SSEEvent{
+		Type:       EventTrace,
+		ServerID:   serverID,
+		ServerName: serverName,
+		ObjectName: objectName,
+		Data:       batch,
+		Timestamp:  time.Now(),
+	})
 }
 
 // ClientCount возвращает количество подключённых клиентов

@@ -6,7 +6,8 @@ const ENTITY_TYPE_BADGE = {
     launcher: 'Lnc',
     journal: 'Jrn',
     dashboard: 'Dsh',
-    server: 'Srv'
+    server: 'Srv',
+    overview: 'Ovw'
 };
 
 // Загрузка sidebar конфигурации с сервера
@@ -181,6 +182,12 @@ function activateSidebarGroupItem(type, name, serverId) {
                     }
                 }
             }
+            break;
+        }
+        case 'overview': {
+            const serverInfo = state.servers.get(serverId);
+            const serverName = serverInfo ? serverInfo.name : (serverId || '');
+            openSystemOverview(serverId, serverName);
             break;
         }
         case 'server': {

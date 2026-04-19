@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/vendor/litegraph.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
 </head>
@@ -470,6 +471,28 @@
         </div>
     </div>
 
+    <!-- System Overview: hotkeys help overlay (Spec 3 Task 7) -->
+    <div id="overview-help-overlay" class="hidden" role="dialog" aria-label="Overview hotkeys">
+        <div class="help-content">
+            <h3>Hotkeys</h3>
+            <table>
+                <tr><td><kbd>F</kbd></td><td>Fit to screen</td></tr>
+                <tr><td><kbd>0</kbd></td><td>Reset zoom</td></tr>
+                <tr><td><kbd>+</kbd> / <kbd>-</kbd></td><td>Zoom in/out</td></tr>
+                <tr><td><kbd>Home</kbd></td><td>Scroll to origin</td></tr>
+                <tr><td><kbd>V</kbd></td><td>Toggle Values</td></tr>
+                <tr><td><kbd>W</kbd></td><td>Toggle Wires</td></tr>
+                <tr><td><kbd>M</kbd></td><td>Toggle Minimap</td></tr>
+                <tr><td><kbd>/</kbd></td><td>Focus search</td></tr>
+                <tr><td><kbd>Esc</kbd></td><td>Clear highlight / close help</td></tr>
+                <tr><td><kbd>?</kbd></td><td>Toggle this help</td></tr>
+            </table>
+            <button type="button" id="overview-help-close">Close</button>
+        </div>
+    </div>
+
+    <script src="/static/js/vendor/litegraph.js"></script>
+    <script src="/static/js/vendor/dagre.min.js"></script>
     <script src="/static/js/app.js"></script>
 </body>
 </html>

@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -13,6 +16,7 @@ import (
 	"github.com/pv/uniset-panel/internal/api"
 	"github.com/pv/uniset-panel/internal/config"
 	"github.com/pv/uniset-panel/internal/dashboard"
+	"github.com/pv/uniset-panel/internal/debug"
 	"github.com/pv/uniset-panel/internal/ionc"
 	"github.com/pv/uniset-panel/internal/journal"
 	"github.com/pv/uniset-panel/internal/launcher"
@@ -26,6 +30,7 @@ import (
 	"github.com/pv/uniset-panel/internal/server"
 	"github.com/pv/uniset-panel/internal/sm"
 	"github.com/pv/uniset-panel/internal/storage"
+	"github.com/pv/uniset-panel/internal/trace"
 	"github.com/pv/uniset-panel/internal/uniset"
 	"github.com/pv/uniset-panel/internal/uwsgate"
 	"github.com/pv/uniset-panel/ui"
@@ -62,7 +67,7 @@ func main() {
 		}
 	}
 
-	handlers := setupHandlers(cfg, store, serverMgr, sseHub, sensorCfg, perServerConfigs,
+	handlers, traceMgr := setupHandlers(cfg, store, serverMgr, sseHub, sensorCfg, perServerConfigs,
 		controlsEnabled, logServerMgr, controlMgr, recordingMgr, launcherMgr)
 
 	dashboardMgr := setupDashboards(cfg, handlers)
@@ -103,7 +108,7 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	gracefulShutdown(httpServer, sseHub, controlMgr, recordingMgr, journalMgr, journalPollers, launcherMgr, serverMgr)
+	gracefulShutdown(httpServer, sseHub, controlMgr, recordingMgr, journalMgr, journalPollers, launcherMgr, serverMgr, traceMgr)
 }
 
 // setupStorage creates and returns the storage backend.
@@ -289,6 +294,8 @@ func setupLauncher(cfg *config.Config, sseHub *api.SSEHub) *launcher.Manager {
 }
 
 // setupHandlers creates and configures API handlers.
+// Returns the handlers and the trace manager; the trace manager must be
+// stopped at shutdown (StopAll) to terminate per-object pollers cleanly.
 func setupHandlers(
 	cfg *config.Config,
 	store storage.Storage,
@@ -301,7 +308,7 @@ func setupHandlers(
 	controlMgr *api.ControlManager,
 	recordingMgr *recording.Manager,
 	launcherMgr *launcher.Manager,
-) *api.Handlers {
+) (*api.Handlers, *trace.Manager) {
 	// Get first server's client and pollers for backward compatibility
 	var client *uniset.Client
 	var pollerInstance *poller.Poller
@@ -349,8 +356,63 @@ func setupHandlers(
 	if cfg.Sidebar != nil {
 		handlers.SetSidebarConfig(cfg.Sidebar)
 	}
+	if cfg.Overview != nil {
+		handlers.SetOverviewConfig(cfg.Overview)
+	}
 
-	return handlers
+	// Wire UObject debug client (Spec 4)
+	resolverAdapter := &debugResolverAdapter{mgr: serverMgr}
+	handlers.SetDebugClient(debug.NewClient(resolverAdapter))
+
+	// Wire UObject dispatch-trace backend (Spec 4 Task 2):
+	// poll /<obj>/dump?trace=1 per subscribed (server,object),
+	// broadcast batches via the SSE hub's dedicated trace channel.
+	// Reuses debugResolverAdapter: trace.ServerResolver and
+	// api.TraceResolver have the same GetServerAddress signature.
+	traceClient := trace.NewClient(resolverAdapter)
+	traceMgr := trace.NewManager(traceClient, sseHub)
+	handlers.SetTraceManager(traceMgr)
+	handlers.SetTraceResolver(resolverAdapter)
+	handlers.SetHTTPClient(&http.Client{Timeout: 5 * time.Second})
+
+	return handlers, traceMgr
+}
+
+// debugResolverAdapter bridges server.Manager to debug.ServerResolver.
+// Parses Instance.Config.URL (e.g. "http://host:port") into host+port pair.
+type debugResolverAdapter struct{ mgr *server.Manager }
+
+func (d *debugResolverAdapter) GetServerAddress(serverID string) (string, int, error) {
+	inst, ok := d.mgr.GetServer(serverID)
+	if !ok {
+		return "", 0, fmt.Errorf("server %q not found", serverID)
+	}
+	rawURL := inst.Config.URL
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "", 0, fmt.Errorf("parse server URL %q: %w", rawURL, err)
+	}
+	host := u.Hostname()
+	if host == "" {
+		return "", 0, fmt.Errorf("server URL %q has no host", rawURL)
+	}
+	portStr := u.Port()
+	if portStr == "" {
+		// fall back to scheme default
+		switch u.Scheme {
+		case "https":
+			return host, 443, nil
+		case "http", "":
+			return host, 80, nil
+		default:
+			return "", 0, fmt.Errorf("server URL %q has no port", rawURL)
+		}
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return "", 0, fmt.Errorf("parse port %q: %w", portStr, err)
+	}
+	return host, port, nil
 }
 
 // setupDashboards creates the dashboard manager if directory is specified.
@@ -448,8 +510,13 @@ func gracefulShutdown(
 	journalPollers []*journal.Poller,
 	launcherMgr *launcher.Manager,
 	serverMgr *server.Manager,
+	traceMgr *trace.Manager,
 ) {
 	slog.Info("Shutting down server...")
+
+	if traceMgr != nil {
+		traceMgr.StopAll()
+	}
 
 	if controlMgr != nil {
 		controlMgr.Stop()
