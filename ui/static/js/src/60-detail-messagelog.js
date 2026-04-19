@@ -23,6 +23,14 @@ function unsubscribeTraceForDetail(inst) {
 
 function onTraceBatch(inst, batch) {
     if (!batch) return;
+    // If called from the SSE subscribe callback (58-overview-trace.js),
+    // the argument is the full envelope {type, serverId, serverName,
+    // objectName, data, timestamp}. Unwrap .data. Unit tests call this
+    // with a flat TraceBatch directly — detect via shape (no .enabled
+    // at top level, but .data present).
+    if (batch.data && (typeof batch.enabled === 'undefined')) {
+        batch = batch.data;
+    }
     inst.logEnabled = !!batch.enabled;
     if (batch.overflow) inst.logOverflow = true;
     if (!batch.records || inst.logPaused) {

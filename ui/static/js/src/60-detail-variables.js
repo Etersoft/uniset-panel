@@ -138,6 +138,14 @@ function detectVarType(v) {
     return typeof v;
 }
 
+function renderSnapshotError(inst, msg) {
+    const root = document.querySelector('#detail-tab-' +
+        inst.key.replace(/:/g, '_') + ' [data-inner-panel="variables"]');
+    if (!root) return;
+    root.innerHTML = '<div class="detail-error-banner">' +
+        escapeDetailText(msg) + '</div>';
+}
+
 function startDetailSnapshotPoll(inst) {
     const fetchOnce = async function() {
         try {
@@ -146,6 +154,13 @@ function startDetailSnapshotPoll(inst) {
             const resp = await fetch(url);
             if (!resp.ok) {
                 inst.snapshotError = 'status ' + resp.status;
+                // 404: object gone or never existed — stop polling and
+                // show a clear banner. Other non-2xx: transient, keep trying.
+                if (resp.status === 404) {
+                    stopDetailSnapshotPoll(inst);
+                    renderSnapshotError(inst,
+                        'Object not found on server (404). Poll stopped.');
+                }
                 return;
             }
             inst.snapshotError = null;
@@ -183,7 +198,11 @@ async function postForce(inst, sensorId, value) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sensor_id: sensorId, value: Number(value) })
     });
-    return { status: resp.status, body: await resp.json().catch(() => null) };
+    const body = await resp.json().catch(() => null);
+    if (!resp.ok) {
+        handleForceError(resp.status, body, 'force');
+    }
+    return { status: resp.status, body: body };
 }
 
 async function postUnforce(inst, sensorId) {
@@ -196,7 +215,30 @@ async function postUnforce(inst, sensorId) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sensor_id: sensorId })
     });
-    return { status: resp.status, body: await resp.json().catch(() => null) };
+    const body = await resp.json().catch(() => null);
+    if (!resp.ok) {
+        handleForceError(resp.status, body, 'unforce');
+    }
+    return { status: resp.status, body: body };
+}
+
+// TODO: replace alert() with a proper toast / modal dialog once the
+// project gains a shared notification widget. For now alert() guarantees
+// visibility on 403/409 and is consistent with other ad-hoc errors.
+function handleForceError(status, body, action) {
+    let msg;
+    if (status === 403) {
+        msg = action + ' failed: authentication required (missing --control-token?)';
+    } else if (status === 409) {
+        msg = action + ' conflict: sensor may already be in target state';
+    } else {
+        const detail = (body && body.error) || ('HTTP ' + status);
+        msg = action + ' failed: ' + detail;
+    }
+    if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+        window.alert(msg);
+    }
+    console.warn('[detail] ' + msg);
 }
 
 function showDetailVarContextMenu(inst, section, varName, sensorId, event) {

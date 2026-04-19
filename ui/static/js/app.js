@@ -18172,6 +18172,14 @@ function unsubscribeTraceForDetail(inst) {
 
 function onTraceBatch(inst, batch) {
     if (!batch) return;
+    // If called from the SSE subscribe callback (58-overview-trace.js),
+    // the argument is the full envelope {type, serverId, serverName,
+    // objectName, data, timestamp}. Unwrap .data. Unit tests call this
+    // with a flat TraceBatch directly — detect via shape (no .enabled
+    // at top level, but .data present).
+    if (batch.data && (typeof batch.enabled === 'undefined')) {
+        batch = batch.data;
+    }
     inst.logEnabled = !!batch.enabled;
     if (batch.overflow) inst.logOverflow = true;
     if (!batch.records || inst.logPaused) {
@@ -18603,9 +18611,14 @@ if (typeof document !== 'undefined' && typeof document.addEventListener === 'fun
 // Reuses the pattern established in 58-overview-state.js: debounced
 // save (300ms), flush on beforeunload, version-gated reset, silent
 // fail on quota/disabled storage.
+//
+// NOTE: Top-level identifiers must use `var` / `function` so indirect-eval
+// in unit tests promotes them to globals. `const` / `let` at top-level
+// stay in the eval scope and won't be visible to other loadSrc'd files
+// or tests — same convention as other 58-*/60-* modules.
 
-const DETAIL_STATE_VERSION = 1;
-const DETAIL_STATE_DEBOUNCE_MS = 300;
+var DETAIL_STATE_VERSION = 1;
+var DETAIL_STATE_DEBOUNCE_MS = 300;
 
 function detailStateDefault() {
     return {
@@ -18650,7 +18663,7 @@ function loadDetailState(serverId, objectName) {
     }
 }
 
-const _detailStateSaveTimers = {};
+var _detailStateSaveTimers = {};
 
 function saveDetailState(serverId, objectName, state) {
     const key = detailStateKey(serverId, objectName);
@@ -18682,10 +18695,18 @@ function flushDetailStateImmediate(serverId, objectName, state) {
 
 // Global beforeunload: caller must register each live panel's
 // (serverId, objectName, getStateFn) via registerDetailForFlush.
-const _detailFlushRegistry = {};
+// Value shape: { serverId, objectName, getStateFn }. We store the pair
+// explicitly instead of splitting the map key at flush time — serverId
+// may legitimately contain ':' (e.g. "host:8080"), which would break
+// key.split(':').
+var _detailFlushRegistry = {};
 
 function registerDetailForFlush(serverId, objectName, getStateFn) {
-    _detailFlushRegistry[serverId + ':' + objectName] = { getStateFn };
+    _detailFlushRegistry[serverId + ':' + objectName] = {
+        serverId: serverId,
+        objectName: objectName,
+        getStateFn: getStateFn
+    };
 }
 
 function unregisterDetailForFlush(serverId, objectName) {
@@ -18695,10 +18716,10 @@ function unregisterDetailForFlush(serverId, objectName) {
 if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
     window.addEventListener('beforeunload', function() {
         for (const key of Object.keys(_detailFlushRegistry)) {
-            const [serverId, objectName] = key.split(':');
+            const entry = _detailFlushRegistry[key];
             try {
-                const state = _detailFlushRegistry[key].getStateFn();
-                flushDetailStateImmediate(serverId, objectName, state);
+                const state = entry.getStateFn();
+                flushDetailStateImmediate(entry.serverId, entry.objectName, state);
             } catch (e) {
                 console.warn('[detail-state] beforeunload flush failed:', e);
             }
@@ -19033,6 +19054,14 @@ function detectVarType(v) {
     return typeof v;
 }
 
+function renderSnapshotError(inst, msg) {
+    const root = document.querySelector('#detail-tab-' +
+        inst.key.replace(/:/g, '_') + ' [data-inner-panel="variables"]');
+    if (!root) return;
+    root.innerHTML = '<div class="detail-error-banner">' +
+        escapeDetailText(msg) + '</div>';
+}
+
 function startDetailSnapshotPoll(inst) {
     const fetchOnce = async function() {
         try {
@@ -19041,6 +19070,13 @@ function startDetailSnapshotPoll(inst) {
             const resp = await fetch(url);
             if (!resp.ok) {
                 inst.snapshotError = 'status ' + resp.status;
+                // 404: object gone or never existed — stop polling and
+                // show a clear banner. Other non-2xx: transient, keep trying.
+                if (resp.status === 404) {
+                    stopDetailSnapshotPoll(inst);
+                    renderSnapshotError(inst,
+                        'Object not found on server (404). Poll stopped.');
+                }
                 return;
             }
             inst.snapshotError = null;
@@ -19078,7 +19114,11 @@ async function postForce(inst, sensorId, value) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sensor_id: sensorId, value: Number(value) })
     });
-    return { status: resp.status, body: await resp.json().catch(() => null) };
+    const body = await resp.json().catch(() => null);
+    if (!resp.ok) {
+        handleForceError(resp.status, body, 'force');
+    }
+    return { status: resp.status, body: body };
 }
 
 async function postUnforce(inst, sensorId) {
@@ -19091,7 +19131,30 @@ async function postUnforce(inst, sensorId) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sensor_id: sensorId })
     });
-    return { status: resp.status, body: await resp.json().catch(() => null) };
+    const body = await resp.json().catch(() => null);
+    if (!resp.ok) {
+        handleForceError(resp.status, body, 'unforce');
+    }
+    return { status: resp.status, body: body };
+}
+
+// TODO: replace alert() with a proper toast / modal dialog once the
+// project gains a shared notification widget. For now alert() guarantees
+// visibility on 403/409 and is consistent with other ad-hoc errors.
+function handleForceError(status, body, action) {
+    let msg;
+    if (status === 403) {
+        msg = action + ' failed: authentication required (missing --control-token?)';
+    } else if (status === 409) {
+        msg = action + ' conflict: sensor may already be in target state';
+    } else {
+        const detail = (body && body.error) || ('HTTP ' + status);
+        msg = action + ' failed: ' + detail;
+    }
+    if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+        window.alert(msg);
+    }
+    console.warn('[detail] ' + msg);
 }
 
 function showDetailVarContextMenu(inst, section, varName, sensorId, event) {

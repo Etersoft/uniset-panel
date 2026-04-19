@@ -178,6 +178,27 @@ describe('force/unforce', () => {
         expect(fetch).not.toHaveBeenCalled();
     });
 
+    it('postForce surfaces 403 via alert', async () => {
+        globalThis.fetch = vi.fn(async () => ({
+            ok: false, status: 403,
+            json: async () => ({ error: 'token required' })
+        }));
+        let alerted = null;
+        const origAlert = window.alert;
+        window.alert = (m) => { alerted = m; };
+        try {
+            openDetailPanel('srv-1', 'Server1', 'DG_Control');
+            const inst = detailInstances['srv-1:DG_Control'];
+            stopDetailSnapshotPoll(inst);
+            inst.snapshot = { sm_object: 'SharedMemory' };
+            const result = await postForce(inst, 101, 42);
+            expect(result.status).toBe(403);
+            expect(alerted).toContain('authentication required');
+        } finally {
+            window.alert = origAlert;
+        }
+    });
+
     it('lookupSnapshotValue finds value across inputs/outputs/variables', () => {
         const inst = makeInst();
         expect(lookupSnapshotValue(inst.snapshot, 'in_Temp')).toBe(75);

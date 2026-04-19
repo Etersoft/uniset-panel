@@ -1439,8 +1439,15 @@ const server = http.createServer((req, res) => {
               id: 101, value: counter++, supplier_id: 42, type: 'sensorInfo' }
           ]
         };
+        // Envelope keys match Go SSEEvent JSON tags (sse.go):
+        // type, serverId, serverName, objectName, data, timestamp.
         const event = {
-          Type: 'trace', ServerID: serverParam, ObjectName: object, Data: batch
+          type: 'trace',
+          serverId: serverParam,
+          serverName: serverParam,
+          objectName: object,
+          data: batch,
+          timestamp: new Date().toISOString()
         };
         res.write('event: trace\ndata: ' + JSON.stringify(event) + '\n\n');
       }, 500);

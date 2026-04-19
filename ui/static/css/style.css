@@ -8996,6 +8996,8 @@ body.overview-no-values .fb-status-panel .fb-type {
 .detail-inner-content [data-inner-panel].active { display: block; }
 
 .detail-placeholder { color: #666; padding: 16px; }
+.detail-error-banner { padding: 12px 16px; background: #5a2a2a;
+                       color: #fff; border-radius: 4px; margin: 8px; }
 
 /* Variables */
 .detail-var-section-header { background: #1a1a24; padding: 6px 10px;
