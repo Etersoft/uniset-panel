@@ -18631,6 +18631,94 @@ function stopDetailSnapshotPoll(inst) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Force / Unforce via SharedMemory ionc endpoints
+// ---------------------------------------------------------------------------
+
+async function postForce(inst, sensorId, value) {
+    if (sensorId == null) return null;
+    const smObject = (inst.snapshot && inst.snapshot.sm_object) || 'SharedMemory';
+    const url = '/api/objects/' + encodeURIComponent(smObject) +
+                '/ionc/freeze?server=' + encodeURIComponent(inst.serverId);
+    const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sensor_id: sensorId, value: Number(value) })
+    });
+    return { status: resp.status, body: await resp.json().catch(() => null) };
+}
+
+async function postUnforce(inst, sensorId) {
+    if (sensorId == null) return null;
+    const smObject = (inst.snapshot && inst.snapshot.sm_object) || 'SharedMemory';
+    const url = '/api/objects/' + encodeURIComponent(smObject) +
+                '/ionc/unfreeze?server=' + encodeURIComponent(inst.serverId);
+    const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sensor_id: sensorId })
+    });
+    return { status: resp.status, body: await resp.json().catch(() => null) };
+}
+
+function showDetailVarContextMenu(inst, section, varName, sensorId, event) {
+    if (section !== 'inputs' && section !== 'outputs') return;
+    if (sensorId == null) return;
+
+    const existing = document.getElementById('detail-var-ctxmenu');
+    if (existing) existing.remove();
+
+    const currentValue = lookupSnapshotValue(inst.snapshot, varName);
+
+    const menu = document.createElement('div');
+    menu.id = 'detail-var-ctxmenu';
+    menu.className = 'detail-ctxmenu';
+    menu.style.position = 'fixed';
+    menu.style.left = event.clientX + 'px';
+    menu.style.top = event.clientY + 'px';
+
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.value = (typeof currentValue === 'number') ? currentValue : 0;
+
+    const forceBtn = document.createElement('button');
+    forceBtn.textContent = 'Force ' + varName;
+    forceBtn.addEventListener('click', async function() {
+        const v = input.value;
+        menu.remove();
+        await postForce(inst, sensorId, v);
+    });
+
+    const unforceBtn = document.createElement('button');
+    unforceBtn.textContent = 'Unforce';
+    unforceBtn.addEventListener('click', async function() {
+        menu.remove();
+        await postUnforce(inst, sensorId);
+    });
+
+    menu.appendChild(input);
+    menu.appendChild(forceBtn);
+    menu.appendChild(unforceBtn);
+    document.body.appendChild(menu);
+
+    setTimeout(function() {
+        document.addEventListener('click', function onOutside(e) {
+            if (!menu.contains(e.target)) {
+                menu.remove();
+                document.removeEventListener('click', onOutside);
+            }
+        });
+    }, 0);
+}
+
+function lookupSnapshotValue(snap, varName) {
+    if (!snap) return null;
+    for (const p of (snap.inputs || [])) if (p.name === varName) return p.value;
+    for (const p of (snap.outputs || [])) if (p.name === varName) return p.value;
+    if (snap.variables && varName in snap.variables) return snap.variables[varName];
+    return null;
+}
+
 
 // === 61-dashboard-widgets.js ===
 class GaugeWidget extends DashboardWidget {

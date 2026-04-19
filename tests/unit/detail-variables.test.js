@@ -117,3 +117,72 @@ describe('snapshot poll', () => {
         stopDetailSnapshotPoll(inst);
     });
 });
+
+describe('force/unforce', () => {
+    beforeEach(() => {
+        globalThis.fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({}) }));
+    });
+
+    function makeInst() {
+        openDetailPanel('srv-1', 'Server1', 'DG_Control');
+        const inst = detailInstances['srv-1:DG_Control'];
+        stopDetailSnapshotPoll(inst);
+        fetch.mockClear();
+        inst.snapshot = {
+            inputs: [{ id: 101, name: 'in_Temp', value: 75 }],
+            outputs: [{ id: 205, name: 'out_Speed', value: 1500 }],
+            variables: { Counter: 3 },
+            timers: [], statistics: {},
+            sm_object: 'SharedMemory'
+        };
+        return inst;
+    }
+
+    it('postForce calls ionc/freeze with sensor_id + value', async () => {
+        const inst = makeInst();
+        await postForce(inst, 101, 42);
+        expect(fetch).toHaveBeenCalledWith(
+            '/api/objects/SharedMemory/ionc/freeze?server=srv-1',
+            expect.objectContaining({
+                method: 'POST',
+                body: JSON.stringify({ sensor_id: 101, value: 42 })
+            })
+        );
+    });
+
+    it('postUnforce calls ionc/unfreeze with sensor_id', async () => {
+        const inst = makeInst();
+        await postUnforce(inst, 205);
+        expect(fetch).toHaveBeenCalledWith(
+            '/api/objects/SharedMemory/ionc/unfreeze?server=srv-1',
+            expect.objectContaining({
+                method: 'POST',
+                body: JSON.stringify({ sensor_id: 205 })
+            })
+        );
+    });
+
+    it('showDetailVarContextMenu no-op for locals section', () => {
+        const inst = makeInst();
+        const before = document.getElementById('detail-var-ctxmenu');
+        const fakeEvent = { preventDefault: () => {}, clientX: 0, clientY: 0 };
+        showDetailVarContextMenu(inst, 'locals', 'Counter', null, fakeEvent);
+        const after = document.getElementById('detail-var-ctxmenu');
+        expect(after).toBe(before);
+    });
+
+    it('postForce no-op when sensorId is null', async () => {
+        const inst = makeInst();
+        const result = await postForce(inst, null, 99);
+        expect(result).toBeNull();
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('lookupSnapshotValue finds value across inputs/outputs/variables', () => {
+        const inst = makeInst();
+        expect(lookupSnapshotValue(inst.snapshot, 'in_Temp')).toBe(75);
+        expect(lookupSnapshotValue(inst.snapshot, 'out_Speed')).toBe(1500);
+        expect(lookupSnapshotValue(inst.snapshot, 'Counter')).toBe(3);
+        expect(lookupSnapshotValue(inst.snapshot, 'missing')).toBeNull();
+    });
+});
