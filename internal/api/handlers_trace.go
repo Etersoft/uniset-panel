@@ -2,7 +2,9 @@ package api
 
 import (
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -102,4 +104,67 @@ func (h *Handlers) HandleTraceEvents(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		}
 	}
+}
+
+// HandleTraceEnable proxies POST /api/trace/servers/{id}/objects/{name}/enable
+// to uniset /<name>/trace/enable with passthrough query string and status.
+func (h *Handlers) HandleTraceEnable(w http.ResponseWriter, r *http.Request) {
+	h.proxyTraceControl(w, r, "enable")
+}
+
+// HandleTraceDisable — analog for disable.
+func (h *Handlers) HandleTraceDisable(w http.ResponseWriter, r *http.Request) {
+	h.proxyTraceControl(w, r, "disable")
+}
+
+func (h *Handlers) proxyTraceControl(w http.ResponseWriter, r *http.Request, action string) {
+	serverID := r.PathValue("id")
+	name := r.PathValue("name")
+	if serverID == "" || name == "" {
+		h.writeError(w, http.StatusBadRequest, "server id and object name required")
+		return
+	}
+	if h.traceResolver == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "trace resolver not configured")
+		return
+	}
+	host, port, err := h.traceResolver.GetServerAddress(serverID)
+	if err != nil {
+		h.writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	endpoint := fmt.Sprintf("http://%s:%d/%s/trace/%s",
+		host, port, url.PathEscape(name), action)
+	if r.URL.RawQuery != "" {
+		endpoint += "?" + r.URL.RawQuery
+	}
+
+	req, err := http.NewRequestWithContext(r.Context(), "POST", endpoint, r.Body)
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	// Passthrough relevant headers.
+	for _, k := range []string{"Content-Type"} {
+		if v := r.Header.Get(k); v != "" {
+			req.Header.Set(k, v)
+		}
+	}
+
+	client := h.httpClient
+	if client == nil {
+		client = http.DefaultClient
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	defer resp.Body.Close()
+
+	if ct := resp.Header.Get("Content-Type"); ct != "" {
+		w.Header().Set("Content-Type", ct)
+	}
+	w.WriteHeader(resp.StatusCode)
+	_, _ = io.Copy(w, resp.Body)
 }

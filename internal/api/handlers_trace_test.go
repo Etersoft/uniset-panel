@@ -2,7 +2,10 @@ package api
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"sync"
 	"testing"
 	"time"
@@ -286,4 +289,101 @@ func indexContains(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+type resolverFnAPI func(string) (string, int, error)
+
+func (f resolverFnAPI) GetServerAddress(s string) (string, int, error) { return f(s) }
+
+func TestHandleTraceEnable_proxy(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			t.Errorf("method: %s", r.Method)
+		}
+		if r.URL.Path != "/DG_Control/trace/enable" {
+			t.Errorf("path: %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("size") != "256" {
+			t.Errorf("size: %s", r.URL.Query().Get("size"))
+		}
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+
+	resolver := resolverFnAPI(func(_ string) (string, int, error) {
+		u, _ := url.Parse(srv.URL)
+		p := 0
+		_, _ = fmt.Sscanf(u.Port(), "%d", &p)
+		return u.Hostname(), p, nil
+	})
+	h := &Handlers{traceResolver: resolver, httpClient: srv.Client()}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/trace/servers/{id}/objects/{name}/enable", h.HandleTraceEnable)
+
+	req := httptest.NewRequest("POST",
+		"/api/trace/servers/srv-1/objects/DG_Control/enable?size=256", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != 200 {
+		t.Errorf("status: %d body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleTraceDisable_proxy(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/X/trace/disable" {
+			t.Errorf("method/path: %s %s", r.Method, r.URL.Path)
+		}
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+
+	resolver := resolverFnAPI(func(_ string) (string, int, error) {
+		u, _ := url.Parse(srv.URL)
+		p := 0
+		_, _ = fmt.Sscanf(u.Port(), "%d", &p)
+		return u.Hostname(), p, nil
+	})
+	h := &Handlers{traceResolver: resolver, httpClient: srv.Client()}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/trace/servers/{id}/objects/{name}/disable", h.HandleTraceDisable)
+	req := httptest.NewRequest("POST", "/api/trace/servers/srv-1/objects/X/disable", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != 200 {
+		t.Errorf("status: %d", rec.Code)
+	}
+}
+
+func TestHandleTraceEnable_missingParams(t *testing.T) {
+	h := &Handlers{traceResolver: resolverFnAPI(func(_ string) (string, int, error) {
+		return "127.0.0.1", 1234, nil
+	})}
+	req := httptest.NewRequest("POST", "/api/trace/servers//objects//enable", nil)
+	req.SetPathValue("id", "")
+	req.SetPathValue("name", "")
+	rec := httptest.NewRecorder()
+	h.HandleTraceEnable(rec, req)
+	if rec.Code != 400 {
+		t.Errorf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestHandleTraceEnable_noResolver(t *testing.T) {
+	h := &Handlers{traceResolver: nil}
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/trace/servers/{id}/objects/{name}/enable", h.HandleTraceEnable)
+
+	req := httptest.NewRequest("POST", "/api/trace/servers/srv-1/objects/X/enable", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != 503 {
+		t.Errorf("expected 503, got %d", rec.Code)
+	}
 }

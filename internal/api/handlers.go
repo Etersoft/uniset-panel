@@ -42,6 +42,11 @@ type TraceManagerInterface interface {
 	StopAll()
 }
 
+// TraceResolver resolves serverID → host:port for trace proxy handlers.
+type TraceResolver interface {
+	GetServerAddress(serverID string) (host string, port int, err error)
+}
+
 type Handlers struct {
 	client          *uniset.Client
 	storage         storage.Storage
@@ -69,6 +74,8 @@ type Handlers struct {
 	overviewConfig  *config.OverviewConfig         // конфиг overview (nil = показать все)
 	debugClient     DebugInterface                 // клиент для UObject debug snapshot (Spec 4)
 	traceMgr        TraceManagerInterface          // менеджер trace подписок (Spec 4)
+	traceResolver   TraceResolver                  // резолвер host:port для trace proxy (Spec 4)
+	httpClient      *http.Client                   // HTTP-клиент для исходящих proxy-запросов (Spec 4)
 }
 
 func NewHandlers(client *uniset.Client, store storage.Storage, p *poller.Poller, sensorCfg *sensorconfig.SensorConfig, pollInterval time.Duration) *Handlers {
@@ -138,6 +145,17 @@ func (h *Handlers) SetDebugClient(c DebugInterface) {
 // SetTraceManager wires the trace manager (Spec 4).
 func (h *Handlers) SetTraceManager(m TraceManagerInterface) {
 	h.traceMgr = m
+}
+
+// SetTraceResolver wires the server resolver for trace proxy handlers.
+func (h *Handlers) SetTraceResolver(r TraceResolver) {
+	h.traceResolver = r
+}
+
+// SetHTTPClient sets an HTTP client for outbound proxy requests.
+// If not set, proxy handlers use http.DefaultClient.
+func (h *Handlers) SetHTTPClient(c *http.Client) {
+	h.httpClient = c
 }
 
 // SetControlsEnabled устанавливает доступность элементов управления IONC
