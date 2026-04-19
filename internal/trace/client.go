@@ -73,9 +73,13 @@ func (c *Client) Fetch(ctx context.Context, serverID, objectName string, since i
 		return zero, fmt.Errorf("upstream status %d: %s", resp.StatusCode, string(bodySnip))
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	const maxTraceBody = 8 * 1024 * 1024 // 8 MB sanity cap
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxTraceBody+1))
 	if err != nil {
 		return zero, fmt.Errorf("read: %w", err)
+	}
+	if int64(len(body)) > maxTraceBody {
+		return zero, fmt.Errorf("%w: response exceeds %d bytes", ErrUpstream, maxTraceBody)
 	}
 	var wrapper map[string]json.RawMessage
 	if err := json.Unmarshal(body, &wrapper); err != nil {

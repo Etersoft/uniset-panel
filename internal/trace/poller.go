@@ -62,8 +62,9 @@ type TracePoller struct {
 	lastTimeUs  int64
 	backoff     time.Duration
 
-	stopCh chan struct{}
-	wg     sync.WaitGroup
+	stopCh   chan struct{}
+	stopOnce sync.Once
+	wg       sync.WaitGroup
 }
 
 func newPoller(serverID, serverName, objectName string, client HTTPFetcher, hub SSEBroadcaster) *TracePoller {
@@ -213,8 +214,10 @@ func (p *TracePoller) sleep(ctx context.Context, d time.Duration) {
 	}
 }
 
-// Stop signals the loop to exit.
+// Stop signals the loop to exit. Safe to call concurrently / multiple times.
 func (p *TracePoller) Stop() {
-	close(p.stopCh)
+	p.stopOnce.Do(func() {
+		close(p.stopCh)
+	})
 	p.wg.Wait()
 }

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -82,6 +83,21 @@ func TestHandleSnapshot_notFound(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "not found") {
 		t.Errorf("body: %s", rec.Body.String())
+	}
+}
+
+func TestHandleSnapshot_networkError_maps_to_502(t *testing.T) {
+	fake := &fakeDebugClient{err: fmt.Errorf("%w: dial tcp: connection refused", debug.ErrUpstream)}
+	h := &Handlers{debugClient: fake}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/servers/{id}/objects/{name}/snapshot", h.HandleSnapshot)
+
+	req := httptest.NewRequest("GET", "/api/servers/srv-1/objects/X/snapshot", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != 502 {
+		t.Errorf("expected 502 Bad Gateway, got %d", rec.Code)
 	}
 }
 

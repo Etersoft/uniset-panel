@@ -66,7 +66,7 @@ func (c *Client) Snapshot(ctx context.Context, serverID, objectName string) (*Sn
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("http: %w", err)
+		return nil, fmt.Errorf("%w: %v", ErrUpstream, err)
 	}
 	defer resp.Body.Close()
 
@@ -78,9 +78,13 @@ func (c *Client) Snapshot(ctx context.Context, serverID, objectName string) (*Sn
 		return nil, fmt.Errorf("upstream status %d: %s", resp.StatusCode, string(snip))
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	const maxSnapshotBody = 8 * 1024 * 1024 // 8 MB sanity cap
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxSnapshotBody+1))
 	if err != nil {
 		return nil, fmt.Errorf("read: %w", err)
+	}
+	if int64(len(body)) > maxSnapshotBody {
+		return nil, fmt.Errorf("%w: response exceeds %d bytes", ErrUpstream, maxSnapshotBody)
 	}
 	var wrapper map[string]json.RawMessage
 	if err := json.Unmarshal(body, &wrapper); err != nil {

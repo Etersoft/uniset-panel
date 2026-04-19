@@ -136,6 +136,25 @@ func TestSnapshot_emptyIOStillReturns(t *testing.T) {
 	}
 }
 
+func TestSnapshot_bodyCap(t *testing.T) {
+	// Generate a body > 8 MB (9 MB with 'a' chars inside a valid-looking envelope).
+	hugeValue := make([]byte, 9*1024*1024)
+	for i := range hugeValue {
+		hugeValue[i] = 'a'
+	}
+	body := `{"X":{"Variables":{"big":"` + string(hugeValue) + `"}}}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv.URL)
+	_, err := c.Snapshot(context.Background(), "srv-1", "X")
+	if !errors.Is(err, ErrUpstream) {
+		t.Errorf("expected ErrUpstream (body cap exceeded), got %v", err)
+	}
+}
+
 func TestSnapshot_deterministicOrder(t *testing.T) {
 	body := `{"X":{"io":{"in":{"c":{"id":3,"value":1},"a":{"id":1,"value":1},"b":{"id":2,"value":1}},"out":{}}}}`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
