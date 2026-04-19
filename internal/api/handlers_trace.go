@@ -65,9 +65,14 @@ func (h *Handlers) HandleTraceEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Register trace-only SSE client + register subscriber with trace manager.
-	// Resolver enrichment (serverName) is out of scope for Spec 2; reuse
-	// serverID as serverName so the manager still receives a stable identity.
+	// Use the optional ServerNameResolver to enrich events; fall back to
+	// serverID when the resolver cannot provide a name.
 	serverName := server
+	if nr, ok := h.traceResolver.(ServerNameResolver); ok && nr != nil {
+		if n := nr.GetServerName(server); n != "" {
+			serverName = n
+		}
+	}
 	token := h.traceMgr.Subscribe(server, serverName, object, interval)
 	defer h.traceMgr.Unsubscribe(token)
 

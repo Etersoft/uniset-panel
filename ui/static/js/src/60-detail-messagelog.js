@@ -3,6 +3,15 @@
 // ============================================================================
 
 var LOG_HARD_CAP = 5000;
+var LOG_FILTER_DEBOUNCE_MS = 150;
+
+// sanitizeLogTypeSlug produces a safe CSS-class fragment from rec.type.
+// Anything outside [A-Za-z0-9_-] is collapsed to a single dash so that
+// whitespace or punctuation in the raw type string can't split the class
+// attribute or inject new tokens.
+function sanitizeLogTypeSlug(type) {
+    return String(type || '').replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-|-$/g, '');
+}
 
 function subscribeTraceForDetail(inst) {
     if (inst.traceToken) return;
@@ -141,7 +150,7 @@ function renderMessageLog(inst) {
         const id = rec.id != null ? rec.id : '';
         const val = rec.value != null ? rec.value : '';
         const supplier = rec.supplier || (rec.supplier_id != null ? rec.supplier_id : '');
-        html += '<tr class="log-row log-type-' + escapeDetailText(rec.type || '') + '">';
+        html += '<tr class="log-row log-type-' + sanitizeLogTypeSlug(rec.type) + '">';
         html += '<td>' + escapeDetailText(time) + ' <small>' +
                 escapeDetailText(delay) + '</small></td>';
         html += '<td>' + escapeDetailText(rec.type || '') + '</td>';
@@ -205,12 +214,20 @@ function wireLogToolbar(inst, root) {
         exportLogCsv(inst);
     });
 
+    // Filter has a debounced re-render to avoid re-rendering the table on
+    // every keystroke when the buffer is large. State is still saved
+    // synchronously so the value survives tab switches.
+    let filterDebounceTimer = null;
     root.querySelector('.log-filter').addEventListener('input', function(e) {
         inst.state.logFilter = e.target.value;
         if (typeof saveDetailState === 'function') {
             saveDetailState(inst.serverId, inst.objectName, captureState(inst));
         }
-        renderMessageLog(inst);
+        if (filterDebounceTimer) clearTimeout(filterDebounceTimer);
+        filterDebounceTimer = setTimeout(function() {
+            filterDebounceTimer = null;
+            renderMessageLog(inst);
+        }, LOG_FILTER_DEBOUNCE_MS);
     });
 }
 

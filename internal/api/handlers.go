@@ -47,6 +47,12 @@ type TraceResolver interface {
 	GetServerAddress(serverID string) (host string, port int, err error)
 }
 
+// ServerNameResolver optionally returns a human-readable server name for
+// enriching SSE events. Implementations missing it fall back to serverID.
+type ServerNameResolver interface {
+	GetServerName(serverID string) string
+}
+
 type Handlers struct {
 	client          *uniset.Client
 	storage         storage.Storage

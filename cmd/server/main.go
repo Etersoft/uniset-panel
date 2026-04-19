@@ -415,6 +415,19 @@ func (d *debugResolverAdapter) GetServerAddress(serverID string) (string, int, e
 	return host, port, nil
 }
 
+// GetServerName satisfies api.ServerNameResolver — returns the configured
+// display name (or URL as fallback) for enriching trace SSE envelopes.
+func (d *debugResolverAdapter) GetServerName(serverID string) string {
+	inst, ok := d.mgr.GetServer(serverID)
+	if !ok {
+		return ""
+	}
+	if inst.Config.Name != "" {
+		return inst.Config.Name
+	}
+	return inst.Config.URL
+}
+
 // setupDashboards creates the dashboard manager if directory is specified.
 func setupDashboards(cfg *config.Config, handlers *api.Handlers) *dashboard.Manager {
 	if cfg.DashboardsDir == "" {
