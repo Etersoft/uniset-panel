@@ -154,6 +154,9 @@ type Config struct {
 	// Sidebar settings
 	Sidebar *SidebarConfig // Конфигурация sidebar групп (nil = legacy mode)
 
+	// Overview settings
+	Overview *OverviewConfig // Конфигурация System Overview (nil = показать все)
+
 	// Development settings
 	JSFile  string // Внешний файл app.js для разработки (вместо встроенного)
 	CSSFile string // Внешний файл style.css для разработки (вместо встроенного)
@@ -269,6 +272,8 @@ func Parse() *Config {
 			}
 			// Sidebar из YAML
 			cfg.Sidebar = yamlConfig.Sidebar
+			// Overview из YAML
+			cfg.Overview = yamlConfig.Overview
 			// Журналы из YAML (конвертируем в URL формат)
 			for _, j := range yamlConfig.Journals {
 				journalURL := buildJournalURL(j)

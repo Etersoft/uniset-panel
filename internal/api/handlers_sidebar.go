@@ -26,7 +26,7 @@ func (h *Handlers) GetSidebar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result := sidebar.Resolve(groups, exclude, entities)
-	h.writeJSON(w, map[string]interface{}{"groups": result})
+	h.writeJSON(w, map[string]any{"groups": result})
 }
 
 // collectSidebarEntities собирает все известные сущности из менеджеров
@@ -46,7 +46,7 @@ func (h *Handlers) collectSidebarEntities() []sidebar.SidebarItem {
 		}
 	}
 
-	// Серверы
+	// Серверы + System Overview (по одному на сервер)
 	if h.serverMgr != nil {
 		for _, inst := range h.serverMgr.GetAllInstances() {
 			displayName := inst.Config.Name
@@ -57,6 +57,12 @@ func (h *Handlers) collectSidebarEntities() []sidebar.SidebarItem {
 				Type:        "server",
 				Name:        inst.Config.ID,
 				DisplayName: displayName,
+			})
+			entities = append(entities, sidebar.SidebarItem{
+				Type:        "overview",
+				Name:        inst.Config.ID,
+				DisplayName: "System Overview",
+				ServerID:    inst.Config.ID,
 			})
 		}
 	}

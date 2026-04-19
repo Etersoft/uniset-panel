@@ -4,7 +4,7 @@ const WebSocket = require('ws');
 const PORT = 9393;
 
 // Mock data
-const objects = ['UniSetActivator', 'TestProc', 'SharedMemory', 'OPCUAClient1', 'MBTCPMaster1', 'MBTCPSlave1', 'OPCUAServer1', 'UNetExchange', 'UWebSocketGate'];
+const objects = ['UniSetActivator', 'TestProc', 'ControlProc', 'LogicProc', 'MonitorProc', 'StorageProc', 'SharedMemory', 'OPCUAClient1', 'MBTCPMaster1', 'MBTCPSlave1', 'OPCUAServer1', 'UNetExchange', 'UWebSocketGate'];
 
 const testProcData = {
   TestProc: {
@@ -53,44 +53,27 @@ const testProcData = {
     },
     io: {
       in: {
-        in_input1_s: {
-          comment: 'comment for input1',
-          id: 1,
-          name: 'Input1_S',
-          textname: 'Вход 1 - Температура',
-          smTestID: '1',
-          value: 1,
-          vartype: 'in'
-        },
-        in_input2_s: {
-          comment: 'comment for input2',
-          id: 19,
-          initFromSM: '1',
-          name: 'DumpSensor1_S',
-          textname: 'Датчик давления',
-          value: 0,
-          vartype: 'in'
-        }
+        in_input1_s: { comment: 'comment for input1', id: 1, name: 'Input1_S', textname: 'Вход 1 - Температура', smTestID: '1', value: 1, vartype: 'in' },
+        in_input2_s: { comment: 'comment for input2', id: 19, initFromSM: '1', name: 'DumpSensor1_S', textname: 'Датчик давления', value: 0, vartype: 'in' },
+        in_alarm_s: { id: 30, name: 'Alarm_S', textname: 'Аварийный сигнал', value: 0, vartype: 'in' },
+        in_pump: { id: 31, name: 'PumpCmd_C', textname: 'Команда насоса', value: 1, vartype: 'in' },
+        in_valve: { id: 32, name: 'ValveCmd_C', textname: 'Команда клапана', value: 0, vartype: 'in' },
+        in_fan: { id: 33, name: 'FanCmd_C', textname: 'Команда вентилятора', value: 1, vartype: 'in' },
+        in_heater: { id: 34, name: 'HeaterCmd_C', textname: 'Команда нагревателя', value: 0, vartype: 'in' },
+        in_warn: { id: 35, name: 'Warning_S', textname: 'Предупреждение', value: 0, vartype: 'in' },
+        in_ready: { id: 36, name: 'SystemReady_S', textname: 'Готовность системы', value: 1, vartype: 'in' },
+        in_estop: { id: 37, name: 'EmergencyStop_C', textname: 'Аварийный стоп', value: 0, vartype: 'in' },
+        in_logic_hb: { id: 38, name: 'LogicHeartbeat_S', textname: 'Heartbeat логики', value: 55, vartype: 'in' },
+        in_power: { id: 39, name: 'PowerConsumption_S', textname: 'Потребляемая мощность', value: 880, vartype: 'in' },
+        in_enable: { id: 40, name: 'Enable_S', textname: 'Разрешение работы', value: 1, vartype: 'in' }
       },
       out: {
-        out_output1_c: {
-          id: 7,
-          name: 'DO_C',
-          no_check_id: '1',
-          comment: 'comment for output1',
-          textname: 'Выход 1 - Насос',
-          value: 1,
-          vartype: 'out'
-        },
-        out_output2_c: {
-          force: '1',
-          id: 8,
-          name: 'DO1_C',
-          comment: 'comment for output2',
-          textname: 'Выход 2 - Клапан',
-          value: 0,
-          vartype: 'out'
-        }
+        out_output1_c: { id: 7, name: 'DO_C', no_check_id: '1', comment: 'comment for output1', textname: 'Выход 1 - Насос', value: 1, vartype: 'out' },
+        out_output2_c: { force: '1', id: 8, name: 'DO1_C', comment: 'comment for output2', textname: 'Выход 2 - Клапан', value: 0, vartype: 'out' },
+        out_display: { id: 41, name: 'DisplayCode_C', textname: 'Код дисплея', value: 3, vartype: 'out' },
+        out_log: { id: 42, name: 'EventLog_S', textname: 'Журнал событий', value: 100, vartype: 'out' },
+        out_enable: { id: 43, name: 'Enable_S', textname: 'Разрешение работы (обратная связь)', value: 1, vartype: 'out' },
+        out_feedback: { id: 44, name: 'TestFeedback_S', textname: 'Обратная связь тестов', value: 42, vartype: 'out' }
       }
     },
     myFloatVar: 42.42,
@@ -119,6 +102,180 @@ const unisetActivatorData = {
     isActive: true,
     name: 'UniSetActivator',
     objectType: 'UniSetActivator'
+  }
+};
+
+// ControlProc: reads raw sensors, outputs processed values to LogicProc
+const controlProcData = {
+  ControlProc: {
+    Variables: {
+      pollInterval: '500',
+      filterCoeff: '0.85'
+    },
+    io: {
+      in: {
+        in_raw_temp: { id: 50, name: 'RawTemp_AI', textname: 'Сырой датчик температуры', value: 2450, vartype: 'in' },
+        in_raw_press: { id: 51, name: 'RawPressure_AI', textname: 'Сырой датчик давления', value: 1800, vartype: 'in' },
+        in_raw_humidity: { id: 55, name: 'RawHumidity_AI', textname: 'Сырой датчик влажности', value: 650, vartype: 'in' },
+        in_raw_flow: { id: 56, name: 'RawFlow_AI', textname: 'Сырой датчик расхода', value: 3200, vartype: 'in' },
+        in_raw_level: { id: 57, name: 'RawLevel_AI', textname: 'Сырой датчик уровня', value: 780, vartype: 'in' },
+        in_raw_voltage: { id: 58, name: 'RawVoltage_AI', textname: 'Сырое напряжение', value: 2200, vartype: 'in' },
+        in_raw_current: { id: 59, name: 'RawCurrent_AI', textname: 'Сырой ток', value: 450, vartype: 'in' },
+        in_enable: { id: 70, name: 'Enable_S', textname: 'Разрешение работы', value: 1, vartype: 'in' },
+        in_feedback: { id: 78, name: 'TestFeedback_S', textname: 'Обратная связь тестов', value: 42, vartype: 'in' }
+      },
+      out: {
+        out_temp: { id: 52, name: 'Temp_S', textname: 'Температура (обработанная)', value: 24, vartype: 'out' },
+        out_pressure: { id: 53, name: 'Pressure_S', textname: 'Давление (обработанное)', value: 1013, vartype: 'out' },
+        out_humidity: { id: 71, name: 'Humidity_S', textname: 'Влажность (обработанная)', value: 65, vartype: 'out' },
+        out_flow: { id: 72, name: 'Flow_S', textname: 'Расход (обработанный)', value: 320, vartype: 'out' },
+        out_level: { id: 73, name: 'Level_S', textname: 'Уровень (обработанный)', value: 78, vartype: 'out' },
+        out_voltage: { id: 74, name: 'Voltage_S', textname: 'Напряжение', value: 220, vartype: 'out' },
+        out_current: { id: 75, name: 'Current_S', textname: 'Ток', value: 4, vartype: 'out' },
+        out_mode: { id: 54, name: 'Mode_C', textname: 'Режим работы', value: 1, vartype: 'out' },
+        out_status: { id: 76, name: 'CtrlStatus_S', textname: 'Статус контроллера', value: 1, vartype: 'out' },
+        out_heartbeat: { id: 77, name: 'CtrlHeartbeat_S', textname: 'Heartbeat контроллера', value: 42, vartype: 'out' }
+      }
+    }
+  },
+  object: {
+    id: 6100,
+    isActive: true,
+    lostMessages: 0,
+    maxSizeOfMessageQueue: 1000,
+    msgCount: 0,
+    name: 'ControlProc',
+    objectType: 'UniSetObject'
+  }
+};
+
+// LogicProc: business logic - consumes from ControlProc, outputs to TestProc
+const logicProcData = {
+  LogicProc: {
+    Variables: {
+      tempThreshold: '80',
+      pressureThreshold: '2000',
+      alarmDelay: '3000'
+    },
+    io: {
+      in: {
+        in_temp: { id: 60, name: 'Temp_S', textname: 'Температура', value: 24, vartype: 'in' },
+        in_pressure: { id: 61, name: 'Pressure_S', textname: 'Давление', value: 1013, vartype: 'in' },
+        in_humidity: { id: 80, name: 'Humidity_S', textname: 'Влажность', value: 65, vartype: 'in' },
+        in_flow: { id: 81, name: 'Flow_S', textname: 'Расход', value: 320, vartype: 'in' },
+        in_level: { id: 82, name: 'Level_S', textname: 'Уровень', value: 78, vartype: 'in' },
+        in_voltage: { id: 83, name: 'Voltage_S', textname: 'Напряжение', value: 220, vartype: 'in' },
+        in_current: { id: 84, name: 'Current_S', textname: 'Ток', value: 4, vartype: 'in' },
+        in_ctrl_status: { id: 85, name: 'CtrlStatus_S', textname: 'Статус контроллера', value: 1, vartype: 'in' },
+        in_ctrl_hb: { id: 86, name: 'CtrlHeartbeat_S', textname: 'Heartbeat контроллера', value: 42, vartype: 'in' },
+        in_mode: { id: 87, name: 'Mode_C', textname: 'Режим работы', value: 1, vartype: 'in' }
+      },
+      out: {
+        out_alarm: { id: 62, name: 'Alarm_S', textname: 'Аварийный сигнал', value: 0, vartype: 'out' },
+        out_pump: { id: 63, name: 'PumpCmd_C', textname: 'Команда насоса', value: 1, vartype: 'out' },
+        out_valve: { id: 88, name: 'ValveCmd_C', textname: 'Команда клапана', value: 0, vartype: 'out' },
+        out_fan: { id: 89, name: 'FanCmd_C', textname: 'Команда вентилятора', value: 1, vartype: 'out' },
+        out_heater: { id: 90, name: 'HeaterCmd_C', textname: 'Команда нагревателя', value: 0, vartype: 'out' },
+        out_warn: { id: 91, name: 'Warning_S', textname: 'Предупреждение', value: 0, vartype: 'out' },
+        out_ready: { id: 92, name: 'SystemReady_S', textname: 'Готовность системы', value: 1, vartype: 'out' },
+        out_emergency: { id: 93, name: 'EmergencyStop_C', textname: 'Аварийный стоп', value: 0, vartype: 'out' },
+        out_logic_hb: { id: 94, name: 'LogicHeartbeat_S', textname: 'Heartbeat логики', value: 55, vartype: 'out' },
+        out_power: { id: 95, name: 'PowerConsumption_S', textname: 'Потребляемая мощность', value: 880, vartype: 'out' }
+      }
+    }
+  },
+  object: {
+    id: 6200,
+    isActive: true,
+    lostMessages: 0,
+    maxSizeOfMessageQueue: 1000,
+    msgCount: 0,
+    name: 'LogicProc',
+    objectType: 'UniSetObject'
+  }
+};
+
+// MonitorProc: monitors system health — reads heartbeats/statuses, outputs aggregated metrics
+const monitorProcData = {
+  MonitorProc: {
+    Variables: {
+      checkInterval: '2000',
+      alertThreshold: '3'
+    },
+    io: {
+      in: {
+        in_ctrl_hb: { id: 200, name: 'CtrlHeartbeat_S', textname: 'Heartbeat контроллера', value: 42, vartype: 'in' },
+        in_logic_hb: { id: 201, name: 'LogicHeartbeat_S', textname: 'Heartbeat логики', value: 55, vartype: 'in' },
+        in_alarm: { id: 202, name: 'Alarm_S', textname: 'Аварийный сигнал', value: 0, vartype: 'in' },
+        in_warning: { id: 203, name: 'Warning_S', textname: 'Предупреждение', value: 0, vartype: 'in' },
+        in_ready: { id: 204, name: 'SystemReady_S', textname: 'Готовность системы', value: 1, vartype: 'in' },
+        in_estop: { id: 205, name: 'EmergencyStop_C', textname: 'Аварийный стоп', value: 0, vartype: 'in' },
+        in_ctrl_status: { id: 206, name: 'CtrlStatus_S', textname: 'Статус контроллера', value: 1, vartype: 'in' },
+        in_power: { id: 207, name: 'PowerConsumption_S', textname: 'Потребляемая мощность', value: 880, vartype: 'in' },
+        in_event_log: { id: 208, name: 'EventLog_S', textname: 'Журнал событий', value: 100, vartype: 'in' },
+        in_storage_ok: { id: 209, name: 'StorageStatus_S', textname: 'Статус хранилища', value: 1, vartype: 'in' }
+      },
+      out: {
+        out_sys_health: { id: 210, name: 'SystemHealth_S', textname: 'Здоровье системы', value: 95, vartype: 'out' },
+        out_active_alarms: { id: 211, name: 'ActiveAlarms_S', textname: 'Активные аварии', value: 0, vartype: 'out' },
+        out_uptime: { id: 212, name: 'Uptime_S', textname: 'Время работы (мин)', value: 4320, vartype: 'out' },
+        out_cpu_load: { id: 213, name: 'CpuLoad_S', textname: 'Загрузка CPU', value: 23, vartype: 'out' },
+        out_mem_usage: { id: 214, name: 'MemUsage_S', textname: 'Использование памяти', value: 67, vartype: 'out' },
+        out_mon_hb: { id: 215, name: 'MonitorHeartbeat_S', textname: 'Heartbeat монитора', value: 99, vartype: 'out' }
+      }
+    }
+  },
+  object: {
+    id: 6300,
+    isActive: true,
+    lostMessages: 0,
+    maxSizeOfMessageQueue: 1000,
+    msgCount: 0,
+    name: 'MonitorProc',
+    objectType: 'UniSetObject'
+  }
+};
+
+// StorageProc: data storage — receives processed values, outputs storage statistics
+const storageProcData = {
+  StorageProc: {
+    Variables: {
+      dbPath: '/var/data/storage.db',
+      flushInterval: '5000',
+      maxRecords: '1000000'
+    },
+    io: {
+      in: {
+        in_temp: { id: 300, name: 'Temp_S', textname: 'Температура', value: 24, vartype: 'in' },
+        in_pressure: { id: 301, name: 'Pressure_S', textname: 'Давление', value: 1013, vartype: 'in' },
+        in_humidity: { id: 302, name: 'Humidity_S', textname: 'Влажность', value: 65, vartype: 'in' },
+        in_flow: { id: 303, name: 'Flow_S', textname: 'Расход', value: 320, vartype: 'in' },
+        in_alarm: { id: 304, name: 'Alarm_S', textname: 'Аварийный сигнал', value: 0, vartype: 'in' },
+        in_pump: { id: 305, name: 'PumpCmd_C', textname: 'Команда насоса', value: 1, vartype: 'in' },
+        in_power: { id: 306, name: 'PowerConsumption_S', textname: 'Потребляемая мощность', value: 880, vartype: 'in' },
+        in_sys_health: { id: 307, name: 'SystemHealth_S', textname: 'Здоровье системы', value: 95, vartype: 'in' },
+        in_cpu_load: { id: 308, name: 'CpuLoad_S', textname: 'Загрузка CPU', value: 23, vartype: 'in' },
+        in_mode: { id: 309, name: 'Mode_C', textname: 'Режим работы', value: 1, vartype: 'in' },
+        in_display: { id: 310, name: 'DisplayCode_C', textname: 'Код дисплея', value: 3, vartype: 'in' },
+        in_event_log: { id: 311, name: 'EventLog_S', textname: 'Журнал событий', value: 100, vartype: 'in' }
+      },
+      out: {
+        out_storage_status: { id: 312, name: 'StorageStatus_S', textname: 'Статус хранилища', value: 1, vartype: 'out' },
+        out_records_count: { id: 313, name: 'RecordsCount_S', textname: 'Количество записей', value: 542890, vartype: 'out' },
+        out_disk_usage: { id: 314, name: 'DiskUsage_S', textname: 'Использование диска (%)', value: 34, vartype: 'out' },
+        out_write_rate: { id: 315, name: 'WriteRate_S', textname: 'Скорость записи (зап/с)', value: 150, vartype: 'out' },
+        out_last_flush: { id: 316, name: 'LastFlushTime_S', textname: 'Время последнего сброса', value: 1710, vartype: 'out' }
+      }
+    }
+  },
+  object: {
+    id: 6400,
+    isActive: true,
+    lostMessages: 0,
+    maxSizeOfMessageQueue: 1000,
+    msgCount: 0,
+    name: 'StorageProc',
+    objectType: 'UniSetObject'
   }
 };
 
@@ -607,6 +764,14 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify(testProcData));
   } else if (url === '/api/v2/UniSetActivator') {
     res.end(JSON.stringify(unisetActivatorData));
+  } else if (url === '/api/v2/ControlProc') {
+    res.end(JSON.stringify(controlProcData));
+  } else if (url === '/api/v2/LogicProc') {
+    res.end(JSON.stringify(logicProcData));
+  } else if (url === '/api/v2/MonitorProc') {
+    res.end(JSON.stringify(monitorProcData));
+  } else if (url === '/api/v2/StorageProc') {
+    res.end(JSON.stringify(storageProcData));
   } else if (url === '/api/v2/TestProc/help') {
     res.end(JSON.stringify({
       TestProc: [
@@ -1260,6 +1425,47 @@ setInterval(() => {
       reg.register.mbval = reg.value;
     }
   });
+}, 1000);
+
+// Simulate IO value changes for overview-eligible objects (ControlProc, LogicProc, etc.)
+// This makes the System Overview graph show dynamic sensor updates via SSE.
+const overviewDataSources = [controlProcData, logicProcData, monitorProcData, storageProcData, testProcData];
+setInterval(() => {
+  for (const dataSource of overviewDataSources) {
+    const objName = Object.keys(dataSource).find(k => k !== 'object');
+    if (!objName || !dataSource[objName].io) continue;
+    const io = dataSource[objName].io;
+    // Mutate input values
+    if (io.in) {
+      for (const ioVar of Object.values(io.in)) {
+        if (typeof ioVar.value === 'number') {
+          if (ioVar.value > 10) {
+            // Analog: small random walk
+            ioVar.value = Math.round((ioVar.value + (Math.random() - 0.5) * ioVar.value * 0.05) * 100) / 100;
+          } else {
+            // Digital/small: occasional toggle or bump
+            if (Math.random() < 0.15) {
+              ioVar.value = ioVar.value === 0 ? 1 : (ioVar.value === 1 ? 0 : ioVar.value + Math.round(Math.random() * 2 - 1));
+            }
+          }
+        }
+      }
+    }
+    // Mutate output values
+    if (io.out) {
+      for (const ioVar of Object.values(io.out)) {
+        if (typeof ioVar.value === 'number') {
+          if (ioVar.value > 10) {
+            ioVar.value = Math.round((ioVar.value + (Math.random() - 0.5) * ioVar.value * 0.05) * 100) / 100;
+          } else {
+            if (Math.random() < 0.15) {
+              ioVar.value = ioVar.value === 0 ? 1 : (ioVar.value === 1 ? 0 : ioVar.value + Math.round(Math.random() * 2 - 1));
+            }
+          }
+        }
+      }
+    }
+  }
 }, 1000);
 
 server.listen(PORT, '0.0.0.0', () => {

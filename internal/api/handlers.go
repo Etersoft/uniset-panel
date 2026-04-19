@@ -51,6 +51,7 @@ type Handlers struct {
 	journalMgr      *journal.Manager     // менеджер журналов сообщений
 	launcherMgr     *launcher.Manager              // менеджер Launcher'ов
 	sidebarConfig   *config.SidebarConfig          // конфиг sidebar (nil = дефолт по типам)
+	overviewConfig  *config.OverviewConfig         // конфиг overview (nil = показать все)
 }
 
 func NewHandlers(client *uniset.Client, store storage.Storage, p *poller.Poller, sensorCfg *sensorconfig.SensorConfig, pollInterval time.Duration) *Handlers {
