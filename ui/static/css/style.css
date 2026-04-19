@@ -8976,7 +8976,7 @@ body.overview-no-values .fb-status-panel .fb-type {
    ========================================================================== */
 
 .detail-panel { background: #0e0e18; color: #ddd; display: flex;
-                flex-direction: column; height: 100%; }
+                flex-direction: column; height: 100%; min-height: 500px; }
 .detail-header { padding: 8px 12px; background: #1a1a24;
                  border-bottom: 1px solid #333; display: flex; gap: 16px; }
 .detail-header .detail-obj { font-weight: bold; font-size: 14px; }
