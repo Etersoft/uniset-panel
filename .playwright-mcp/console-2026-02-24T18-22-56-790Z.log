@@ -1,0 +1,19 @@
+[     276ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/favicon.ico:0
+[   60584ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[   61628ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[   61628ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[   63443ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[   63443ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[   65217ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[   67512ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[   67512ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[   70221ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[   75043ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[   75043ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[   75216ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[   80220ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[   85220ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[   90218ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[   91975ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[   91975ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  144364ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277

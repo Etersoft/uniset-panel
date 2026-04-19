@@ -1,0 +1,917 @@
+[     174ms] [LOG] Control: Token loaded from localStorage @ http://localhost:8000/static/js/app.js:289
+[     175ms] [LOG] SSE: Подключение к /api/events?token=admin @ http://localhost:8000/static/js/app.js:760
+[     179ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o @ http://localhost:8000/:0
+[     199ms] [LOG] SSE: Соединение открыто @ http://localhost:8000/static/js/app.js:1200
+[     202ms] [LOG] SSE: Подключено, poll interval: 1000 ms, smEnabled: true @ http://localhost:8000/static/js/app.js:774
+[     225ms] [LOG] Polling: Отключение fallback режима @ http://localhost:8000/static/js/app.js:1240
+[     242ms] [LOG] App config loaded: {controlsEnabled: true, ioncUISensorsFilter: false, opcuaUISensorsFilter: false} @ http://localhost:8000/static/js/app.js:15397
+[     243ms] [LOG] Sidebar: 1 groups loaded @ http://localhost:8000/static/js/app.js:15430
+[     271ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/favicon.ico:0
+[     313ms] [LOG] Список объектов обновлён @ http://localhost:8000/static/js/app.js:11891
+[     337ms] [LOG] Загружено 5154 сенсоров @ http://localhost:8000/static/js/app.js:11987
+[    1226ms] [LOG] SSE: Переподписка всех вкладок после переподключения @ http://localhost:8000/static/js/app.js:1339
+[   89391ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1170
+[   89391ms] [LOG] SSE: Переподключение через 1073ms (попытка 1/10) @ http://localhost:8000/static/js/app.js:1189
+[   90248ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[   90465ms] [LOG] SSE: Подключение к /api/events?token=admin @ http://localhost:8000/static/js/app.js:760
+[   90466ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1170
+[   90467ms] [LOG] SSE: Переподключение через 2023ms (попытка 2/10) @ http://localhost:8000/static/js/app.js:1189
+[   90467ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[   92490ms] [LOG] SSE: Подключение к /api/events?token=admin @ http://localhost:8000/static/js/app.js:760
+[   92491ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1170
+[   92491ms] [LOG] SSE: Переподключение через 3979ms (попытка 3/10) @ http://localhost:8000/static/js/app.js:1189
+[   92491ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[   95246ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[   96471ms] [LOG] SSE: Подключение к /api/events?token=admin @ http://localhost:8000/static/js/app.js:760
+[   96472ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1170
+[   96472ms] [LOG] SSE: Переподключение через 7431ms (попытка 4/10) @ http://localhost:8000/static/js/app.js:1189
+[   96472ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  100249ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  103903ms] [LOG] SSE: Подключение к /api/events?token=admin @ http://localhost:8000/static/js/app.js:760
+[  103905ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1170
+[  103905ms] [LOG] SSE: Переподключение через 15535ms (попытка 5/10) @ http://localhost:8000/static/js/app.js:1189
+[  103905ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  105247ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  110250ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  115251ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  119440ms] [LOG] SSE: Подключение к /api/events?token=admin @ http://localhost:8000/static/js/app.js:760
+[  119445ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1170
+[  119445ms] [LOG] SSE: Переподключение через 31588ms (попытка 6/10) @ http://localhost:8000/static/js/app.js:1189
+[  119445ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  120247ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  125251ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  151033ms] [LOG] SSE: Подключение к /api/events?token=admin @ http://localhost:8000/static/js/app.js:760
+[  151035ms] [LOG] SSE: Соединение открыто @ http://localhost:8000/static/js/app.js:1200
+[  151036ms] [LOG] SSE: Подключено, poll interval: 1000 ms, smEnabled: true @ http://localhost:8000/static/js/app.js:774
+[  151037ms] [LOG] Polling: Отключение fallback режима @ http://localhost:8000/static/js/app.js:1240
+[  151044ms] [LOG] Список объектов обновлён @ http://localhost:8000/static/js/app.js:11891
+[  152038ms] [LOG] SSE: Переподписка всех вкладок после переподключения @ http://localhost:8000/static/js/app.js:1339
+[  170534ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  170784ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  171463ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  171686ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  171772ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  171817ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  171855ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  171983ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  172453ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  172743ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  172897ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  173110ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  173137ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  173279ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  173466ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  173721ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  173959ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  174136ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  174284ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  174672ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  174928ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  175127ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  175401ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  175674ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  175754ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  175898ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  176171ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  176200ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  176438ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  176732ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  176773ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  176814ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  176911ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  176996ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  177334ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  177434ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  177977ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  178041ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  178073ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  178154ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  178219ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  178227ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  178493ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  178943ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  179123ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  179186ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  179299ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  179373ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  179415ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  179579ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  179641ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  180031ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  180173ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  180512ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  180565ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  180578ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  180696ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  180788ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  180913ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  180966ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  180974ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  181451ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  181531ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  181666ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  181673ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  181806ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  181867ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  181969ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  182010ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  182138ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  182244ms] [LOG] SSE: Control status changed: {enabled: true, hasController: true, isController: false, timeoutSec: 60} @ http://localhost:8000/static/js/app.js:1083
+[  220669ms] [LOG] SSE: Сервер ee8d9159 отключен @ http://localhost:8000/static/js/app.js:1048
+[  221671ms] [LOG] SSE: Сервер ee8d9159 подключен @ http://localhost:8000/static/js/app.js:1048
+[  221672ms] [LOG] SSE: Сервер ee8d9159 восстановил связь, объектов: 13 @ http://localhost:8000/static/js/app.js:1062
+[  221675ms] [LOG] Sidebar: 1 groups loaded @ http://localhost:8000/static/js/app.js:15430
+[  221677ms] [LOG] Список объектов обновлён @ http://localhost:8000/static/js/app.js:11891
+[  225676ms] [LOG] SSE: Сервер ee8d9159 отключен @ http://localhost:8000/static/js/app.js:1048
+[  226677ms] [LOG] SSE: Сервер ee8d9159 подключен @ http://localhost:8000/static/js/app.js:1048
+[  226677ms] [LOG] SSE: Сервер ee8d9159 восстановил связь, объектов: 13 @ http://localhost:8000/static/js/app.js:1062
+[  226685ms] [LOG] Sidebar: 1 groups loaded @ http://localhost:8000/static/js/app.js:15430
+[  226688ms] [LOG] Список объектов обновлён @ http://localhost:8000/static/js/app.js:11891
+[  227273ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1170
+[  227273ms] [LOG] SSE: Переподключение через 975ms (попытка 1/10) @ http://localhost:8000/static/js/app.js:1189
+[  228249ms] [LOG] SSE: Подключение к /api/events?token=admin @ http://localhost:8000/static/js/app.js:760
+[  228250ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1170
+[  228250ms] [LOG] SSE: Переподключение через 2197ms (попытка 2/10) @ http://localhost:8000/static/js/app.js:1189
+[  228250ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  230247ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  230447ms] [LOG] SSE: Подключение к /api/events?token=admin @ http://localhost:8000/static/js/app.js:760
+[  230449ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1170
+[  230449ms] [LOG] SSE: Переподключение через 4314ms (попытка 3/10) @ http://localhost:8000/static/js/app.js:1189
+[  230449ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  234763ms] [LOG] SSE: Подключение к /api/events?token=admin @ http://localhost:8000/static/js/app.js:760
+[  234768ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1170
+[  234768ms] [LOG] SSE: Переподключение через 8108ms (попытка 4/10) @ http://localhost:8000/static/js/app.js:1189
+[  234769ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  235247ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  240250ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  242877ms] [LOG] SSE: Подключение к /api/events?token=admin @ http://localhost:8000/static/js/app.js:760
+[  242879ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1170
+[  242879ms] [LOG] SSE: Переподключение через 16516ms (попытка 5/10) @ http://localhost:8000/static/js/app.js:1189
+[  242879ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  245249ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  250251ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  255247ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  259395ms] [LOG] SSE: Подключение к /api/events?token=admin @ http://localhost:8000/static/js/app.js:760
+[  259397ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1170
+[  259397ms] [LOG] SSE: Переподключение через 27070ms (попытка 6/10) @ http://localhost:8000/static/js/app.js:1189
+[  259397ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  270250ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  275250ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  280250ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  285249ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  286468ms] [LOG] SSE: Подключение к /api/events?token=admin @ http://localhost:8000/static/js/app.js:760
+[  286469ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1170
+[  286469ms] [LOG] SSE: Переподключение через 27598ms (попытка 7/10) @ http://localhost:8000/static/js/app.js:1189
+[  286469ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  290250ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  295250ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  300249ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  305250ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  310249ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  314067ms] [LOG] SSE: Подключение к /api/events?token=admin @ http://localhost:8000/static/js/app.js:760
+[  314069ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1170
+[  314069ms] [LOG] SSE: Переподключение через 32203ms (попытка 8/10) @ http://localhost:8000/static/js/app.js:1189
+[  314069ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  315246ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  320250ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  325250ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  330250ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  335250ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  340250ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  345250ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  346272ms] [LOG] SSE: Подключение к /api/events?token=admin @ http://localhost:8000/static/js/app.js:760
+[  346273ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1170
+[  346273ms] [LOG] SSE: Переподключение через 29309ms (попытка 9/10) @ http://localhost:8000/static/js/app.js:1189
+[  346274ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  350250ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  355252ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  360250ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  365250ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  370250ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  375252ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  375583ms] [LOG] SSE: Подключение к /api/events?token=admin @ http://localhost:8000/static/js/app.js:760
+[  375584ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1170
+[  375584ms] [LOG] SSE: Переподключение через 28007ms (попытка 10/10) @ http://localhost:8000/static/js/app.js:1189
+[  375584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  380249ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  385250ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  390250ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  395250ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  400251ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  403591ms] [LOG] SSE: Подключение к /api/events?token=admin @ http://localhost:8000/static/js/app.js:760
+[  403593ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1170
+[  403593ms] [WARNING] SSE: Превышено количество попыток, переход на polling @ http://localhost:8000/static/js/app.js:1193
+[  403593ms] [LOG] Polling: Включение fallback режима @ http://localhost:8000/static/js/app.js:1206
+[  403593ms] [LOG] Polling: Включен для System Overview (tab: ee8d9159:overview ) @ http://localhost:8000/static/js/app.js:1220
+[  403593ms] [LOG] SSE: Запуск recovery probe каждые 30000 ms @ http://localhost:8000/static/js/app.js:1279
+[  403593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  404595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  404595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  405247ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  405595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  405595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  406595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  406595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  407594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  407594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  408595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  408595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  409595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  409595ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11835:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11842:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11890:28)
+    at http://localhost:8000/static/js/app.js:1211:9 @ http://localhost:8000/static/js/app.js:11893
+[  409595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  409595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  410246ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  410595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  410595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  411594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  411594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  412594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  412594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  413595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  413595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  414594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  414595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  415246ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  415595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  415595ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11835:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11842:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11890:28)
+    at http://localhost:8000/static/js/app.js:1211:9 @ http://localhost:8000/static/js/app.js:11893
+[  415596ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  415596ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  416595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  416595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  417594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  417594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  418594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  418594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  419594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  419594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  420246ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  420594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  420595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  421595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  421595ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11835:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11842:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11890:28)
+    at http://localhost:8000/static/js/app.js:1211:9 @ http://localhost:8000/static/js/app.js:11893
+[  421596ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  421596ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  422595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  422595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  423595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  423595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  424595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  424595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  425247ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  425595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  425595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  426595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  426595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  427595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  427595ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11835:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11842:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11890:28)
+    at http://localhost:8000/static/js/app.js:1211:9 @ http://localhost:8000/static/js/app.js:11893
+[  427595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  427595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  428595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  428595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  429594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  429594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  430246ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  430594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  430594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  431595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  431595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  432594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  432594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  433595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  433595ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11835:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11842:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11890:28)
+    at http://localhost:8000/static/js/app.js:1211:9 @ http://localhost:8000/static/js/app.js:11893
+[  433595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  433595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  433596ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[  434595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  434595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  435246ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  435594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  435594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  436594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  436594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  437595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  437595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  438594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  438594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  439595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  439595ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11835:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11842:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11890:28)
+    at http://localhost:8000/static/js/app.js:1211:9 @ http://localhost:8000/static/js/app.js:11893
+[  439595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  439595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  440246ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  440594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  440594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  441594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  441595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  442594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  442595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  443595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  443595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  444595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  444595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  445247ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  445595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  445595ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11835:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11842:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11890:28)
+    at http://localhost:8000/static/js/app.js:1211:9 @ http://localhost:8000/static/js/app.js:11893
+[  445595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  445595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  446595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  446595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  447594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  447595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  448595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  448595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  449595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  449595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  450246ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  450594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  450594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  451595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  451595ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11835:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11842:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11890:28)
+    at http://localhost:8000/static/js/app.js:1211:9 @ http://localhost:8000/static/js/app.js:11893
+[  451595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  451595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  452594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  452595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  453594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  453594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  454595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  454595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  455246ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  455594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  455595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  456595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  456595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  457595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  457595ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11835:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11842:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11890:28)
+    at http://localhost:8000/static/js/app.js:1211:9 @ http://localhost:8000/static/js/app.js:11893
+[  457595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  457595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  458595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  458595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  459595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  459595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  460246ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  460595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  460595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  461595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  461595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  462595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  462595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  463595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  463595ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11835:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11842:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11890:28)
+    at http://localhost:8000/static/js/app.js:1211:9 @ http://localhost:8000/static/js/app.js:11893
+[  463596ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  463596ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  463596ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[  464595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  464595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  465248ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  465595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  465595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  466594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  466595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  467595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  467595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  468595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  468595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  469595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  469595ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11835:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11842:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11890:28)
+    at http://localhost:8000/static/js/app.js:1211:9 @ http://localhost:8000/static/js/app.js:11893
+[  469595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  469595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  470246ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  470595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  470595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  471595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  471595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  472594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  472595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  473594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  473594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  474595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  474595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  475247ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  475595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  475595ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11835:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11842:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11890:28)
+    at http://localhost:8000/static/js/app.js:1211:9 @ http://localhost:8000/static/js/app.js:11893
+[  475595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  475595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  476595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  476595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  477595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  477595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  478595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  478595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  479595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  479595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  480247ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  480594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  480595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  481595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  481595ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11835:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11842:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11890:28)
+    at http://localhost:8000/static/js/app.js:1211:9 @ http://localhost:8000/static/js/app.js:11893
+[  481596ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  481596ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  482594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  482594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  483595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  483595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  484594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  484594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  485246ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  485594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  485594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  486595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  486595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  487595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  487595ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11835:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11842:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11890:28)
+    at http://localhost:8000/static/js/app.js:1211:9 @ http://localhost:8000/static/js/app.js:11893
+[  487595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  487595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  488594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  488595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  489594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  489594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  490247ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  490594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  490594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  491594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  491595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  492594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  492594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  493619ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  493619ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11835:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11842:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11890:28)
+    at http://localhost:8000/static/js/app.js:1211:9 @ http://localhost:8000/static/js/app.js:11893
+[  493619ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  493619ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  493620ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[  494594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  494594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  495247ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  495595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  495595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  496595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  496595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  497594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  497594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  498594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  498594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  499595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  499595ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11835:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11842:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11890:28)
+    at http://localhost:8000/static/js/app.js:1211:9 @ http://localhost:8000/static/js/app.js:11893
+[  499596ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  499596ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  500247ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  500595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  500595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  501595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  501595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  502594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  502594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  503595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  503595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  504594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  504595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  505246ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  505595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  505595ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11835:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11842:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11890:28)
+    at http://localhost:8000/static/js/app.js:1211:9 @ http://localhost:8000/static/js/app.js:11893
+[  505595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  505595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  506594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  506594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  507594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  507594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  508594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  508595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  509595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  509595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  510246ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  510595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  510595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  511595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  511595ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11835:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11842:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11890:28)
+    at http://localhost:8000/static/js/app.js:1211:9 @ http://localhost:8000/static/js/app.js:11893
+[  511595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  511595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  512595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  512595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  513594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  513594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  514594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  514594ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  515247ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  515595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  515595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  516595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  516595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578
+[  517595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  517595ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11835:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11842:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11890:28)
+    at http://localhost:8000/static/js/app.js:1211:9 @ http://localhost:8000/static/js/app.js:11893
+[  517595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/System%20Overview?server=ee8d9159:0
+[  517595ms] [ERROR] Error загрузки ee8d9159:overview: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11909:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13567:28)
+    at http://localhost:8000/static/js/app.js:1218:23 @ http://localhost:8000/static/js/app.js:13578

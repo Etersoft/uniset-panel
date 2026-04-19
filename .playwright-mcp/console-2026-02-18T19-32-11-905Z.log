@@ -1,0 +1,8 @@
+[      15ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[  504306ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[  504382ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/launchers/8895c737/status:0
+[  504382ms] [WARNING] Launcher Основная нода: failed to load status: TypeError: Failed to fetch
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10278:32)
+    at http://localhost:8000/static/js/app.js:10226:59 @ http://localhost:8000/static/js/app.js:10284
+[  504903ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/MBTCPMaster1/modbus/status?server=385205fb:0
+[  505061ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0

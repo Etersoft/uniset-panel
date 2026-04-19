@@ -1,0 +1,3 @@
+[       6ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1262
+[  424970ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1262
+[  425045ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0

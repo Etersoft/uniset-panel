@@ -1,0 +1,3 @@
+[       7ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[    5704ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/api/sm/sensors/DG1_Power/history?limit=200:0
+[    5709ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/api/sm/sensors/DG2_Power/history?limit=200:0

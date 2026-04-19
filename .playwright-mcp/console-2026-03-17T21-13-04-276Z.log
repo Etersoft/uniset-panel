@@ -1,0 +1,7 @@
+[     478ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/favicon.ico:0
+[    9760ms] [ERROR] Failed to load resource: the server responded with a status of 403 (Forbidden) @ http://localhost:8000/api/settings/poll-interval:0
+[    9761ms] [WARNING] Не удалось изменить poll interval @ http://localhost:8000/static/js/app.js:21518
+[  108206ms] [ERROR] Failed to load resource: the server responded with a status of 403 (Forbidden) @ http://localhost:8000/api/settings/poll-interval:0
+[  108206ms] [WARNING] Не удалось изменить poll interval @ http://localhost:8000/static/js/app.js:21518
+[  765935ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1145
+[  786683ms] [ERROR] Failed to load resource: the server responded with a status of 403 (Forbidden) @ http://localhost:8000/api/control/ping:0

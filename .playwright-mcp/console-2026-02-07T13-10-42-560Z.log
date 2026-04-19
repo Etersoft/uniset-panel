@@ -1,0 +1,2 @@
+[       6ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1253
+[   40627ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1252

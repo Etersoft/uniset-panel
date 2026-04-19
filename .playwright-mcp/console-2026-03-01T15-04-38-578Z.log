@@ -1,0 +1,3 @@
+[      24ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1346
+[  402653ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1187
+[  403093ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/MBTCPMaster1/modbus/status?server=ee8d9159:0

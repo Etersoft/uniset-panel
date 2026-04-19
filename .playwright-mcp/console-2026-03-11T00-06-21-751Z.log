@@ -1,0 +1,41 @@
+[       7ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1159
+[  135665ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1159
+[  136690ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1159
+[  136691ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events:0
+[  138637ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1159
+[  138638ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events:0
+[  140054ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  142471ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1159
+[  142471ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events:0
+[  145057ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  150055ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  150374ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1159
+[  150374ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events:0
+[  155054ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  160056ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  252859ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1159
+[  253873ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1159
+[  253873ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events:0
+[  255052ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  255954ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1159
+[  255954ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events:0
+[  260059ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  260184ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1159
+[  260184ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events:0
+[  265059ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  268350ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1159
+[  268351ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events:0
+[  270054ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  275058ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  280058ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  284778ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1159
+[  284778ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events:0
+[  285053ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  290060ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  295058ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  300060ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  305054ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  310082ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  314934ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1159
+[  314934ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events:0
+[  315054ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0

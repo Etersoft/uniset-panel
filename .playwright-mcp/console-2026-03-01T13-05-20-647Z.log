@@ -1,0 +1,3 @@
+[     111ms] ReferenceError: Cannot access 'DEFAULT_CHART_TIME_RANGE' before initialization
+    at http://localhost:8000/static/js/app.js:20:16
+[     179ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/favicon.ico:0

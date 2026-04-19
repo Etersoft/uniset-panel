@@ -1,0 +1,2114 @@
+[      12ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[  282086ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[  283001ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[  283002ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  284901ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[  284901ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  285085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  289275ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[  289275ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  290085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  295088ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  296996ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[  296996ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  300085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  305089ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  310089ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  313561ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[  313561ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  315086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  320088ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  673952ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[  675051ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[  675051ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  675085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  676923ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[  676923ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  680085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  680794ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[  680794ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  685091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  688433ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[  688433ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  690085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  695092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  700093ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  703244ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[  703244ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  705086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  710092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  715092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  720091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  725090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  730090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  735090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  735227ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[  735228ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  740094ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  745093ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  750087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  755092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  760091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  765090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  767963ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[  767964ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  770087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  775092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  780093ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  785088ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  790091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  795095ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  798686ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[  798686ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  800086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  805091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  810089ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  815088ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  820087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  825093ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  830091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  830379ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[  830380ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  835091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  840091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  845088ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  850088ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  855090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  858590ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[  858590ms] [WARNING] SSE: Превышено количество попыток, переход на polling @ http://localhost:8000/static/js/app.js:1300
+[  858590ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  860085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  864599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  864599ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[  865086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  870091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  870593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  870594ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[  875095ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  876592ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  876592ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[  880086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  882600ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  882600ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[  885085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  888601ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  888601ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[  888601ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[  890086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  894601ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  894601ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[  895085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  900093ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  900593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  900594ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[  905092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  906592ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  906593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[  910087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  912603ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  912603ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[  915085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  918602ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  918602ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[  918602ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[  920086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  924600ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  924600ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[  925085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  930095ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  930593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  930593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[  935091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  936593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  936593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[  940086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  942601ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  942601ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[  945086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  948602ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  948602ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[  948603ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[  950087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  954601ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  954601ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[  955086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  960091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  960593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  960593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[  965090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  966593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  966593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[  970086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  972597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  972597ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[  975087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  978598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  978599ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[  978599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[  980086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  984597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  984597ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[  985086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  990094ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  990594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  990594ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[  995091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  996593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  996593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1000087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1002598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1002598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1005086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1008598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1008598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1008598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1010085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1014601ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1014601ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1015086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1020095ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1020592ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1020592ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1025090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1026593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1026593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1030086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1032600ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1032600ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1035086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1038599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1038599ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1038599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1040085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1044599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1044599ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1045086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1050090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1050592ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1050593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1055091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1056593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1056593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1060086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1062600ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1062601ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1065086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1068602ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1068602ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1068602ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1070087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1074601ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1074601ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1075086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1080090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1080594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1080594ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1085090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1086593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1086593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1090086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1092597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1092598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1095085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1098602ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1098602ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1098602ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1100085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1104600ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1104600ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1105086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1110092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1110593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1110593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1115091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1116593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1116594ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1120086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1122599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1122599ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1125085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1128600ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1128600ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1128601ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1130086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1134598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1134599ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1135085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1140094ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1140593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1140593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1145093ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1146592ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1146592ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1150087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1152597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1152598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1155086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1158600ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1158600ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1158600ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1160086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1164597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1164597ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1165085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1170090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1170593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1170593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1175091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1176592ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1176592ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1180086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1182597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1182597ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1185085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1188599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1188599ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1188599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1190085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1194598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1194598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1195086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1200088ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1200592ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1200592ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1205090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1206592ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1206592ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1210085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1212598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1212598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1215085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1218597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1218597ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1218597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1220086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1224597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1224597ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1225085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1230090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1230594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1230594ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1235091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1236593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1236593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1240086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1242599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1242599ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1245086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1248599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1248599ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1248599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1250086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1254597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1254597ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1255085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1260092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1260593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1260593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1265091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1266593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1266593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1270086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1272598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1272598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1275085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1278597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1278597ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1278597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1280086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1284597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1284597ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1285085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1290090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1290592ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1290592ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1295090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1296592ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1296593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1300085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1302598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1302598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1305085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1308600ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1308600ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1308600ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1310086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1314597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1314598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1315085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1320090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1320593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1320593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1325090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1326592ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1326592ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1330085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1332597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1332597ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1335086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1338599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1338599ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1338600ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1340085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1344598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1344598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1345086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1350091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1350593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1350593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1355090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1356593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1356593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1360111ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1362597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1362597ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1365086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1368598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1368598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1368598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1370086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1374596ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1374596ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1375085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1380092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1380592ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1380593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1385090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1386593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1386593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1390086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1392597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1392597ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1395086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1398598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1398598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1398599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1400085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1404598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1404598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1405086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1410091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1410592ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1410592ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1415090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1416592ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1416592ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1420085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1422598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1422598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1425085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1428597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1428598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1428598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1430085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1434598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1434598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1435085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1440092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1440593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1440593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1445090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1446593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1446593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1450086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1452598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1452598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1455086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1458598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1458598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1458598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1460085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1464598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1464598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1465086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1470091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1470592ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1470592ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1475092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1476593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1476593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1480086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1482597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1482597ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1485087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1488598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1488598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1488599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1490085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1494596ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1494597ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1495085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1500092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1500593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1500593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1505091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1506594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1506594ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1510087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1512597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1512598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1515086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1518599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1518599ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1518599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1520085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1524597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1524597ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1525086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1530091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1530592ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1530592ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1535091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1536592ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1536592ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1540086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1542597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1542598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1545086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1548598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1548598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1548599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1550086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1554597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1554597ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1555085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1560091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1560593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1560593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1565091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1566593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1566593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1570086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1572600ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1572600ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1575085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1578599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1578599ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1578599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1580086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1584599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1584599ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1585085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1590091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1590593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1590593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1595091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1596592ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1596592ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1600086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1602600ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1602600ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1605085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1608599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1608599ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1608600ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1610086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1614598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1614598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1615087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1620091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1620592ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1620592ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1625091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1626593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1626593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1630086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1632602ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1632603ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1635086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1638599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1638599ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1638600ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1640085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1644598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1644598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1645085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1650090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1650592ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1650592ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1655091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1656592ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1656592ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1660086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1662598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1662598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1665087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1668599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1668599ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1668599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1670086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1674595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1674595ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1675086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1680093ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1680593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1680593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1685091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1686593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1686593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1690087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1692598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1692598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1695086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1698599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1698599ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1698599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1700086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1704600ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1704601ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1705086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1710092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1710593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1710593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1715093ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1716593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1716593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1720087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1722597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1722597ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1725086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1728596ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1728596ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1728597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1730085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1734595ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1734595ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1735086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1740091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1740593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1740593ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1745089ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1746592ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1746592ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1750085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1752596ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1752596ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1755085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1758598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 1758598ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 1758598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 1760085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1857713ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[ 1858810ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[ 1858810ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[ 1860086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1860780ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[ 1860780ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[ 1865001ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[ 1865001ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[ 1865086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1870091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1873560ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[ 1873560ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[ 1875085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1880090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1885089ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1890094ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1891041ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[ 1891042ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[ 1905092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1910092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1915094ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1920092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1923803ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[ 1923804ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[ 1925085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1930090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1935092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1940092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1945092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1950092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1954149ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[ 1954149ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[ 1955086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1960095ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1965090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1970090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1975090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1980095ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1985091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1987079ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[ 1987080ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[ 1990085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 1995093ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2000091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2005091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2010092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2015095ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2019236ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[ 2019236ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[ 2020087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2025093ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2030092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2035092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2040094ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2045091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2047652ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1277
+[ 2047652ms] [WARNING] SSE: Превышено количество попыток, переход на polling @ http://localhost:8000/static/js/app.js:1300
+[ 2047652ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[ 2050086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2053661ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2053661ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2055086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2059660ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2059661ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2060086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2065091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2065655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2065655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2070092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2071655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2071655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2075091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2077656ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2077656ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2077657ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 2080086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2083660ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2083660ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2085086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2089661ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2089661ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2090086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2095091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2095655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2095655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2100091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2101654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2101654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2105094ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2107655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2107655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2107655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 2110087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2113660ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2113660ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2115085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2119658ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2119659ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2120086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2125095ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2125655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2125655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2130092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2131656ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2131656ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2135092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2137657ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2137657ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2137658ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 2140087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2143660ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2143660ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2145086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2149660ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2149660ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2150086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2155091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2155655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2155655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2160089ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2161655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2161655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2165091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2167654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2167654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2167654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 2170086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2173660ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2173660ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2175086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2179660ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2179660ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2180085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2185095ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2185655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2185655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2190096ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2191654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2191654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2195108ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2197654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2197654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2197654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 2200085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2203655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2203655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2205085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2209658ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2209658ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2210086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2215086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2215654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2215654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2220090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2221654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2221654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2225087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2227654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2227654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2227654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 2230085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2233658ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2233658ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2235085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2239656ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2239656ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2240085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2245091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2245654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2245654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2250090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2251655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2251655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2255090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2257653ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2257653ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2257654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 2260084ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2263660ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2263660ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2265085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2269658ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2269659ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2270085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2275089ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2275654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2275654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2280091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2281655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2281655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2285090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2287654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2287654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2287654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 2290084ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2293657ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2293657ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2295084ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2299660ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2299660ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2300084ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2305090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2305656ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2305656ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2310087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2311654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2311654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2315088ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2317654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2317654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2317654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 2320086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2323658ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2323658ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2325086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2329659ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2329659ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2330085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2335088ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2335654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2335654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2340089ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2341654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2341654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2345089ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2347653ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2347653ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2347654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 2350085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2353659ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2353659ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2355084ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2359659ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2359659ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2360086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2365087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2365654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2365654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2370087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2371654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2371654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2375087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2377654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2377654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2377654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 2380084ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2383655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2383656ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2385085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2389660ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2389660ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2390086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2395090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2395654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2395654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2400087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2401654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2401654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2405087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2407654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2407654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2407654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 2410086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2413659ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2413659ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2415085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2419659ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2419659ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2420086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2425089ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2425653ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2425654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2430091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2431654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2431654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2435086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2437655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2437655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2437656ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 2440085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2443659ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2443659ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2445085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2449659ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2449660ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2450086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2455087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2455654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2455654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2460090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2461655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2461655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2465090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2467654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2467654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2467655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 2470085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2473660ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2473660ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2475086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2479659ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2479660ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2480085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2485092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2485653ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2485653ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2490087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2491655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2491655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2495089ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2497656ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2497656ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2497656ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 2500085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2503657ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2503657ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2505085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2509659ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2509659ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2510086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2515091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2515655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2515655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2520091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2521655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2521655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2525091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2527656ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2527656ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2527656ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 2530086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2533660ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2533660ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2535085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2539661ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2539661ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2540086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2545113ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2545655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2545655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2550092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2551655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2551655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2555093ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2557657ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2557657ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2557657ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 2560086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2563660ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2563660ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2565087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2569660ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2569660ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2570086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2575092ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2575654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2575655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2580090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2581655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2581655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2585090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2587656ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2587656ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2587656ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 2590085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2593660ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2593660ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2595086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2599656ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2599656ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2600086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2605090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2605655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2605655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2610091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2611654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2611654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2615090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2617655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2617655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2617655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 2620086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2623658ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2623658ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2625086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2629659ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2629659ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2630084ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2635090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2635654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2635654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2640088ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2641656ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2641656ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2645091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2647654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2647654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2647654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 2650086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2653659ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2653659ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2655087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2659661ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2659661ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2660086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2665117ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2665656ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2665656ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2670091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2671656ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2671656ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2675090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2677656ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2677656ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2677656ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 2680085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2683655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2683656ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2685084ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2689661ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2689661ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2690086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2695090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2695655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2695655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2700091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2701653ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2701653ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2705088ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2707655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2707655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2707656ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 2710086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2713655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2713655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2715085ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2719660ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2719660ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2720086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2725086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2725655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2725655ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2730091ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2731653ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2731653ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2735090ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2737654ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2737654ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2737655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[ 2740084ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2743660ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2743660ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2745086ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[ 2749661ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[ 2749661ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:12561:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:12568:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:12616:28)
+    at http://localhost:8000/static/js/app.js:1318:9 @ http://localhost:8000/static/js/app.js:12619
+[ 2750087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0

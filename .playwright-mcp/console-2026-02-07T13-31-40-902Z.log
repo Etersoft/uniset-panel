@@ -1,0 +1,6 @@
+[       5ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1243
+[  198282ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1243
+[  198846ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/launchers/623413ff/status:0
+[  198846ms] [WARNING] Launcher Основная нода: failed to load status: TypeError: Failed to fetch
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10065:32)
+    at http://localhost:8000/static/js/app.js:10021:59 @ http://localhost:8000/static/js/app.js:10071

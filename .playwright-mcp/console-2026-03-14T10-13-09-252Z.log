@@ -1,0 +1,4 @@
+[      13ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1163
+[  314014ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1163
+[  314939ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1163
+[  314940ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_RESET @ http://localhost:8000/api/events:0

@@ -1,0 +1,311 @@
+[     547ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8181/favicon.ico:0
+[     558ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/sm/sensors:0
+[   19322ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[   19322ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[   24323ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[   24323ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[   29321ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[   29322ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[   34321ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[   34322ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[   39322ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[   39322ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[   44322ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[   44322ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[   49320ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[   49320ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[   54323ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[   54324ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[   59323ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[   59323ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[   64326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[   64327ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[   69323ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[   69323ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[   74325ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[   74325ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[   79325ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[   79326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[   84325ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[   84326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[   89322ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[   89323ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[   94321ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[   94321ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[   99326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[   99326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  104326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  104326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  109325ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  109325ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  114325ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  114325ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  119321ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  119321ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  124329ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  124329ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  129327ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  129327ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  134326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  134327ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  139326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  139326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  144325ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  144325ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  149326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  149327ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  154326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  154326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  159325ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  159325ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  164322ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  164322ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  169326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  169326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  174325ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  174325ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  179328ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  179328ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  184328ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  184328ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  189326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  189326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  194327ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  194327ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  199328ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  199328ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  204321ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  204321ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  209326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  209326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  214327ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  214328ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  219326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  219327ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  224328ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  224328ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  229328ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  229328ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  234328ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  234329ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  239326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  239326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  244326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  244326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  249326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  249327ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  254321ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  254321ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  259327ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  259327ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  264327ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  264327ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  269325ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  269326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  274325ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  274326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  279327ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  279327ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  284328ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  284328ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  289327ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  289327ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  294325ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  294325ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  299325ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  299326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  304326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  304326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  309326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  309326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  314330ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  314330ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  319327ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  319327ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  324352ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  324352ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  329326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  329326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  334328ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  334329ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  339326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  339326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  344322ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  344322ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  349321ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  349322ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  354325ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  354326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  359327ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  359328ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  364325ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  364325ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  369326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  369327ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  374326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  374326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  379326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  379326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  384326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  384326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  389323ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  389323ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  394327ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  394327ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  399327ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  399327ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  404326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  404326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  409326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  409326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  414325ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  414325ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  419326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  419326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  424325ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  424325ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  429326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  429326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  434323ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  434323ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  439325ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  439325ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  444324ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  444324ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  449325ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  449326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  454321ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  454321ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  459326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  459326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  464325ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  464326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  469326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  469326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  474327ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  474327ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  479327ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  479327ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  484324ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  484324ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  489326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  489327ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  494324ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  494325ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  499327ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  499327ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  504327ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  504327ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  509325ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  509325ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  514326ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  514326ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  519323ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  519323ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  524323ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  524324ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287
+[  529327ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8181/api/launchers/623413ff/status:0
+[  529328ms] [WARNING] Launcher localhost:9999: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8181/static/js/app.js:10283:23) @ http://localhost:8181/static/js/app.js:10287

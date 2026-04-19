@@ -125,7 +125,35 @@ func TestSnapshot_emptyIOStillReturns(t *testing.T) {
 	if len(s.Inputs) != 0 || len(s.Outputs) != 0 {
 		t.Errorf("expected empty io, got in=%d out=%d", len(s.Inputs), len(s.Outputs))
 	}
+	if s.Inputs == nil {
+		t.Errorf("expected non-nil empty Inputs slice, got nil")
+	}
+	if s.Outputs == nil {
+		t.Errorf("expected non-nil empty Outputs slice, got nil")
+	}
 	if v, ok := s.Variables["Counter"].(float64); !ok || v != 42 {
 		t.Errorf("Counter: %v", s.Variables["Counter"])
+	}
+}
+
+func TestSnapshot_deterministicOrder(t *testing.T) {
+	body := `{"X":{"io":{"in":{"c":{"id":3,"value":1},"a":{"id":1,"value":1},"b":{"id":2,"value":1}},"out":{}}}}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv.URL)
+	for i := 0; i < 5; i++ {
+		s, err := c.Snapshot(context.Background(), "srv-1", "X")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(s.Inputs) != 3 {
+			t.Fatalf("expected 3 inputs, got %d", len(s.Inputs))
+		}
+		if s.Inputs[0].ID != 1 || s.Inputs[1].ID != 2 || s.Inputs[2].ID != 3 {
+			t.Errorf("not sorted by ID: %+v", s.Inputs)
+		}
 	}
 }

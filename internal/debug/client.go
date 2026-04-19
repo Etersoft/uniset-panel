@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"time"
 )
 
@@ -112,12 +113,27 @@ func adaptDump(serverID, objectName string, raw *rawDump) *Snapshot {
 	if s.Statistics == nil {
 		s.Statistics = map[string]any{}
 	}
+	// Initialize slices to non-nil empty slices for deterministic JSON marshaling.
+	s.Inputs = make([]Port, 0, len(raw.IO.In))
+	s.Outputs = make([]Port, 0, len(raw.IO.Out))
+	s.Timers = []Timer{}
+
 	for name, p := range raw.IO.In {
 		s.Inputs = append(s.Inputs, Port{ID: p.ID, Name: name, Value: p.Value})
 	}
+	// Sort inputs by ID for deterministic order (map iteration is non-deterministic).
+	sort.Slice(s.Inputs, func(i, j int) bool {
+		return s.Inputs[i].ID < s.Inputs[j].ID
+	})
+
 	for name, p := range raw.IO.Out {
 		s.Outputs = append(s.Outputs, Port{ID: p.ID, Name: name, Value: p.Value})
 	}
+	// Sort outputs by ID for deterministic order.
+	sort.Slice(s.Outputs, func(i, j int) bool {
+		return s.Outputs[i].ID < s.Outputs[j].ID
+	})
+
 	for key, rawMsg := range raw.Timers {
 		if key == "count" {
 			continue
@@ -134,5 +150,10 @@ func adaptDump(serverID, objectName string, raw *rawDump) *Snapshot {
 			Tick:       rt.Tick,
 		})
 	}
+	// Sort timers by ID for deterministic order.
+	sort.Slice(s.Timers, func(i, j int) bool {
+		return s.Timers[i].ID < s.Timers[j].ID
+	})
+
 	return s
 }

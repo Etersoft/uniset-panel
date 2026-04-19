@@ -1,0 +1,514 @@
+[      10ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1150
+[   90139ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1150
+[   91169ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1150
+[   91170ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[   93094ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1150
+[   93094ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[   95047ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[   97220ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1150
+[   97221ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  100046ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  105052ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  105870ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1150
+[  105871ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  110052ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  115052ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  120052ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  123147ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1150
+[  123147ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  125046ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  130054ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  135048ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  140053ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  145052ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  150053ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  152435ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1150
+[  152435ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  155047ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  160054ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  165048ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  170053ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  175049ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  180048ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  181879ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1150
+[  181879ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  185051ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  190053ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  195048ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  200052ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  205052ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  210054ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  210797ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1150
+[  210798ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  215053ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  220051ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  225053ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  230053ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  235054ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  240051ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  243214ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1150
+[  243214ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  245048ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  250054ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  255048ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  260050ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  265052ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  270053ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  270582ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1150
+[  270582ms] [WARNING] SSE: Превышено количество попыток, переход на polling @ http://localhost:8000/static/js/app.js:1173
+[  270583ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events?token=admin:0
+[  271585ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  271585ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  271586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  271586ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  272587ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  272587ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  272587ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  272587ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  273586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  273586ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  273586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  273586ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  274584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  274584ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  274584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  274584ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  275049ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  275586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  275587ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  275587ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  275587ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  276584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  276585ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11815:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11822:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11870:28)
+    at http://localhost:8000/static/js/app.js:1191:9 @ http://localhost:8000/static/js/app.js:11873
+[  276585ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  276585ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  276585ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  276585ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  277585ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  277585ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  277586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  277586ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  278586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  278586ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  278587ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  278587ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  279585ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  279585ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  279586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  279586ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  280046ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  280586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  280586ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  280586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  280586ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  281585ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  281585ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  281585ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  281585ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  282587ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  282587ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11815:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11822:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11870:28)
+    at http://localhost:8000/static/js/app.js:1191:9 @ http://localhost:8000/static/js/app.js:11873
+[  282587ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  282587ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  282588ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  282588ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  283586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  283586ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  283586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  283586ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  284585ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  284585ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  284585ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  284585ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  285048ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  285585ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  285585ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  285586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  285586ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  286585ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  286585ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  286586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  286586ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  287586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  287586ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  287587ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  287587ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  288586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  288586ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11815:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11822:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11870:28)
+    at http://localhost:8000/static/js/app.js:1191:9 @ http://localhost:8000/static/js/app.js:11873
+[  288587ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  288587ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  288587ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  288587ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  289585ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  289585ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  289585ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  289585ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  290047ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  290586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  290587ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  290587ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  290587ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  291585ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  291586ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  291586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  291586ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  292585ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  292585ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  292586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  292586ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  293586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  293586ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  293586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  293586ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  294585ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  294585ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11815:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11822:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11870:28)
+    at http://localhost:8000/static/js/app.js:1191:9 @ http://localhost:8000/static/js/app.js:11873
+[  294585ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  294585ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  294585ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  294585ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  295047ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  295584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  295585ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  295585ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  295585ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  296585ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  296585ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  296586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  296586ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  297584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  297584ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  297584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  297584ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  298584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  298584ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  298584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  298584ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  299585ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  299585ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  299586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  299586ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  300046ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  300586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  300587ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11815:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11822:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11870:28)
+    at http://localhost:8000/static/js/app.js:1191:9 @ http://localhost:8000/static/js/app.js:11873
+[  300587ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  300587ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  300589ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  300589ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  300590ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/version:0
+[  301584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  301584ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  301584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  301584ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  302584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  302584ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  302584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  302584ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  303584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  303584ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  303584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  303584ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  304584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  304584ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  304584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  304584ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  305046ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  305584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  305584ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  305584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  305584ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  306584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/servers:0
+[  306584ms] [ERROR] Error обновления списка объектов: TypeError: Failed to fetch
+    at fetchServers (http://localhost:8000/static/js/app.js:11815:28)
+    at fetchObjects (http://localhost:8000/static/js/app.js:11822:31)
+    at refreshObjectsList (http://localhost:8000/static/js/app.js:11870:28)
+    at http://localhost:8000/static/js/app.js:1191:9 @ http://localhost:8000/static/js/app.js:11873
+[  306584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  306584ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  306584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  306584ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  307584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  307584ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  307584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  307584ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  308586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  308586ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  308587ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  308587ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  309584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  309584ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  309584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  309584ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  310047ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  310586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  310586ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558
+[  310586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  310586ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  311584ms] [ERROR] Failed to load resource: net::ERR_EMPTY_RESPONSE @ http://localhost:8000/api/objects/SharedMemory/variables/io%3ASensor1_S/history?count=200&server=ee8d9159:0
+[  311584ms] [ERROR] Error обновления графика для io:Sensor1_S: TypeError: Failed to fetch
+    at fetchVariableHistory (http://localhost:8000/static/js/app.js:11919:28)
+    at updateChart (http://localhost:8000/static/js/app.js:13985:31)
+    at http://localhost:8000/static/js/app.js:1209:27 @ http://localhost:8000/static/js/app.js:14010
+[  311584ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_RESET @ http://localhost:8000/api/objects/SharedMemory?server=ee8d9159:0
+[  311584ms] [ERROR] Error загрузки ee8d9159:SharedMemory: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:11889:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:13547:28)
+    at http://localhost:8000/static/js/app.js:1198:23 @ http://localhost:8000/static/js/app.js:13558

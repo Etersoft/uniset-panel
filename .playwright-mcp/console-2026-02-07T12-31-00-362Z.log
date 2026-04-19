@@ -1,0 +1,13 @@
+[       9ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1244
+[   95852ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/objects/SharedMemory?server=bcbfb714:0
+[   95852ms] [ERROR] Error открытия вкладки SharedMemory: Error: Failed to load object data
+    at fetchObjectData (http://localhost:8000/static/js/app.js:12305:29)
+    at async openObjectTab (http://localhost:8000/static/js/app.js:13581:22) @ http://localhost:8000/static/js/app.js:13588
+[   97315ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/objects/IONotifyController?server=bcbfb714:0
+[   97315ms] [ERROR] Error открытия вкладки IONotifyController: Error: Failed to load object data
+    at fetchObjectData (http://localhost:8000/static/js/app.js:12305:29)
+    at async openObjectTab (http://localhost:8000/static/js/app.js:13581:22) @ http://localhost:8000/static/js/app.js:13588
+[   98074ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/objects/MBTCPMaster1?server=864153d2:0
+[   98075ms] [ERROR] Error открытия вкладки MBTCPMaster1: Error: Failed to load object data
+    at fetchObjectData (http://localhost:8000/static/js/app.js:12305:29)
+    at async openObjectTab (http://localhost:8000/static/js/app.js:13581:22) @ http://localhost:8000/static/js/app.js:13588

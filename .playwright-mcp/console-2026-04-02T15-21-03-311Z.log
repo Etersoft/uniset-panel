@@ -1,0 +1,12 @@
+[     316ms] [LOG] Control: Token loaded from localStorage @ http://localhost:8000/static/js/app.js:287
+[     317ms] [LOG] SSE: Подключение к /api/events?token=admin @ http://localhost:8000/static/js/app.js:756
+[     320ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o @ http://localhost:8000/:0
+[     327ms] [LOG] SSE: Соединение открыто @ http://localhost:8000/static/js/app.js:1193
+[     329ms] [LOG] SSE: Подключено, poll interval: 1000 ms, smEnabled: true @ http://localhost:8000/static/js/app.js:770
+[     348ms] [LOG] Polling: Отключение fallback режима @ http://localhost:8000/static/js/app.js:1233
+[     348ms] [LOG] App config loaded: {controlsEnabled: true, ioncUISensorsFilter: false, opcuaUISensorsFilter: false} @ http://localhost:8000/static/js/app.js:15371
+[     350ms] [LOG] Sidebar: 1 groups loaded @ http://localhost:8000/static/js/app.js:15404
+[     375ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/favicon.ico:0
+[     379ms] [LOG] Список объектов обновлён @ http://localhost:8000/static/js/app.js:11883
+[     441ms] [LOG] Загружено 5154 сенсоров @ http://localhost:8000/static/js/app.js:11979
+[    1348ms] [LOG] SSE: Переподписка всех вкладок после переподключения @ http://localhost:8000/static/js/app.js:1332

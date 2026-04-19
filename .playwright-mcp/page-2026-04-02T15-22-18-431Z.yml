@@ -1,0 +1,116 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - heading "UniSet Panel v0.1.2" [level=1] [ref=e4]
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - button "Objects" [ref=e7] [cursor=pointer]:
+          - img [ref=e8]
+          - generic [ref=e11]: Objects
+        - button "Dashboard" [ref=e12] [cursor=pointer]:
+          - img [ref=e13]
+          - generic [ref=e18]: Dashboard
+        - button "Journals" [ref=e19] [cursor=pointer]:
+          - img [ref=e20]
+          - generic [ref=e23]: Journals
+      - generic "Server polling interval" [ref=e24]:
+        - generic [ref=e25]: "Poll:"
+        - generic [ref=e26]:
+          - button "1s" [ref=e27] [cursor=pointer]
+          - button "5s" [ref=e28] [cursor=pointer]
+          - button "10s" [ref=e29] [cursor=pointer]
+          - button "30s" [ref=e30] [cursor=pointer]
+          - button "1m" [ref=e31] [cursor=pointer]
+          - button "5m" [ref=e32] [cursor=pointer]
+      - generic "Connected via Server-Sent Events" [ref=e33]:
+        - generic [ref=e35]: SSE · 06:22:18 PM
+      - generic [ref=e36]:
+        - generic [ref=e37]: 🔒
+        - generic [ref=e38]: Read-only
+        - button "Take" [ref=e39] [cursor=pointer]
+      - generic [ref=e40]:
+        - generic [ref=e42]: Rec
+        - button "Record" [ref=e43] [cursor=pointer]
+        - button "Export data" [ref=e45] [cursor=pointer]:
+          - img [ref=e46]
+  - generic [ref=e49]:
+    - complementary [ref=e50]:
+      - generic [ref=e51]:
+        - heading "Navigation" [level=2] [ref=e52]
+        - generic [ref=e53]:
+          - button "Refresh" [ref=e54] [cursor=pointer]:
+            - img [ref=e55]
+          - button "Clear cache (LocalStorage)" [ref=e58] [cursor=pointer]:
+            - img [ref=e59]
+          - button "Collapse panel" [ref=e62] [cursor=pointer]:
+            - img [ref=e63]
+      - generic [ref=e67]:
+        - generic [ref=e68] [cursor=pointer]:
+          - img [ref=e69]
+          - generic [ref=e71]: "18"
+        - list [ref=e72]:
+          - listitem [ref=e73] [cursor=pointer]:
+            - generic [ref=e75]: Obj
+            - generic [ref=e76]: UniSetActivator
+          - listitem [ref=e77] [cursor=pointer]:
+            - generic [ref=e79]: Obj
+            - generic [ref=e80]: TestProc
+          - listitem [ref=e81] [cursor=pointer]:
+            - generic [ref=e83]: Obj
+            - generic [ref=e84]: ControlProc
+          - listitem [ref=e85] [cursor=pointer]:
+            - generic [ref=e87]: Obj
+            - generic [ref=e88]: LogicProc
+          - listitem [ref=e89] [cursor=pointer]:
+            - generic [ref=e91]: Obj
+            - generic [ref=e92]: MonitorProc
+          - listitem [ref=e93] [cursor=pointer]:
+            - generic [ref=e95]: Obj
+            - generic [ref=e96]: StorageProc
+          - listitem [ref=e97] [cursor=pointer]:
+            - generic [ref=e99]: Obj
+            - generic [ref=e100]: SharedMemory
+          - listitem [ref=e101] [cursor=pointer]:
+            - generic [ref=e103]: Obj
+            - generic [ref=e104]: OPCUAClient1
+          - listitem [ref=e105] [cursor=pointer]:
+            - generic [ref=e107]: Obj
+            - generic [ref=e108]: MBTCPMaster1
+          - listitem [ref=e109] [cursor=pointer]:
+            - generic [ref=e111]: Obj
+            - generic [ref=e112]: MBTCPSlave1
+          - listitem [ref=e113] [cursor=pointer]:
+            - generic [ref=e115]: Obj
+            - generic [ref=e116]: OPCUAServer1
+          - listitem [ref=e117] [cursor=pointer]:
+            - generic [ref=e119]: Obj
+            - generic [ref=e120]: UNetExchange
+          - listitem [ref=e121] [cursor=pointer]:
+            - generic [ref=e123]: Obj
+            - generic [ref=e124]: UWebSocketGate
+          - listitem [ref=e125] [cursor=pointer]:
+            - generic [ref=e126]: Ovw
+            - generic [ref=e127]: System Overview
+          - listitem [ref=e128] [cursor=pointer]:
+            - generic [ref=e129]: Lnc
+            - generic [ref=e130]: mock-launcher:8111
+          - listitem [ref=e131] [cursor=pointer]:
+            - generic [ref=e132]: Dsh
+            - generic [ref=e133]: Diesel Generator Control
+          - listitem [ref=e134] [cursor=pointer]:
+            - generic [ref=e135]: Dsh
+            - generic [ref=e136]: System Overview
+          - listitem [ref=e137] [cursor=pointer]:
+            - generic [ref=e138]: Jrn
+            - generic [ref=e139]: TestJournal
+    - main [ref=e140]:
+      - generic [ref=e141]:
+        - button "Overview http://mock-uniset:9393 System Overview ×" [ref=e145] [cursor=pointer]:
+          - generic [ref=e146]: Overview
+          - generic [ref=e147]: http://mock-uniset:9393
+          - text: System Overview
+          - generic [ref=e148]: ×
+        - generic [ref=e151]:
+          - button "⛶" [ref=e152] [cursor=pointer]
+          - button "✥" [ref=e153] [cursor=pointer]
+          - button "▬" [ref=e154] [cursor=pointer]
+          - button "☰ Objects ▾" [ref=e156] [cursor=pointer]

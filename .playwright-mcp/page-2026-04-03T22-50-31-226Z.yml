@@ -1,0 +1,101 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - heading "UniSet Panel v0.1.3" [level=1] [ref=e4]
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - button "Objects" [ref=e7] [cursor=pointer]:
+          - img [ref=e8]
+          - generic [ref=e11]: Objects
+        - button "Dashboard" [ref=e12] [cursor=pointer]:
+          - img [ref=e13]
+          - generic [ref=e18]: Dashboard
+      - generic "Server polling interval" [ref=e19]:
+        - generic [ref=e20]: "Poll:"
+        - generic [ref=e21]:
+          - button "100ms" [ref=e22] [cursor=pointer]
+          - button "300ms" [ref=e23] [cursor=pointer]
+          - button "500ms" [ref=e24] [cursor=pointer]
+          - button "1s" [ref=e25] [cursor=pointer]
+          - button "5s" [ref=e26] [cursor=pointer]
+          - button "10s" [ref=e27] [cursor=pointer]
+          - button "30s" [ref=e28] [cursor=pointer]
+          - button "1m" [ref=e29] [cursor=pointer]
+          - button "5m" [ref=e30] [cursor=pointer]
+      - generic "Connected via Server-Sent Events" [ref=e31]:
+        - generic [ref=e33]: SSE · 01:50:31 AM
+      - generic [ref=e34]:
+        - generic [ref=e35]: 🔒
+        - generic [ref=e36]: Read-only
+        - button "Take" [ref=e37] [cursor=pointer]
+  - generic [ref=e38]:
+    - complementary [ref=e39]:
+      - generic [ref=e40]:
+        - heading "Navigation" [level=2] [ref=e41]
+        - generic [ref=e42]:
+          - button "Refresh" [ref=e43] [cursor=pointer]:
+            - img [ref=e44]
+          - button "Clear cache (LocalStorage)" [ref=e47] [cursor=pointer]:
+            - img [ref=e48]
+          - button "Collapse panel" [ref=e51] [cursor=pointer]:
+            - img [ref=e52]
+      - generic [ref=e56]:
+        - generic [ref=e57] [cursor=pointer]:
+          - img [ref=e58]
+          - generic [ref=e60]: "18"
+        - list [ref=e61]:
+          - listitem [ref=e62] [cursor=pointer]:
+            - generic [ref=e64]: Obj
+            - generic [ref=e65]: UniSetActivator
+          - listitem [ref=e66] [cursor=pointer]:
+            - generic [ref=e68]: Obj
+            - generic [ref=e69]: TestProc
+          - listitem [ref=e70] [cursor=pointer]:
+            - generic [ref=e72]: Obj
+            - generic [ref=e73]: ControlProc
+          - listitem [ref=e74] [cursor=pointer]:
+            - generic [ref=e76]: Obj
+            - generic [ref=e77]: LogicProc
+          - listitem [ref=e78] [cursor=pointer]:
+            - generic [ref=e80]: Obj
+            - generic [ref=e81]: MonitorProc
+          - listitem [ref=e82] [cursor=pointer]:
+            - generic [ref=e84]: Obj
+            - generic [ref=e85]: StorageProc
+          - listitem [ref=e86] [cursor=pointer]:
+            - generic [ref=e88]: Obj
+            - generic [ref=e89]: SharedMemory
+          - listitem [ref=e90] [cursor=pointer]:
+            - generic [ref=e92]: Obj
+            - generic [ref=e93]: OPCUAClient1
+          - listitem [ref=e94] [cursor=pointer]:
+            - generic [ref=e96]: Obj
+            - generic [ref=e97]: MBTCPMaster1
+          - listitem [ref=e98] [cursor=pointer]:
+            - generic [ref=e100]: Obj
+            - generic [ref=e101]: MBTCPSlave1
+          - listitem [ref=e102] [cursor=pointer]:
+            - generic [ref=e104]: Obj
+            - generic [ref=e105]: OPCUAServer1
+          - listitem [ref=e106] [cursor=pointer]:
+            - generic [ref=e108]: Obj
+            - generic [ref=e109]: UNetExchange
+          - listitem [ref=e110] [cursor=pointer]:
+            - generic [ref=e112]: Obj
+            - generic [ref=e113]: UWebSocketGate
+          - listitem [ref=e114] [cursor=pointer]:
+            - generic [ref=e115]: Ovw
+            - generic [ref=e116]: System Overview
+          - listitem [ref=e117] [cursor=pointer]:
+            - generic [ref=e118]: Lnc
+            - generic [ref=e119]: mock-launcher:8111
+          - listitem [ref=e120] [cursor=pointer]:
+            - generic [ref=e121]: Dsh
+            - generic [ref=e122]: Diesel Generator Control
+          - listitem [ref=e123] [cursor=pointer]:
+            - generic [ref=e124]: Dsh
+            - generic [ref=e125]: System Overview
+          - listitem [ref=e126] [cursor=pointer]:
+            - generic [ref=e127]: Jrn
+            - generic [ref=e128]: TestJournal
+    - main [ref=e129]:
+      - generic [ref=e133]: Select an object from the list on the left

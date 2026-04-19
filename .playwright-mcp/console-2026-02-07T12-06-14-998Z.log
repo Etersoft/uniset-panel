@@ -1,0 +1,293 @@
+[      13ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1244
+[   24452ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[   24452ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[   29459ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[   29459ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[   34460ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[   34460ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[   39458ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[   39458ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[   44457ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[   44458ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[   49454ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[   49454ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[   54460ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[   54461ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[   59457ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[   59457ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[   64462ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[   64462ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[   69458ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[   69458ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[   74457ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[   74457ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[   79454ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[   79456ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[   84462ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[   84463ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[   89461ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[   89461ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[   94461ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[   94461ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[   99453ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[   99454ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  104453ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  104453ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  109453ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  109454ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  114453ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  114453ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  119459ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  119459ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  124455ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  124455ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  129684ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/api/sm/sensors/DG1_Power/history?limit=200:0
+[  129691ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/api/sm/sensors/DG2_Power/history?limit=200:0
+[  129723ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  129723ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  131160ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/api/sm/sensors/Sensor15099_S/history?limit=200:0
+[  131172ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/api/sm/sensors/AI70_S/history?limit=200:0
+[  134453ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  134453ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  139453ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  139453ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  144459ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  144459ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  149457ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  149458ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  154459ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  154459ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  159457ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  159457ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  164458ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  164458ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  169454ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  169454ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  174458ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  174458ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  179458ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  179458ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  184454ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  184454ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  189456ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  189457ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  194460ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  194461ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  199461ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  199461ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  204457ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  204458ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  209458ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  209458ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  214455ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  214455ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  219457ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  219458ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  224457ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  224457ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  229460ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  229461ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  234458ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  234459ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  239458ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  239458ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  244459ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  244460ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  249458ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  249458ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  254457ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  254457ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  259458ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  259459ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  264459ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  264459ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  269454ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  269454ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  274458ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  274459ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  279459ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  279459ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  284458ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  284459ms] [WARNING] Launcher Основная нода: failed to load status: Error: HTTP 502
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10031:23) @ http://localhost:8000/static/js/app.js:10035
+[  286538ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1244
+[  287596ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1244
+[  287596ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events:0
+[  289450ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  289450ms] [WARNING] Launcher Основная нода: failed to load status: TypeError: Failed to fetch
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10029:32)
+    at http://localhost:8000/static/js/app.js:10024:59 @ http://localhost:8000/static/js/app.js:10035
+[  289497ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1244
+[  289497ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events:0
+[  290049ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  292500ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1244
+[  292501ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events:0
+[  293157ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1244
+[  293158ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events:0
+[  294451ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  294452ms] [WARNING] Launcher Основная нода: failed to load status: TypeError: Failed to fetch
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10029:32)
+    at http://localhost:8000/static/js/app.js:10024:59 @ http://localhost:8000/static/js/app.js:10035
+[  295050ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  296159ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1244
+[  296160ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events:0
+[  299162ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1244
+[  299162ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events:0
+[  299450ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  299450ms] [WARNING] Launcher Основная нода: failed to load status: TypeError: Failed to fetch
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10029:32)
+    at http://localhost:8000/static/js/app.js:10024:59 @ http://localhost:8000/static/js/app.js:10035
+[  300049ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  300553ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1244
+[  300553ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events:0
+[  303555ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1244
+[  303555ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events:0
+[  304450ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  304450ms] [WARNING] Launcher Основная нода: failed to load status: TypeError: Failed to fetch
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10029:32)
+    at http://localhost:8000/static/js/app.js:10024:59 @ http://localhost:8000/static/js/app.js:10035
+[  305050ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  306557ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1244
+[  306557ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events:0
+[  309450ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  309451ms] [WARNING] Launcher Основная нода: failed to load status: TypeError: Failed to fetch
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10029:32)
+    at http://localhost:8000/static/js/app.js:10024:59 @ http://localhost:8000/static/js/app.js:10035
+[  309558ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1244
+[  309558ms] [WARNING] SSE: Превышено количество попыток, переход на polling @ http://localhost:8000/static/js/app.js:1258
+[  309559ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events:0
+[  310049ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  310108ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1244
+[  310108ms] [WARNING] SSE: Превышено количество попыток, переход на polling @ http://localhost:8000/static/js/app.js:1258
+[  310108ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events:0
+[  310561ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/launcher%3Anode1:0
+[  310561ms] [ERROR] Error загрузки launcher:node1: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:12304:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:14017:28)
+    at http://localhost:8000/static/js/app.js:1277:23 @ http://localhost:8000/static/js/app.js:14029
+[  311563ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/launcher%3Anode1:0
+[  311563ms] [ERROR] Error загрузки launcher:node1: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:12304:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:14017:28)
+    at http://localhost:8000/static/js/app.js:1277:23 @ http://localhost:8000/static/js/app.js:14029
+[  312560ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/launcher%3Anode1:0
+[  312560ms] [ERROR] Error загрузки launcher:node1: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:12304:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:14017:28)
+    at http://localhost:8000/static/js/app.js:1277:23 @ http://localhost:8000/static/js/app.js:14029
+[  313109ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1244
+[  313110ms] [WARNING] SSE: Превышено количество попыток, переход на polling @ http://localhost:8000/static/js/app.js:1258
+[  313110ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events:0
+[  313560ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/launcher%3Anode1:0
+[  313560ms] [ERROR] Error загрузки launcher:node1: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:12304:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:14017:28)
+    at http://localhost:8000/static/js/app.js:1277:23 @ http://localhost:8000/static/js/app.js:14029
+[  314450ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  314450ms] [WARNING] Launcher Основная нода: failed to load status: TypeError: Failed to fetch
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10029:32)
+    at http://localhost:8000/static/js/app.js:10024:59 @ http://localhost:8000/static/js/app.js:10035
+[  314561ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/launcher%3Anode1:0
+[  314561ms] [ERROR] Error загрузки launcher:node1: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:12304:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:14017:28)
+    at http://localhost:8000/static/js/app.js:1277:23 @ http://localhost:8000/static/js/app.js:14029
+[  315049ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  315561ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/launcher%3Anode1:0
+[  315561ms] [ERROR] Error загрузки launcher:node1: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:12304:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:14017:28)
+    at http://localhost:8000/static/js/app.js:1277:23 @ http://localhost:8000/static/js/app.js:14029
+[  316111ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1244
+[  316111ms] [WARNING] SSE: Превышено количество попыток, переход на polling @ http://localhost:8000/static/js/app.js:1258
+[  316111ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events:0
+[  316560ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/launcher%3Anode1:0
+[  316560ms] [ERROR] Error загрузки launcher:node1: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:12304:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:14017:28)
+    at http://localhost:8000/static/js/app.js:1277:23 @ http://localhost:8000/static/js/app.js:14029
+[  317560ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/launcher%3Anode1:0
+[  317560ms] [ERROR] Error загрузки launcher:node1: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:12304:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:14017:28)
+    at http://localhost:8000/static/js/app.js:1277:23 @ http://localhost:8000/static/js/app.js:14029
+[  318560ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/launcher%3Anode1:0
+[  318561ms] [ERROR] Error загрузки launcher:node1: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:12304:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:14017:28)
+    at http://localhost:8000/static/js/app.js:1277:23 @ http://localhost:8000/static/js/app.js:14029
+[  319113ms] [WARNING] SSE: Error соединения @ http://localhost:8000/static/js/app.js:1244
+[  319113ms] [WARNING] SSE: Превышено количество попыток, переход на polling @ http://localhost:8000/static/js/app.js:1258
+[  319113ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/events:0
+[  319450ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/nodes/node1/launcher/status:0
+[  319450ms] [WARNING] Launcher Основная нода: failed to load status: TypeError: Failed to fetch
+    at LauncherRenderer.loadStatus (http://localhost:8000/static/js/app.js:10029:32)
+    at http://localhost:8000/static/js/app.js:10024:59 @ http://localhost:8000/static/js/app.js:10035
+[  319560ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/launcher%3Anode1:0
+[  319560ms] [ERROR] Error загрузки launcher:node1: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:12304:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:14017:28)
+    at http://localhost:8000/static/js/app.js:1277:23 @ http://localhost:8000/static/js/app.js:14029
+[  320049ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/recording/status:0
+[  320560ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/launcher%3Anode1:0
+[  320560ms] [ERROR] Error загрузки launcher:node1: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:12304:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:14017:28)
+    at http://localhost:8000/static/js/app.js:1277:23 @ http://localhost:8000/static/js/app.js:14029
+[  321560ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8000/api/objects/launcher%3Anode1:0
+[  321560ms] [ERROR] Error загрузки launcher:node1: TypeError: Failed to fetch
+    at fetchObjectData (http://localhost:8000/static/js/app.js:12304:28)
+    at loadObjectData (http://localhost:8000/static/js/app.js:14017:28)
+    at http://localhost:8000/static/js/app.js:1277:23 @ http://localhost:8000/static/js/app.js:14029
