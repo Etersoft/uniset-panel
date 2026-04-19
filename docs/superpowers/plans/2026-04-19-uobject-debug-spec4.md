@@ -4,7 +4,7 @@
 
 **Goal:** Implement UObject detail panel (Variables / Trends / Message Log tabs) plus Spec 2 backend (trace polling + SSE + proxy endpoints) in a single branch, completing the 4-spec UObject debug visualizer.
 
-**Architecture:** Backend-first (Go): new `internal/debug/` package for snapshot/history proxies, new `internal/trace/` package for trace polling + SSE channel, two new handler files (`handlers_debug.go`, `handlers_trace.go`). Frontend: 5 new modules (`60-detail-*.js`) with per-object tab lifecycle, reusing Spec 3 CustomEvent hooks and trace API. Force/unforce wired through existing `/api/objects/{SM}/ionc/{freeze,unfreeze}`.
+**Architecture:** Backend-first (Go): new `internal/debug/` package with a Snapshot adapter over existing uniset `/<Object>/dump`, new `internal/trace/` package for trace polling + SSE channel, two new handler files (`handlers_debug.go`, `handlers_trace.go`). Frontend: 5 new modules (`60-detail-*.js`) with per-object tab lifecycle, reusing Spec 3 CustomEvent hooks and trace API. Force/unforce wired through existing `/api/objects/{SM}/ionc/{freeze,unfreeze}`. Trends are client-side live buffer only (history deferred to Future Spec 5).
 
 **Tech Stack:** Go 1.25+ (per `go.mod`: `go 1.25.3`; net/http method-prefix routes available since 1.22, PathValue since 1.22, testing/synctest since 1.25), vanilla JS (no ES modules, `ui/concat.go` alphabetical build), Vitest + jsdom (unit), Playwright (E2E in `tests/single/`), Chart.js (already vendored in dashboard).
 
@@ -17,8 +17,8 @@
 ### New files
 
 **Backend (Go):**
-- `internal/debug/types.go` — `Snapshot`, `HistoryPoint`, `History` types; `ErrObjectNotFound`, `ErrUnsupported`.
-- `internal/debug/client.go` — HTTP client to uniset `/debug/snapshot` + `/debug/history`.
+- `internal/debug/types.go` — `Snapshot`, `Port`, `Timer` types; `ErrObjectNotFound`, `ErrUpstream`.
+- `internal/debug/client.go` — HTTP client to uniset `/<Object>/dump` with flatten adapter (no history method — see Future Spec 5 in design doc).
 - `internal/debug/client_test.go` — unit tests (happy, 404, 501, malformed).
 - `internal/trace/types.go` — `dumpEnvelope`, `TraceBatch`, `recordTimeOnly`.
 - `internal/trace/client.go` — HTTP client to uniset `/dump?trace=1`.
@@ -28,7 +28,7 @@
 - `internal/trace/manager.go` — registry `(serverID, objectName) → *TracePoller`.
 - `internal/trace/manager_test.go` — unit tests.
 - `internal/trace/integration_test.go` — end-to-end (fake uniset + real manager + SSE hub + handler).
-- `internal/api/handlers_debug.go` — `HandleSnapshot`, `HandleHistory`.
+- `internal/api/handlers_debug.go` — `HandleSnapshot` (no `HandleHistory`: Trends are client-side; see Future Spec 5 in design doc).
 - `internal/api/handlers_debug_test.go` — handler contract tests.
 - `internal/api/handlers_trace.go` — `HandleTraceEvents`, `HandleTraceEnable`, `HandleTraceDisable`.
 - `internal/api/handlers_trace_test.go` — handler contract tests.
@@ -60,7 +60,7 @@
 - `cmd/server/main.go` — wire `debug.Client` and `trace.Manager` construction into handler init.
 - `ui/static/js/app.js` — regenerated via `cd ui && go run concat.go` after every frontend source change.
 - `ui/static/css/style.css` — detail panel CSS (header, inner-tabs, variables table, trends charts, messagelog rows).
-- `tests/mock-server/server.js` — stubs for `/api/servers/:id/objects/:name/snapshot`, `/history`, `/api/trace/events`, `/api/trace/servers/:s/objects/:o/{enable,disable}`.
+- `tests/mock-server/server.js` — stubs for `/api/servers/:id/objects/:name/snapshot`, `/api/trace/events`, `/api/trace/servers/:s/objects/:o/{enable,disable}`.
 
 ---
 
@@ -68,12 +68,19 @@
 
 These are manual checks. They do not modify code but produce evidence notes (record outputs in `docs/superpowers/plans/2026-04-19-uobject-debug-spec4-phase0-notes.md` as you go) that drive Phase 1 type choices.
 
-### Task 0.1: Verify `/debug/snapshot` envelope shape
+**Design update:** prior draft of this plan referenced `/debug/snapshot`
+and `/debug/history` as uniset endpoints. They do not exist — Spec 1
+added only `/dump?trace=1` + `/trace/enable|disable`. Snapshot data comes
+from the **existing** `/<ObjectName>/dump` endpoint, which already returns
+`io` / `Variables` / `Timers` / `Statistics`. History is not available
+(deferred to Future Spec 5).
+
+### Task 0.1: Verify `/<ObjectName>/dump` envelope shape
 
 **Files:**
 - Create: `docs/superpowers/plans/2026-04-19-uobject-debug-spec4-phase0-notes.md`
 
-- [ ] **Step 1: Run uniset with dispatch-trace branch**
+- [ ] **Step 1: Confirm uniset branch**
 
 ```bash
 cd /home/pv/Projects/uniset-2.x
@@ -81,44 +88,46 @@ git log --oneline | grep "UObject debug dispatch-trace API" | head -1
 # Expected: fc6a0718 (core,codegen): UObject debug dispatch-trace API (Spec 1)
 ```
 
-Build uniset (existing procedure — `./autogen.sh && jmake`). Start any test config with at least one UObject that has inputs/outputs.
+Build uniset if not yet (`./autogen.sh && jmake`). Start any test config with at least one UObject that has inputs/outputs (e.g. testsuite/e2e).
 
-- [ ] **Step 2: Curl snapshot endpoint**
+- [ ] **Step 2: Curl dump endpoint**
 
 ```bash
 # Adjust host:port and <ObjectName> to the running test object.
-curl -s http://localhost:8080/<ObjectName>/debug/snapshot | jq . | head -80
+curl -s "http://localhost:8080/<ObjectName>/dump" | jq . | head -100
 ```
 
 Record the exact JSON structure in `phase0-notes.md`. Specifically note:
-- Is the top level wrapped as `{"<ObjectName>": {...}}` or flat?
-- Field name for variables map — `vars` or something else?
-- Is there a `sensor_map` field mapping `in_*`/`out_*` names to numeric sensor IDs?
-- Is there a `forced` array of sensor IDs?
-- Is there an `sm_object` field carrying the SharedMemory object name?
+- Top level: `{"<ObjectName>": {...}}` wrapper (expected).
+- Sub-keys of the inner object: does it contain `Timers`, `Variables`,
+  `Statistics`, `io` (expected, per Spec 1 design + UObject_SK source)?
+- Shape of `io.in[<name>]` — does each entry have `id` and `value`
+  fields, or a different layout?
+- Shape of `Timers[<id>]` — `id`, `name`, `msec`, `timeleft`, `tick`?
 
 - [ ] **Step 3: Write Phase 0 note**
 
 ```markdown
 # Spec 4 Phase 0 verification notes
 
-## 0.1 /debug/snapshot envelope
+## 0.1 /<ObjectName>/dump envelope
 
 Date: <date>
 Uniset branch: <branch>, commit: <sha>
 
-Top-level wrapper: <yes/no>, key = "<ObjectName>"
-Fields observed:
-- vars: <yes/no, type>
-- sensor_map: <yes/no, type>
-- forced: <yes/no, type>
-- sm_object: <yes/no, type>
-Other fields: <list>
+Top-level wrapper: yes/no, key = "<ObjectName>"
+Top-level keys observed: <comma-separated list, e.g. Timers,Variables,Statistics,io,LogServer>
+
+io.in item shape:   <id/value/name?>
+io.out item shape:  <id/value/name?>
+Timers[<id>] shape: <id/name/msec/timeleft/tick/...>
 
 Decision for Phase 1:
-- debug.Snapshot struct matches observed fields (adjust if needed).
-- If sm_object absent: hardcode "SharedMemory" in client fallback.
-- If sensor_map absent: force/unforce context menu disabled entirely; log as open concern.
+- debug.Snapshot struct field names match observed (adjust adapter
+  code below if uniset uses different keys).
+- If io is empty for the test object — OK, Variables tab will render
+  empty Inputs/Outputs; still need at least one object with non-empty
+  io for full E2E later (Phase 7).
 ```
 
 - [ ] **Step 4: Commit notes**
@@ -126,40 +135,10 @@ Decision for Phase 1:
 ```bash
 cd /home/pv/Projects/uniset-panel
 git add docs/superpowers/plans/2026-04-19-uobject-debug-spec4-phase0-notes.md
-git commit -m "docs(spec4): Phase 0.1 verification — /debug/snapshot envelope"
+git commit -m "docs(spec4): Phase 0.1 verification — /<Object>/dump envelope"
 ```
 
-### Task 0.2: Verify `/debug/history` timestamp unit
-
-- [ ] **Step 1: Curl history endpoint**
-
-```bash
-curl -s "http://localhost:8080/<ObjectName>/debug/history?var=in_<one_of_the_inputs>&depth=10" | jq . | head -40
-```
-
-- [ ] **Step 2: Determine `t` unit**
-
-Check two consecutive points. If `t` values differ by ~500 (poll interval in ms) → milliseconds. If they differ by ~500000 → microseconds. Typical `time_us` in TraceRecord is µs; history may follow same convention.
-
-- [ ] **Step 3: Append to notes**
-
-```markdown
-## 0.2 /debug/history timestamp unit
-
-Response shape: <observed>
-`t` unit: <ms / µs>
-Decision: HistoryPoint.T is int64 <ms/µs>; frontend converts to ms at render
-         (Date.now() is ms; if uniset returns µs, debug.Client divides by 1000).
-```
-
-- [ ] **Step 4: Commit notes**
-
-```bash
-git add docs/superpowers/plans/2026-04-19-uobject-debug-spec4-phase0-notes.md
-git commit -m "docs(spec4): Phase 0.2 verification — /debug/history timestamp unit"
-```
-
-### Task 0.3: Locate Handlers struct
+### Task 0.2: Locate Handlers struct
 
 - [ ] **Step 1: Find struct**
 
@@ -186,249 +165,86 @@ added to this struct, not to new file.
 
 ```bash
 git add docs/superpowers/plans/2026-04-19-uobject-debug-spec4-phase0-notes.md
-git commit -m "docs(spec4): Phase 0.3 verification — Handlers struct location"
+git commit -m "docs(spec4): Phase 0.2 verification — Handlers struct location"
 ```
 
 ---
 
+
 ## Phase 1 — Debug backend (Go)
 
-### Task 1.1: `internal/debug/types.go`
+**Scope change:** snapshot endpoint proxies uniset `/<ObjectName>/dump`
+(existing) and **adapts** the response to a flat Spec 4 schema. No history
+endpoint in Spec 4 (Trends are client-side; see Future Spec 5 in design doc).
+
+### Task 1.1: `internal/debug/types.go` + `internal/debug/client.go` — Snapshot adapter + tests
 
 **Files:**
 - Create: `internal/debug/types.go`
+- Create: `internal/debug/client.go`
+- Create: `internal/debug/client_test.go`
 
-- [ ] **Step 1: Write type definitions**
+- [ ] **Step 1: Write types**
 
 Create `internal/debug/types.go`:
 
 ```go
-// Package debug provides HTTP proxy client and types for uniset
-// /debug/* endpoints (snapshot, history). Used by uniset-panel
-// handlers to surface per-UObject state to the browser detail panel.
+// Package debug provides a Snapshot adapter over uniset
+// /<ObjectName>/dump. Spec 4: no history method (deferred to Spec 5).
 package debug
 
 import "errors"
 
-// Snapshot is the envelope returned by uniset-panel's
-// /api/servers/{id}/objects/{name}/snapshot endpoint, adapted from
-// uniset /debug/snapshot. Fields reflect Phase 0.1 observations;
-// adjust if uniset emits different names.
+// Port is one input or output (from uniset io.in[*] / io.out[*]).
+type Port struct {
+	ID    int64 `json:"id"`
+	Name  string `json:"name"`
+	Value any   `json:"value"`
+}
+
+// Timer mirrors uniset Timers[<id>].
+type Timer struct {
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	IntervalMS int64  `json:"interval_ms"`
+	TimeLeft   int64  `json:"time_left"`
+	Tick       int64  `json:"tick"`
+}
+
+// Snapshot is the flat envelope returned to frontend.
 type Snapshot struct {
-	Object    string            `json:"object"`
-	Server    string            `json:"server"`
-	Vars      map[string]any    `json:"vars"`
-	SensorMap map[string]int64  `json:"sensor_map"`
-	Forced    []int64           `json:"forced"`
-	SMObject  string            `json:"sm_object"`
-}
-
-// HistoryPoint is a single time-series sample. T is in milliseconds
-// since epoch on the client side of this struct; the HTTP client
-// in client.go converts uniset's native unit (see Phase 0.2) to ms.
-type HistoryPoint struct {
-	T int64 `json:"t"`
-	V any   `json:"v"`
-}
-
-// History is the envelope for /history responses.
-type History struct {
-	Var    string         `json:"var"`
-	Points []HistoryPoint `json:"points"`
+	Object     string         `json:"object"`
+	Server     string         `json:"server"`
+	Inputs     []Port         `json:"inputs"`
+	Outputs    []Port         `json:"outputs"`
+	Variables  map[string]any `json:"variables"`
+	Timers     []Timer        `json:"timers"`
+	Statistics map[string]any `json:"statistics"`
+	SMObject   string         `json:"sm_object"`
 }
 
 var (
-	// ErrObjectNotFound: uniset returned 404 for the requested object.
 	ErrObjectNotFound = errors.New("debug: object not found")
-	// ErrUnsupported: uniset is too old; no /debug/* endpoints available.
-	ErrUnsupported = errors.New("debug: uniset does not support /debug API")
-	// ErrUpstream: non-retryable protocol error (malformed JSON etc).
-	ErrUpstream = errors.New("debug: upstream protocol error")
+	ErrUpstream       = errors.New("debug: upstream protocol error")
 )
 ```
 
-- [ ] **Step 2: Verify it compiles**
+- [ ] **Step 2: Write failing test**
+
+Create `internal/debug/client_test.go` with test cases: `TestSnapshot_happy` (full envelope), `TestSnapshot_notFound` (404 → ErrObjectNotFound), `TestSnapshot_objectKeyMissing` (200 but wrong top-level key → ErrObjectNotFound), `TestSnapshot_malformedJSON` (invalid JSON → ErrUpstream), `TestSnapshot_emptyIOStillReturns` (io.in/out empty → success with empty arrays). Use `httptest.NewServer` + a `resolverFn` type that implements `ServerResolver` by parsing the test server URL.
+
+(Full test code: see spec design doc §"internal/debug/ (Spec 4 additions)".
+Total ~150 lines; the 5 test functions use the same `httptest` pattern as existing `internal/api/*_test.go` files.)
+
+Run to verify it fails:
 
 ```bash
 cd /home/pv/Projects/uniset-panel
-go build -mod=vendor ./internal/debug/...
-# Expected: no output (success)
+go test -mod=vendor ./internal/debug/... 2>&1 | tail -10
+# Expected: FAIL — Client not defined
 ```
 
-- [ ] **Step 3: Commit**
-
-```bash
-git add internal/debug/types.go
-git commit -m "feat(debug): Snapshot/History types + sentinel errors"
-```
-
-### Task 1.2: `internal/debug/client.go` — Snapshot + test
-
-**Files:**
-- Create: `internal/debug/client.go`
-- Create: `internal/debug/client_test.go`
-
-- [ ] **Step 1: Write failing test first**
-
-Create `internal/debug/client_test.go`:
-
-```go
-package debug
-
-import (
-	"context"
-	"encoding/json"
-	"errors"
-	"net/http"
-	"net/http/httptest"
-	"testing"
-	"time"
-)
-
-type fakeResolver struct {
-	hostport string
-}
-
-func (f *fakeResolver) GetServerAddress(_ string) (string, int, error) {
-	// hostport format "127.0.0.1:12345"
-	var host string
-	var port int
-	if _, err := fmtSscanf(f.hostport, "%s:%d", &host, &port); err != nil {
-		return "", 0, err
-	}
-	return host, port, nil
-}
-
-// fmtSscanf is a thin wrapper to avoid pulling fmt into the package
-// top-level imports in a style-jarring way; real code uses fmt.
-func fmtSscanf(s, format string, args ...any) (int, error) {
-	return 0, errors.New("use fmt.Sscanf in real client.go")
-}
-
-func TestSnapshot_happy(t *testing.T) {
-	body := `{"DG_Control":{"vars":{"in_Temp":75,"out_Speed":1500,"Counter":3},"sensor_map":{"in_Temp":101,"out_Speed":205},"forced":[101],"sm_object":"SharedMemory"}}`
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/DG_Control/debug/snapshot" {
-			t.Errorf("unexpected path: %s", r.URL.Path)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(body))
-	}))
-	defer srv.Close()
-
-	c := newTestClient(srv.URL)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	s, err := c.Snapshot(ctx, "srv-1", "DG_Control")
-	if err != nil {
-		t.Fatalf("Snapshot: %v", err)
-	}
-	if s.Object != "DG_Control" || s.Server != "srv-1" {
-		t.Errorf("object/server mismatch: %+v", s)
-	}
-	if v, ok := s.Vars["in_Temp"].(float64); !ok || v != 75 {
-		t.Errorf("in_Temp: got %v", s.Vars["in_Temp"])
-	}
-	if s.SensorMap["in_Temp"] != 101 {
-		t.Errorf("sensor_map[in_Temp]: got %d", s.SensorMap["in_Temp"])
-	}
-	if len(s.Forced) != 1 || s.Forced[0] != 101 {
-		t.Errorf("forced: got %+v", s.Forced)
-	}
-	if s.SMObject != "SharedMemory" {
-		t.Errorf("sm_object: got %q", s.SMObject)
-	}
-}
-
-func TestSnapshot_notFound(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(404)
-		w.Write([]byte(`{"error":"object not found"}`))
-	}))
-	defer srv.Close()
-
-	c := newTestClient(srv.URL)
-	_, err := c.Snapshot(context.Background(), "srv-1", "NoSuch")
-	if !errors.Is(err, ErrObjectNotFound) {
-		t.Errorf("expected ErrObjectNotFound, got %v", err)
-	}
-}
-
-func TestSnapshot_objectKeyMissing(t *testing.T) {
-	// Uniset returned 200 but the envelope does not contain the
-	// expected top-level object key (could happen on coding bug).
-	body := `{"OtherObject":{"vars":{}}}`
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Write([]byte(body))
-	}))
-	defer srv.Close()
-
-	c := newTestClient(srv.URL)
-	_, err := c.Snapshot(context.Background(), "srv-1", "DG_Control")
-	if !errors.Is(err, ErrObjectNotFound) {
-		t.Errorf("expected ErrObjectNotFound, got %v", err)
-	}
-}
-
-func TestSnapshot_malformedJSON(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Write([]byte(`{bad json`))
-	}))
-	defer srv.Close()
-
-	c := newTestClient(srv.URL)
-	_, err := c.Snapshot(context.Background(), "srv-1", "DG_Control")
-	if !errors.Is(err, ErrUpstream) {
-		t.Errorf("expected ErrUpstream, got %v", err)
-	}
-	// Sanity: err message wraps the underlying JSON error
-	if !hasSubstring(err.Error(), "invalid") && !hasSubstring(err.Error(), "json") {
-		t.Errorf("error should reference JSON failure: %v", err)
-	}
-}
-
-// newTestClient wires a Client to a single httptest server URL by
-// hardcoding the resolver to that URL's host:port.
-func newTestClient(urlStr string) *Client {
-	// Parse "http://127.0.0.1:PORT" into host, port
-	// (fmt.Sscanf handles this in real code; use net/url for safety)
-	// Note: kept inline in test for clarity.
-	return &Client{http: defaultHTTPClient(), resolver: urlResolver(urlStr)}
-}
-
-func urlResolver(urlStr string) ServerResolver {
-	return resolverFunc(func(_ string) (string, int, error) {
-		u, err := parseURL(urlStr)
-		if err != nil {
-			return "", 0, err
-		}
-		return u.Hostname(), u.Port(), nil
-	})
-}
-
-func hasSubstring(s, sub string) bool { return stringContains(s, sub) }
-
-// The following helpers are defined in client.go test support
-// section to keep this test file focused. They are NOT exported.
-type resolverFunc func(string) (string, int, error)
-
-func (f resolverFunc) GetServerAddress(id string) (string, int, error) { return f(id) }
-
-// parseURL and stringContains helpers referenced above are provided
-// by the client.go companion (to keep test dependencies minimal).
-var _ = json.Unmarshal // silence unused import when not needed
-```
-
-(Note: the file includes several helpers referenced but not defined here — they will be added in `client.go` in the next step.)
-
-- [ ] **Step 2: Run test — expect failure**
-
-```bash
-go test -mod=vendor ./internal/debug/... 2>&1 | tail -20
-# Expected: FAIL (type Client not defined, parseURL not defined, etc.)
-```
-
-- [ ] **Step 3: Write `client.go` with Snapshot + helpers**
+- [ ] **Step 3: Write `client.go`**
 
 Create `internal/debug/client.go`:
 
@@ -438,49 +254,60 @@ package debug
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 )
 
-// ServerResolver resolves a uniset-panel server ID to a host:port
-// address reachable by the debug HTTP client. The interface is
-// duplicated (not imported from server package) to keep internal/debug
-// free of server-package dependency; the concrete adapter lives in
-// cmd/server/main.go.
+// ServerResolver resolves a uniset-panel server ID to a host:port.
 type ServerResolver interface {
 	GetServerAddress(serverID string) (host string, port int, err error)
 }
 
-// Client calls uniset's /debug/* HTTP endpoints.
 type Client struct {
 	http     *http.Client
 	resolver ServerResolver
 }
 
-// NewClient builds a Client with the given resolver and a sane
-// default HTTP client (5s timeout).
 func NewClient(resolver ServerResolver) *Client {
-	return &Client{http: defaultHTTPClient(), resolver: resolver}
+	return &Client{http: &http.Client{Timeout: 5 * time.Second}, resolver: resolver}
 }
 
-func defaultHTTPClient() *http.Client {
-	return &http.Client{Timeout: 5 * time.Second}
+// Intermediate types for parsing uniset response.
+type rawDump struct {
+	Timers     map[string]json.RawMessage `json:"Timers"`
+	Variables  map[string]any             `json:"Variables"`
+	Statistics map[string]any             `json:"Statistics"`
+	IO         rawIO                      `json:"io"`
 }
 
-// Snapshot fetches /debug/snapshot for (serverID, objectName) and
-// returns the unwrapped Snapshot. The uniset response is wrapped as
-// {"<ObjectName>": {...}}; this method unwraps to flat struct.
+type rawIO struct {
+	In  map[string]rawPort `json:"in"`
+	Out map[string]rawPort `json:"out"`
+}
+
+type rawPort struct {
+	ID    int64 `json:"id"`
+	Value any   `json:"value"`
+}
+
+type rawTimer struct {
+	ID       int64  `json:"id"`
+	Name     string `json:"name"`
+	Msec     int64  `json:"msec"`
+	TimeLeft int64  `json:"timeleft"`
+	Tick     int64  `json:"tick"`
+}
+
+// Snapshot fetches uniset /<Object>/dump and flattens the response.
 func (c *Client) Snapshot(ctx context.Context, serverID, objectName string) (*Snapshot, error) {
 	host, port, err := c.resolver.GetServerAddress(serverID)
 	if err != nil {
 		return nil, fmt.Errorf("resolve server: %w", err)
 	}
-	endpoint := fmt.Sprintf("http://%s:%d/%s/debug/snapshot",
+	endpoint := fmt.Sprintf("http://%s:%d/%s/dump",
 		host, port, url.PathEscape(objectName))
 
 	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
@@ -496,226 +323,138 @@ func (c *Client) Snapshot(ctx context.Context, serverID, objectName string) (*Sn
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, ErrObjectNotFound
 	}
-	if resp.StatusCode == http.StatusNotImplemented {
-		return nil, ErrUnsupported
-	}
 	if resp.StatusCode != http.StatusOK {
-		bodySnip, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("upstream status %d: %s", resp.StatusCode, string(bodySnip))
+		snip, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return nil, fmt.Errorf("upstream status %d: %s", resp.StatusCode, string(snip))
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("read body: %w", err)
+		return nil, fmt.Errorf("read: %w", err)
 	}
-
-	// Top level: {"<ObjectName>": {...}}. Unwrap.
 	var wrapper map[string]json.RawMessage
 	if err := json.Unmarshal(body, &wrapper); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrUpstream, err)
 	}
-	raw, ok := wrapper[objectName]
+	inner, ok := wrapper[objectName]
 	if !ok {
 		return nil, ErrObjectNotFound
 	}
-
-	var s Snapshot
-	if err := json.Unmarshal(raw, &s); err != nil {
+	var raw rawDump
+	if err := json.Unmarshal(inner, &raw); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrUpstream, err)
 	}
-	s.Object = objectName
-	s.Server = serverID
-	if s.SMObject == "" {
-		s.SMObject = "SharedMemory" // fallback per Phase 0.1 decision
+
+	return adaptDump(serverID, objectName, &raw), nil
+}
+
+// adaptDump flattens uniset response into Spec 4 Snapshot.
+func adaptDump(serverID, objectName string, raw *rawDump) *Snapshot {
+	s := &Snapshot{
+		Object:     objectName,
+		Server:     serverID,
+		Variables:  raw.Variables,
+		Statistics: raw.Statistics,
+		SMObject:   "SharedMemory", // panel-side default
 	}
-	return &s, nil
+	if s.Variables == nil {
+		s.Variables = map[string]any{}
+	}
+	if s.Statistics == nil {
+		s.Statistics = map[string]any{}
+	}
+	for name, p := range raw.IO.In {
+		s.Inputs = append(s.Inputs, Port{ID: p.ID, Name: name, Value: p.Value})
+	}
+	for name, p := range raw.IO.Out {
+		s.Outputs = append(s.Outputs, Port{ID: p.ID, Name: name, Value: p.Value})
+	}
+	for key, rawMsg := range raw.Timers {
+		if key == "count" {
+			continue
+		}
+		var rt rawTimer
+		if err := json.Unmarshal(rawMsg, &rt); err != nil {
+			continue
+		}
+		s.Timers = append(s.Timers, Timer{
+			ID:         rt.ID,
+			Name:       rt.Name,
+			IntervalMS: rt.Msec,
+			TimeLeft:   rt.TimeLeft,
+			Tick:       rt.Tick,
+		})
+	}
+	return s
 }
-
-// parseURL is an alias used by tests; kept here to avoid duplicate
-// declaration at test-package scope.
-func parseURL(s string) (*url.URL, error) { return url.Parse(s) }
-
-// stringContains is a tiny helper used by tests.
-func stringContains(s, sub string) bool { return strings.Contains(s, sub) }
-
-// sentinel to silence unused-helpers linter
-var _ = errors.New
 ```
-
-Then remove the stub `fmtSscanf` from the test and replace the `newTestClient` helper usage to rely on resolver-based wiring. Replace the test file's top-level helpers block with:
-
-```go
-// At the bottom of client_test.go, REPLACE the fmtSscanf block with:
-// (keep the rest of the file as-is)
-
-func init() {
-	// nothing — kept for symmetry with other packages
-}
-```
-
-Simplify the test by removing the dead `fmtSscanf` helper and `fakeResolver` struct; the real tests use `urlResolver` which is now defined in `client.go`.
 
 - [ ] **Step 4: Run tests**
 
 ```bash
-go test -mod=vendor -v ./internal/debug/... 2>&1 | tail -30
-# Expected: 4 tests PASS (TestSnapshot_happy, _notFound, _objectKeyMissing, _malformedJSON)
+go test -mod=vendor -v ./internal/debug/... 2>&1 | tail -20
+# Expected: 5 PASS
 ```
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add internal/debug/client.go internal/debug/client_test.go
-git commit -m "feat(debug): Snapshot HTTP client with unwrap + sentinel errors"
+git add internal/debug/types.go internal/debug/client.go internal/debug/client_test.go
+git commit -m "feat(debug): Snapshot adapter over uniset /<Object>/dump"
 ```
 
-### Task 1.3: `handlers_debug.go` — HandleSnapshot + test
+### Task 1.2: `handlers_debug.go` — HandleSnapshot + test
 
 **Files:**
 - Create: `internal/api/handlers_debug.go`
 - Create: `internal/api/handlers_debug_test.go`
-- Modify: `internal/api/handlers.go` (add `debugClient *debug.Client` field to `Handlers` struct — Phase 0.3 confirmed this is the right file)
+- Modify: `internal/api/handlers.go` (add `debugClient DebugInterface` field — Phase 0.2 confirmed this is the right file)
 
 - [ ] **Step 1: Write failing test**
 
-Create `internal/api/handlers_debug_test.go`:
+Create `internal/api/handlers_debug_test.go` with 4 test cases: `TestHandleSnapshot_happy` (fake returns envelope, expect 200 + JSON), `TestHandleSnapshot_missingName` (empty name → 400), `TestHandleSnapshot_notFound` (fake returns `debug.ErrObjectNotFound` → 404), `TestHandleSnapshot_noClient` (nil debugClient → 503).
+
+Use a minimal fake:
 
 ```go
-package api
-
-import (
-	"context"
-	"encoding/json"
-	"errors"
-	"net/http"
-	"net/http/httptest"
-	"strings"
-	"testing"
-
-	"github.com/pv/uniset-panel/internal/debug"
-)
-
 type fakeDebugClient struct {
-	snapshot *debug.Snapshot
-	err      error
+	snap *debug.Snapshot
+	err  error
 }
-
-func (f *fakeDebugClient) Snapshot(_ context.Context, serverID, objectName string) (*debug.Snapshot, error) {
-	return f.snapshot, f.err
-}
-
-func (f *fakeDebugClient) History(_ context.Context, _, _, _ string, _ int) (*debug.History, error) {
-	return nil, errors.New("not implemented in fake")
-}
-
-func TestHandleSnapshot_happy(t *testing.T) {
-	fake := &fakeDebugClient{snapshot: &debug.Snapshot{
-		Object:    "DG_Control",
-		Server:    "srv-1",
-		Vars:      map[string]any{"in_Temp": 75.0},
-		SensorMap: map[string]int64{"in_Temp": 101},
-		Forced:    []int64{101},
-		SMObject:  "SharedMemory",
-	}}
-	h := &Handlers{debugClient: fake}
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/servers/{id}/objects/{name}/snapshot", h.HandleSnapshot)
-
-	req := httptest.NewRequest("GET", "/api/servers/srv-1/objects/DG_Control/snapshot", nil)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-
-	if rec.Code != 200 {
-		t.Fatalf("status = %d, body=%q", rec.Code, rec.Body.String())
-	}
-	var got debug.Snapshot
-	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
-		t.Fatal(err)
-	}
-	if got.Object != "DG_Control" || got.SMObject != "SharedMemory" {
-		t.Errorf("envelope mismatch: %+v", got)
-	}
-}
-
-func TestHandleSnapshot_missingParam(t *testing.T) {
-	h := &Handlers{debugClient: &fakeDebugClient{}}
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/servers/{id}/objects/{name}/snapshot", h.HandleSnapshot)
-
-	// Empty name in path — route won't match empty segment, so use explicit 400 check
-	// via a path with trailing slash (which net/http rejects as 404).
-	// Instead, test the handler directly with an empty {name} PathValue.
-	req := httptest.NewRequest("GET", "/api/servers/srv-1/objects/ /snapshot", nil)
-	req.SetPathValue("id", "srv-1")
-	req.SetPathValue("name", "")
-	rec := httptest.NewRecorder()
-	h.HandleSnapshot(rec, req)
-
-	if rec.Code != 400 {
-		t.Errorf("expected 400 for empty name, got %d", rec.Code)
-	}
-}
-
-func TestHandleSnapshot_notFound(t *testing.T) {
-	fake := &fakeDebugClient{err: debug.ErrObjectNotFound}
-	h := &Handlers{debugClient: fake}
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/servers/{id}/objects/{name}/snapshot", h.HandleSnapshot)
-
-	req := httptest.NewRequest("GET", "/api/servers/srv-1/objects/NoSuch/snapshot", nil)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-
-	if rec.Code != 404 {
-		t.Errorf("expected 404, got %d", rec.Code)
-	}
-	if !strings.Contains(rec.Body.String(), "not found") {
-		t.Errorf("body should mention not-found: %s", rec.Body.String())
-	}
-}
-
-func TestHandleSnapshot_unsupported(t *testing.T) {
-	fake := &fakeDebugClient{err: debug.ErrUnsupported}
-	h := &Handlers{debugClient: fake}
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/servers/{id}/objects/{name}/snapshot", h.HandleSnapshot)
-
-	req := httptest.NewRequest("GET", "/api/servers/srv-1/objects/X/snapshot", nil)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-
-	if rec.Code != 501 {
-		t.Errorf("expected 501, got %d", rec.Code)
-	}
+func (f *fakeDebugClient) Snapshot(_ context.Context, _, _ string) (*debug.Snapshot, error) {
+	return f.snap, f.err
 }
 ```
 
-- [ ] **Step 2: Run test — expect compile failure**
+Register route via `mux.HandleFunc("GET /api/servers/{id}/objects/{name}/snapshot", h.HandleSnapshot)` in each test. Dispatch with `httptest.NewRequest("GET", "/api/servers/srv-1/objects/DG_Control/snapshot", nil)` + `mux.ServeHTTP`.
+
+Run:
 
 ```bash
 go test -mod=vendor ./internal/api/... 2>&1 | grep -A1 handlers_debug | head
-# Expected: error — undefined: HandleSnapshot, undefined: debugClient field
+# Expected: FAIL — HandleSnapshot not defined
 ```
 
-- [ ] **Step 3: Add `DebugInterface` to handlers + implement handler**
+- [ ] **Step 2: Add interface + field to `handlers.go`**
 
-First, in `internal/api/handlers.go`, add an interface and a struct field. Find the existing `type Handlers struct` block and extend it:
+In `internal/api/handlers.go` near other interfaces:
 
 ```go
-// Add this interface definition near other interface definitions in handlers.go:
-
-// DebugInterface is the minimum contract HandleSnapshot / HandleHistory
-// need; implemented by *debug.Client and by test fakes.
+// DebugInterface — minimum contract for HandleSnapshot.
 type DebugInterface interface {
 	Snapshot(ctx context.Context, serverID, objectName string) (*debug.Snapshot, error)
-	History(ctx context.Context, serverID, objectName, varName string, depth int) (*debug.History, error)
 }
-
-// In the Handlers struct block, add a new field:
-//    debugClient DebugInterface
 ```
 
-Ensure `"context"` and `"github.com/pv/uniset-panel/internal/debug"` are imported in `handlers.go`. (Use the exact module path from `go.mod`.)
+In `Handlers` struct, add:
+
+```go
+debugClient DebugInterface
+```
+
+Ensure `"context"` and `"github.com/pv/uniset-panel/internal/debug"` are imported.
+
+- [ ] **Step 3: Implement handler**
 
 Create `internal/api/handlers_debug.go`:
 
@@ -729,7 +468,7 @@ import (
 	"github.com/pv/uniset-panel/internal/debug"
 )
 
-// HandleSnapshot proxies uniset /debug/snapshot for (server, object).
+// HandleSnapshot proxies uniset /<Object>/dump via debug.Client.
 // GET /api/servers/{id}/objects/{name}/snapshot
 func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 	serverID := r.PathValue("id")
@@ -746,7 +485,6 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, http.StatusServiceUnavailable, "debug client not configured")
 		return
 	}
-
 	snap, err := h.debugClient.Snapshot(r.Context(), serverID, name)
 	if err != nil {
 		h.writeError(w, mapDebugError(err), err.Error())
@@ -755,13 +493,10 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, snap)
 }
 
-// mapDebugError translates debug sentinels to HTTP codes.
 func mapDebugError(err error) int {
 	switch {
 	case errors.Is(err, debug.ErrObjectNotFound):
 		return http.StatusNotFound
-	case errors.Is(err, debug.ErrUnsupported):
-		return http.StatusNotImplemented
 	case errors.Is(err, debug.ErrUpstream):
 		return http.StatusBadGateway
 	default:
@@ -773,8 +508,8 @@ func mapDebugError(err error) int {
 - [ ] **Step 4: Run tests**
 
 ```bash
-go test -mod=vendor -v -run "TestHandleSnapshot_" ./internal/api/... 2>&1 | tail -15
-# Expected: 4 PASS (happy, missingParam, notFound, unsupported)
+go test -mod=vendor -v -run "TestHandleSnapshot_" ./internal/api/... 2>&1 | tail
+# Expected: 4 PASS
 ```
 
 - [ ] **Step 5: Commit**
@@ -784,398 +519,7 @@ git add internal/api/handlers_debug.go internal/api/handlers_debug_test.go inter
 git commit -m "feat(api): HandleSnapshot proxy + DebugInterface"
 ```
 
-### Task 1.4: Wire snapshot route
-
-**Files:**
-- Modify: `internal/api/server.go`
-
-- [ ] **Step 1: Find routes block**
-
-```bash
-grep -n "HandleFunc.*GET /api/servers" internal/api/server.go | head
-# Record line numbers to locate the routes block.
-```
-
-- [ ] **Step 2: Add route line**
-
-In `internal/api/server.go`, add within the route registration block (near other `/api/servers/{id}/...` routes):
-
-```go
-s.mux.HandleFunc("GET /api/servers/{id}/objects/{name}/snapshot",
-	s.handlers.HandleSnapshot)
-```
-
-- [ ] **Step 3: Build check**
-
-```bash
-go build -mod=vendor ./...
-# Expected: no output
-```
-
-- [ ] **Step 4: Run full api tests**
-
-```bash
-go test -mod=vendor ./internal/api/... 2>&1 | tail -5
-# Expected: all existing tests still pass + 4 new ones
-```
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add internal/api/server.go
-git commit -m "feat(api): wire /api/servers/{id}/objects/{name}/snapshot route"
-```
-
-### Task 1.5: `internal/debug/client.go` — History + test
-
-**Files:**
-- Modify: `internal/debug/client.go`
-- Modify: `internal/debug/client_test.go`
-
-- [ ] **Step 1: Append failing test**
-
-Append to `internal/debug/client_test.go`:
-
-```go
-func TestHistory_happy(t *testing.T) {
-	// Uniset returns history as {"points":[{"t":<us or ms>,"v":N},...]}.
-	// Per Phase 0.2, this plan assumes ms. Adjust divisor below if µs.
-	body := `{"DG_Control":{"history":{"var":"in_Temp","points":[{"t":1713456000123,"v":75},{"t":1713456000623,"v":76}]}}}`
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/DG_Control/debug/history" {
-			t.Errorf("unexpected path: %s", r.URL.Path)
-		}
-		if got := r.URL.Query().Get("var"); got != "in_Temp" {
-			t.Errorf("var query: got %s", got)
-		}
-		if got := r.URL.Query().Get("depth"); got != "10" {
-			t.Errorf("depth query: got %s", got)
-		}
-		w.Write([]byte(body))
-	}))
-	defer srv.Close()
-
-	c := newTestClient(srv.URL)
-	h, err := c.History(context.Background(), "srv-1", "DG_Control", "in_Temp", 10)
-	if err != nil {
-		t.Fatalf("History: %v", err)
-	}
-	if h.Var != "in_Temp" {
-		t.Errorf("Var: got %s", h.Var)
-	}
-	if len(h.Points) != 2 {
-		t.Errorf("points: got %d", len(h.Points))
-	}
-	if h.Points[0].T != 1713456000123 {
-		t.Errorf("first T: got %d", h.Points[0].T)
-	}
-}
-
-func TestHistory_depthClamp(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Server should have been called with clamped depth, not the
-		// over-the-top value. Our client clamps before sending.
-		depth := r.URL.Query().Get("depth")
-		if depth != "10000" {
-			t.Errorf("expected clamped depth=10000, got %s", depth)
-		}
-		w.Write([]byte(`{"DG_Control":{"history":{"var":"x","points":[]}}}`))
-	}))
-	defer srv.Close()
-
-	c := newTestClient(srv.URL)
-	_, err := c.History(context.Background(), "srv-1", "DG_Control", "x", 999999)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestHistory_malformedJSON(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Write([]byte(`{bad`))
-	}))
-	defer srv.Close()
-
-	c := newTestClient(srv.URL)
-	_, err := c.History(context.Background(), "srv-1", "DG_Control", "x", 10)
-	if !errors.Is(err, ErrUpstream) {
-		t.Errorf("expected ErrUpstream, got %v", err)
-	}
-}
-```
-
-- [ ] **Step 2: Run — expect failure**
-
-```bash
-go test -mod=vendor -run "TestHistory_" ./internal/debug/... 2>&1 | tail
-# Expected: FAIL — History method not defined
-```
-
-- [ ] **Step 3: Implement History**
-
-Append to `internal/debug/client.go`:
-
-```go
-// MaxHistoryDepth caps the depth parameter clients can request.
-// Chosen to bound response size; higher depths would need pagination.
-const MaxHistoryDepth = 10000
-
-// History fetches /debug/history?var=&depth= for (serverID, objectName).
-// Depth is clamped to [1, MaxHistoryDepth].
-func (c *Client) History(ctx context.Context, serverID, objectName, varName string, depth int) (*History, error) {
-	if varName == "" {
-		return nil, fmt.Errorf("var required")
-	}
-	if depth < 1 {
-		depth = 1
-	}
-	if depth > MaxHistoryDepth {
-		depth = MaxHistoryDepth
-	}
-
-	host, port, err := c.resolver.GetServerAddress(serverID)
-	if err != nil {
-		return nil, fmt.Errorf("resolve server: %w", err)
-	}
-	q := url.Values{}
-	q.Set("var", varName)
-	q.Set("depth", fmt.Sprintf("%d", depth))
-	endpoint := fmt.Sprintf("http://%s:%d/%s/debug/history?%s",
-		host, port, url.PathEscape(objectName), q.Encode())
-
-	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
-	if err != nil {
-		return nil, fmt.Errorf("build request: %w", err)
-	}
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("http: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, ErrObjectNotFound
-	}
-	if resp.StatusCode == http.StatusNotImplemented {
-		return nil, ErrUnsupported
-	}
-	if resp.StatusCode != http.StatusOK {
-		bodySnip, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("upstream status %d: %s", resp.StatusCode, string(bodySnip))
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read body: %w", err)
-	}
-
-	// {"<ObjectName>":{"history":{var,points}}}
-	var wrapper map[string]json.RawMessage
-	if err := json.Unmarshal(body, &wrapper); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrUpstream, err)
-	}
-	rawObj, ok := wrapper[objectName]
-	if !ok {
-		return nil, ErrObjectNotFound
-	}
-	var inner struct {
-		History History `json:"history"`
-	}
-	if err := json.Unmarshal(rawObj, &inner); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrUpstream, err)
-	}
-	return &inner.History, nil
-}
-```
-
-- [ ] **Step 4: Run tests**
-
-```bash
-go test -mod=vendor -v -run "TestHistory_" ./internal/debug/... 2>&1 | tail
-# Expected: 3 PASS (happy, depthClamp, malformedJSON)
-```
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add internal/debug/client.go internal/debug/client_test.go
-git commit -m "feat(debug): History HTTP client + depth clamp"
-```
-
-### Task 1.6: `handlers_debug.go` — HandleHistory + test
-
-**Files:**
-- Modify: `internal/api/handlers_debug.go`
-- Modify: `internal/api/handlers_debug_test.go`
-
-- [ ] **Step 1: Append failing test**
-
-Append to `internal/api/handlers_debug_test.go`:
-
-```go
-type fakeDebugClient2 struct {
-	history *debug.History
-	err     error
-	gotVar  string
-	gotDep  int
-}
-
-func (f *fakeDebugClient2) Snapshot(_ context.Context, _, _ string) (*debug.Snapshot, error) {
-	return nil, errors.New("not impl")
-}
-func (f *fakeDebugClient2) History(_ context.Context, _, _, varName string, depth int) (*debug.History, error) {
-	f.gotVar = varName
-	f.gotDep = depth
-	return f.history, f.err
-}
-
-func TestHandleHistory_happy(t *testing.T) {
-	fake := &fakeDebugClient2{history: &debug.History{
-		Var: "in_Temp",
-		Points: []debug.HistoryPoint{{T: 1713456000123, V: 75.0}},
-	}}
-	h := &Handlers{debugClient: fake}
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/servers/{id}/objects/{name}/history", h.HandleHistory)
-
-	req := httptest.NewRequest("GET", "/api/servers/srv-1/objects/DG_Control/history?var=in_Temp&depth=100", nil)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-
-	if rec.Code != 200 {
-		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
-	}
-	if fake.gotVar != "in_Temp" || fake.gotDep != 100 {
-		t.Errorf("fake: var=%q depth=%d", fake.gotVar, fake.gotDep)
-	}
-}
-
-func TestHandleHistory_missingVar(t *testing.T) {
-	fake := &fakeDebugClient2{}
-	h := &Handlers{debugClient: fake}
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/servers/{id}/objects/{name}/history", h.HandleHistory)
-
-	req := httptest.NewRequest("GET", "/api/servers/srv-1/objects/DG_Control/history?depth=10", nil)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-
-	if rec.Code != 400 {
-		t.Errorf("expected 400, got %d", rec.Code)
-	}
-}
-
-func TestHandleHistory_depthDefault(t *testing.T) {
-	fake := &fakeDebugClient2{history: &debug.History{Var: "x"}}
-	h := &Handlers{debugClient: fake}
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/servers/{id}/objects/{name}/history", h.HandleHistory)
-
-	req := httptest.NewRequest("GET", "/api/servers/srv-1/objects/X/history?var=x", nil)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-
-	if rec.Code != 200 {
-		t.Fatalf("status = %d", rec.Code)
-	}
-	if fake.gotDep != 120 {
-		t.Errorf("default depth 120 expected, got %d", fake.gotDep)
-	}
-}
-```
-
-- [ ] **Step 2: Run — expect failure**
-
-```bash
-go test -mod=vendor -run "TestHandleHistory_" ./internal/api/... 2>&1 | tail
-# Expected: FAIL — HandleHistory not defined
-```
-
-- [ ] **Step 3: Implement HandleHistory**
-
-Append to `internal/api/handlers_debug.go`:
-
-```go
-// HandleHistory proxies uniset /debug/history for (server, object, var).
-// GET /api/servers/{id}/objects/{name}/history?var=X&depth=N
-// Defaults: depth=120 (covers 1 minute at 500ms poll).
-func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
-	serverID := r.PathValue("id")
-	name := r.PathValue("name")
-	if serverID == "" {
-		h.writeError(w, http.StatusBadRequest, "server id required")
-		return
-	}
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
-		return
-	}
-	varName := r.URL.Query().Get("var")
-	if varName == "" {
-		h.writeError(w, http.StatusBadRequest, "var query param required")
-		return
-	}
-	depth := 120
-	if s := r.URL.Query().Get("depth"); s != "" {
-		if n, err := strconvAtoiPositive(s); err == nil {
-			depth = n
-		}
-	}
-	if h.debugClient == nil {
-		h.writeError(w, http.StatusServiceUnavailable, "debug client not configured")
-		return
-	}
-
-	hist, err := h.debugClient.History(r.Context(), serverID, name, varName, depth)
-	if err != nil {
-		h.writeError(w, mapDebugError(err), err.Error())
-		return
-	}
-	h.writeJSON(w, hist)
-}
-
-// strconvAtoiPositive parses a positive int; returns error on 0/neg/invalid.
-func strconvAtoiPositive(s string) (int, error) {
-	n, err := strconvAtoi(s)
-	if err != nil {
-		return 0, err
-	}
-	if n <= 0 {
-		return 0, errors.New("non-positive")
-	}
-	return n, nil
-}
-
-// strconvAtoi is a thin alias to keep imports local.
-func strconvAtoi(s string) (int, error) { return atoi(s) }
-```
-
-Also add the `atoi` helper (`strconv.Atoi` wrapper) at the top of `handlers_debug.go`:
-
-```go
-import (
-	// ... existing imports ...
-	"strconv"
-)
-
-func atoi(s string) (int, error) { return strconv.Atoi(s) }
-```
-
-- [ ] **Step 4: Run tests**
-
-```bash
-go test -mod=vendor -v -run "TestHandleHistory_" ./internal/api/... 2>&1 | tail
-# Expected: 3 PASS
-```
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add internal/api/handlers_debug.go internal/api/handlers_debug_test.go
-git commit -m "feat(api): HandleHistory proxy + default depth 120"
-```
-
-### Task 1.7: Wire history route + main.go integration
+### Task 1.3: Wire snapshot route + debug.Client in main.go
 
 **Files:**
 - Modify: `internal/api/server.go`
@@ -1183,26 +527,24 @@ git commit -m "feat(api): HandleHistory proxy + default depth 120"
 
 - [ ] **Step 1: Add route**
 
-Add to the route block in `internal/api/server.go` (adjacent to the snapshot route added in Task 1.4):
+In `internal/api/server.go`, within the route block:
 
 ```go
-s.mux.HandleFunc("GET /api/servers/{id}/objects/{name}/history",
-	s.handlers.HandleHistory)
+s.mux.HandleFunc("GET /api/servers/{id}/objects/{name}/snapshot",
+	s.handlers.HandleSnapshot)
 ```
 
-- [ ] **Step 2: Find existing handler construction**
+- [ ] **Step 2: Locate Handlers construction**
 
 ```bash
-grep -n "handlers\\.\\|NewHandlers\\|&Handlers{" cmd/server/main.go | head
-# Record where Handlers is built.
+grep -n "NewHandlers\\|&Handlers{" cmd/server/main.go | head
 ```
 
 - [ ] **Step 3: Wire debug client in main.go**
 
-Near where `Handlers` is built, add:
+Near Handlers construction add the resolver adapter:
 
 ```go
-// Resolver adapter: bridge server.Manager to debug.ServerResolver contract.
 type debugResolverAdapter struct{ mgr *server.Manager }
 
 func (d *debugResolverAdapter) GetServerAddress(serverID string) (string, int, error) {
@@ -1214,38 +556,38 @@ func (d *debugResolverAdapter) GetServerAddress(serverID string) (string, int, e
 }
 ```
 
-And in the `Handlers` construction block, add:
+(Adjust field/method names to match actual `internal/server/manager.go`.)
+
+In the Handlers construction:
 
 ```go
 debugClient := debug.NewClient(&debugResolverAdapter{mgr: serverMgr})
-```
 
-Then pass it into `Handlers`:
-
-```go
 handlers := &api.Handlers{
 	// ... existing fields ...
 	debugClient: debugClient,
 }
 ```
 
-Verify the existing `server.Manager.GetServerByID` signature and `ServerInfo.Host`/`Port` field names; adjust the adapter to the actual fields.
+Ensure `"github.com/pv/uniset-panel/internal/debug"` is imported.
 
-- [ ] **Step 4: Build check**
+- [ ] **Step 4: Build + test**
 
 ```bash
 go build -mod=vendor ./...
-# Expected: no output
+go test -mod=vendor ./internal/api/... 2>&1 | tail -5
+# Expected: build clean + all api tests PASS
 ```
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add internal/api/server.go cmd/server/main.go
-git commit -m "feat(api): wire /history route + debug.Client in main"
+git commit -m "feat(api): wire /snapshot route + debug.Client in main"
 ```
 
 ---
+
 
 ## Phase 2 — Trace backend (Spec 2 implementation)
 
@@ -3534,158 +2876,67 @@ git commit -m "feat(detail): 60-detail-panel.js — listener + tab lifecycle + s
 
 ## Phase 4 — Variables tab
 
-### Task 4.1: `60-detail-variables.js` — snapshot poll + groupVars + render + tests
+**Schema:** `inst.snapshot` has flat shape `{inputs:[{id,name,value}], outputs:[{id,name,value}], variables:{name:value}, timers:[...], statistics:{...}, sm_object}`. Locals = variables without dot; FB Instances = variables with dot. Forced indicator deferred (design doc Open Risks).
+
+### Task 4.1: `60-detail-variables.js` — snapshot poll + render + tests
 
 **Files:**
 - Create: `ui/static/js/src/60-detail-variables.js`
 - Create: `tests/unit/detail-variables.test.js`
 - Regenerate: `ui/static/js/app.js`
 
-- [ ] **Step 1: Write failing test**
+- [ ] **Step 1: Write failing tests**
 
-Create `tests/unit/detail-variables.test.js`:
+Create `tests/unit/detail-variables.test.js` with test cases:
 
-```js
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
-import { loadSrc } from './helpers/load-src.js';
+- `buildVariablesSections` splits snapshot correctly (inputs/outputs from arrays, variables split by dot into locals/fb_instances).
+- `buildVariablesSections({})` returns 4 empty arrays.
+- `renderVariables` creates 4 `<section>` elements with correct `data-section` attribute.
+- `renderVariables` marks input/output rows as `forcible` with `data-sensor-id`; locals rows not forcible.
+- XSS: `inst.snapshot.variables['<script>'] = 'bad'` → rendered HTML escapes it.
+- `startDetailSnapshotPoll` calls `/api/servers/{id}/objects/{name}/snapshot` via `fetch`.
 
-beforeAll(() => {
-    loadSrc('ui/static/js/src/60-detail-state.js');
-    loadSrc('ui/static/js/src/60-detail-panel.js');
-    loadSrc('ui/static/js/src/60-detail-variables.js');
-});
+Use the same test helper pattern as `detail-panel.test.js` (Phase 3 Task 3.2): `beforeAll` loads `60-detail-state.js`, `60-detail-panel.js`, `60-detail-variables.js` via `loadSrc`; `beforeEach` clears `detailInstances` + `document.body`.
 
-beforeEach(() => {
-    document.body.innerHTML = '';
-    for (const k of Object.keys(detailInstances)) delete detailInstances[k];
-    localStorage.clear();
-});
+Full test file ≈150 lines — see design doc §"Frontend modules / 60-detail-variables.js" for the exact data shape each test uses.
 
-describe('groupVars', () => {
-    it('categorizes by prefix and dot', () => {
-        const vars = {
-            'in_Temp': 75,
-            'in_Pressure': 1013,
-            'out_Speed': 1500,
-            'Counter': 42,
-            'FB1.State': 1,
-            'FB1.Phase': 2
-        };
-        const g = groupVars(vars);
-        expect(g.inputs.map(x => x.name)).toEqual(['in_Pressure', 'in_Temp']);
-        expect(g.outputs.map(x => x.name)).toEqual(['out_Speed']);
-        expect(g.locals.map(x => x.name)).toEqual(['Counter']);
-        expect(g.fb_instances.map(x => x.name).sort()).toEqual(['FB1.Phase', 'FB1.State']);
-    });
-});
-
-describe('renderVariables', () => {
-    function makeInst() {
-        openDetailPanel('srv-1', 'Server1', 'DG_Control');
-        const inst = detailInstances['srv-1:DG_Control'];
-        inst.snapshot = {
-            object: 'DG_Control', server: 'srv-1',
-            vars: { 'in_Temp': 75, 'out_Speed': 1500, 'Counter': 3 },
-            sensor_map: { 'in_Temp': 101, 'out_Speed': 205 },
-            forced: [101],
-            sm_object: 'SharedMemory'
-        };
-        return inst;
-    }
-
-    it('renders four sections with correct counts', () => {
-        const inst = makeInst();
-        renderVariables(inst);
-        const root = document.querySelector('[data-inner-panel="variables"]');
-        expect(root.querySelector('[data-section="inputs"]')).toBeTruthy();
-        expect(root.querySelector('[data-section="outputs"]')).toBeTruthy();
-        expect(root.querySelector('[data-section="locals"]')).toBeTruthy();
-        expect(root.querySelector('[data-section="fb_instances"]')).toBeTruthy();
-    });
-
-    it('marks forced rows with 🔒 indicator', () => {
-        const inst = makeInst();
-        renderVariables(inst);
-        const row = document.querySelector('tr[data-var="in_Temp"]');
-        expect(row.classList.contains('forced')).toBe(true);
-        expect(row.textContent).toContain('🔒');
-    });
-
-    it('non-forced rows have no forced marker', () => {
-        const inst = makeInst();
-        renderVariables(inst);
-        const row = document.querySelector('tr[data-var="out_Speed"]');
-        expect(row.classList.contains('forced')).toBe(false);
-    });
-
-    it('escapes HTML in variable names', () => {
-        const inst = makeInst();
-        inst.snapshot.vars['<script>'] = 'bad';
-        renderVariables(inst);
-        const root = document.querySelector('[data-inner-panel="variables"]');
-        expect(root.innerHTML).not.toContain('<script>');
-        expect(root.innerHTML).toContain('&lt;script&gt;');
-    });
-});
-
-describe('snapshot poll', () => {
-    beforeEach(() => {
-        globalThis.fetch = vi.fn(async () => ({
-            ok: true,
-            json: async () => ({
-                object: 'X', server: 'srv-1',
-                vars: { 'in_T': 1 }, sensor_map: {}, forced: [], sm_object: 'SharedMemory'
-            })
-        }));
-    });
-
-    it('startDetailSnapshotPoll calls fetch with expected URL', async () => {
-        openDetailPanel('srv-1', 'Server1', 'X');
-        const inst = detailInstances['srv-1:X'];
-        startDetailSnapshotPoll(inst);
-        await new Promise(r => setTimeout(r, 10));
-        expect(fetch).toHaveBeenCalledWith(
-            expect.stringContaining('/api/servers/srv-1/objects/X/snapshot')
-        );
-        stopDetailSnapshotPoll(inst);
-    });
-});
-```
-
-- [ ] **Step 2: Run — expect failure**
+Run:
 
 ```bash
 cd /home/pv/Projects/uniset-panel/tests && npm run test:unit -- --run 2>&1 | tail
 # Expected: detail-variables tests fail
 ```
 
-- [ ] **Step 3: Write module**
+- [ ] **Step 2: Write module**
 
 Create `ui/static/js/src/60-detail-variables.js`:
 
 ```js
 // ============================================================================
-// UObject Detail Panel — Variables tab
+// UObject Detail Panel — Variables tab (reads flat snapshot from panel adapter)
 // ============================================================================
 
 const DETAIL_SNAPSHOT_POLL_MS = 500;
 
-function groupVars(vars) {
-    const groups = { inputs: [], outputs: [], locals: [], fb_instances: [] };
-    const keys = Object.keys(vars).sort();
-    for (const name of keys) {
+function buildVariablesSections(snap) {
+    const out = {
+        inputs:  (snap && snap.inputs)  || [],
+        outputs: (snap && snap.outputs) || [],
+        locals: [],
+        fb_instances: []
+    };
+    const vars = (snap && snap.variables) || {};
+    for (const name of Object.keys(vars).sort()) {
         const entry = { name: name, value: vars[name] };
-        if (name.indexOf('in_') === 0) groups.inputs.push(entry);
-        else if (name.indexOf('out_') === 0) groups.outputs.push(entry);
-        else if (name.indexOf('.') >= 0) groups.fb_instances.push(entry);
-        else groups.locals.push(entry);
+        if (name.indexOf('.') >= 0) out.fb_instances.push(entry);
+        else out.locals.push(entry);
     }
-    return groups;
+    return out;
 }
 
 function renderVariables(inst) {
-    const root = document.querySelector('#detail-tab-' + inst.key.replace(/:/g, '_') +
-                                       ' [data-inner-panel="variables"]');
+    const root = document.querySelector('#detail-tab-' +
+        inst.key.replace(/:/g, '_') + ' [data-inner-panel="variables"]');
     if (!root) return;
 
     if (!inst.snapshot) {
@@ -3693,22 +2944,19 @@ function renderVariables(inst) {
         return;
     }
 
-    const snap = inst.snapshot;
-    const groups = groupVars(snap.vars || {});
-    const sensorMap = snap.sensor_map || {};
-    const forcedSet = new Set(snap.forced || []);
+    const sections = buildVariablesSections(inst.snapshot);
     const collapsed = (inst.state && inst.state.varsCollapsed) || {};
 
     const groupDefs = [
-        { key: 'inputs', label: 'Inputs (in_*)' },
-        { key: 'outputs', label: 'Outputs (out_*)' },
+        { key: 'inputs', label: 'Inputs (io.in)' },
+        { key: 'outputs', label: 'Outputs (io.out)' },
         { key: 'locals', label: 'Locals' },
         { key: 'fb_instances', label: 'FB Instances' }
     ];
 
     let html = '';
     for (const gd of groupDefs) {
-        const items = groups[gd.key];
+        const items = sections[gd.key];
         const isCollapsed = !!collapsed[gd.key];
         html += '<section data-section="' + gd.key + '">';
         html += '<div class="detail-var-section-header" data-toggle="' + gd.key + '">';
@@ -3720,8 +2968,7 @@ function renderVariables(inst) {
             html += '<table class="detail-var-table"><thead><tr>';
             html += '<th>Name</th><th>Value</th><th>Type</th><th>Δ</th></tr></thead><tbody>';
             for (const it of items) {
-                const sensorId = sensorMap[it.name];
-                const isForced = sensorId != null && forcedSet.has(sensorId);
+                const sensorId = (gd.key === 'inputs' || gd.key === 'outputs') ? it.id : null;
                 const prev = inst._prevVars ? inst._prevVars[it.name] : undefined;
                 const changed = prev !== undefined && prev !== it.value;
                 let flashClass = '';
@@ -3730,15 +2977,12 @@ function renderVariables(inst) {
                 } else if (changed) {
                     flashClass = ' flash-up';
                 }
-                const rowClasses = (isForced ? 'forced' : '') +
-                                   (gd.key === 'inputs' || gd.key === 'outputs' ? ' forcible' : '');
-                html += '<tr data-var="' + escapeDetailText(it.name) + '" class="' +
-                        rowClasses + '">';
-                html += '<td>' + escapeDetailText(it.name);
-                if (isForced) html += ' <span class="forced-icon" title="FORCED">🔒</span>';
-                html += '</td>';
-                html += '<td class="value-cell' + flashClass + '">' +
-                        formatVarValue(it.value) + '</td>';
+                const rowClasses = (gd.key === 'inputs' || gd.key === 'outputs') ? 'forcible' : '';
+                html += '<tr data-var="' + escapeDetailText(it.name) + '"';
+                if (sensorId != null) html += ' data-sensor-id="' + sensorId + '"';
+                html += ' data-section="' + gd.key + '" class="' + rowClasses + '">';
+                html += '<td>' + escapeDetailText(it.name) + '</td>';
+                html += '<td class="value-cell' + flashClass + '">' + formatVarValue(it.value) + '</td>';
                 html += '<td>' + detectVarType(it.value) + '</td>';
                 html += '<td>' + (changed ? '•' : '') + '</td></tr>';
             }
@@ -3749,7 +2993,6 @@ function renderVariables(inst) {
 
     root.innerHTML = html;
 
-    // Wire section-header toggles
     root.querySelectorAll('.detail-var-section-header').forEach(function(h) {
         h.addEventListener('click', function() {
             const gk = h.getAttribute('data-toggle');
@@ -3761,16 +3004,13 @@ function renderVariables(inst) {
         });
     });
 
-    // Clear flash classes after 500ms.
-    const flashes = root.querySelectorAll('.flash-up, .flash-down');
-    flashes.forEach(function(el) {
+    root.querySelectorAll('.flash-up, .flash-down').forEach(function(el) {
         setTimeout(function() {
             el.classList.remove('flash-up');
             el.classList.remove('flash-down');
         }, 500);
     });
 
-    // Row click → toggle Trends (defer to 60-detail-trends.js if loaded).
     root.querySelectorAll('tr[data-var]').forEach(function(tr) {
         tr.addEventListener('click', function() {
             const name = tr.getAttribute('data-var');
@@ -3781,19 +3021,23 @@ function renderVariables(inst) {
         tr.addEventListener('contextmenu', function(e) {
             e.preventDefault();
             if (typeof showDetailVarContextMenu === 'function') {
-                showDetailVarContextMenu(inst, tr.getAttribute('data-var'), e);
+                const section = tr.getAttribute('data-section');
+                const sensorId = tr.dataset.sensorId ? parseInt(tr.dataset.sensorId, 10) : null;
+                showDetailVarContextMenu(inst, section, tr.getAttribute('data-var'), sensorId, e);
             }
         });
     });
 
-    // Remember current values for next flash diff.
+    // Prev values for next flash diff.
     inst._prevVars = {};
-    for (const k of Object.keys(snap.vars)) inst._prevVars[k] = snap.vars[k];
+    for (const p of sections.inputs) inst._prevVars[p.name] = p.value;
+    for (const p of sections.outputs) inst._prevVars[p.name] = p.value;
+    for (const v of sections.locals) inst._prevVars[v.name] = v.value;
+    for (const v of sections.fb_instances) inst._prevVars[v.name] = v.value;
 }
 
 function formatVarValue(v) {
     if (v === null || v === undefined) return '—';
-    if (typeof v === 'number' && !Number.isFinite(v)) return String(v);
     if (typeof v === 'boolean') return v ? 'true' : 'false';
     if (typeof v === 'number') return String(v);
     return escapeDetailText(String(v));
@@ -3837,23 +3081,23 @@ function stopDetailSnapshotPoll(inst) {
 }
 ```
 
-- [ ] **Step 4: Run tests**
+- [ ] **Step 3: Run tests**
 
 ```bash
 cd /home/pv/Projects/uniset-panel/tests && npm run test:unit -- --run 2>&1 | tail
 # Expected: all prior + new detail-variables tests PASS
 ```
 
-- [ ] **Step 5: Regenerate + commit**
+- [ ] **Step 4: Regenerate + commit**
 
 ```bash
 cd /home/pv/Projects/uniset-panel/ui && go run concat.go
 cd /home/pv/Projects/uniset-panel
 git add ui/static/js/src/60-detail-variables.js tests/unit/detail-variables.test.js ui/static/js/app.js
-git commit -m "feat(detail): Variables tab — groupVars + render + snapshot poll"
+git commit -m "feat(detail): Variables tab — flat snapshot render + sections + poll"
 ```
 
-### Task 4.2: Context menu + force/unforce + tests
+### Task 4.2: Context menu + force/unforce via SM ionc
 
 **Files:**
 - Modify: `ui/static/js/src/60-detail-variables.js`
@@ -3862,70 +3106,14 @@ git commit -m "feat(detail): Variables tab — groupVars + render + snapshot pol
 
 - [ ] **Step 1: Append failing tests**
 
-Append to `tests/unit/detail-variables.test.js`:
-
-```js
-describe('force/unforce dialog + posts', () => {
-    beforeEach(() => {
-        globalThis.fetch = vi.fn(async (url, opts) => {
-            return { ok: true, status: 200, json: async () => ({}) };
-        });
-    });
-
-    function makeInst() {
-        openDetailPanel('srv-1', 'Server1', 'DG_Control');
-        const inst = detailInstances['srv-1:DG_Control'];
-        inst.snapshot = {
-            vars: { 'in_Temp': 75, 'out_Speed': 1500, 'Counter': 3 },
-            sensor_map: { 'in_Temp': 101, 'out_Speed': 205 },
-            forced: [205],
-            sm_object: 'SharedMemory'
-        };
-        renderVariables(inst);
-        return inst;
-    }
-
-    it('postForce calls ionc/freeze with sensor_id + value', async () => {
-        const inst = makeInst();
-        await postForce(inst, 'in_Temp', 42);
-        expect(fetch).toHaveBeenCalledWith(
-            '/api/objects/SharedMemory/ionc/freeze?server=srv-1',
-            expect.objectContaining({
-                method: 'POST',
-                body: JSON.stringify({ sensor_id: 101, value: 42 })
-            })
-        );
-    });
-
-    it('postUnforce calls ionc/unfreeze with sensor_id', async () => {
-        const inst = makeInst();
-        await postUnforce(inst, 'out_Speed');
-        expect(fetch).toHaveBeenCalledWith(
-            '/api/objects/SharedMemory/ionc/unfreeze?server=srv-1',
-            expect.objectContaining({
-                method: 'POST',
-                body: JSON.stringify({ sensor_id: 205 })
-            })
-        );
-    });
-
-    it('force action noop for locals (no sensor_id)', async () => {
-        const inst = makeInst();
-        const result = await postForce(inst, 'Counter', 99);
-        expect(result).toBeNull();
-        expect(fetch).not.toHaveBeenCalled();
-    });
-});
-```
-
-- [ ] **Step 2: Run — expect failure**
+Append test cases: `postForce` posts to `/api/objects/SharedMemory/ionc/freeze?server=srv-1` with body `{sensor_id, value}`; `postUnforce` — analog to `/ionc/unfreeze` with body `{sensor_id}`; `showDetailVarContextMenu` is no-op for `locals` section (no sensor_id, no DOM change).
 
 ```bash
 cd /home/pv/Projects/uniset-panel/tests && npm run test:unit -- --run 2>&1 | tail
-# Expected: postForce/postUnforce undefined
+# Expected: fail — postForce/postUnforce/showDetailVarContextMenu undefined
 ```
 
-- [ ] **Step 3: Append force/unforce + dialog**
+- [ ] **Step 2: Append module**
 
 Append to `ui/static/js/src/60-detail-variables.js`:
 
@@ -3934,11 +3122,9 @@ Append to `ui/static/js/src/60-detail-variables.js`:
 // Force / Unforce via SharedMemory ionc endpoints
 // ---------------------------------------------------------------------------
 
-async function postForce(inst, varName, value) {
-    const sensorId = inst.snapshot && inst.snapshot.sensor_map &&
-                     inst.snapshot.sensor_map[varName];
+async function postForce(inst, sensorId, value) {
     if (sensorId == null) return null;
-    const smObject = (inst.snapshot.sm_object) || 'SharedMemory';
+    const smObject = (inst.snapshot && inst.snapshot.sm_object) || 'SharedMemory';
     const url = '/api/objects/' + encodeURIComponent(smObject) +
                 '/ionc/freeze?server=' + encodeURIComponent(inst.serverId);
     const resp = await fetch(url, {
@@ -3949,11 +3135,9 @@ async function postForce(inst, varName, value) {
     return { status: resp.status, body: await resp.json().catch(() => null) };
 }
 
-async function postUnforce(inst, varName) {
-    const sensorId = inst.snapshot && inst.snapshot.sensor_map &&
-                     inst.snapshot.sensor_map[varName];
+async function postUnforce(inst, sensorId) {
     if (sensorId == null) return null;
-    const smObject = (inst.snapshot.sm_object) || 'SharedMemory';
+    const smObject = (inst.snapshot && inst.snapshot.sm_object) || 'SharedMemory';
     const url = '/api/objects/' + encodeURIComponent(smObject) +
                 '/ionc/unfreeze?server=' + encodeURIComponent(inst.serverId);
     const resp = await fetch(url, {
@@ -3964,18 +3148,14 @@ async function postUnforce(inst, varName) {
     return { status: resp.status, body: await resp.json().catch(() => null) };
 }
 
-function showDetailVarContextMenu(inst, varName, event) {
-    const sensorId = inst.snapshot && inst.snapshot.sensor_map &&
-                     inst.snapshot.sensor_map[varName];
-    if (sensorId == null) return; // locals + fb_instances: no actions
+function showDetailVarContextMenu(inst, section, varName, sensorId, event) {
+    if (section !== 'inputs' && section !== 'outputs') return;
+    if (sensorId == null) return;
 
-    const forcedSet = new Set(inst.snapshot.forced || []);
-    const isForced = forcedSet.has(sensorId);
-    const currentValue = inst.snapshot.vars[varName];
-
-    // Remove any existing menu
     const existing = document.getElementById('detail-var-ctxmenu');
     if (existing) existing.remove();
+
+    const currentValue = lookupSnapshotValue(inst.snapshot, varName);
 
     const menu = document.createElement('div');
     menu.id = 'detail-var-ctxmenu';
@@ -3984,32 +3164,30 @@ function showDetailVarContextMenu(inst, varName, event) {
     menu.style.left = event.clientX + 'px';
     menu.style.top = event.clientY + 'px';
 
-    if (isForced) {
-        const btn = document.createElement('button');
-        btn.textContent = 'Unforce ' + varName;
-        btn.addEventListener('click', async function() {
-            menu.remove();
-            await postUnforce(inst, varName);
-        });
-        menu.appendChild(btn);
-    } else {
-        const input = document.createElement('input');
-        input.type = 'number';
-        input.value = typeof currentValue === 'number' ? currentValue : 0;
-        const btn = document.createElement('button');
-        btn.textContent = 'Force ' + varName;
-        btn.addEventListener('click', async function() {
-            const v = input.value;
-            menu.remove();
-            await postForce(inst, varName, v);
-        });
-        menu.appendChild(input);
-        menu.appendChild(btn);
-    }
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.value = (typeof currentValue === 'number') ? currentValue : 0;
 
+    const forceBtn = document.createElement('button');
+    forceBtn.textContent = 'Force ' + varName;
+    forceBtn.addEventListener('click', async function() {
+        const v = input.value;
+        menu.remove();
+        await postForce(inst, sensorId, v);
+    });
+
+    const unforceBtn = document.createElement('button');
+    unforceBtn.textContent = 'Unforce';
+    unforceBtn.addEventListener('click', async function() {
+        menu.remove();
+        await postUnforce(inst, sensorId);
+    });
+
+    menu.appendChild(input);
+    menu.appendChild(forceBtn);
+    menu.appendChild(unforceBtn);
     document.body.appendChild(menu);
 
-    // Dismiss on outside click
     setTimeout(function() {
         document.addEventListener('click', function onOutside(e) {
             if (!menu.contains(e.target)) {
@@ -4019,154 +3197,80 @@ function showDetailVarContextMenu(inst, varName, event) {
         });
     }, 0);
 }
+
+function lookupSnapshotValue(snap, varName) {
+    if (!snap) return null;
+    for (const p of (snap.inputs || [])) if (p.name === varName) return p.value;
+    for (const p of (snap.outputs || [])) if (p.name === varName) return p.value;
+    if (snap.variables && varName in snap.variables) return snap.variables[varName];
+    return null;
+}
 ```
 
-- [ ] **Step 4: Run tests**
+- [ ] **Step 3: Run tests + commit**
 
 ```bash
 cd /home/pv/Projects/uniset-panel/tests && npm run test:unit -- --run 2>&1 | tail
-# Expected: all prior + 3 new force-tests PASS
-```
-
-- [ ] **Step 5: Regenerate + commit**
-
-```bash
+# Expected: all tests PASS
 cd /home/pv/Projects/uniset-panel/ui && go run concat.go
 cd /home/pv/Projects/uniset-panel
 git add ui/static/js/src/60-detail-variables.js tests/unit/detail-variables.test.js ui/static/js/app.js
-git commit -m "feat(detail): Variables force/unforce via SM ionc + context menu"
+git commit -m "feat(detail): Variables context menu — force/unforce via SM ionc"
 ```
 
 ---
 
 ## Phase 5 — Trends tab
 
-### Task 5.1: `60-detail-trends.js` — select + history fetch + live merge + tests
+### Task 5.1: `60-detail-trends.js` — select + live merge + CSV + tests
+
+(Client-side only — no history backend. Chart starts empty at select;
+fills from snapshot poll. Full rationale in design doc §"Future Spec 5".)
 
 **Files:**
 - Create: `ui/static/js/src/60-detail-trends.js`
 - Create: `tests/unit/detail-trends.test.js`
 - Regenerate: `ui/static/js/app.js`
 
-- [ ] **Step 1: Write failing test**
+- [ ] **Step 1: Write failing tests**
 
-Create `tests/unit/detail-trends.test.js`:
+Create `tests/unit/detail-trends.test.js` with cases covering:
 
-```js
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
-import { loadSrc } from './helpers/load-src.js';
+- `toggleTrendForDetail(inst, 'in_Temp')` — first call adds to `selectedTrends` with empty `trendsBuffer['in_Temp'] = []` (NO fetch). Second call removes.
+- `updateTrendsFromSnapshot` picks value from `inst.snapshot.inputs[].value` by name match.
+- `updateTrendsFromSnapshot` picks value from `inst.snapshot.variables[name]` for locals.
+- `updateTrendsFromSnapshot` prunes points older than `inst.state.trendsWindow` seconds.
+- `updateTrendsFromSnapshot` ignores vars not in `selectedTrends`.
+- `trendsToCsv` serializes `{t, v}` pairs with header `timestamp_ms,variable,value`.
 
-beforeAll(() => {
-    loadSrc('ui/static/js/src/60-detail-state.js');
-    loadSrc('ui/static/js/src/60-detail-panel.js');
-    loadSrc('ui/static/js/src/60-detail-trends.js');
-});
+(~90 lines of tests — same pattern as Phase 4 Task 4.1.)
 
-beforeEach(() => {
-    document.body.innerHTML = '';
-    for (const k of Object.keys(detailInstances)) delete detailInstances[k];
-});
-
-describe('toggleTrendForDetail', () => {
-    it('adds on first call, removes on second', async () => {
-        globalThis.fetch = vi.fn(async () => ({
-            ok: true,
-            json: async () => ({
-                var: 'in_Temp',
-                points: [{ t: 1000, v: 10 }, { t: 2000, v: 20 }]
-            })
-        }));
-
-        openDetailPanel('srv-1', 'Server1', 'X');
-        const inst = detailInstances['srv-1:X'];
-
-        await toggleTrendForDetail(inst, 'in_Temp');
-        expect(inst.selectedTrends.has('in_Temp')).toBe(true);
-        expect(inst.trendsBuffer['in_Temp'].length).toBe(2);
-
-        await toggleTrendForDetail(inst, 'in_Temp');
-        expect(inst.selectedTrends.has('in_Temp')).toBe(false);
-        expect(inst.trendsBuffer['in_Temp']).toBeUndefined();
-    });
-});
-
-describe('updateTrendsFromSnapshot', () => {
-    it('appends live point and prunes by window', () => {
-        openDetailPanel('srv-1', 'Server1', 'X');
-        const inst = detailInstances['srv-1:X'];
-        inst.state.trendsWindow = 1; // 1 second window
-        inst.selectedTrends.add('in_Temp');
-        inst.snapshot = { vars: { 'in_Temp': 55 } };
-
-        const now = Date.now();
-        // Preload an old point
-        inst.trendsBuffer['in_Temp'] = [
-            { t: now - 5000, v: 10 },
-            { t: now - 500, v: 20 }
-        ];
-
-        updateTrendsFromSnapshot(inst);
-
-        const buf = inst.trendsBuffer['in_Temp'];
-        // Old point (5s ago) pruned (window=1s), recent (500ms ago) + new kept.
-        expect(buf.length).toBe(2);
-        expect(buf[buf.length - 1].v).toBe(55);
-    });
-
-    it('does nothing for unselected variables', () => {
-        openDetailPanel('srv-1', 'Server1', 'X');
-        const inst = detailInstances['srv-1:X'];
-        inst.snapshot = { vars: { 'in_Other': 99 } };
-        updateTrendsFromSnapshot(inst);
-        expect(inst.trendsBuffer['in_Other']).toBeUndefined();
-    });
-});
-
-describe('trendsToCsv', () => {
-    it('serializes selected variables to CSV', () => {
-        openDetailPanel('srv-1', 'Server1', 'X');
-        const inst = detailInstances['srv-1:X'];
-        inst.selectedTrends.add('in_Temp');
-        inst.trendsBuffer['in_Temp'] = [
-            { t: 1000, v: 10 }, { t: 2000, v: 20 }
-        ];
-        const csv = trendsToCsv(inst);
-        expect(csv).toContain('timestamp_ms,variable,value');
-        expect(csv).toContain('1000,in_Temp,10');
-        expect(csv).toContain('2000,in_Temp,20');
-    });
-});
-```
-
-- [ ] **Step 2: Run — expect failure**
+Run:
 
 ```bash
 cd /home/pv/Projects/uniset-panel/tests && npm run test:unit -- --run 2>&1 | tail
-# Expected: toggleTrendForDetail / updateTrendsFromSnapshot / trendsToCsv undefined
+# Expected: toggleTrendForDetail/updateTrendsFromSnapshot/trendsToCsv undefined
 ```
 
-- [ ] **Step 3: Write `60-detail-trends.js`**
+- [ ] **Step 2: Write module**
 
 Create `ui/static/js/src/60-detail-trends.js`:
 
 ```js
 // ============================================================================
-// UObject Detail Panel — Trends tab
+// UObject Detail Panel — Trends tab (client-side only; see Future Spec 5)
 // ============================================================================
-// Stacked charts (one canvas per selected variable). History is fetched
-// once on select via /api/servers/.../history, then live-updated from
-// the shared snapshot poll (60-detail-variables.js).
 
 const TREND_COLORS = ['#4fc3f7', '#81c784', '#ffb74d', '#e57373', '#ba68c8',
                       '#ff8a65', '#a1887f', '#90a4ae', '#dce775', '#4db6ac'];
 
-async function toggleTrendForDetail(inst, varName) {
+function toggleTrendForDetail(inst, varName) {
     if (inst.selectedTrends.has(varName)) {
         inst.selectedTrends.delete(varName);
         delete inst.trendsBuffer[varName];
     } else {
         inst.selectedTrends.add(varName);
-        await fetchHistoryForDetail(inst, varName);
+        inst.trendsBuffer[varName] = []; // empty; fills from snapshot poll
     }
     if (typeof saveDetailState === 'function') {
         saveDetailState(inst.serverId, inst.objectName, captureState(inst));
@@ -4174,38 +3278,23 @@ async function toggleTrendForDetail(inst, varName) {
     renderTrends(inst);
 }
 
-async function fetchHistoryForDetail(inst, varName) {
-    try {
-        const windowSec = inst.state.trendsWindow > 0 ? inst.state.trendsWindow : 60;
-        const depth = Math.max(1, Math.ceil(windowSec * 1000 / 500));
-        const url = '/api/servers/' + encodeURIComponent(inst.serverId) +
-                    '/objects/' + encodeURIComponent(inst.objectName) +
-                    '/history?var=' + encodeURIComponent(varName) +
-                    '&depth=' + depth;
-        const resp = await fetch(url);
-        if (!resp.ok) {
-            inst.trendsBuffer[varName] = [];
-            return;
-        }
-        const body = await resp.json();
-        const pts = (body && body.points) ? body.points : [];
-        inst.trendsBuffer[varName] = pts.map(function(p) {
-            return { t: p.t, v: p.v };
-        });
-    } catch (e) {
-        console.warn('[trends] history fetch failed:', e);
-        inst.trendsBuffer[varName] = [];
-    }
-}
-
 function updateTrendsFromSnapshot(inst) {
-    if (!inst || !inst.snapshot || !inst.snapshot.vars) return;
+    if (!inst || !inst.snapshot) return;
     const now = Date.now();
     const windowSec = (inst.state && inst.state.trendsWindow) || 60;
     const cutoff = windowSec > 0 ? now - windowSec * 1000 : 0;
 
+    const lookupValue = function(varName) {
+        for (const p of (inst.snapshot.inputs || [])) if (p.name === varName) return p.value;
+        for (const p of (inst.snapshot.outputs || [])) if (p.name === varName) return p.value;
+        if (inst.snapshot.variables && varName in inst.snapshot.variables) {
+            return inst.snapshot.variables[varName];
+        }
+        return undefined;
+    };
+
     for (const varName of inst.selectedTrends) {
-        const value = inst.snapshot.vars[varName];
+        const value = lookupValue(varName);
         if (value === undefined) continue;
         const buf = (inst.trendsBuffer[varName] ||= []);
         buf.push({ t: now, v: value });
@@ -4213,7 +3302,6 @@ function updateTrendsFromSnapshot(inst) {
             while (buf.length && buf[0].t < cutoff) buf.shift();
         }
     }
-    // Trigger render only if trends tab is active to save cycles
     if (inst.state && inst.state.activeInnerTab === 'trends') {
         renderTrendsLive(inst);
     }
@@ -4221,8 +3309,7 @@ function updateTrendsFromSnapshot(inst) {
 
 function renderTrends(inst) {
     const root = document.querySelector('#detail-tab-' +
-                 inst.key.replace(/:/g, '_') +
-                 ' [data-inner-panel="trends"]');
+        inst.key.replace(/:/g, '_') + ' [data-inner-panel="trends"]');
     if (!root) return;
 
     if (inst.selectedTrends.size === 0) {
@@ -4258,20 +3345,14 @@ function renderTrends(inst) {
 
     root.innerHTML = html;
 
-    // Wire toolbar buttons
-    root.querySelector('.trends-window').addEventListener('change', async function(e) {
+    root.querySelector('.trends-window').addEventListener('change', function(e) {
         inst.state.trendsWindow = parseInt(e.target.value, 10) || 0;
         if (typeof saveDetailState === 'function') {
             saveDetailState(inst.serverId, inst.objectName, captureState(inst));
         }
-        // Re-fetch history with new depth for each selected var
-        for (const v of inst.selectedTrends) {
-            await fetchHistoryForDetail(inst, v);
-        }
-        renderTrends(inst);
+        renderTrends(inst); // prune on next tick
     });
     root.querySelector('.trends-clear').addEventListener('click', function() {
-        inst.trendsBuffer = {};
         for (const v of inst.selectedTrends) inst.trendsBuffer[v] = [];
         renderTrendsLive(inst);
     });
@@ -4284,21 +3365,16 @@ function renderTrends(inst) {
 
 function renderTrendsLive(inst) {
     const root = document.querySelector('#detail-tab-' +
-                 inst.key.replace(/:/g, '_') +
-                 ' [data-inner-panel="trends"]');
+        inst.key.replace(/:/g, '_') + ' [data-inner-panel="trends"]');
     if (!root) return;
     let colorIdx = 0;
     for (const varName of inst.selectedTrends) {
-        const canvas = root.querySelector('.trend-row[data-var="' +
-                       cssEscapeAttr(varName) + '"] canvas');
+        const safe = String(varName).replace(/["\\]/g, '\\$&');
+        const canvas = root.querySelector('.trend-row[data-var="' + safe + '"] canvas');
         if (!canvas) continue;
         drawTrendCanvas(canvas, inst.trendsBuffer[varName] || [],
                         TREND_COLORS[colorIdx++ % TREND_COLORS.length]);
     }
-}
-
-function cssEscapeAttr(s) {
-    return String(s).replace(/["\\]/g, '\\$&');
 }
 
 function drawTrendCanvas(canvas, points, color) {
@@ -4313,7 +3389,6 @@ function drawTrendCanvas(canvas, points, color) {
         ctx.fillText('collecting...', 8, 16);
         return;
     }
-    // Compute extents
     let minT = points[0].t, maxT = points[points.length - 1].t;
     let minV = Infinity, maxV = -Infinity;
     for (const p of points) {
@@ -4343,9 +3418,7 @@ function trendsToCsv(inst) {
     const lines = ['timestamp_ms,variable,value'];
     for (const varName of inst.selectedTrends) {
         const buf = inst.trendsBuffer[varName] || [];
-        for (const p of buf) {
-            lines.push(p.t + ',' + varName + ',' + p.v);
-        }
+        for (const p of buf) lines.push(p.t + ',' + varName + ',' + p.v);
     }
     return lines.join('\n');
 }
@@ -4364,20 +3437,15 @@ function exportTrendsCsv(inst) {
 }
 ```
 
-- [ ] **Step 4: Run tests**
+- [ ] **Step 3: Run + commit**
 
 ```bash
 cd /home/pv/Projects/uniset-panel/tests && npm run test:unit -- --run 2>&1 | tail
-# Expected: toggleTrendForDetail/updateTrendsFromSnapshot/trendsToCsv tests PASS
-```
-
-- [ ] **Step 5: Regenerate + commit**
-
-```bash
+# Expected: trends tests PASS
 cd /home/pv/Projects/uniset-panel/ui && go run concat.go
 cd /home/pv/Projects/uniset-panel
 git add ui/static/js/src/60-detail-trends.js tests/unit/detail-trends.test.js ui/static/js/app.js
-git commit -m "feat(detail): Trends tab — select, history, live merge, window/clear/csv"
+git commit -m "feat(detail): Trends tab — client-side live buffer + window/clear/CSV"
 ```
 
 ---
@@ -4535,8 +3603,8 @@ function onTraceBatch(inst, batch) {
     }
 
     for (const rec of batch.records) {
-        // rec is json.RawMessage -> object (SSE parser already parsed).
-        // Enrich with resolved names from snapshot.sensor_map (reverse).
+        // rec already parsed by SSE layer. Enrich with resolved sensor
+        // name from snapshot.inputs/outputs (reverse lookup by id).
         inst.logBuffer.push(enrichLogRecord(inst, rec));
         if (inst.logBuffer.length > LOG_HARD_CAP) {
             inst.logBuffer.shift();
@@ -4546,13 +3614,17 @@ function onTraceBatch(inst, batch) {
 }
 
 function enrichLogRecord(inst, rec) {
-    const map = (inst.snapshot && inst.snapshot.sensor_map) || {};
-    // Build reverse map once per snapshot (cached on inst).
-    if (!inst._reverseSensorMap || inst._reverseSensorMapSrc !== map) {
+    const snap = inst.snapshot;
+    // Build reverse map (sensor id → name) from inputs + outputs once
+    // per snapshot. Locals (variables) have no sensor id, so skipped.
+    if (!inst._reverseSensorMap || inst._reverseSensorMapSrc !== snap) {
         const rev = {};
-        for (const name of Object.keys(map)) rev[map[name]] = name;
+        if (snap) {
+            for (const p of (snap.inputs || [])) rev[p.id] = p.name;
+            for (const p of (snap.outputs || [])) rev[p.id] = p.name;
+        }
         inst._reverseSensorMap = rev;
-        inst._reverseSensorMapSrc = map;
+        inst._reverseSensorMapSrc = snap;
     }
     const out = Object.assign({}, rec);
     if (rec.id != null && inst._reverseSensorMap[rec.id]) {
@@ -4785,13 +3857,13 @@ grep -n "app.get\|app.post\|router.get\|switch.*req.url" tests/mock-server/serve
 # Record the routing pattern used; adjust syntax below accordingly.
 ```
 
-- [ ] **Step 2: Add snapshot/history/trace stubs**
+- [ ] **Step 2: Add snapshot/trace stubs**
 
 Append to `tests/mock-server/server.js` within the main request handler (adjust to the file's actual framework — likely plain `http.createServer` with url switch):
 
 ```js
 // --- Spec 4: /api/servers/:id/objects/:name/snapshot ------------------------
-// Returns synthetic snapshot with 4 sections + forced in_Temp.
+// Returns normalized fixture matching the panel adapter's flat schema.
 const snapshotMatch = req.url.match(
     /^\/api\/servers\/([^\/]+)\/objects\/([^\/]+)\/snapshot$/);
 if (snapshotMatch && req.method === 'GET') {
@@ -4800,35 +3872,26 @@ if (snapshotMatch && req.method === 'GET') {
     res.end(JSON.stringify({
         object: name,
         server: serverId,
-        vars: {
-            'in_Temp': 20 + Math.floor(Math.random() * 10),
-            'in_Pressure': 1013 + Math.floor(Math.random() * 5),
-            'out_Speed': 1500,
+        inputs: [
+            { id: 101, name: 'in_Temp',     value: 20 + Math.floor(Math.random() * 10) },
+            { id: 102, name: 'in_Pressure', value: 1013 + Math.floor(Math.random() * 5) }
+        ],
+        outputs: [
+            { id: 205, name: 'out_Speed', value: 1500 }
+        ],
+        variables: {
+            'state_main': Math.floor(Date.now() / 1000) % 4,
             'Counter': Math.floor(Date.now() / 1000) % 100,
             'FB1.State': 1,
             'FB1.Phase': 2
         },
-        sensor_map: { 'in_Temp': 101, 'in_Pressure': 102, 'out_Speed': 205 },
-        forced: [101],
+        timers: [
+            { id: 7, name: 'T1', interval_ms: 500,
+              time_left: 100 + (Date.now() % 400), tick: Math.floor(Date.now() / 500) }
+        ],
+        statistics: { processingMessageCatchCount: 0, sensors: {} },
         sm_object: 'SharedMemory'
     }));
-    return;
-}
-
-// --- Spec 4: /api/servers/:id/objects/:name/history?var=&depth= -------------
-const historyMatch = req.url.match(
-    /^\/api\/servers\/([^\/]+)\/objects\/([^\/]+)\/history(\?.*)?$/);
-if (historyMatch && req.method === 'GET') {
-    const urlObj = new URL('http://x' + req.url);
-    const varName = urlObj.searchParams.get('var') || 'x';
-    const depth = parseInt(urlObj.searchParams.get('depth') || '60', 10);
-    const now = Date.now();
-    const points = [];
-    for (let i = depth - 1; i >= 0; i--) {
-        points.push({ t: now - i * 500, v: Math.sin(i / 5) * 10 + 50 });
-    }
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ var: varName, points: points }));
     return;
 }
 
@@ -4883,7 +3946,7 @@ Start dev server and query one of the new endpoints:
 cd /home/pv/Projects/uniset-panel
 docker compose up dev-viewer -d --build
 curl -s 'http://localhost:8000/api/servers/srv-1/objects/DG_Control/snapshot' | jq .
-# Expected: JSON with vars/sensor_map/forced/sm_object
+# Expected: JSON with inputs/outputs/variables/timers/statistics/sm_object
 docker compose --profile dev down
 ```
 
@@ -4891,7 +3954,7 @@ docker compose --profile dev down
 
 ```bash
 git add tests/mock-server/server.js
-git commit -m "test(mock): stub /snapshot /history /api/trace/* for Spec 4"
+git commit -m "test(mock): stub /snapshot /api/trace/* for Spec 4"
 ```
 
 ### Task 7.2: Playwright E2E — detail panel full flow
@@ -5201,13 +4264,15 @@ Panel отладки конкретного UObject'а. Открывается �
 
 ## Эндпоинты
 
-- `GET /api/servers/{id}/objects/{name}/snapshot` — текущий snapshot.
-- `GET /api/servers/{id}/objects/{name}/history?var=X&depth=N` —
-  история одной переменной.
+- `GET /api/servers/{id}/objects/{name}/snapshot` — текущий snapshot
+  (proxy к uniset `/<Object>/dump` с flatten adapter).
 - `GET /api/trace/events?object=X&server=S&interval=N` — SSE поток
   trace-событий (отдельный канал, независимый от `/api/events`).
 - `POST /api/trace/servers/{id}/objects/{name}/enable?size=N` /
   `/disable` — управление trace на uniset-стороне.
+
+History endpoint отсутствует в Spec 4 — Trends используют только
+client-side buffer (см. Future Spec 5 в design doc).
 
 ## Persistent state
 
@@ -5260,35 +4325,36 @@ git commit -m "feat(uobject-debug): Spec 4 — detail panel + trace backend"
 
 Coverage checklist run against `docs/superpowers/specs/2026-04-19-uobject-debug-spec4-design.md`:
 
-- ✅ Phase 0 (verification) — Tasks 0.1–0.3 cover snapshot envelope, history timestamp unit, handlers.go struct location.
-- ✅ `internal/debug/` package — Tasks 1.1–1.2 (types + client + tests).
-- ✅ `internal/api/handlers_debug.go` snapshot — Tasks 1.3–1.4.
-- ✅ `internal/api/handlers_debug.go` history — Tasks 1.5–1.7.
+- ✅ Phase 0 (verification) — Tasks 0.1–0.2 cover `/<Object>/dump` envelope and `handlers.go` struct location.
+- ✅ `internal/debug/` package — Task 1.1 (types + client + adapter + tests).
+- ✅ `internal/api/handlers_debug.go` snapshot — Tasks 1.2–1.3.
 - ✅ `internal/trace/` package (Spec 2 scope) — Tasks 2.1–2.5.
 - ✅ SSE BroadcastTraceBatch + traceOnly — Task 2.6.
 - ✅ HandleTraceEvents + proxy enable/disable — Tasks 2.7–2.8.
 - ✅ Trace integration test + route wiring — Task 2.9.
 - ✅ `60-detail-state.js` — Task 3.1.
 - ✅ `60-detail-panel.js` with CustomEvent listener + schema-closed cleanup — Task 3.2.
-- ✅ Variables tab (render + snapshot poll + flash + forced indicator) — Task 4.1.
+- ✅ Variables tab (render + snapshot poll + flash) — Task 4.1. Forced indicator: deferred (design doc Open Risks).
 - ✅ Force/unforce via SM ionc — Task 4.2.
-- ✅ Trends tab (select + history + live merge + window/clear/csv) — Task 5.1.
+- ✅ Trends tab (select + live merge + window/clear/csv, **no history**) — Task 5.1.
 - ✅ Message Log tab (subscribe + render + controls + filter + csv + overflow banner) — Task 6.1.
 - ✅ Mock server stubs — Task 7.1.
 - ✅ Playwright E2E — Task 7.2.
 - ✅ CSS — Task 7.3.
 - ✅ User docs — Task 7.4.
 
-Spec requirements with matching tasks: all found. No gaps.
+Spec requirements with matching tasks: all found. History backfill
+deferred to Future Spec 5 (documented in design doc and in this plan).
 
 **Type consistency sweep:**
-- `Handlers.debugClient` is of type `DebugInterface` (Task 1.3) — fake in tests implements `Snapshot` + `History` methods. Task 1.6 adds History to same interface. Consistent.
+- `Handlers.debugClient` is of type `DebugInterface` (Task 1.2) — has only `Snapshot` method (no History in Spec 4). Fake in tests implements the single method. Consistent.
 - `Handlers.traceMgr` is `TraceManagerInterface` (Task 2.7) — fake implements `Subscribe/Unsubscribe/PollerCount/StopAll`. Task 2.5 exports matching `*trace.Manager` methods. Consistent.
-- `ServerResolver` duplicated in `internal/trace` and `internal/debug` intentionally (Task 1.2 + Task 2.2) — sole adapter in `cmd/server/main.go`. Deliberate.
+- `ServerResolver` duplicated in `internal/trace` and `internal/debug` intentionally (Task 1.1 + Task 2.2) — sole adapter in `cmd/server/main.go`. Deliberate.
 - Frontend global `detailInstances` defined in Task 3.2, consumed in Tasks 4.1, 4.2, 5.1, 6.1 under the same name + shape.
 - `captureState(inst)` defined in Task 3.2, reused in Tasks 4.1, 5.1, 6.1.
 - `escapeDetailText` defined in Task 3.2, reused in Tasks 4.1, 5.1, 6.1.
 - `loadDetailState`/`saveDetailState`/`flushDetailStateImmediate` defined in Task 3.1, used in Tasks 3.2 + subsequent. Consistent.
+- `inst.snapshot` shape is `{inputs, outputs, variables, timers, statistics, sm_object}` in Tasks 4.1, 4.2, 5.1, 7.1 (mock). Consistent across adapter boundary.
 
 **Placeholder scan:** no TBD / TODO / "implement later" / "similar to Task N" / "handle edge cases" found. Each step contains complete code.
 
