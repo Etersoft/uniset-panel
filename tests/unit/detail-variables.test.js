@@ -62,7 +62,7 @@ describe('renderVariables', () => {
 
     it('renders four sections (even when some are empty)', () => {
         const inst = makeInst();
-        renderVariables(inst);
+        renderDetailVariables(inst);
         const root = document.querySelector('[data-inner-panel="variables"]');
         expect(root.querySelector('[data-section="inputs"]')).toBeTruthy();
         expect(root.querySelector('[data-section="outputs"]')).toBeTruthy();
@@ -72,7 +72,7 @@ describe('renderVariables', () => {
 
     it('marks in_*/out_* rows as forcible with data-sensor-id', () => {
         const inst = makeInst();
-        renderVariables(inst);
+        renderDetailVariables(inst);
         const inputRow = document.querySelector('tr[data-var="in_Temp"]');
         expect(inputRow.classList.contains('forcible')).toBe(true);
         expect(inputRow.dataset.sensorId).toBe('101');
@@ -83,7 +83,7 @@ describe('renderVariables', () => {
     it('escapes HTML in variable names', () => {
         const inst = makeInst();
         inst.snapshot.variables['<script>evil</script>'] = 'bad';
-        renderVariables(inst);
+        renderDetailVariables(inst);
         const root = document.querySelector('[data-inner-panel="variables"]');
         // No script element was actually injected into the DOM.
         expect(root.querySelector('script')).toBeNull();

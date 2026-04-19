@@ -23,7 +23,7 @@ function buildVariablesSections(snap) {
     return out;
 }
 
-function renderVariables(inst) {
+function renderDetailVariables(inst) {
     const root = document.querySelector('#detail-tab-' +
         inst.key.replace(/:/g, '_') + ' [data-inner-panel="variables"]');
     if (!root) return;
@@ -89,7 +89,7 @@ function renderVariables(inst) {
             if (typeof saveDetailState === 'function') {
                 saveDetailState(inst.serverId, inst.objectName, captureState(inst));
             }
-            renderVariables(inst);
+            renderDetailVariables(inst);
         });
     });
 
@@ -165,7 +165,7 @@ function startDetailSnapshotPoll(inst) {
             }
             inst.snapshotError = null;
             inst.snapshot = await resp.json();
-            renderVariables(inst);
+            renderDetailVariables(inst);
             if (typeof updateTrendsFromSnapshot === 'function') {
                 updateTrendsFromSnapshot(inst);
             }
