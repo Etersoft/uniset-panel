@@ -77,5 +77,14 @@ when the panel branch merges.
 
 ## 0.2 Handlers struct location
 
-To be verified before Phase 1.2 (`handlers_debug.go` adds
-`debugClient` field). Subagent will grep and record.
+Date: 2026-04-19
+
+File: `internal/api/handlers.go`
+Starting line: 30
+Existing fields: client, storage, poller, sensorConfig, sensorConfigs, sseHub, pollInterval, logServerMgr, smPoller, ioncPoller, modbusPoller, opcuaPoller, serverMgr, controlsEnabled, uiConfig, logStreamConfig, controlMgr, recordingMgr, version, dashboardMgr, journalMgr, launcherMgr, sidebarConfig, overviewConfig
+"context" imported: no
+
+Decision for Phase 1.2:
+- Add `debugClient DebugInterface` field to this struct.
+- Phase 1.2 must add `"context"` to the imports (together with the
+  debug package module path).
