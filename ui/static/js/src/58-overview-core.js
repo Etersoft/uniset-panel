@@ -306,8 +306,9 @@ function initOverviewGraph(tabKey, serverId, data) {
     lgCanvas.title_text_font = 'bold 14px sans-serif';
     lgCanvas.inner_text_font = '12px sans-serif';
 
-    // Hide link lines — connections kept for layout, labels shown as text on nodes
-    lgCanvas.renderLink = function() {};
+    // LiteGraph draws native link lines by default. Task 13 made them the
+    // primary visual at scale >= 0.5; port text-labels (below) render only
+    // at mid-zoom [0.25, 0.5) for orientation.
 
     // Build graph from data
     const nodeMap = buildOverviewGraph(graph, data);
