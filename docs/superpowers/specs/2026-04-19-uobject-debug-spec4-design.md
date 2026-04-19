@@ -41,11 +41,16 @@ Spec 4 объединяет в одной ветке два ранее разд�
    - Unit + integration тесты.
 
 2. **Backend — Spec 4 часть (debug proxy):**
-   - Go-пакет `internal/debug/` (HTTP client к uniset `/debug/*`).
-   - Handler `GET /api/servers/{id}/objects/{name}/snapshot` → uniset
-     `/debug/snapshot`.
-   - Handler `GET /api/servers/{id}/objects/{name}/history?var=X&depth=N`
-     → uniset `/debug/history`.
+   - Go-пакет `internal/debug/` (HTTP client к uniset `/<Object>/dump`).
+   - Adapter: `/dump` response → Spec 4 `Snapshot` struct (flatten
+     `io.in` → inputs с sensor id, `io.out` → outputs, `Variables` →
+     locals/fb_instances по dotted-prefix convention; `Timers` и
+     `Statistics` прокидываются как есть для будущих вкладок).
+   - Handler `GET /api/servers/{id}/objects/{name}/snapshot` → proxy
+     к uniset `/<name>/dump` с post-process adapter.
+   - **History backend — нет в Spec 4.** Trends используют только
+     client-side live buffer (см. секцию "Trends tab"). Future Spec 5
+     может добавить uniset-side per-variable ring buffer.
    - Unit тесты (fake uniset + handler contract).
 
 3. **Frontend — detail panel tab:**
@@ -71,8 +76,11 @@ Spec 4 объединяет в одной ветке два ранее разд�
    - Stacked charts: один Chart.js canvas per selected variable.
    - Window selector: 30s / 1m / 5m / all.
    - Clear / Export CSV.
-   - Initial history на select (backend proxy) + live updates из
-     snapshot poll.
+   - **Client-side only live buffer** — точки накапливаются из
+     snapshot poll (500ms) с момента select'а. Первое добавление
+     показывает пустой график, который заполняется по мере поступления
+     данных. Backend history — откладывается в Spec 5 (см. "Future
+     work" ниже).
 
 6. **Message Log tab:**
    - Virtualized table с trace records.
@@ -119,20 +127,18 @@ System Overview tab                    Detail panel tab (new, per object)
 │  (Spec 3, existing)   │  double-     │ │                              │   │
 └───────────────────────┘  clicked     │ └──────────────────────────────┘   │
                                        └────────────────────────────────────┘
-                                               ▲           ▲            ▲
-                                   snapshot    │  history  │  trace     │
-                                   poll 500ms  │  (on      │  SSE       │
-                                               │   select) │  stream    │
-                                               │           │            │
+                                               ▲                          ▲
+                                   snapshot    │                          │
+                                   poll 500ms  │         trace SSE stream │
+                                               │                          │
                                       ┌────────────────────────────────┐
                                       │ uniset-panel Go backend        │
                                       │                                │
-                                      │  /api/servers/{s}/objects/{o}/ │
-                                      │      snapshot                  │
-                                      │      history?var=X&depth=N     │
+                                      │  /api/servers/{id}/objects/    │
+                                      │     {name}/snapshot            │
                                       │  /api/trace/events             │
-                                      │  /api/trace/servers/{s}/       │
-                                      │      objects/{o}/{enable|disable}
+                                      │  /api/trace/servers/{id}/      │
+                                      │     objects/{name}/{enable|disable}
                                       │                                │
                                       │  Reused:                       │
                                       │  /api/objects/{SM}/ionc/       │
@@ -140,12 +146,14 @@ System Overview tab                    Detail panel tab (new, per object)
                                       └─────────────┬──────────────────┘
                                                     │
                                     uniset (C++) per-server:
-                                      /debug/snapshot
-                                      /debug/history?var=X&depth=N
-                                      /<obj>/dump?trace=1&since=&limit=
-                                      /<obj>/trace/enable?size=N
-                                      /<obj>/trace/disable
+                                      /<Object>/dump              (for snapshot)
+                                      /<Object>/dump?trace=1&since=&limit=
+                                      /<Object>/trace/enable?size=N
+                                      /<Object>/trace/disable
                                       (SM existing for freeze/unfreeze)
+
+Trends tab keeps a client-side live buffer populated from the same
+/snapshot poll — no backend history endpoint in Spec 4.
 ```
 
 ### CustomEvent entry point
@@ -287,53 +295,77 @@ function startSnapshotPoll(inst) {
 }
 ```
 
+**Envelope structure (from backend adapter):**
+
+```js
+// inst.snapshot after fetch:
+{
+    object: "DG_Control",
+    server: "srv-1",
+    inputs:  [{ id: 101, name: "in_Temp",   value: 75 }, ...],   // from io.in
+    outputs: [{ id: 205, name: "out_Speed", value: 1500 }, ...],  // from io.out
+    variables: { "state_main": 2, "Counter": 42, "FB1.State": 1 }, // from Variables (vmon)
+    timers: [{ id: 7, name: "T2", interval_ms: 500, ... }, ...],    // from Timers
+    statistics: { processingMessageCatchCount: 0, sensors: {...} }, // from Statistics
+    sm_object: "SharedMemory"  // resolved panel-side
+}
+```
+
+Forced state is **not** in the envelope — it's queried separately from
+the SM via existing ionc endpoints, or derived: a variable is shown as
+forced if its sensor ID appears in the per-server forced-sensors list
+(panel can maintain this list from existing `/api/objects/{SM}/ionc/frozen`
+if it exists, otherwise the forced indicator is deferred until such an
+API is added).
+
+**Simpler approach for MVP:** the Force/Unforce action always attempts
+the operation; if the SM rejects because already-in-that-state, the
+dialog surfaces the error. No forced indicator in MVP is acceptable —
+add it later when a forced-list endpoint is confirmed.
+
 **Render:**
 
 ```js
 function renderVariables(inst) {
-    const groups = groupVars(inst.snapshot.vars); // by prefix
-    // 4 <section> blocks: inputs/outputs/locals/fb_instances
+    const sections = buildSections(inst.snapshot);
+    // 4 <section> blocks: inputs, outputs, locals, fb_instances
+    //   - inputs: from inst.snapshot.inputs directly (Port array)
+    //   - outputs: from inst.snapshot.outputs
+    //   - locals:  from inst.snapshot.variables, filtered: !name.includes('.')
+    //   - fb_instances: from inst.snapshot.variables, filtered: name.includes('.')
     // Each: header with count + collapse arrow, <table> with Name/Value/Type/Δ
-    // forced indicator from inst.snapshot.forced + sensor_map
+    // forced indicator: deferred (see "Envelope structure" above)
     // flash classes (flash-up/flash-down) on value change
 }
-```
 
-**Group detection:**
-
-```js
-function groupVars(vars) {
-    const groups = { inputs: [], outputs: [], locals: [], fb_instances: [] };
-    for (const [name, value] of Object.entries(vars)) {
-        if (name.startsWith('in_')) groups.inputs.push({ name, value });
-        else if (name.startsWith('out_')) groups.outputs.push({ name, value });
-        else if (name.includes('.')) groups.fb_instances.push({ name, value });
-        else groups.locals.push({ name, value });
+function buildSections(snap) {
+    const locals = [], fbInstances = [];
+    for (const [name, value] of Object.entries(snap.variables || {})) {
+        if (name.includes('.')) fbInstances.push({ name, value });
+        else locals.push({ name, value });
     }
-    return groups;
+    return {
+        inputs: (snap.inputs || []).map(p => ({ name: p.name, value: p.value, sensorId: p.id })),
+        outputs: (snap.outputs || []).map(p => ({ name: p.name, value: p.value, sensorId: p.id })),
+        locals,
+        fb_instances: fbInstances
+    };
 }
 ```
 
 **Force / unforce:**
 
 ```js
-function onVariableContextMenu(inst, varName, event) {
+function onVariableContextMenu(inst, section, varName, sensorId, event) {
     event.preventDefault();
-    const group = varGroup(varName);
-    if (group !== 'inputs' && group !== 'outputs') return; // no-op
+    if (section !== 'inputs' && section !== 'outputs') return; // locals/fb: no-op
+    if (sensorId == null) return; // row не связан с SM
 
-    const sensorId = inst.snapshot.sensor_map[varName];
-    if (!sensorId) return; // envelope broken
     const smObject = inst.snapshot.sm_object || 'SharedMemory';
-    const isForced = inst.snapshot.forced.includes(sensorId);
-
-    if (isForced) {
-        showConfirm(`Unforce ${varName}?`, () =>
-            postUnforce(inst.serverId, smObject, sensorId));
-    } else {
-        showValueDialog(`Force ${varName} to:`, inst.snapshot.vars[varName],
-            (value) => postForce(inst.serverId, smObject, sensorId, value));
-    }
+    // MVP: no forced indicator; always offer Force dialog.
+    // The SM returns error if already-in-that-state — surface it inline.
+    showValueDialog(`Force ${varName} to:`, currentValueFor(inst, section, varName),
+        (value) => postForce(inst.serverId, smObject, sensorId, value));
 }
 
 async function postForce(serverId, smObject, sensorId, value) {
@@ -361,44 +393,52 @@ inst.trendsWindow = 60;          // seconds (state persisted)
 **On select (from Variables row click):**
 
 ```js
-async function addToTrends(inst, varName) {
+function addToTrends(inst, varName) {
     if (inst.selectedTrends.has(varName)) {
         inst.selectedTrends.delete(varName);
         delete inst.trendsBuffer[varName];
     } else {
         inst.selectedTrends.add(varName);
-        await fetchHistory(inst, varName);
+        inst.trendsBuffer[varName] = []; // empty; filled by snapshot poll
     }
     renderTrends(inst);
     persistState(inst);
 }
-
-async function fetchHistory(inst, varName) {
-    const depth = Math.ceil(inst.trendsWindow * 1000 / 500); // 500ms poll
-    const resp = await fetch(
-        `/api/servers/${inst.serverId}/objects/${inst.objectName}`
-        + `/history?var=${encodeURIComponent(varName)}&depth=${depth}`);
-    if (!resp.ok) { inst.trendsBuffer[varName] = []; return; }
-    const body = await resp.json();
-    inst.trendsBuffer[varName] = (body.points || []).map(p => ({ t: p.t, v: p.v }));
-}
 ```
+
+No backend history fetch. Chart starts empty and fills as snapshot poll
+ticks arrive (first point after ≤500ms).
 
 **Live updates:**
 
 ```js
 function updateTrendsFromSnapshot(inst) {
     const now = Date.now();
+    // Lookup helper: in Spec 4 snapshot, values come from either
+    // inputs/outputs arrays OR variables map.
+    const lookupValue = (varName) => {
+        if (inst.snapshot.variables && varName in inst.snapshot.variables) {
+            return inst.snapshot.variables[varName];
+        }
+        for (const p of inst.snapshot.inputs || []) if (p.name === varName) return p.value;
+        for (const p of inst.snapshot.outputs || []) if (p.name === varName) return p.value;
+        return undefined;
+    };
+
     for (const varName of inst.selectedTrends) {
-        const value = inst.snapshot.vars[varName];
+        const value = lookupValue(varName);
         if (value === undefined) continue;
         const buf = inst.trendsBuffer[varName] ||= [];
         buf.push({ t: now, v: value });
-        // prune by window
-        const cutoff = now - inst.trendsWindow * 1000;
-        while (buf.length && buf[0].t < cutoff) buf.shift();
+        // prune by window (0 = unbounded until panel close)
+        if (inst.trendsWindow > 0) {
+            const cutoff = now - inst.trendsWindow * 1000;
+            while (buf.length && buf[0].t < cutoff) buf.shift();
+        }
     }
-    renderTrends(inst); // Chart.js update
+    if (inst.state && inst.state.activeInnerTab === 'trends') {
+        renderTrends(inst);
+    }
 }
 ```
 
@@ -546,32 +586,64 @@ type Client struct {
     resolver ServerResolver // reuse from trace package or extract to shared
 }
 
+// Port is one input or output port from uniset io.in / io.out.
+type Port struct {
+    ID    int64 `json:"id"`
+    Name  string `json:"name"`
+    Value any   `json:"value"`
+}
+
+// Timer mirrors uniset Timers[<id>] entry from httpDump.
+type Timer struct {
+    ID       int64  `json:"id"`
+    Name     string `json:"name"`
+    IntervalMS int64 `json:"interval_ms"`
+    TimeLeft   int64 `json:"time_left"`
+    Tick       int64 `json:"tick"`
+}
+
+// Snapshot is the normalized envelope returned to frontend. Adapted
+// from uniset /<Object>/dump response; flat rather than wrapped.
 type Snapshot struct {
-    Object    string            `json:"object"`
-    Server    string            `json:"server"`
-    Vars      map[string]any    `json:"vars"`
-    SensorMap map[string]int64  `json:"sensor_map"` // in_*/out_* → sensor ID
-    Forced    []int64           `json:"forced"`
-    SMObject  string            `json:"sm_object"` // from uniset config
-}
-
-type HistoryPoint struct {
-    T int64 `json:"t"` // ms since epoch
-    V any   `json:"v"`
-}
-
-type History struct {
-    Var    string         `json:"var"`
-    Points []HistoryPoint `json:"points"`
+    Object     string            `json:"object"`
+    Server     string            `json:"server"`
+    Inputs     []Port            `json:"inputs"`       // from io.in
+    Outputs    []Port            `json:"outputs"`      // from io.out
+    Variables  map[string]any    `json:"variables"`    // from Variables (vmon)
+    Timers     []Timer           `json:"timers"`       // from Timers
+    Statistics map[string]any    `json:"statistics"`   // from Statistics (passthrough)
+    SMObject   string            `json:"sm_object"`    // resolved panel-side, not from uniset
 }
 
 func (c *Client) Snapshot(ctx context.Context, serverID, objectName string) (*Snapshot, error)
-func (c *Client) History(ctx context.Context, serverID, objectName, varName string, depth int) (*History, error)
 ```
 
-**Uniset response adaptation:** uniset `/debug/snapshot` JSON имеет
-top-level `{"<ObjectName>": {vars, sensor_map, forced, sm_object}}`;
-client разворачивает в flat Snapshot. Аналогично для history.
+**Uniset response adaptation:** existing uniset `/<Object>/dump` (depth=0)
+returns:
+```json
+{
+  "<ObjectName>": {
+    "LogServer": {...},
+    "Timers": { "count": N, "<id>": { id, name, msec, timeleft, tick }, ... },
+    "Variables": { "name": value, ... },
+    "Statistics": { processingMessageCatchCount, sensors: { ... } },
+    "io": { "in": { "<name>": { id, value }, ... },
+            "out": { "<name>": { id, value }, ... } }
+  }
+}
+```
+
+Client:
+1. Strips top-level `{"<ObjectName>": ...}` wrapper.
+2. Flattens `Timers` map (excluding `count`) into `[]Timer`.
+3. Flattens `io.in` / `io.out` into `[]Port` (preserving sensor IDs).
+4. Copies `Variables` / `Statistics` verbatim.
+5. Drops `LogServer` (не нужен Spec 4).
+6. `SMObject` заполняется **panel-side** из server config (обычно
+   `"SharedMemory"`; overridable через existing uniset-panel settings).
+
+**NO history endpoint.** `Client` has only `Snapshot` method. For Trends
+backfill — see Future Spec 5.
 
 ### `internal/api/handlers_debug.go`
 
@@ -587,17 +659,12 @@ func (h *Handlers) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
     h.writeJSON(w, snap)
 }
 
-// GET /api/servers/{id}/objects/{name}/history?var=X&depth=N
-func (h *Handlers) HandleHistory(w http.ResponseWriter, r *http.Request) {
-    // parse var + depth (clamp depth to [1, 10000])
-    // call debugClient.History(...)
-    // passthrough result
-}
-
-func mapDebugErr(err error) int { // 404 / 501 / 502 / 503 ...
+func mapDebugErr(err error) int { // 404 / 502 / 503
     ...
 }
 ```
+
+**No `HandleHistory` in Spec 4.** Trends are client-side only.
 
 ### `internal/api/handlers_trace.go` (Spec 2 scope)
 
@@ -617,8 +684,8 @@ s.mux.HandleFunc("POST /api/trace/servers/{serverId}/objects/{objectName}/disabl
 // Spec 4 routes (using {id}/{name} to match existing convention in server.go):
 s.mux.HandleFunc("GET /api/servers/{id}/objects/{name}/snapshot",
                  s.handlers.HandleSnapshot)
-s.mux.HandleFunc("GET /api/servers/{id}/objects/{name}/history",
-                 s.handlers.HandleHistory)
+// No /history route in Spec 4 — Trends are client-side only.
+// Future Spec 5 may add GET /api/servers/{id}/objects/{name}/history.
 ```
 
 ### `Handlers` struct additions
@@ -646,9 +713,9 @@ DI.
 |---|---|
 | snapshot: uniset connection refused | 503 + "server unreachable"; frontend retries next poll |
 | snapshot: uniset 404 | 404 "object not found"; Variables shows error banner, poll halts |
-| snapshot: uniset 501 (no `/debug` on old uniset) | 501 + message; Variables graceful: "requires uniset with debug API" |
+| snapshot: missing `io` or `Variables` in uniset response | partial render with empty sections; banner "uniset response incomplete" |
 | snapshot: malformed JSON | 502 + log warning; poll continues (next cycle may succeed) |
-| history: any error | inline in Trends chart: "no history for X"; live buffer continues |
+| Trends backfill on select | **no backend call** — empty chart until first snapshot tick populates buffer |
 | trace SSE drops | Spec 2 auto-backoff + enabled:false batch → banner "reconnecting" |
 | trace enable/disable returned 403 | dialog "authentication required"; toggle disabled |
 | force/unforce 403 | dialog "authentication required" |
@@ -736,13 +803,14 @@ DI.
 
 В `tests/mock-server/server.js`:
 
-- `GET /api/servers/:id/objects/:name/snapshot` — returns fixture with:
-  - 4-section vars (in_Temp, out_Speed, Counter, FB1.State)
-  - sensor_map for in_/out_
-  - forced: [101] (for in_Temp)
-  - sm_object: "SharedMemory"
-- `GET /api/servers/:id/objects/:name/history?var=X&depth=N` — returns
-  synthetic sine wave of N points.
+- `GET /api/servers/:id/objects/:name/snapshot` — returns normalized
+  fixture (panel-side schema, already flattened):
+  - `inputs: [{id: 101, name: "in_Temp", value: <random>}, ...]`
+  - `outputs: [{id: 205, name: "out_Speed", value: 1500}, ...]`
+  - `variables: { "state_main": 2, "Counter": 42, "FB1.State": 1 }`
+  - `timers: [{id: 7, name: "T2", interval_ms: 500, ...}]`
+  - `statistics: { processingMessageCatchCount: 0, sensors: {...} }`
+  - `sm_object: "SharedMemory"`
 - `GET /api/trace/events?object=X&server=S` — SSE emits batches of
   fake records every 500ms (sensorInfo + timerInfo + sysCommand mix).
 - `POST /api/trace/servers/:s/objects/:o/{enable,disable}` —
@@ -750,42 +818,60 @@ DI.
 
 ## Backward compatibility
 
-- Новые endpoints (snapshot / history / trace/*) — 404 before; no
-  breaking.
+- Новые endpoints (snapshot / trace/*) — 404 before; no breaking.
 - CustomEvent contract: `uniset:node-double-clicked` уже эмитится
   Spec 3; Spec 4 — добавляет listener, никаких changes на emit side.
 - localStorage: новый namespace `uniset-panel:detail:*`; не
   конфликтует с overview (`uniset-panel:overview:*`).
-- Если uniset не поддерживает `/debug/snapshot` (старая version) —
-  501 response; detail panel graceful degrade.
+- Uniset `/<Object>/dump` существует с задолго до Spec 1; Spec 4
+  адаптер работает с любой uniset version. Если конкретный
+  UObject подкласс не выдаёт `io` секцию — панель показывает пустые
+  Inputs/Outputs, всё остальное рендерится.
+
+## Future Spec 5 — per-variable history on uniset side
+
+Spec 4 Trends show only live data (from the moment a variable is
+selected). For historical backfill (e.g. "показать последнюю минуту
+изменений"), uniset needs to maintain a per-variable ring buffer
+similar to the dispatch trace ring from Spec 1.
+
+Sketch of Spec 5 (not in Spec 4 scope):
+
+- Codegen-emitted per-UObject `VariableHistoryBuffer` keyed by
+  `(varName → ring<{t_us, value}>)`. Opt-in via XML attribute or CLI
+  flag (like `trace_buffer`).
+- New HTTP endpoint `GET /<Object>/history?var=X&since=<us>&limit=N`.
+- Panel proxy `GET /api/servers/{id}/objects/{name}/history?var=X&depth=N`
+  with time-unit adapter (ms for frontend, µs inside).
+- Frontend: Trends tab `addToTrends(varName)` becomes async, calls
+  history endpoint, prepends returned points to the client buffer.
+
+Until Spec 5 lands, Trends MVP (Spec 4) works correctly but has no
+visible history at the moment of first select.
 
 ## Implementation order (для плана)
 
 Phase 0 — Verification against Spec 1 (uniset-2.x branch with
 `fc6a0718 UObject debug dispatch-trace API`):
 
-0a. Call uniset `/debug/snapshot` against a test UObject; confirm
-    JSON envelope contains `vars`, `sensor_map`, `forced`, `sm_object`
-    (or record what fields actually exist). Adjust `debug.Snapshot`
-    Go struct if Spec 1 emits different field names.
-0b. Call uniset `/debug/history?var=X&depth=N`; record the unit of
-    the timestamp field (`t` in ms vs µs). If µs — divide by 1000 in
-    adapter, or switch `HistoryPoint.T` to int64 µs and convert in
-    frontend. Document choice in `client.go` comment + assert in
-    `client_test.go`.
-0c. Verify `traceMgr` and `debugClient` field placement target —
+0a. Call uniset `/<ObjectName>/dump` against a test UObject; confirm
+    JSON envelope contains expected top-level keys: `Variables`,
+    `Timers`, `Statistics`, `io`. Record exact `io.in` / `io.out`
+    item shape (at minimum each item should have `id` and `value`
+    fields). If a key is missing, document it in Phase 0 notes and
+    adjust adapter default fallbacks.
+0b. Verify `traceMgr` and `debugClient` field placement target —
     currently `internal/api/handlers.go` holds the `Handlers` struct
     (per Spec 2 commitments). Add new fields there, not in a new
     file.
 
 Phase 1 — Backend foundation:
 
-1. `internal/debug/types.go` + `client.go` + unit tests (snapshot only).
+1. `internal/debug/types.go` + `client.go` + unit tests (Snapshot only).
 2. `internal/api/handlers_debug.go` — HandleSnapshot + tests.
-3. Wire snapshot route.
-4. `internal/debug/client.go` — History method + tests.
-5. `handlers_debug.go` — HandleHistory + tests.
-6. Wire history route.
+3. Wire snapshot route (`GET /api/servers/{id}/objects/{name}/snapshot`).
+
+(No history method, no history handler — Trends are client-side only.)
 
 Phase 2 — Spec 2 trace backend (следует spec2-design.md):
 
@@ -814,10 +900,12 @@ Phase 4 — Variables tab:
 
 Phase 5 — Trends tab:
 
-21. `60-detail-trends.js` — selectedTrends state + render shell.
-22. History fetch на select + Chart.js integration.
-23. Live update merge + window pruning.
-24. Window selector + Clear + Export CSV + tests.
+21. `60-detail-trends.js` — selectedTrends state + render shell +
+    Chart.js integration.
+22. Live update merge + window pruning (points come from snapshot poll).
+23. Window selector + Clear + Export CSV + tests.
+
+(No history fetch on select — see Future Spec 5.)
 
 Phase 6 — Message Log tab:
 
@@ -836,24 +924,30 @@ Phase 7 — Integration & polish:
 
 ## Open risks
 
-- **Uniset `/debug/snapshot` envelope fields** — Spec 1 commit
-  `fc6a0718` не документирует публично field names. `debug.Snapshot`
-  Go struct (vars/sensor_map/forced/sm_object) — design-time
-  assumption. Phase 0a verifies fact; если разница — adjust struct +
-  client adapter до Phase 1.
+- **Uniset `/<Object>/dump` `io` schema per subclass** — base
+  `UObject_SK` emits empty `io.in` / `io.out`; actual content comes
+  from codegen-generated subclass `httpDumpIO()`. If a particular
+  UObject does not populate `io` (rare but possible), Variables tab
+  Inputs/Outputs show empty sections — acceptable graceful degrade
+  for Spec 4.
 
-- **`sm_object` fallback** — если uniset не выдаёт это поле
-  (старая version или оптимизация), panel использует hardcoded
-  "SharedMemory" (типичное имя SM-объекта в uniset-проектах).
-  Если в конкретном развёртывании SM имеет иное имя — panel config
-  option добавляется как отдельный ticket.
+- **`sm_object` — panel-side resolution** — Spec 4 adapter hardcodes
+  `"SharedMemory"` as the default SM name. If a deployment uses a
+  non-standard name, the force/unforce action will target the wrong
+  object and fail. A config option (`--sm-object` per server in
+  uniset-panel) is the right long-term fix; out of Spec 4 scope.
 
-- **History timestamp unit** — uniset `/debug/history` может
-  возвращать `t` в миллисекундах или микросекундах (TraceRecord
-  использует µs в `time_us`). Phase 0b проверяет фактический
-  формат и закрепляет convention в code + comment. Несоответствие
-  ms/µs между history backfill и live update (`Date.now()` в ms)
-  создало бы split в x-оси Trends chart.
+- **Forced state indicator deferred** — Spec 4 MVP does not display
+  a 🔒 marker on forced variables because uniset-panel does not
+  expose a list of currently-frozen sensors per SM. Adding that
+  (e.g. `GET /api/objects/{SM}/ionc/frozen`) is a small enhancement
+  but belongs to a separate ticket. Users can attempt Force anyway;
+  SM will reject if already frozen.
+
+- **Trends backfill (history) deferred to Spec 5** — see "Future
+  Spec 5" section. Without Spec 5, Trends start empty at select time
+  and fill as snapshot poll delivers new points. This is a known UX
+  limitation, documented in user docs as "live-only" during MVP.
 
 - **Sensor name resolution в Message Log** — если snapshot envelope
   не дает mapping sensor_id → имя, Message Log показывает только ID.
