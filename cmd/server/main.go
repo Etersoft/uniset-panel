@@ -30,6 +30,7 @@ import (
 	"github.com/pv/uniset-panel/internal/server"
 	"github.com/pv/uniset-panel/internal/sm"
 	"github.com/pv/uniset-panel/internal/storage"
+	"github.com/pv/uniset-panel/internal/trace"
 	"github.com/pv/uniset-panel/internal/uniset"
 	"github.com/pv/uniset-panel/internal/uwsgate"
 	"github.com/pv/uniset-panel/ui"
@@ -66,7 +67,7 @@ func main() {
 		}
 	}
 
-	handlers := setupHandlers(cfg, store, serverMgr, sseHub, sensorCfg, perServerConfigs,
+	handlers, traceMgr := setupHandlers(cfg, store, serverMgr, sseHub, sensorCfg, perServerConfigs,
 		controlsEnabled, logServerMgr, controlMgr, recordingMgr, launcherMgr)
 
 	dashboardMgr := setupDashboards(cfg, handlers)
@@ -107,7 +108,7 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	gracefulShutdown(httpServer, sseHub, controlMgr, recordingMgr, journalMgr, journalPollers, launcherMgr, serverMgr)
+	gracefulShutdown(httpServer, sseHub, controlMgr, recordingMgr, journalMgr, journalPollers, launcherMgr, serverMgr, traceMgr)
 }
 
 // setupStorage creates and returns the storage backend.
@@ -293,6 +294,8 @@ func setupLauncher(cfg *config.Config, sseHub *api.SSEHub) *launcher.Manager {
 }
 
 // setupHandlers creates and configures API handlers.
+// Returns the handlers and the trace manager; the trace manager must be
+// stopped at shutdown (StopAll) to terminate per-object pollers cleanly.
 func setupHandlers(
 	cfg *config.Config,
 	store storage.Storage,
@@ -305,7 +308,7 @@ func setupHandlers(
 	controlMgr *api.ControlManager,
 	recordingMgr *recording.Manager,
 	launcherMgr *launcher.Manager,
-) *api.Handlers {
+) (*api.Handlers, *trace.Manager) {
 	// Get first server's client and pollers for backward compatibility
 	var client *uniset.Client
 	var pollerInstance *poller.Poller
@@ -358,9 +361,21 @@ func setupHandlers(
 	}
 
 	// Wire UObject debug client (Spec 4)
-	handlers.SetDebugClient(debug.NewClient(&debugResolverAdapter{mgr: serverMgr}))
+	resolverAdapter := &debugResolverAdapter{mgr: serverMgr}
+	handlers.SetDebugClient(debug.NewClient(resolverAdapter))
 
-	return handlers
+	// Wire UObject dispatch-trace backend (Spec 4 Task 2):
+	// poll /<obj>/dump?trace=1 per subscribed (server,object),
+	// broadcast batches via the SSE hub's dedicated trace channel.
+	// Reuses debugResolverAdapter: trace.ServerResolver and
+	// api.TraceResolver have the same GetServerAddress signature.
+	traceClient := trace.NewClient(resolverAdapter)
+	traceMgr := trace.NewManager(traceClient, sseHub)
+	handlers.SetTraceManager(traceMgr)
+	handlers.SetTraceResolver(resolverAdapter)
+	handlers.SetHTTPClient(&http.Client{Timeout: 5 * time.Second})
+
+	return handlers, traceMgr
 }
 
 // debugResolverAdapter bridges server.Manager to debug.ServerResolver.
@@ -495,8 +510,13 @@ func gracefulShutdown(
 	journalPollers []*journal.Poller,
 	launcherMgr *launcher.Manager,
 	serverMgr *server.Manager,
+	traceMgr *trace.Manager,
 ) {
 	slog.Info("Shutting down server...")
+
+	if traceMgr != nil {
+		traceMgr.StopAll()
+	}
 
 	if controlMgr != nil {
 		controlMgr.Stop()

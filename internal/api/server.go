@@ -148,6 +148,13 @@ func (s *Server) setupRoutes(staticFS fs.FS) {
 	s.mux.HandleFunc("GET /api/servers/{id}/objects/{name}/snapshot", s.handlers.HandleSnapshot)
 	s.mux.HandleFunc("GET /api/all-objects", s.handlers.GetAllObjectsWithServers)
 
+	// UObject dispatch-trace API (Spec 4)
+	s.mux.HandleFunc("GET /api/trace/events", s.handlers.HandleTraceEvents)
+	s.mux.HandleFunc("POST /api/trace/servers/{id}/objects/{name}/enable",
+		s.handlers.HandleTraceEnable)
+	s.mux.HandleFunc("POST /api/trace/servers/{id}/objects/{name}/disable",
+		s.handlers.HandleTraceDisable)
+
 	// Settings API
 	s.mux.HandleFunc("GET /api/settings/poll-interval", s.handlers.GetPollInterval)
 	s.mux.HandleFunc("POST /api/settings/poll-interval", s.handlers.SetPollInterval)
