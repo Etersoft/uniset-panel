@@ -145,6 +145,7 @@ func (s *Server) setupRoutes(staticFS fs.FS) {
 	s.mux.HandleFunc("DELETE /api/servers/{id}", s.handlers.RemoveServer)
 	s.mux.HandleFunc("GET /api/servers/{id}/status", s.handlers.GetServerStatus)
 	s.mux.HandleFunc("GET /api/servers/{id}/overview", s.handlers.handleServerOverview)
+	s.mux.HandleFunc("GET /api/servers/{id}/objects/{name}/snapshot", s.handlers.HandleSnapshot)
 	s.mux.HandleFunc("GET /api/all-objects", s.handlers.GetAllObjectsWithServers)
 
 	// Settings API

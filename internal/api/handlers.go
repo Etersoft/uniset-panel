@@ -121,6 +121,11 @@ func (h *Handlers) SetServerManager(mgr *server.Manager) {
 	h.serverMgr = mgr
 }
 
+// SetDebugClient wires the debug client (Spec 4).
+func (h *Handlers) SetDebugClient(c DebugInterface) {
+	h.debugClient = c
+}
+
 // SetControlsEnabled устанавливает доступность элементов управления IONC
 func (h *Handlers) SetControlsEnabled(enabled bool) {
 	h.controlsEnabled = enabled

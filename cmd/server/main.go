@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -13,6 +16,7 @@ import (
 	"github.com/pv/uniset-panel/internal/api"
 	"github.com/pv/uniset-panel/internal/config"
 	"github.com/pv/uniset-panel/internal/dashboard"
+	"github.com/pv/uniset-panel/internal/debug"
 	"github.com/pv/uniset-panel/internal/ionc"
 	"github.com/pv/uniset-panel/internal/journal"
 	"github.com/pv/uniset-panel/internal/launcher"
@@ -353,7 +357,47 @@ func setupHandlers(
 		handlers.SetOverviewConfig(cfg.Overview)
 	}
 
+	// Wire UObject debug client (Spec 4)
+	handlers.SetDebugClient(debug.NewClient(&debugResolverAdapter{mgr: serverMgr}))
+
 	return handlers
+}
+
+// debugResolverAdapter bridges server.Manager to debug.ServerResolver.
+// Parses Instance.Config.URL (e.g. "http://host:port") into host+port pair.
+type debugResolverAdapter struct{ mgr *server.Manager }
+
+func (d *debugResolverAdapter) GetServerAddress(serverID string) (string, int, error) {
+	inst, ok := d.mgr.GetServer(serverID)
+	if !ok {
+		return "", 0, fmt.Errorf("server %q not found", serverID)
+	}
+	rawURL := inst.Config.URL
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "", 0, fmt.Errorf("parse server URL %q: %w", rawURL, err)
+	}
+	host := u.Hostname()
+	if host == "" {
+		return "", 0, fmt.Errorf("server URL %q has no host", rawURL)
+	}
+	portStr := u.Port()
+	if portStr == "" {
+		// fall back to scheme default
+		switch u.Scheme {
+		case "https":
+			return host, 443, nil
+		case "http", "":
+			return host, 80, nil
+		default:
+			return "", 0, fmt.Errorf("server URL %q has no port", rawURL)
+		}
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return "", 0, fmt.Errorf("parse port %q: %w", portStr, err)
+	}
+	return host, port, nil
 }
 
 // setupDashboards creates the dashboard manager if directory is specified.
