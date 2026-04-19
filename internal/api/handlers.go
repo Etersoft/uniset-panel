@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/pv/uniset-panel/internal/config"
 	"github.com/pv/uniset-panel/internal/dashboard"
+	"github.com/pv/uniset-panel/internal/debug"
 	"github.com/pv/uniset-panel/internal/ionc"
 	"github.com/pv/uniset-panel/internal/journal"
 	"github.com/pv/uniset-panel/internal/launcher"
@@ -26,6 +28,11 @@ import (
 const (
 	defaultHistoryCount = 100 // кол-во записей истории переменной по умолчанию
 )
+
+// DebugInterface — minimum contract for HandleSnapshot; fake-friendly.
+type DebugInterface interface {
+	Snapshot(ctx context.Context, serverID, objectName string) (*debug.Snapshot, error)
+}
 
 type Handlers struct {
 	client          *uniset.Client
@@ -52,6 +59,7 @@ type Handlers struct {
 	launcherMgr     *launcher.Manager              // менеджер Launcher'ов
 	sidebarConfig   *config.SidebarConfig          // конфиг sidebar (nil = дефолт по типам)
 	overviewConfig  *config.OverviewConfig         // конфиг overview (nil = показать все)
+	debugClient     DebugInterface                 // клиент для UObject debug snapshot (Spec 4)
 }
 
 func NewHandlers(client *uniset.Client, store storage.Storage, p *poller.Poller, sensorCfg *sensorconfig.SensorConfig, pollInterval time.Duration) *Handlers {
