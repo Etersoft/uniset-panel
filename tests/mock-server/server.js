@@ -1385,7 +1385,74 @@ const server = http.createServer((req, res) => {
     }
 
     res.end(JSON.stringify({ result: 'OK', sensors }));
-  } else {
+  }
+  // --- Spec 4: /api/servers/:id/objects/:name/snapshot ----------------------
+  // Returns normalized fixture matching the panel adapter's flat schema.
+  else if (req.method === 'GET' && /^\/api\/servers\/([^\/]+)\/objects\/([^\/]+)\/snapshot$/.test(req.url)) {
+    const snapshotMatch = req.url.match(/^\/api\/servers\/([^\/]+)\/objects\/([^\/]+)\/snapshot$/);
+    const [, serverId, name] = snapshotMatch;
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      object: name,
+      server: serverId,
+      inputs: [
+        { id: 101, name: 'in_Temp',     value: 20 + Math.floor(Math.random() * 10) },
+        { id: 102, name: 'in_Pressure', value: 1013 + Math.floor(Math.random() * 5) }
+      ],
+      outputs: [
+        { id: 205, name: 'out_Speed', value: 1500 }
+      ],
+      variables: {
+        'state_main': Math.floor(Date.now() / 1000) % 4,
+        'Counter': Math.floor(Date.now() / 1000) % 100,
+        'FB1.State': 1,
+        'FB1.Phase': 2
+      },
+      timers: [
+        { id: 7, name: 'T1', interval_ms: 500,
+          time_left: 100 + (Date.now() % 400), tick: Math.floor(Date.now() / 500) }
+      ],
+      statistics: { processingMessageCatchCount: 0, sensors: {} },
+      sm_object: 'SharedMemory'
+    }));
+  }
+  // --- Spec 2/4: /api/trace/events (SSE) ------------------------------------
+  else if (req.method === 'GET' && req.url.startsWith('/api/trace/events')) {
+    const urlObj = new URL('http://x' + req.url);
+    const object = urlObj.searchParams.get('object');
+    const serverParam = urlObj.searchParams.get('server');
+    if (!object || !serverParam) {
+      res.writeHead(400);
+      res.end('missing params');
+    } else {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+      });
+      let counter = 0;
+      const tick = setInterval(() => {
+        const batch = {
+          enabled: true, overflow: false,
+          records: [
+            { time_us: Date.now() * 1000, event_time_us: Date.now() * 1000 - 2000,
+              id: 101, value: counter++, supplier_id: 42, type: 'sensorInfo' }
+          ]
+        };
+        const event = {
+          Type: 'trace', ServerID: serverParam, ObjectName: object, Data: batch
+        };
+        res.write('event: trace\ndata: ' + JSON.stringify(event) + '\n\n');
+      }, 500);
+      req.on('close', () => clearInterval(tick));
+    }
+  }
+  // --- Spec 2: /api/trace/servers/:id/objects/:name/enable|disable ----------
+  else if (req.method === 'POST' && /^\/api\/trace\/servers\/([^\/]+)\/objects\/([^\/]+)\/(enable|disable)(\?.*)?$/.test(req.url)) {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true }));
+  }
+  else {
     res.statusCode = 404;
     res.end(JSON.stringify({ error: 'Not found' }));
   }
