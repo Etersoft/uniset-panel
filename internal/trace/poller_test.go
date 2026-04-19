@@ -143,3 +143,80 @@ func TestPoller_unsubscribeStops(t *testing.T) {
 		t.Errorf("fetches continued after stop: %d -> %d", callsAfter, callsLater)
 	}
 }
+
+func TestPoller_effectiveIntervalMin(t *testing.T) {
+	p := newPoller("srv", "srv", "X", &fakeClient{}, &fakeBroadcaster{})
+	p.AddSubscriber("a", 500)
+	p.AddSubscriber("b", 100)
+	if got := p.effectiveInterval(); got != 100*time.Millisecond {
+		t.Errorf("effective: got %v", got)
+	}
+	p.RemoveSubscriber("b")
+	if got := p.effectiveInterval(); got != 500*time.Millisecond {
+		t.Errorf("after remove: got %v", got)
+	}
+}
+
+func TestPoller_intervalClamp(t *testing.T) {
+	p := newPoller("srv", "srv", "X", &fakeClient{}, &fakeBroadcaster{})
+	p.AddSubscriber("a", 10) // below min
+	if got := p.effectiveInterval(); got != MinInterval {
+		t.Errorf("low clamp: got %v", got)
+	}
+	p.RemoveSubscriber("a")
+	p.AddSubscriber("b", 99999) // above max
+	if got := p.effectiveInterval(); got != MaxInterval {
+		t.Errorf("high clamp: got %v", got)
+	}
+}
+
+func TestPoller_backoffOnError(t *testing.T) {
+	fc := &fakeClient{err: ErrObjectNotFound}
+	bc := &fakeBroadcaster{}
+	p := newPoller("srv", "srv", "X", fc, bc)
+	p.AddSubscriber("s1", 50)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go p.run(ctx)
+	time.Sleep(50 * time.Millisecond)
+
+	p.mu.Lock()
+	b1 := p.backoff
+	p.mu.Unlock()
+	if b1 != backoffInitial {
+		t.Errorf("initial backoff: got %v", b1)
+	}
+
+	cancel()
+	p.wg.Wait()
+}
+
+func TestPoller_backoffResetsOnSuccess(t *testing.T) {
+	fc := &fakeClient{err: ErrObjectNotFound}
+	bc := &fakeBroadcaster{}
+	p := newPoller("srv", "srv", "X", fc, bc)
+	p.AddSubscriber("s1", 50)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go p.run(ctx)
+	time.Sleep(50 * time.Millisecond) // allow error to occur and backoff to set
+
+	// Switch to success
+	fc.mu.Lock()
+	fc.err = nil
+	fc.resp = dumpEnvelope{Trace: &traceSection{Enabled: true}}
+	fc.mu.Unlock()
+
+	// Wait for the backoff sleep (1s) plus next iteration
+	time.Sleep(1200 * time.Millisecond)
+
+	p.mu.Lock()
+	b := p.backoff
+	p.mu.Unlock()
+	if b != 0 {
+		t.Errorf("backoff after success: got %v", b)
+	}
+
+	cancel()
+	p.wg.Wait()
+}
