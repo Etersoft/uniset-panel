@@ -34,6 +34,14 @@ type DebugInterface interface {
 	Snapshot(ctx context.Context, serverID, objectName string) (*debug.Snapshot, error)
 }
 
+// TraceManagerInterface is the subset of *trace.Manager used by handlers.
+type TraceManagerInterface interface {
+	Subscribe(serverID, serverName, objectName string, intervalMS int64) string
+	Unsubscribe(token string)
+	PollerCount() int
+	StopAll()
+}
+
 type Handlers struct {
 	client          *uniset.Client
 	storage         storage.Storage
@@ -60,6 +68,7 @@ type Handlers struct {
 	sidebarConfig   *config.SidebarConfig          // конфиг sidebar (nil = дефолт по типам)
 	overviewConfig  *config.OverviewConfig         // конфиг overview (nil = показать все)
 	debugClient     DebugInterface                 // клиент для UObject debug snapshot (Spec 4)
+	traceMgr        TraceManagerInterface          // менеджер trace подписок (Spec 4)
 }
 
 func NewHandlers(client *uniset.Client, store storage.Storage, p *poller.Poller, sensorCfg *sensorconfig.SensorConfig, pollInterval time.Duration) *Handlers {
@@ -124,6 +133,11 @@ func (h *Handlers) SetServerManager(mgr *server.Manager) {
 // SetDebugClient wires the debug client (Spec 4).
 func (h *Handlers) SetDebugClient(c DebugInterface) {
 	h.debugClient = c
+}
+
+// SetTraceManager wires the trace manager (Spec 4).
+func (h *Handlers) SetTraceManager(m TraceManagerInterface) {
+	h.traceMgr = m
 }
 
 // SetControlsEnabled устанавливает доступность элементов управления IONC
