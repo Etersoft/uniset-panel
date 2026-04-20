@@ -65,6 +65,20 @@ const DEFAULT_CHART_TIME_RANGE = 900;
 const TIME_AGO_MIN_SECONDS = 5;
 const TIME_AGO_MINUTES_THRESHOLD = 60;
 
+// === System Overview ===
+const OVERVIEW_NODE_WIDTH = 380;
+const OVERVIEW_NODE_HORIZONTAL_SPACING = 460;
+const OVERVIEW_NODE_VERTICAL_SPACING = 150;
+const OVERVIEW_MIN_LAYER_GAP = 80;
+const OVERVIEW_MIN_NODE_GAP = 20;
+const OVERVIEW_ACTIVE_COLOR = '#4CAF50';
+const OVERVIEW_INACTIVE_COLOR = '#666';
+const OVERVIEW_PULSE_DURATION_MS = 800;
+const OVERVIEW_MAX_LINK_LABELS = 3;
+const OVERVIEW_LINK_LABEL_COLOR = '#8899aa';
+const OVERVIEW_FIT_PADDING = 50;
+const OVERVIEW_DIRECTION_LS_PREFIX = 'overview-direction:';
+
 
 // === 00-state.js ===
 // Идентификатор сервера для SharedMemory (SM) событий
@@ -807,6 +821,11 @@ function initSSE() {
 
             // Формируем ключ вкладки: serverId:objectName
             const tabKey = `${serverId}:${objectName}`;
+
+            // Обновляем System Overview (если открыт для этого сервера)
+            if (data.io && typeof updateOverviewFromSSE === 'function') {
+                updateOverviewFromSSE(serverId, objectName, data.io);
+            }
 
             // Обновляем UI только для открытых вкладок
             const tabState = state.tabs.get(tabKey);
@@ -15393,7 +15412,8 @@ const ENTITY_TYPE_BADGE = {
     launcher: 'Lnc',
     journal: 'Jrn',
     dashboard: 'Dsh',
-    server: 'Srv'
+    server: 'Srv',
+    overview: 'Ovw'
 };
 
 // Загрузка sidebar конфигурации с сервера
@@ -15570,6 +15590,12 @@ function activateSidebarGroupItem(type, name, serverId) {
             }
             break;
         }
+        case 'overview': {
+            const serverInfo = state.servers.get(serverId);
+            const serverName = serverInfo ? serverInfo.name : (serverId || '');
+            openSystemOverview(serverId, serverName);
+            break;
+        }
         case 'server': {
             for (const [serverId, server] of state.servers) {
                 if (server.id === name || server.name === name) {
@@ -15660,6 +15686,2484 @@ function renderUserDashboardsGroup(container) {
     } catch (err) {
         // ignore
     }
+}
+
+
+// === 58-overview-core.js ===
+// ============================================================================
+// System Overview — orchestration: open/close tab, data fetch, init
+// ============================================================================
+// Public API (globals):
+//   window.overviewInstances = { [serverId]: {graph, canvas, nodeMap, ...} }
+//   openSystemOverview(serverId, serverName) -- entry point, called from sidebar
+// ============================================================================
+
+// Store active overview instances: serverId -> { graph, canvas, nodeMap, container }
+// Exposed on window for debugging/testing
+const overviewInstances = window.overviewInstances = {};
+
+// ============================================================================
+// openSystemOverview -- create or switch to overview tab
+// ============================================================================
+
+function openSystemOverview(serverId, serverName) {
+    // Check LiteGraph availability
+    if (typeof LiteGraph === 'undefined' || typeof LGraph === 'undefined' || typeof LGraphCanvas === 'undefined') {
+        openOverviewErrorTab(serverId, serverName, 'LiteGraph.js not loaded. Cannot display UObject Overview.');
+        return;
+    }
+
+    const tabKey = `${serverId}:overview`;
+
+    // Switch to Objects view if on Dashboard
+    if (dashboardManager && dashboardState.currentView !== 'objects') {
+        dashboardManager.switchView('objects');
+    }
+
+    // If tab exists, just activate it
+    if (state.tabs.has(tabKey)) {
+        activateTab(tabKey);
+        return;
+    }
+
+    // Create tab
+    createOverviewTab(tabKey, serverId, serverName);
+    activateTab(tabKey);
+
+    // Fetch data and build graph
+    fetchOverviewData(serverId, tabKey);
+}
+
+// ============================================================================
+// Tab creation
+// ============================================================================
+
+function createOverviewTab(tabKey, serverId, serverName) {
+    const tabsHeader = document.getElementById('tabs-header');
+    const tabsContent = document.getElementById('tabs-content');
+
+    const placeholder = tabsContent.querySelector('.placeholder');
+    if (placeholder) placeholder.remove();
+
+    // Tab button
+    const tabBtn = document.createElement('button');
+    tabBtn.className = 'tab-btn';
+    tabBtn.dataset.name = tabKey;
+    tabBtn.dataset.objectType = 'Overview';
+    tabBtn.dataset.serverId = serverId;
+    tabBtn.innerHTML = `
+        <span class="tab-type-badge">Overview</span>
+        <span class="tab-server-badge" data-server-id="${serverId}">${escapeHtml(serverName)}</span>
+        UObject Overview
+        <span class="close">&times;</span>
+    `;
+    tabBtn.addEventListener('click', (e) => {
+        if (e.target.classList.contains('close')) {
+            closeOverviewTab(tabKey, serverId);
+        } else {
+            activateTab(tabKey);
+        }
+    });
+    tabsHeader.appendChild(tabBtn);
+
+    // Tab panel with canvas
+    const panel = document.createElement('div');
+    panel.className = 'tab-panel';
+    panel.dataset.name = tabKey;
+    panel.dataset.objectType = 'Overview';
+    panel.dataset.serverId = serverId;
+
+    const canvasId = `overview-canvas-${serverId}`;
+    panel.innerHTML = `
+        <div class="overview-container">
+            <div class="overview-canvas-wrap">
+                <div class="overview-toolbar">
+                    <button class="overview-fit-btn" title="Fit to Screen">&#x26F6;</button>
+                    <button class="overview-fit-btn overview-layout-btn" title="Auto-layout: minimize crossings">&#x2725;</button>
+                    <button class="overview-direction-btn" title="Toggle layout direction: Horizontal / Vertical"><span class="overview-dir-icon-h">▬</span><span class="overview-dir-icon-v" style="display:none">▮</span></button>
+                    <div class="overview-view-wrapper">
+                        <button type="button" id="overview-view-btn-${serverId}" class="overview-view-btn" title="Toggle Values / Wires / Minimap">View ▾</button>
+                        <div id="overview-view-menu-${serverId}" class="overview-view-menu hidden">
+                            <label><input type="checkbox" data-toggle="values"/> Values</label>
+                            <label><input type="checkbox" data-toggle="wires"/> Wires</label>
+                            <label><input type="checkbox" data-toggle="minimap"/> Minimap</label>
+                        </div>
+                    </div>
+                    <button type="button" id="overview-svg-export-${serverId}" class="overview-svg-export" title="Export overview as SVG">SVG</button>
+                </div>
+                <div class="overview-loading">Loading overview data...</div>
+                <canvas id="${canvasId}"></canvas>
+                <div id="overview-minimap-${serverId}" class="overview-minimap"></div>
+            </div>
+            <div id="fb-status-panel-${serverId}" class="fb-status-panel"></div>
+        </div>
+    `;
+    tabsContent.appendChild(panel);
+
+    // Save tab state
+    state.tabs.set(tabKey, {
+        charts: new Map(),
+        variables: {},
+        objectType: 'Overview',
+        renderer: null,
+        updateInterval: null,
+        displayName: 'UObject Overview',
+        serverId: serverId,
+        serverName: serverName
+    });
+}
+
+function closeOverviewTab(tabKey, serverId) {
+    // Cleanup overview instance
+    const instance = overviewInstances[serverId];
+    if (instance) {
+        if (instance.resizeObserver) {
+            instance.resizeObserver.disconnect();
+        }
+        if (instance.graph) {
+            instance.graph.stop();
+        }
+        if (instance.hotkeyHandler) {
+            document.removeEventListener('keydown', instance.hotkeyHandler);
+        }
+        // Detach wheel handler (zoom + pan). Must match capture flag of
+        // attachOverviewWheelZoom to deregister correctly.
+        if (instance.wheelZoomHandler && instance.canvas && instance.canvas.canvas) {
+            instance.canvas.canvas.removeEventListener('wheel', instance.wheelZoomHandler, { capture: true });
+        }
+        // Nulling minimap causes the rAF redraw loop to short-circuit on
+        // next tick (see initOverviewMinimap in 58-overview-navigation.js).
+        if (instance.minimap) {
+            instance.minimap = null;
+        }
+        delete overviewInstances[serverId];
+    }
+
+    // Notify listeners (e.g. Spec 4 detail panel) that this schema is gone.
+    emitSchemaClosed(serverId);
+
+    // Use standard closeTab (handles state.tabs, DOM, etc.)
+    closeTab(tabKey);
+}
+
+function openOverviewErrorTab(serverId, serverName, message) {
+    const tabKey = `${serverId}:overview`;
+
+    if (dashboardManager && dashboardState.currentView !== 'objects') {
+        dashboardManager.switchView('objects');
+    }
+
+    if (state.tabs.has(tabKey)) {
+        activateTab(tabKey);
+        return;
+    }
+
+    const tabsHeader = document.getElementById('tabs-header');
+    const tabsContent = document.getElementById('tabs-content');
+
+    const placeholder = tabsContent.querySelector('.placeholder');
+    if (placeholder) placeholder.remove();
+
+    const tabBtn = document.createElement('button');
+    tabBtn.className = 'tab-btn';
+    tabBtn.dataset.name = tabKey;
+    tabBtn.dataset.objectType = 'Overview';
+    tabBtn.innerHTML = `
+        <span class="tab-type-badge">Overview</span>
+        UObject Overview
+        <span class="close">&times;</span>
+    `;
+    tabBtn.addEventListener('click', (e) => {
+        if (e.target.classList.contains('close')) {
+            closeTab(tabKey);
+        } else {
+            activateTab(tabKey);
+        }
+    });
+    tabsHeader.appendChild(tabBtn);
+
+    const panel = document.createElement('div');
+    panel.className = 'tab-panel';
+    panel.dataset.name = tabKey;
+    panel.dataset.objectType = 'Overview';
+    panel.innerHTML = `<div class="overview-container" style="display:flex;align-items:center;justify-content:center;">
+        <div style="color:#f44336;font-size:16px;">${escapeHtml(message)}</div>
+    </div>`;
+    tabsContent.appendChild(panel);
+
+    state.tabs.set(tabKey, {
+        charts: new Map(),
+        variables: {},
+        objectType: 'Overview',
+        renderer: null,
+        updateInterval: null,
+        displayName: 'UObject Overview',
+        serverId: serverId,
+        serverName: serverName
+    });
+
+    activateTab(tabKey);
+}
+
+// ============================================================================
+// Fetch data and build graph
+// ============================================================================
+
+async function fetchOverviewData(serverId, tabKey) {
+    try {
+        const url = `/api/servers/${encodeURIComponent(serverId)}/overview`;
+        const resp = await fetch(url);
+        if (!resp.ok) {
+            const errData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
+            showOverviewError(tabKey, serverId, errData.error || `HTTP ${resp.status}`);
+            return;
+        }
+
+        const data = await resp.json();
+
+        if ((!data.allNodes || data.allNodes.length === 0) && (!data.nodes || data.nodes.length === 0)) {
+            showOverviewMessage(tabKey, serverId, 'No processes found for this server.');
+            return;
+        }
+
+        initOverviewGraph(tabKey, serverId, data);
+    } catch (err) {
+        console.error('Failed to fetch overview data:', err);
+        showOverviewError(tabKey, serverId, 'Failed to load overview data: ' + err.message);
+    }
+}
+
+function showOverviewError(tabKey, serverId, message) {
+    const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+    if (!panel) return;
+    const loading = panel.querySelector('.overview-loading');
+    if (loading) {
+        loading.textContent = message;
+        loading.style.color = '#f44336';
+    }
+}
+
+function showOverviewMessage(tabKey, serverId, message) {
+    const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+    if (!panel) return;
+    const loading = panel.querySelector('.overview-loading');
+    if (loading) {
+        loading.textContent = message;
+        loading.style.color = '#aaa';
+    }
+}
+
+// ============================================================================
+// Graph initialization
+// ============================================================================
+
+function initOverviewGraph(tabKey, serverId, data) {
+    const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+    if (!panel) return;
+
+    const container = panel.querySelector('.overview-container');
+    const canvasEl = panel.querySelector('canvas');
+    const loading = panel.querySelector('.overview-loading');
+    const fitBtn = panel.querySelector('.overview-fit-btn:not(.overview-layout-btn)');
+    const layoutBtn = panel.querySelector('.overview-layout-btn');
+    const dirBtn = panel.querySelector('.overview-direction-btn');
+
+    if (!container || !canvasEl) return;
+
+    // Hide loading
+    if (loading) loading.style.display = 'none';
+
+    // Calculate available height: tabs-content height minus tabs-header
+    const tabsContent = document.getElementById('tabs-content');
+    const tabsHeader = document.getElementById('tabs-header');
+    const availableHeight = (tabsContent ? tabsContent.clientHeight : 600)
+        - (tabsHeader ? tabsHeader.offsetHeight : 0);
+    container.style.height = availableHeight + 'px';
+
+    // Set canvas size to container
+    canvasEl.width = container.clientWidth;
+    canvasEl.height = availableHeight;
+
+    // Increase vertical spacing between ports to fit value + connection labels
+    LiteGraph.NODE_SLOT_HEIGHT = 48;
+
+    // Create LiteGraph instances
+    const graph = new LGraph();
+    const lgCanvas = new LGraphCanvas(canvasEl, graph);
+
+    // Configure canvas: dark background, read-only
+    lgCanvas.clear_background_color = '#1a1a2e';
+    lgCanvas.read_only = true;
+    lgCanvas.allow_searchbox = false;
+    lgCanvas.allow_interaction = true; // allow pan/zoom
+    // Clamp native LiteGraph zoom to the same [OVERVIEW_SCALE_MIN,
+    // OVERVIEW_SCALE_MAX] range used by Ctrl+wheel (navigation.js), so plain
+    // wheel and Ctrl+wheel behave consistently. Defaults otherwise allow
+    // zoom-out to 10x which is disorienting for the overview.
+    if (typeof OVERVIEW_SCALE_MIN === 'number') lgCanvas.ds.min_scale = OVERVIEW_SCALE_MIN;
+    if (typeof OVERVIEW_SCALE_MAX === 'number') lgCanvas.ds.max_scale = OVERVIEW_SCALE_MAX;
+    lgCanvas.show_info = false; // hide debug info (FPS, node count, etc.)
+    lgCanvas.render_canvas_border = false; // remove blue border around canvas
+    lgCanvas.title_text_font = 'bold 14px sans-serif';
+    lgCanvas.inner_text_font = '12px sans-serif';
+
+    // Suppress LiteGraph's canvas-drawn link lines when the Wires toggle is
+    // off. The existing .overview-no-wires CSS hides only text port-labels;
+    // the canvas-rendered splines ignore DOM classes, so we wrap the draw
+    // method and early-return when the body class is present.
+    const _origDrawConnections = lgCanvas.drawConnections.bind(lgCanvas);
+    lgCanvas.drawConnections = function(ctx) {
+        if (document.body.classList.contains('overview-no-wires')) return;
+        _origDrawConnections(ctx);
+    };
+
+    // LiteGraph draws native link lines by default. Task 13 made them the
+    // primary visual at scale >= 0.5; port text-labels (below) render only
+    // at mid-zoom [0.25, 0.5) for orientation.
+
+    // Build graph from data
+    const nodeMap = buildOverviewGraph(graph, data);
+
+    // Populate text connection labels on each node
+    populatePortConnections(nodeMap, data.edges || []);
+
+    // Load saved direction from localStorage (default: vertical).
+    const dirLsKey = OVERVIEW_DIRECTION_LS_PREFIX + tabKey;
+    let direction = 'vertical';
+    try {
+        const saved = localStorage.getItem(dirLsKey);
+        if (saved === 'horizontal') direction = 'horizontal';
+    } catch (_) {}
+
+    const getCanvasSize = () => ({ width: canvasEl.width, height: canvasEl.height });
+
+    // Apply layout with direction
+    applyOverviewLayout(nodeMap, data.edges || [], direction, getCanvasSize());
+
+    // Start rendering
+    graph.start();
+
+    // Update direction button icon
+    const updateDirBtnIcon = () => {
+        if (!dirBtn) return;
+        const iconH = dirBtn.querySelector('.overview-dir-icon-h');
+        const iconV = dirBtn.querySelector('.overview-dir-icon-v');
+        if (iconH) iconH.style.display = direction === 'horizontal' ? '' : 'none';
+        if (iconV) iconV.style.display = direction === 'vertical' ? '' : 'none';
+        dirBtn.title = direction === 'horizontal'
+            ? 'Layout: Horizontal (click for Vertical)'
+            : 'Layout: Vertical (click for Horizontal)';
+    };
+    updateDirBtnIcon();
+
+    // Initial view: vertical layout opens at actual size (scale = 1) with
+    // the top block centered horizontally — user scrolls the wheel to reveal
+    // subsequent blocks. Horizontal layout still fits everything to screen.
+    setTimeout(() => {
+        if (direction === 'vertical') {
+            centerOverviewOnFirstBlock(lgCanvas, nodeMap);
+        } else {
+            fitOverviewToScreen(lgCanvas, graph);
+        }
+        if (typeof applyLOD === 'function') applyLOD(overviewInstances[serverId]);
+    }, 100);
+
+    // Fit button handler
+    if (fitBtn) {
+        fitBtn.addEventListener('click', () => {
+            fitOverviewToScreen(lgCanvas, graph);
+            if (typeof applyLOD === 'function') applyLOD(overviewInstances[serverId]);
+        });
+    }
+
+    // Auto-layout button handler. After re-laying out the nodes the viewport
+    // is centered on the top-most block at scale=1 (same behaviour as the
+    // initial vertical render) so the user instantly sees the first block;
+    // wheel-pan reveals the rest. For full overview use the Fit button.
+    if (layoutBtn) {
+        layoutBtn.addEventListener('click', () => {
+            autoLayoutOverview(nodeMap, data.edges || [], direction, getCanvasSize());
+            graph.setDirtyCanvas(true, true);
+            setTimeout(() => {
+                centerOverviewOnFirstBlock(lgCanvas, nodeMap);
+                if (typeof applyLOD === 'function') applyLOD(overviewInstances[serverId]);
+            }, 50);
+        });
+    }
+
+    // Direction toggle button handler
+    if (dirBtn) {
+        dirBtn.addEventListener('click', () => {
+            direction = direction === 'horizontal' ? 'vertical' : 'horizontal';
+            updateDirBtnIcon();
+            try { localStorage.setItem(dirLsKey, direction); } catch (_) {}
+            // Sync direction to instance for subsequent auto-layout calls
+            const inst = overviewInstances[serverId];
+            if (inst) inst.direction = direction;
+            autoLayoutOverview(nodeMap, data.edges || [], direction, getCanvasSize());
+            graph.setDirtyCanvas(true, true);
+            setTimeout(() => {
+                fitOverviewToScreen(lgCanvas, graph);
+                if (typeof applyLOD === 'function') applyLOD(overviewInstances[serverId]);
+            }, 50);
+        });
+    }
+
+    // ResizeObserver on tabs-content to recalculate height.
+    // The canvas sits in a dedicated wrap (flex-child) so its width is
+    // independent of the FB Status column's width.
+    const canvasWrap = canvasEl.parentElement || container;
+    const resizeTarget = tabsContent || container;
+    const resizeObserver = new ResizeObserver(() => {
+        const newHeight = (tabsContent ? tabsContent.clientHeight : 600)
+            - (tabsHeader ? tabsHeader.offsetHeight : 0);
+        container.style.height = newHeight + 'px';
+        canvasEl.width = canvasWrap.clientWidth;
+        canvasEl.height = newHeight;
+        lgCanvas.resize();
+    });
+    resizeObserver.observe(resizeTarget);
+
+    // Store instance for SSE updates and cleanup
+    overviewInstances[serverId] = {
+        graph: graph,
+        canvas: lgCanvas,
+        nodeMap: nodeMap,
+        container: container,
+        resizeObserver: resizeObserver,
+        allNodes: data.allNodes || [],
+        data: data, // raw overview payload — highlight module reads .edges
+        tabKey: tabKey,
+        direction: direction,
+        serverId: serverId
+    };
+
+    // Restore persisted view state (zoom, pan, toggles, etc.)
+    // Actual apply of zoom/pan/toggles happens in later tasks (7-9, 14);
+    // here we only load + attach the field so the state is available.
+    overviewInstances[serverId].state = loadOverviewState(serverId);
+
+    // Apply persisted toggle body-classes
+    const _t = overviewInstances[serverId].state.toggles || {};
+    document.body.classList.toggle('overview-no-values', _t.values === false);
+    document.body.classList.toggle('overview-no-wires', _t.wires === false);
+
+    // Minimap (Task 8): mount canvas + start redraw loop. Visibility driven
+    // by body class `overview-minimap-hidden`; default hidden (minimap=false).
+    if (typeof initOverviewMinimap === 'function') {
+        initOverviewMinimap(overviewInstances[serverId]);
+    }
+    document.body.classList.toggle('overview-minimap-hidden', !_t.minimap);
+
+    // Attach keyboard hotkeys (F/0/+/-/Home/V/W/M///Esc/?). Handler stored
+    // for detach in closeOverviewTab.
+    if (typeof attachOverviewHotkeys === 'function') {
+        overviewInstances[serverId].hotkeyHandler = attachOverviewHotkeys(serverId);
+    }
+
+    // Ctrl+wheel zoom-around-cursor + initial LOD state (Task 9).
+    if (typeof attachOverviewWheelZoom === 'function') {
+        overviewInstances[serverId].wheelZoomHandler =
+            attachOverviewWheelZoom(overviewInstances[serverId]);
+    }
+    if (typeof applyLOD === 'function') {
+        applyLOD(overviewInstances[serverId]);
+    }
+
+    // Resolve serverName from tab state (captured in createOverviewTab).
+    const tabInfo = state.tabs.get(tabKey);
+    const serverName = tabInfo ? tabInfo.serverName : '';
+    // Attach to instance so downstream modules (FB Status panel, Spec 4)
+    // can emit events without re-reading state.tabs.
+    overviewInstances[serverId].serverName = serverName;
+
+    // Wire LGraphCanvas node-level callbacks to emit CustomEvents.
+    // Callbacks are compose-safe: call any previously-assigned handler first,
+    // so we don't clobber existing selection/drag behaviour.
+    const prevOnNodeSelected = lgCanvas.onNodeSelected;
+    lgCanvas.onNodeSelected = function(node) {
+        if (prevOnNodeSelected) prevOnNodeSelected.call(this, node);
+        if (!node) return;
+        if (node.type !== 'uniset/process') return;
+        const objectName = node.title || '';
+        emitNodeClicked(serverId, serverName, objectName, node.id, null);
+        // Task 10: click-to-highlight edges + dim non-neighbors. Defensive
+        // typeof-guard so selection still works if highlight module absent.
+        if (typeof applyOverviewHighlight === 'function') {
+            applyOverviewHighlight(overviewInstances[serverId], node);
+        }
+    };
+
+    const prevOnNodeDblClicked = lgCanvas.onNodeDblClicked;
+    lgCanvas.onNodeDblClicked = function(node) {
+        if (prevOnNodeDblClicked) prevOnNodeDblClicked.call(this, node);
+        if (!node) return;
+        if (node.type !== 'uniset/process') return;
+        const objectName = node.title || '';
+        emitNodeDoubleClicked(serverId, serverName, objectName, node.id);
+    };
+
+    // Notify listeners (e.g. Spec 4 detail panel) that the schema is ready.
+    // nodeMap is a Map<name, LGraphNode>; names are the object names.
+    emitSchemaOpened(serverId, serverName, Array.from(nodeMap.keys()));
+
+    // Task 11: FB Status panel (per-server list with name/type filter).
+    if (typeof initFBStatusPanel === 'function') {
+        initFBStatusPanel(overviewInstances[serverId]);
+    }
+
+    // Task 14: View dropdown (Values/Wires/Minimap toggles) + SVG export.
+    if (typeof initViewDropdown === 'function') {
+        initViewDropdown(overviewInstances[serverId]);
+    }
+}
+
+// ============================================================================
+// Build graph from backend data
+// ============================================================================
+
+function buildOverviewGraph(graph, data) {
+    const nodeMap = new Map(); // nodeName -> LGraphNode
+
+    // Create nodes
+    for (const nodeData of data.nodes) {
+        const lgNode = LiteGraph.createNode('uniset/process');
+        if (!lgNode) continue;
+
+        lgNode.title = nodeData.name;
+        lgNode.size[0] = OVERVIEW_NODE_WIDTH;
+
+        // Add inputs
+        if (nodeData.inputs) {
+            for (const port of nodeData.inputs) {
+                lgNode.addInput(port.name, 'sensor');
+                lgNode.portValues[port.name] = port.value;
+            }
+        }
+
+        // Add outputs
+        if (nodeData.outputs) {
+            for (const port of nodeData.outputs) {
+                lgNode.addOutput(port.name, 'sensor');
+                lgNode.portValues[port.name] = port.value;
+            }
+        }
+
+        // Recalculate node height: add extra space for value labels below last port
+        const maxPorts = Math.max(
+            lgNode.inputs ? lgNode.inputs.length : 0,
+            lgNode.outputs ? lgNode.outputs.length : 0
+        );
+        const slotHeight = LiteGraph.NODE_SLOT_HEIGHT;
+        const titleHeight = LiteGraph.NODE_TITLE_HEIGHT || 30;
+        lgNode.size[1] = titleHeight + maxPorts * slotHeight + 20; // 20px extra for bottom value
+
+        graph.add(lgNode);
+        // Force width after add (LiteGraph may auto-resize based on text)
+        lgNode.size[0] = OVERVIEW_NODE_WIDTH;
+        nodeMap.set(nodeData.name, lgNode);
+    }
+
+    // Create edges: actual LiteGraph links so the native renderer draws the lines.
+    // Task 13: text-label fallback (in 58-overview-node.js) now only shows at
+    // mid zoom — the primary rendering path is these links.
+    if (data.edges) {
+        for (const edge of data.edges) {
+            const sourceNode = nodeMap.get(edge.fromNode);
+            const targetNode = nodeMap.get(edge.toNode);
+            if (!sourceNode || !targetNode) continue;
+
+            const outputSlot = findSlotIndex(sourceNode.outputs, edge.fromPort);
+            const inputSlot = findSlotIndex(targetNode.inputs, edge.toPort);
+
+            if (outputSlot >= 0 && inputSlot >= 0) {
+                try {
+                    sourceNode.connect(outputSlot, targetNode, inputSlot);
+                } catch (err) {
+                    console.warn('[overview] link failed:', edge, err);
+                }
+            }
+        }
+    }
+
+    return nodeMap;
+}
+
+
+// === 58-overview-events.js ===
+// ============================================================================
+// System Overview — CustomEvent emission (hooks for Spec 4 detail panel)
+// ============================================================================
+// Emits DOM events on `document` so external modules (e.g. the future Spec 4
+// detail panel) can react without being coupled to overview internals.
+//
+// Events:
+//   uniset:schema-opened  { serverId, serverName, objectNames }
+//   uniset:schema-closed  { serverId }
+//   uniset:node-clicked   { serverId, serverName, objectName, nodeId, element }
+//   uniset:node-double-clicked { serverId, serverName, objectName, nodeId }
+// ============================================================================
+
+function emitSchemaOpened(serverId, serverName, objectNames) {
+    document.dispatchEvent(new CustomEvent('uniset:schema-opened', {
+        detail: { serverId, serverName, objectNames }
+    }));
+}
+
+function emitSchemaClosed(serverId) {
+    document.dispatchEvent(new CustomEvent('uniset:schema-closed', {
+        detail: { serverId }
+    }));
+}
+
+function emitNodeClicked(serverId, serverName, objectName, nodeId, element) {
+    document.dispatchEvent(new CustomEvent('uniset:node-clicked', {
+        detail: { serverId, serverName, objectName, nodeId, element }
+    }));
+}
+
+function emitNodeDoubleClicked(serverId, serverName, objectName, nodeId) {
+    document.dispatchEvent(new CustomEvent('uniset:node-double-clicked', {
+        detail: { serverId, serverName, objectName, nodeId }
+    }));
+}
+
+
+// === 58-overview-fb-status.js ===
+// ============================================================================
+// System Overview — FB Status panel (Task 11, Spec 3)
+// ============================================================================
+// Replaces the old toolbar "Objects" palette dropdown as the primary FB
+// navigator. Renders a per-server list of nodes with a live name filter
+// (and `:type` filter for future extension). Click = highlight the node on
+// the canvas + scroll viewport to it. Double-click = emit the Spec 4
+// `uniset:node-double-clicked` CustomEvent.
+//
+// Public API (attached to window because concat.go emits a flat script):
+//   initFBStatusPanel(inst)      -- bind search input + render list
+//   renderFBStatusList(inst)     -- re-render list from inst.nodeMap + state
+//   scrollToOverviewNode(inst,n) -- center the canvas on a given LGraphNode
+//
+// Notes:
+//   * inst.nodeMap is a Map<name, LGraphNode>, not a plain object.
+//   * Node "type" (function block type) is not currently tracked on the
+//     LGraphNode — the existing UniSetProcessNode only carries `title`.
+//     The `:type` filter is wired through `n.__type` so it becomes usable
+//     the moment that field is populated (e.g. in a later task) without
+//     extra integration. Until then the `:xxx` query yields an empty list.
+//   * Rendering goes through `_fbStatusEscape` to keep object names XSS-safe
+//     (names come from the server API and are not otherwise sanitized).
+// ============================================================================
+
+function _fbStatusEscape(s) {
+    return String(s).replace(/[&<>"']/g, function(c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+}
+
+function initFBStatusPanel(inst) {
+    if (!inst || !inst.serverId) return;
+    const container = document.getElementById('fb-status-panel-' + inst.serverId);
+    if (!container) return;
+
+    const sid = inst.serverId;
+    container.innerHTML =
+        '<h3>FB Status (<span class="fb-count">0</span>)</h3>' +
+        '<input type="text" id="fb-status-search-' + _fbStatusEscape(sid) + '" placeholder="Filter (type :x)" class="fb-status-search"/>' +
+        '<div class="fb-list"></div>';
+
+    const searchInput = container.querySelector('.fb-status-search');
+    const list = container.querySelector('.fb-list');
+
+    // Restore persisted query (Task 5 state).
+    searchInput.value = (inst.state && inst.state.searchQuery) || '';
+
+    searchInput.addEventListener('input', function(e) {
+        if (inst.state) inst.state.searchQuery = e.target.value;
+        renderFBStatusList(inst);
+        if (typeof saveOverviewState === 'function' && inst.state) {
+            saveOverviewState(inst.serverId, inst.state);
+        }
+    });
+
+    inst.fbStatus = { container: container, searchInput: searchInput, list: list };
+    renderFBStatusList(inst);
+}
+
+function renderFBStatusList(inst) {
+    if (!inst || !inst.fbStatus) return;
+    const list = inst.fbStatus.list;
+    const query = ((inst.state && inst.state.searchQuery) || '').toLowerCase();
+    const typeFilter = query.charAt(0) === ':' ? query.slice(1) : null;
+    const nameFilter = typeFilter === null ? query : null;
+
+    const nodes = Array.from(inst.nodeMap.values());
+    const filtered = nodes.filter(function(n) {
+        if (typeFilter !== null) {
+            // TODO: n.__type is not currently populated by UniSetProcessNode.
+            // When it is (future task), this filter will start working.
+            return String(n.__type || '').toLowerCase().indexOf(typeFilter) !== -1;
+        }
+        if (nameFilter) {
+            return String(n.title || '').toLowerCase().indexOf(nameFilter) !== -1;
+        }
+        return true;
+    });
+
+    if (filtered.length === 0) {
+        list.innerHTML = '<div class="fb-empty">No matches</div>';
+    } else {
+        list.innerHTML = filtered.map(function(n) {
+            const name = _fbStatusEscape(n.title);
+            const type = n.__type ? '<span class="fb-type">(' + _fbStatusEscape(n.__type) + ')</span>' : '';
+            return '<div class="fb-card" data-name="' + name + '"><span class="fb-name">' + name + '</span>' + type + '</div>';
+        }).join('');
+    }
+
+    Array.prototype.forEach.call(list.querySelectorAll('.fb-card'), function(card) {
+        card.addEventListener('click', function() {
+            const name = card.getAttribute('data-name');
+            const node = inst.nodeMap.get(name);
+            if (!node) return;
+            if (typeof applyOverviewHighlight === 'function') applyOverviewHighlight(inst, node);
+            scrollToOverviewNode(inst, node);
+        });
+        card.addEventListener('dblclick', function() {
+            const name = card.getAttribute('data-name');
+            if (typeof emitNodeDoubleClicked === 'function') {
+                emitNodeDoubleClicked(inst.serverId, inst.serverName, name, null);
+            }
+        });
+    });
+
+    const counter = inst.fbStatus.container.querySelector('.fb-count');
+    if (counter) counter.textContent = String(filtered.length);
+}
+
+function scrollToOverviewNode(inst, node) {
+    if (!inst || !inst.canvas || !node || !node.pos) return;
+    const ds = inst.canvas.ds;
+    if (!ds) return;
+    const s = ds.scale || 1;
+    const canvasEl = inst.canvas.canvas;
+    if (!canvasEl) return;
+    const nodeW = node.size ? node.size[0] : 0;
+    const nodeH = node.size ? node.size[1] : 0;
+    // LiteGraph applies the transform as ctx.scale(s).translate(off), so
+    // screen = s * (world + offset). For a world point p to land at screen
+    // center c we need offset = c/s - p.
+    ds.offset = [
+        canvasEl.width / (2 * s) - (node.pos[0] + nodeW / 2),
+        canvasEl.height / (2 * s) - (node.pos[1] + nodeH / 2)
+    ];
+    inst.canvas.setDirty(true, true);
+    if (inst.state) {
+        inst.state.offsetX = ds.offset[0];
+        inst.state.offsetY = ds.offset[1];
+        if (typeof saveOverviewState === 'function' && inst.serverId) {
+            saveOverviewState(inst.serverId, inst.state);
+        }
+    }
+}
+
+
+// === 58-overview-highlight.js ===
+// ============================================================================
+// System Overview — click-to-highlight edges + neighbors
+// ============================================================================
+// Public API (globals):
+//   applyOverviewHighlight(inst, clickedNode) -- mark neighbors as __hi,
+//       others as __dim; populate inst._hiEdges with "from->to" keys; set
+//       inst._hiActive = true; request canvas redraw.
+//   clearOverviewHighlight(inst)              -- clear flags, reset state,
+//       request canvas redraw.
+//
+// Rendering: `58-overview-node.js` reads __hi / __dim on each node in
+// onDrawForeground and applies outline / alpha accordingly.
+//
+// Edge double-click ("signal info tooltip") is deferred to Spec 4.
+// ============================================================================
+
+function applyOverviewHighlight(inst, clickedNode) {
+    if (!inst || !clickedNode) return;
+    const edges = (inst.data && inst.data.edges) || [];
+    const neighbors = new Set();
+    const hiEdges = new Set();
+    const clickedTitle = clickedNode.title;
+
+    for (const e of edges) {
+        if (e.fromNode === clickedTitle || e.toNode === clickedTitle) {
+            hiEdges.add(e.fromNode + '->' + e.toNode);
+            neighbors.add(e.fromNode);
+            neighbors.add(e.toNode);
+        }
+    }
+
+    for (const n of inst.nodeMap.values()) {
+        n.__hi = neighbors.has(n.title);
+        n.__dim = !n.__hi && n.title !== clickedTitle;
+    }
+    inst._hiEdges = hiEdges;
+    inst._hiActive = true;
+    if (inst.canvas && typeof inst.canvas.setDirty === 'function') {
+        inst.canvas.setDirty(true, true);
+    }
+}
+
+function clearOverviewHighlight(inst) {
+    if (!inst || !inst._hiActive) return;
+    for (const n of inst.nodeMap.values()) {
+        delete n.__hi;
+        delete n.__dim;
+    }
+    inst._hiEdges = new Set();
+    inst._hiActive = false;
+    if (inst.canvas && typeof inst.canvas.setDirty === 'function') {
+        inst.canvas.setDirty(true, true);
+    }
+}
+
+
+// === 58-overview-layout.js ===
+// ============================================================================
+// System Overview — graph layout (Sugiyama via dagre + fallback H/V)
+// ============================================================================
+// Public:
+//   autoLayoutOverview(nodeMap, edges, direction, canvasSize)
+//   applyOverviewLayout(nodeMap, edges, direction, canvasSize)
+//   findSlotIndex(slots, portName)
+// Sugiyama-specific:
+//   computeSugiyamaPositions(nodes, edges, opts) -> {name: {x,y}} | null
+//   autoOrientation(nodes, edges) -> 'LR' | 'TB'
+// Internal helpers: orderLayersByBarycenter, positionOverviewNodes
+// ============================================================================
+
+function findSlotIndex(slots, portName) {
+    if (!slots) return -1;
+    for (let i = 0; i < slots.length; i++) {
+        if (slots[i].name === portName) return i;
+    }
+    return -1;
+}
+
+// ============================================================================
+// Layout: topological sort (Kahn's algorithm), left-to-right
+// ============================================================================
+
+function applyOverviewLayout(nodeMap, edges, direction, canvasSize) {
+    const nodeNames = Array.from(nodeMap.keys());
+    if (nodeNames.length === 0) return;
+
+    // Build adjacency and in-degree
+    const inDegree = new Map();
+    const adjacency = new Map(); // node -> [node, ...]
+
+    for (const name of nodeNames) {
+        inDegree.set(name, 0);
+        adjacency.set(name, []);
+    }
+
+    for (const edge of edges) {
+        if (nodeMap.has(edge.fromNode) && nodeMap.has(edge.toNode)) {
+            adjacency.get(edge.fromNode).push(edge.toNode);
+            inDegree.set(edge.toNode, (inDegree.get(edge.toNode) || 0) + 1);
+        }
+    }
+
+    // Kahn's algorithm
+    const queue = [];
+    const layers = new Map(); // nodeName -> layer index
+
+    for (const [name, degree] of inDegree) {
+        if (degree === 0) {
+            queue.push(name);
+            layers.set(name, 0);
+        }
+    }
+
+    const sorted = [];
+    while (queue.length > 0) {
+        const current = queue.shift();
+        sorted.push(current);
+
+        for (const neighbor of adjacency.get(current)) {
+            const newDegree = inDegree.get(neighbor) - 1;
+            inDegree.set(neighbor, newDegree);
+            if (newDegree === 0) {
+                queue.push(neighbor);
+                const currentLayer = layers.get(current) || 0;
+                const existingLayer = layers.get(neighbor) || 0;
+                layers.set(neighbor, Math.max(existingLayer, currentLayer + 1));
+            }
+        }
+    }
+
+    // Cycle fallback: if not all nodes processed, assign alphabetically
+    if (sorted.length < nodeNames.length) {
+        const unsorted = nodeNames.filter(n => !layers.has(n));
+        unsorted.sort();
+        let fallbackLayer = 0;
+        for (const name of unsorted) {
+            layers.set(name, fallbackLayer);
+            fallbackLayer++;
+        }
+    }
+
+    // Ensure layer assignment is maximized (longest path)
+    // Re-compute layers using BFS from roots for correct depth
+    for (const name of sorted) {
+        for (const neighbor of adjacency.get(name)) {
+            const currentLayer = layers.get(name) || 0;
+            const neighborLayer = layers.get(neighbor) || 0;
+            if (neighborLayer <= currentLayer) {
+                layers.set(neighbor, currentLayer + 1);
+            }
+        }
+    }
+
+    // Group nodes by layer
+    const layerGroups = new Map(); // layer -> [nodeName, ...]
+    for (const [name, layer] of layers) {
+        if (!layerGroups.has(layer)) {
+            layerGroups.set(layer, []);
+        }
+        layerGroups.get(layer).push(name);
+    }
+
+    // Barycenter heuristic: order nodes within each layer to minimize crossings
+    orderLayersByBarycenter(layerGroups, edges, nodeMap);
+
+    // Position nodes
+    positionOverviewNodes(layerGroups, nodeMap, direction, canvasSize);
+}
+
+// ============================================================================
+// Sugiyama layout via dagre.js
+// ============================================================================
+
+// Sugiyama layout via dagre. Returns { [nodeName]: {x, y} } or null.
+//
+// nodes: [{ name, width?, height? }]. When width/height are present they
+// override the defaults — the caller (autoLayoutOverview) must pass real
+// LiteGraph node sizes here, otherwise dagre lays nodes out as if they
+// were 220×140 and large blocks visibly overlap once you Fit the canvas.
+function computeSugiyamaPositions(nodes, edges, opts) {
+    if (typeof dagre === 'undefined') {
+        console.warn('[overview-layout] dagre.js not loaded, falling back to H layout');
+        return null;
+    }
+    const titleH = (typeof LiteGraph !== 'undefined' && LiteGraph.NODE_TITLE_HEIGHT) || 30;
+    const g = new dagre.graphlib.Graph().setGraph({
+        rankdir: (opts && opts.direction) || 'LR',
+        nodesep: 40,
+        ranksep: 80,
+    });
+    for (const n of nodes) {
+        const w = n.width  || (opts && opts.nodeWidth)  || 220;
+        const h = (n.height || (opts && opts.nodeHeight) || 140) + titleH;
+        g.setNode(n.name, { width: w, height: h });
+    }
+    for (const e of edges) {
+        // Empty label {} is required — dagre.layout() dereferences
+        // edge labels in updateInputGraph() and crashes on undefined.
+        g.setEdge(e.fromNode, e.toNode, {});
+    }
+    dagre.layout(g);
+    const positions = {};
+    for (const name of g.nodes()) {
+        const node = g.node(name);
+        const w = node.width;
+        const h = node.height;
+        // dagre returns the CENTER of the node; LiteGraph wants top-left
+        // (and pos[1] is below the title bar). Convert.
+        positions[name] = {
+            x: node.x - w / 2,
+            y: node.y - h / 2 + titleH
+        };
+    }
+    return positions;
+}
+
+// Auto-detect orientation based on edge density.
+function autoOrientation(nodes, edges) {
+    return edges.length > nodes.length ? 'LR' : 'TB';
+}
+
+// ============================================================================
+// Auto-layout entry point: Sugiyama (dagre) preferred, H/V fallback
+// ============================================================================
+
+// direction accepted values:
+//   'auto'                        -> derive via autoOrientation()
+//   'H' or 'horizontal'           -> dagre 'LR', fallback 'horizontal'
+//   'V' or 'vertical'             -> dagre 'TB', fallback 'vertical'
+//   'LR' / 'RL' / 'TB' / 'BT'     -> passed through to dagre as-is
+function autoLayoutOverview(nodeMap, edges, direction, canvasSize) {
+    const nodeNames = Array.from(nodeMap.keys());
+    if (nodeNames.length === 0) return;
+
+    const nodesArr = nodeNames.map(name => {
+        const lg = nodeMap.get(name);
+        return {
+            name,
+            width:  lg && lg.size ? Math.max(lg.size[0], OVERVIEW_NODE_WIDTH) : undefined,
+            height: lg && lg.size ? lg.size[1] : undefined
+        };
+    });
+
+    let dagreDir;
+    if (direction === 'auto') dagreDir = autoOrientation(nodesArr, edges);
+    else if (direction === 'H' || direction === 'horizontal') dagreDir = 'LR';
+    else if (direction === 'V' || direction === 'vertical') dagreDir = 'TB';
+    else dagreDir = direction; // assume already 'LR'/'TB'/'BT'/'RL'
+
+    const positions = computeSugiyamaPositions(nodesArr, edges, { direction: dagreDir });
+    if (positions) {
+        for (const name in positions) {
+            const lgNode = nodeMap.get ? nodeMap.get(name) : nodeMap[name];
+            if (lgNode && positions[name]) {
+                lgNode.pos[0] = positions[name].x;
+                lgNode.pos[1] = positions[name].y;
+            }
+        }
+        return;
+    }
+
+    // Fallback: existing H/V logic with barycenter multi-pass ordering
+    const fallbackDir = (dagreDir === 'LR' || dagreDir === 'RL') ? 'horizontal' : 'vertical';
+    autoLayoutOverviewFallback(nodeMap, edges, fallbackDir, canvasSize);
+}
+
+// H/V fallback layout (previous implementation, preserved verbatim).
+// Used when dagre is unavailable.
+function autoLayoutOverviewFallback(nodeMap, edges, direction, canvasSize) {
+    const nodeNames = Array.from(nodeMap.keys());
+    if (nodeNames.length === 0) return;
+
+    // Build adjacency and compute layers (same as applyOverviewLayout)
+    const inDegree = new Map();
+    const adjacency = new Map();
+
+    for (const name of nodeNames) {
+        inDegree.set(name, 0);
+        adjacency.set(name, []);
+    }
+
+    for (const edge of edges) {
+        if (nodeMap.has(edge.fromNode) && nodeMap.has(edge.toNode)) {
+            adjacency.get(edge.fromNode).push(edge.toNode);
+            inDegree.set(edge.toNode, (inDegree.get(edge.toNode) || 0) + 1);
+        }
+    }
+
+    const queue = [];
+    const layers = new Map();
+
+    for (const [name, degree] of inDegree) {
+        if (degree === 0) {
+            queue.push(name);
+            layers.set(name, 0);
+        }
+    }
+
+    const sorted = [];
+    while (queue.length > 0) {
+        const current = queue.shift();
+        sorted.push(current);
+        for (const neighbor of adjacency.get(current)) {
+            const newDegree = inDegree.get(neighbor) - 1;
+            inDegree.set(neighbor, newDegree);
+            if (newDegree === 0) {
+                queue.push(neighbor);
+                layers.set(neighbor, Math.max(layers.get(neighbor) || 0, (layers.get(current) || 0) + 1));
+            }
+        }
+    }
+
+    if (sorted.length < nodeNames.length) {
+        const unsorted = nodeNames.filter(n => !layers.has(n));
+        unsorted.sort();
+        let fallbackLayer = 0;
+        for (const name of unsorted) {
+            layers.set(name, fallbackLayer++);
+        }
+    }
+
+    for (const name of sorted) {
+        for (const neighbor of adjacency.get(name)) {
+            const cl = layers.get(name) || 0;
+            const nl = layers.get(neighbor) || 0;
+            if (nl <= cl) layers.set(neighbor, cl + 1);
+        }
+    }
+
+    const layerGroups = new Map();
+    for (const [name, layer] of layers) {
+        if (!layerGroups.has(layer)) layerGroups.set(layer, []);
+        layerGroups.get(layer).push(name);
+    }
+
+    // Multiple passes of barycenter ordering for better results
+    for (let pass = 0; pass < 4; pass++) {
+        orderLayersByBarycenter(layerGroups, edges, nodeMap);
+    }
+
+    positionOverviewNodes(layerGroups, nodeMap, direction, canvasSize);
+}
+
+// Barycenter heuristic: for each node in a layer, compute the average
+// position of its neighbors in the adjacent layer, then sort by that value.
+function orderLayersByBarycenter(layerGroups, edges, nodeMap) {
+    const sortedLayers = Array.from(layerGroups.keys()).sort((a, b) => a - b);
+
+    // Build reverse adjacency: toNode -> [fromNode, ...]
+    const reverseAdj = new Map();
+    const forwardAdj = new Map();
+    for (const edge of edges) {
+        if (!nodeMap.has(edge.fromNode) || !nodeMap.has(edge.toNode)) continue;
+        if (!reverseAdj.has(edge.toNode)) reverseAdj.set(edge.toNode, []);
+        reverseAdj.get(edge.toNode).push(edge.fromNode);
+        if (!forwardAdj.has(edge.fromNode)) forwardAdj.set(edge.fromNode, []);
+        forwardAdj.get(edge.fromNode).push(edge.toNode);
+    }
+
+    // Forward sweep: order each layer based on positions in previous layer
+    for (let li = 1; li < sortedLayers.length; li++) {
+        const prevLayer = layerGroups.get(sortedLayers[li - 1]);
+        const currGroup = layerGroups.get(sortedLayers[li]);
+
+        // Position index of each node in previous layer
+        const prevPos = new Map();
+        prevLayer.forEach((name, idx) => prevPos.set(name, idx));
+
+        // Compute barycenter for each node in current layer
+        const barycenters = new Map();
+        for (const name of currGroup) {
+            const neighbors = reverseAdj.get(name) || [];
+            const positions = neighbors.filter(n => prevPos.has(n)).map(n => prevPos.get(n));
+            if (positions.length > 0) {
+                barycenters.set(name, positions.reduce((a, b) => a + b, 0) / positions.length);
+            } else {
+                barycenters.set(name, Infinity);
+            }
+        }
+
+        currGroup.sort((a, b) => {
+            const ba = barycenters.get(a);
+            const bb = barycenters.get(b);
+            if (ba !== bb) return ba - bb;
+            return a.localeCompare(b);
+        });
+    }
+
+    // Backward sweep: refine based on positions in next layer
+    for (let li = sortedLayers.length - 2; li >= 0; li--) {
+        const nextLayer = layerGroups.get(sortedLayers[li + 1]);
+        const currGroup = layerGroups.get(sortedLayers[li]);
+
+        const nextPos = new Map();
+        nextLayer.forEach((name, idx) => nextPos.set(name, idx));
+
+        const barycenters = new Map();
+        for (const name of currGroup) {
+            const neighbors = forwardAdj.get(name) || [];
+            const positions = neighbors.filter(n => nextPos.has(n)).map(n => nextPos.get(n));
+            if (positions.length > 0) {
+                barycenters.set(name, positions.reduce((a, b) => a + b, 0) / positions.length);
+            } else {
+                barycenters.set(name, Infinity);
+            }
+        }
+
+        currGroup.sort((a, b) => {
+            const ba = barycenters.get(a);
+            const bb = barycenters.get(b);
+            if (ba !== bb) return ba - bb;
+            return a.localeCompare(b);
+        });
+    }
+}
+
+// Position nodes on canvas based on layer groups.
+// direction: 'horizontal' (left-to-right) or 'vertical' (top-to-bottom)
+// canvasSize: { width, height } — used for adaptive spacing
+function positionOverviewNodes(layerGroups, nodeMap, direction, canvasSize) {
+    const isVertical = direction === 'vertical';
+    const numLayers = layerGroups.size;
+    if (numLayers === 0) return;
+
+    // LiteGraph draws the title bar ABOVE pos[1], so effective node height
+    // is size[1] + NODE_TITLE_HEIGHT. Account for this in spacing.
+    const titleH = LiteGraph.NODE_TITLE_HEIGHT || 30;
+
+    if (isVertical) {
+        // Vertical: layers go top-to-bottom, nodes within layer go left-to-right
+        const layerMaxHeights = new Map();
+        const layerWidths = new Map();
+        for (const [layer, group] of layerGroups) {
+            let maxH = 0;
+            let totalW = 0;
+            for (const name of group) {
+                const lgNode = nodeMap.get(name);
+                if (lgNode) {
+                    maxH = Math.max(maxH, lgNode.size[1] + titleH);
+                    totalW += lgNode.size[0] + OVERVIEW_MIN_NODE_GAP;
+                }
+            }
+            layerMaxHeights.set(layer, maxH);
+            layerWidths.set(layer, totalW - OVERVIEW_MIN_NODE_GAP);
+        }
+
+        // Adaptive vertical spacing: fit layers into canvas height if possible
+        const totalLayerHeights = Array.from(layerMaxHeights.values()).reduce((a, b) => a + b, 0);
+        const availableGap = canvasSize.height - totalLayerHeights;
+        const adaptiveGap = numLayers > 1 ? availableGap / (numLayers + 1) : 0;
+        // Clamp gap: at least MIN_NODE_GAP, at most 80px (don't spread too far)
+        const gapPerLayer = Math.max(OVERVIEW_MIN_NODE_GAP, Math.min(80, adaptiveGap));
+
+        // Max width across all layers for centering
+        const maxWidth = Math.max(...layerWidths.values(), 0);
+
+        const sortedLayers = Array.from(layerGroups.keys()).sort((a, b) => a - b);
+        let yOffset = 0;
+        for (const layer of sortedLayers) {
+            const group = layerGroups.get(layer);
+            const totalWidth = layerWidths.get(layer) || 0;
+            let xOffset = (maxWidth - totalWidth) / 2; // center horizontally
+            for (const name of group) {
+                const lgNode = nodeMap.get(name);
+                if (lgNode) {
+                    lgNode.pos[0] = xOffset;
+                    lgNode.pos[1] = yOffset;
+                    xOffset += lgNode.size[0] + OVERVIEW_MIN_NODE_GAP;
+                }
+            }
+            yOffset += (layerMaxHeights.get(layer) || 0) + gapPerLayer;
+        }
+    } else {
+        // Horizontal: layers go left-to-right, nodes within layer go top-to-bottom
+        const layerHeights = new Map();
+        const layerMaxWidths = new Map();
+        for (const [layer, group] of layerGroups) {
+            let h = 0;
+            let maxW = 0;
+            for (const name of group) {
+                const lgNode = nodeMap.get(name);
+                if (lgNode) {
+                    h += (lgNode.size[1] + titleH) + OVERVIEW_MIN_NODE_GAP;
+                    maxW = Math.max(maxW, lgNode.size[0]);
+                }
+            }
+            layerHeights.set(layer, h - OVERVIEW_MIN_NODE_GAP);
+            layerMaxWidths.set(layer, maxW);
+        }
+
+        // Adaptive horizontal spacing: fit layers into canvas width if possible
+        const totalLayerWidths = Array.from(layerMaxWidths.values()).reduce((a, b) => a + b, 0);
+        const availableGap = canvasSize.width - totalLayerWidths;
+        const adaptiveGap = numLayers > 1 ? availableGap / (numLayers + 1) : 0;
+        // Clamp: at least MIN_LAYER_GAP between node edges
+        const gapPerLayer = Math.max(OVERVIEW_MIN_LAYER_GAP, adaptiveGap);
+
+        const maxHeight = Math.max(...layerHeights.values(), 0);
+
+        const sortedLayers = Array.from(layerGroups.keys()).sort((a, b) => a - b);
+        let xOffset = 0;
+        for (const layer of sortedLayers) {
+            const group = layerGroups.get(layer);
+            const totalHeight = layerHeights.get(layer) || 0;
+            let yOff = (maxHeight - totalHeight) / 2;
+            const layerW = layerMaxWidths.get(layer) || OVERVIEW_NODE_WIDTH;
+            for (const name of group) {
+                const lgNode = nodeMap.get(name);
+                if (lgNode) {
+                    lgNode.pos[0] = xOffset;
+                    lgNode.pos[1] = yOff;
+                    yOff += (lgNode.size[1] + titleH) + OVERVIEW_MIN_NODE_GAP;
+                }
+            }
+            xOffset += layerW + gapPerLayer;
+        }
+    }
+}
+
+
+// === 58-overview-navigation.js ===
+// ============================================================================
+// System Overview — hotkeys + help overlay (Spec 3 Task 7)
+// ============================================================================
+// Public API:
+//   attachOverviewHotkeys(serverId) -> handler  (pass to removeEventListener)
+//   fitOverviewInstance(inst), resetOverviewZoom(inst), stepOverviewZoom(inst, factor)
+//   scrollOverviewToOrigin(inst)
+//   toggleOverviewValues(inst), toggleOverviewWires(inst), toggleOverviewMinimap(inst)
+//   toggleOverviewHelp()
+//
+// This module wires keyboard shortcuts when an overview tab is opened. The
+// handler is returned so `closeOverviewTab` can detach it via
+// removeEventListener. Focus in INPUT/TEXTAREA/contentEditable is respected
+// (hotkeys are ignored there).
+//
+// Value/Wires toggles add body classes `overview-no-values` / `overview-no-wires`
+// so CSS (or future render-paths in Task 9 / Task 13) can suppress rendering.
+// Minimap toggle only updates state — actual show/hide lives in Task 8.
+// Clear-highlight delegates to clearOverviewHighlight (Task 10) if defined.
+// ============================================================================
+
+const OVERVIEW_SCALE_MIN = 0.1;
+const OVERVIEW_SCALE_MAX = 5;
+
+const OVERVIEW_HOTKEYS = {
+    'f': 'fit',
+    'F': 'fit',
+    '0': 'reset-zoom',
+    '+': 'zoom-in',
+    '=': 'zoom-in',
+    '-': 'zoom-out',
+    'Home': 'scroll-origin',
+    'v': 'toggle-values',
+    'V': 'toggle-values',
+    'w': 'toggle-wires',
+    'W': 'toggle-wires',
+    'm': 'toggle-minimap',
+    'M': 'toggle-minimap',
+    '/': 'focus-search',
+    'Escape': 'clear-highlight',
+    '?': 'toggle-help',
+};
+
+// ----------------------------------------------------------------------------
+// Zoom / fit / scroll helpers
+// ----------------------------------------------------------------------------
+
+// Wrapper: existing fitOverviewToScreen has signature (lgCanvas, graph).
+// Accept an overview instance for uniform call-sites.
+function fitOverviewInstance(inst) {
+    if (!inst || !inst.canvas || !inst.graph) return;
+    if (typeof fitOverviewToScreen === 'function') {
+        fitOverviewToScreen(inst.canvas, inst.graph);
+    }
+    applyLOD(inst);
+}
+
+function resetOverviewZoom(inst) {
+    if (!inst || !inst.canvas || !inst.canvas.ds) return;
+    inst.canvas.ds.scale = 1;
+    inst.canvas.setDirty(true, true);
+    applyLOD(inst);
+}
+
+function stepOverviewZoom(inst, factor) {
+    if (!inst || !inst.canvas || !inst.canvas.ds) return;
+    const cur = inst.canvas.ds.scale || 1;
+    const next = Math.max(OVERVIEW_SCALE_MIN, Math.min(OVERVIEW_SCALE_MAX, cur * factor));
+    inst.canvas.ds.scale = next;
+    inst.canvas.setDirty(true, true);
+    applyLOD(inst);
+}
+
+// ----------------------------------------------------------------------------
+// Ctrl+wheel zoom-around-cursor + LOD (Spec 3 Task 9)
+// ----------------------------------------------------------------------------
+// attachOverviewWheelZoom(inst) -> handler
+//   Wheel with Ctrl held zooms the main overview canvas around the cursor
+//   (world-coords under cursor stay put). Returns the handler so
+//   closeOverviewTab can detach via removeEventListener.
+//
+// applyLOD(inst)
+//   Toggles body classes `overview-lod-low` (<0.5 scale) and
+//   `overview-lod-min` (<0.25 scale). The `overview-lod-min` class is read
+//   by UniSetProcessNode.onDrawForeground to skip detail rendering when
+//   zoomed far out (perf + visual clarity). CSS selectors on these classes
+//   hide DOM-based overlays if/when they exist.
+// ----------------------------------------------------------------------------
+
+function applyLOD(inst) {
+    const s = (inst && inst.canvas && inst.canvas.ds && inst.canvas.ds.scale) || 1;
+    document.body.classList.toggle('overview-lod-low', s < 0.5);
+    document.body.classList.toggle('overview-lod-min', s < 0.25);
+}
+
+function attachOverviewWheelZoom(inst) {
+    if (!inst || !inst.canvas || !inst.canvas.canvas) return null;
+    const dom = inst.canvas.canvas;
+    const handler = function(e) {
+        // Intercept before LiteGraph's native wheel-zoom handler fires.
+        e.preventDefault();
+        e.stopImmediatePropagation();
+
+        // LiteGraph applies the transform as `ctx.scale(s,s).translate(off)`,
+        // so screen = s * (world + off) and therefore world = screen/s - off.
+        // (See LGraphCanvas.convertEventToCanvasOffset in litegraph.js.)
+        const rect = dom.getBoundingClientRect();
+        // Map from CSS pixels (clientX/Y) to canvas-internal pixels, which is
+        // what ds.offset is measured in. rect.width may differ from
+        // canvas.width on HiDPI displays or when CSS scales the element.
+        const pxRatioX = dom.width / rect.width || 1;
+        const pxRatioY = dom.height / rect.height || 1;
+        const cx = (e.clientX - rect.left) * pxRatioX;
+        const cy = (e.clientY - rect.top) * pxRatioY;
+        const s = inst.canvas.ds.scale || 1;
+        const off = inst.canvas.ds.offset || [0, 0];
+
+        if (e.ctrlKey) {
+            // Ctrl+wheel: zoom around the cursor. World coords under the
+            // cursor must be invariant under the scale change:
+            //   world = cx/s - off   ==>   new_off = cx/newS - world
+            const wx = cx / s - off[0];
+            const wy = cy / s - off[1];
+            const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+            const newS = Math.max(OVERVIEW_SCALE_MIN, Math.min(OVERVIEW_SCALE_MAX, s * factor));
+            inst.canvas.ds.scale = newS;
+            inst.canvas.ds.offset = [cx / newS - wx, cy / newS - wy];
+            applyLOD(inst);
+        } else {
+            // Plain wheel: pan. Vertical by default; Shift — horizontal.
+            // offset is world-space, so delta (screen px) is divided by scale.
+            const delta = e.deltaY / s;
+            if (e.shiftKey) {
+                inst.canvas.ds.offset[0] -= delta;
+            } else {
+                inst.canvas.ds.offset[1] -= delta;
+            }
+        }
+        inst.canvas.setDirty(true, true);
+
+        if (inst.state) {
+            inst.state.zoom = inst.canvas.ds.scale;
+            inst.state.offsetX = inst.canvas.ds.offset[0];
+            inst.state.offsetY = inst.canvas.ds.offset[1];
+            if (typeof saveOverviewState === 'function' && inst.serverId) {
+                saveOverviewState(inst.serverId, inst.state);
+            }
+        }
+    };
+    // `capture: true` — run before LiteGraph's own wheel handler so our
+    // preventDefault + stopImmediatePropagation actually suppress it.
+    dom.addEventListener('wheel', handler, { passive: false, capture: true });
+    return handler;
+}
+
+function scrollOverviewToOrigin(inst) {
+    if (!inst || !inst.canvas || !inst.canvas.ds) return;
+    // LiteGraph pan state is canvas.ds.offset — a 2-element array.
+    if (Array.isArray(inst.canvas.ds.offset)) {
+        inst.canvas.ds.offset[0] = 0;
+        inst.canvas.ds.offset[1] = 0;
+    } else {
+        inst.canvas.ds.offset = [0, 0];
+    }
+    inst.canvas.setDirty(true, true);
+}
+
+// ----------------------------------------------------------------------------
+// Toggle helpers (values / wires / minimap)
+// ----------------------------------------------------------------------------
+
+function persistOverviewInstState(inst) {
+    if (!inst || !inst.serverId || !inst.state) return;
+    if (typeof saveOverviewState === 'function') {
+        saveOverviewState(inst.serverId, inst.state);
+    }
+}
+
+function toggleOverviewValues(inst) {
+    if (!inst || !inst.state) return;
+    if (!inst.state.toggles) inst.state.toggles = {};
+    inst.state.toggles.values = !inst.state.toggles.values;
+    document.body.classList.toggle('overview-no-values', !inst.state.toggles.values);
+    if (inst.canvas) inst.canvas.setDirty(true, true);
+    persistOverviewInstState(inst);
+}
+
+function toggleOverviewWires(inst) {
+    if (!inst || !inst.state) return;
+    if (!inst.state.toggles) inst.state.toggles = {};
+    inst.state.toggles.wires = !inst.state.toggles.wires;
+    document.body.classList.toggle('overview-no-wires', !inst.state.toggles.wires);
+    if (inst.canvas) inst.canvas.setDirty(true, true);
+    persistOverviewInstState(inst);
+}
+
+function toggleOverviewMinimap(inst) {
+    if (!inst || !inst.state) return;
+    if (!inst.state.toggles) inst.state.toggles = {};
+    inst.state.toggles.minimap = !inst.state.toggles.minimap;
+    // Apply visibility via body class; container lives in overview tab markup
+    // and CSS rule `body.overview-minimap-hidden .overview-minimap { display: none }`
+    // hides it. When minimap=false (default), hidden class is applied.
+    document.body.classList.toggle('overview-minimap-hidden', !inst.state.toggles.minimap);
+    persistOverviewInstState(inst);
+}
+
+// ----------------------------------------------------------------------------
+// Help overlay
+// ----------------------------------------------------------------------------
+
+function toggleOverviewHelp() {
+    const overlay = document.getElementById('overview-help-overlay');
+    if (!overlay) return;
+    overlay.classList.toggle('hidden');
+}
+
+function attachOverviewHelpCloseOnce() {
+    const btn = document.getElementById('overview-help-close');
+    if (!btn || btn.dataset.wired === '1') return;
+    btn.dataset.wired = '1';
+    btn.addEventListener('click', () => {
+        const overlay = document.getElementById('overview-help-overlay');
+        if (overlay) overlay.classList.add('hidden');
+    });
+}
+
+// ----------------------------------------------------------------------------
+// Focus-search: delegate to FB-status search input (Task 11). Defensive — if
+// the input is not yet present (Task 11 not implemented), silently no-op.
+// ----------------------------------------------------------------------------
+
+function focusOverviewSearch(inst) {
+    if (!inst || !inst.serverId) return;
+    const sel = `#fb-status-search-${inst.serverId}`;
+    const el = document.querySelector(sel);
+    if (el && typeof el.focus === 'function') el.focus();
+}
+
+// ----------------------------------------------------------------------------
+// Main: attachOverviewHotkeys
+// ----------------------------------------------------------------------------
+
+function attachOverviewHotkeys(serverId) {
+    const handler = function(e) {
+        // Ignore when focus is in editable form control.
+        const t = e.target;
+        if (t) {
+            const tag = (t.tagName || '').toUpperCase();
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || t.isContentEditable) return;
+        }
+
+        const action = OVERVIEW_HOTKEYS[e.key];
+        if (!action) return;
+
+        // Only preventDefault once we know we handle this key.
+        e.preventDefault();
+
+        const inst = (window.overviewInstances || {})[serverId];
+        if (!inst) return;
+
+        switch (action) {
+            case 'fit':
+                fitOverviewInstance(inst);
+                break;
+            case 'reset-zoom':
+                resetOverviewZoom(inst);
+                break;
+            case 'zoom-in':
+                stepOverviewZoom(inst, 1.2);
+                break;
+            case 'zoom-out':
+                stepOverviewZoom(inst, 1 / 1.2);
+                break;
+            case 'scroll-origin':
+                scrollOverviewToOrigin(inst);
+                break;
+            case 'toggle-values':
+                toggleOverviewValues(inst);
+                break;
+            case 'toggle-wires':
+                toggleOverviewWires(inst);
+                break;
+            case 'toggle-minimap':
+                toggleOverviewMinimap(inst);
+                break;
+            case 'focus-search':
+                focusOverviewSearch(inst);
+                break;
+            case 'clear-highlight': {
+                if (typeof clearOverviewHighlight === 'function') {
+                    clearOverviewHighlight(inst);
+                }
+                // Also close help overlay if open.
+                const helpOverlay = document.getElementById('overview-help-overlay');
+                if (helpOverlay && !helpOverlay.classList.contains('hidden')) {
+                    helpOverlay.classList.add('hidden');
+                }
+                break;
+            }
+            case 'toggle-help':
+                toggleOverviewHelp();
+                attachOverviewHelpCloseOnce();
+                break;
+        }
+    };
+
+    document.addEventListener('keydown', handler);
+    // Make sure the close button gets wired as soon as hotkeys are active —
+    // overlay HTML is present from page load, just wire once.
+    attachOverviewHelpCloseOnce();
+    return handler;
+}
+
+// ============================================================================
+// Floating minimap (Spec 3 Task 8)
+// ============================================================================
+// initOverviewMinimap(inst)     — mount canvas into #overview-minimap-<serverId>,
+//                                 start rAF redraw loop, wire mousedown for pan.
+// drawOverviewMinimap(inst)     — one frame: clear, nodes as rects, viewport box.
+// minimapPan(inst, evt)         — centre main canvas on minimap coords; drag-pan
+//                                 while mouse held. Listeners removed on mouseup.
+// Cleanup: `closeOverviewTab` sets `inst.minimap = null`; the rAF callback
+// then short-circuits on next tick, so no explicit cancelAnimationFrame is
+// needed.
+// ============================================================================
+
+function initOverviewMinimap(inst) {
+    if (!inst || !inst.serverId) return;
+    const container = document.getElementById('overview-minimap-' + inst.serverId);
+    if (!container) return;
+    // Guard against double-init (hot-reload, re-entry).
+    if (inst.minimap) return;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 200;
+    canvas.height = 150;
+    container.appendChild(canvas);
+    inst.minimap = { canvas, ctx: canvas.getContext('2d') };
+
+    const redrawLoop = () => {
+        // `inst.minimap = null` in closeOverviewTab stops the loop on next tick.
+        if (!inst.minimap) return;
+        drawOverviewMinimap(inst);
+        requestAnimationFrame(redrawLoop);
+    };
+    redrawLoop();
+
+    canvas.addEventListener('mousedown', (e) => minimapPan(inst, e));
+}
+
+// ============================================================================
+// View dropdown + SVG export (Spec 3 Task 14)
+// ============================================================================
+// initViewDropdown(inst)
+//   Wires the View ▾ button and its checkbox menu (Values/Wires/Minimap) to
+//   the existing toggle* helpers. Avoids the double-flip bug: checkbox
+//   `change` events only call toggle* when desired != current state, and the
+//   menu is re-synced from state on each open so hotkey-driven changes (V/W/M)
+//   are reflected. Outside-click dismisses the menu.
+//
+// exportOverviewSVG(inst)
+//   Builds a static SVG snapshot of the current graph — bbox of all nodes with
+//   20px padding, dark background, cubic-bezier edges from inst.data.edges,
+//   nodes as rects + title text (XML-escaped). Downloads via Blob + <a>.
+// ============================================================================
+
+function _overviewXmlEscape(s) {
+    return String(s).replace(/[&<>"']/g, function(c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c];
+    });
+}
+
+function initViewDropdown(inst) {
+    if (!inst || !inst.serverId) return;
+    const btn = document.getElementById('overview-view-btn-' + inst.serverId);
+    const menu = document.getElementById('overview-view-menu-' + inst.serverId);
+    if (!btn || !menu) return;
+
+    // Sync checkboxes from current inst.state.toggles. Called on open so that
+    // hotkey-driven toggles (V/W/M) are reflected when the user reopens menu.
+    function syncCheckboxes() {
+        menu.querySelectorAll('[data-toggle]').forEach(function(cb) {
+            const k = cb.getAttribute('data-toggle');
+            cb.checked = !!(inst.state && inst.state.toggles && inst.state.toggles[k]);
+        });
+    }
+
+    syncCheckboxes();
+
+    // Checkbox change: only invoke toggle* if the checkbox's desired value
+    // differs from the current state. toggle* helpers flip the state, so a
+    // naive assign-then-toggle would double-flip (net zero) — see Task 14 spec.
+    menu.querySelectorAll('[data-toggle]').forEach(function(cb) {
+        const key = cb.getAttribute('data-toggle');
+        cb.addEventListener('change', function() {
+            const desired = cb.checked;
+            const current = !!(inst.state && inst.state.toggles && inst.state.toggles[key]);
+            if (desired === current) return;
+            if (key === 'values' && typeof toggleOverviewValues === 'function') toggleOverviewValues(inst);
+            else if (key === 'wires' && typeof toggleOverviewWires === 'function') toggleOverviewWires(inst);
+            else if (key === 'minimap' && typeof toggleOverviewMinimap === 'function') toggleOverviewMinimap(inst);
+        });
+    });
+
+    btn.addEventListener('click', function() {
+        const willOpen = menu.classList.contains('hidden');
+        if (willOpen) syncCheckboxes();
+        menu.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!btn.contains(e.target) && !menu.contains(e.target)) {
+            menu.classList.add('hidden');
+        }
+    });
+
+    const svgBtn = document.getElementById('overview-svg-export-' + inst.serverId);
+    if (svgBtn) {
+        svgBtn.addEventListener('click', function() { exportOverviewSVG(inst); });
+    }
+}
+
+function exportOverviewSVG(inst) {
+    if (!inst || !inst.nodeMap) return;
+    const nodes = Array.from(inst.nodeMap.values());
+    if (nodes.length === 0) return;
+
+    // Compute bounding box of all node rectangles.
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        if (!n || !n.pos || !n.size) continue;
+        minX = Math.min(minX, n.pos[0]);
+        minY = Math.min(minY, n.pos[1]);
+        maxX = Math.max(maxX, n.pos[0] + n.size[0]);
+        maxY = Math.max(maxY, n.pos[1] + n.size[1]);
+    }
+    const pad = 20;
+    const w = maxX - minX + 2 * pad;
+    const h = maxY - minY + 2 * pad;
+
+    const parts = [];
+    parts.push('<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">');
+    parts.push('<rect width="100%" height="100%" fill="#1a1a1a"/>');
+
+    // Edges as cubic Bezier paths between output-right and input-left.
+    const edges = (inst.data && inst.data.edges) || [];
+    for (let i = 0; i < edges.length; i++) {
+        const e = edges[i];
+        const from = inst.nodeMap.get(e.fromNode);
+        const to = inst.nodeMap.get(e.toNode);
+        if (!from || !to) continue;
+        const fx = from.pos[0] + from.size[0] - minX + pad;
+        const fy = from.pos[1] + from.size[1] / 2 - minY + pad;
+        const tx = to.pos[0] - minX + pad;
+        const ty = to.pos[1] + to.size[1] / 2 - minY + pad;
+        parts.push('<path d="M' + fx + ',' + fy + ' C' + (fx + 40) + ',' + fy + ' ' + (tx - 40) + ',' + ty + ' ' + tx + ',' + ty + '" stroke="#555" fill="none"/>');
+    }
+
+    // Nodes as rect + title text.
+    for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        const x = n.pos[0] - minX + pad;
+        const y = n.pos[1] - minY + pad;
+        parts.push('<g>');
+        parts.push('<rect x="' + x + '" y="' + y + '" width="' + n.size[0] + '" height="' + n.size[1] + '" fill="#131320" stroke="#1c2836"/>');
+        parts.push('<text x="' + (x + 10) + '" y="' + (y + 16) + '" fill="#fff" font-family="sans-serif" font-size="12">' + _overviewXmlEscape(n.title || '') + '</text>');
+        parts.push('</g>');
+    }
+
+    parts.push('</svg>');
+    const svg = parts.join('');
+
+    const blob = new Blob([svg], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'overview-' + (inst.serverId || 'export') + '.svg';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function() { URL.revokeObjectURL(url); }, 100);
+}
+
+function drawOverviewMinimap(inst) {
+    if (!inst || !inst.minimap || !inst.canvas || !inst.nodeMap) return;
+    const { canvas, ctx } = inst.minimap;
+    // nodeMap is a Map<string, LGraphNode> (set by buildOverviewGraph).
+    const nodes = Array.from(inst.nodeMap.values());
+
+    // Always clear first so the minimap doesn't show stale content when graph
+    // becomes empty mid-session.
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (nodes.length === 0) return;
+
+    // Compute bounding box of all node rectangles.
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const n of nodes) {
+        if (!n || !n.pos || !n.size) continue;
+        minX = Math.min(minX, n.pos[0]);
+        minY = Math.min(minY, n.pos[1]);
+        maxX = Math.max(maxX, n.pos[0] + n.size[0]);
+        maxY = Math.max(maxY, n.pos[1] + n.size[1]);
+    }
+    const w = maxX - minX, h = maxY - minY;
+    if (!isFinite(w) || !isFinite(h) || w <= 0 || h <= 0) return;
+
+    // Fit bbox into canvas with 10% padding, preserving aspect ratio.
+    const scale = Math.min(canvas.width / w, canvas.height / h) * 0.9;
+    const offX = (canvas.width - w * scale) / 2 - minX * scale;
+    const offY = (canvas.height - h * scale) / 2 - minY * scale;
+
+    // Nodes as filled rects.
+    ctx.fillStyle = '#5a7b9a';
+    for (const n of nodes) {
+        if (!n || !n.pos || !n.size) continue;
+        ctx.fillRect(
+            n.pos[0] * scale + offX,
+            n.pos[1] * scale + offY,
+            n.size[0] * scale,
+            n.size[1] * scale
+        );
+    }
+
+    // Viewport rectangle: main canvas maps screen_x -> graph_x by
+    //   screen_x = (graph_x + offset_x) * scale
+    // => visible graph-space range: graph_x in [-offset_x, -offset_x + canvasW/scale]
+    const mainCanvasEl = inst.canvas.canvas;
+    if (mainCanvasEl && inst.canvas.ds) {
+        const canvasW = mainCanvasEl.width;
+        const canvasH = mainCanvasEl.height;
+        const s = inst.canvas.ds.scale || 1;
+        const off = inst.canvas.ds.offset || [0, 0];
+        const vx = (-off[0]) * scale + offX;
+        const vy = (-off[1]) * scale + offY;
+        const vw = (canvasW / s) * scale;
+        const vh = (canvasH / s) * scale;
+        ctx.strokeStyle = '#f0b040';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(vx, vy, vw, vh);
+    }
+
+    // Remember latest transform for click-to-pan coordinate inversion.
+    inst.minimap.scale = scale;
+    inst.minimap.offX = offX;
+    inst.minimap.offY = offY;
+}
+
+function minimapPan(inst, evt) {
+    if (!inst || !inst.minimap || !inst.canvas) return;
+    const mini = inst.minimap;
+    const canvas = mini.canvas;
+
+    const onMove = (e) => {
+        const m = inst.minimap;
+        if (!m || typeof m.scale !== 'number') return;
+        // Recompute rect on every move so it stays accurate if the window was
+        // resized during the drag.
+        const rect = canvas.getBoundingClientRect();
+        // Translate minimap-local mouse coords -> graph-space coords
+        // (inverse of drawOverviewMinimap: graph_x * scale + offX = mini_x).
+        const x = (e.clientX - rect.left - m.offX) / m.scale;
+        const y = (e.clientY - rect.top - m.offY) / m.scale;
+        const mainCanvasEl = inst.canvas.canvas;
+        if (!mainCanvasEl || !inst.canvas.ds) return;
+        const s = inst.canvas.ds.scale || 1;
+        // LiteGraph transform: screen_x = (graph_x + offset_x) * scale.
+        // Centre clicked graph coord (x, y) in main canvas -> solve for offset.
+        inst.canvas.ds.offset = [
+            mainCanvasEl.width / (2 * s) - x,
+            mainCanvasEl.height / (2 * s) - y
+        ];
+        inst.canvas.setDirty(true, true);
+    };
+
+    // Immediate pan on mousedown.
+    onMove(evt);
+
+    const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+}
+
+
+// === 58-overview-node.js ===
+// ============================================================================
+// System Overview — UniSetProcessNode (LiteGraph custom node type)
+// ============================================================================
+// Renders one process as a block with input/output ports showing live values
+// (via portValues + pulse on change). Connection labels at port level.
+// ============================================================================
+
+// ============================================================================
+// Custom LiteGraph Node Type: UniSetProcessNode
+// ============================================================================
+
+if (typeof LiteGraph !== 'undefined') {
+    function UniSetProcessNode() {
+        this.portValues = {};    // name -> value
+        this.prevValues = {};    // name -> previous value (for pulse detection)
+        this.pulseTimers = {};   // name -> timer id
+        this.portConnections = {}; // name -> [nodeName, ...] (connected processes)
+        // Node colors
+        this.color = '#151d28';      // title bar background
+        this.bgcolor = '#131320';    // body background
+    }
+
+    UniSetProcessNode.title = 'Process';
+    UniSetProcessNode.title_color = '#1c2836'; // title bar fill color
+
+    UniSetProcessNode.prototype.onDrawForeground = function(ctx) {
+        // LOD: skip port-value / connection-label detail when zoomed out far.
+        // Body class `overview-lod-min` is toggled by applyLOD() in
+        // 58-overview-navigation.js when canvas scale < 0.25.
+        if (typeof document !== 'undefined'
+            && document.body
+            && document.body.classList.contains('overview-lod-min')) {
+            return;
+        }
+
+        // Task 10 highlight: dim non-neighbors via alpha, outline neighbors.
+        // __hi / __dim are set by applyOverviewHighlight (58-overview-highlight.js).
+        const wasAlpha = ctx.globalAlpha;
+        if (this.__dim) {
+            ctx.globalAlpha = 0.3;
+        }
+
+        // Task 13: port-connection TEXT labels only at mid zoom.
+        //   scale >= 0.5  — LiteGraph native link lines are legible, no text needed.
+        //   0.25 <= scale < 0.5 — lines get thin/noisy; show compact text labels for orientation.
+        //   scale < 0.25  — Task 9 LOD-min already returned early above.
+        const gc = this.graph && this.graph.list_of_graphcanvas && this.graph.list_of_graphcanvas[0];
+        const scale = (gc && gc.ds && typeof gc.ds.scale === 'number') ? gc.ds.scale : 1;
+        const showConnLabels = scale >= 0.25 && scale < 0.5;
+
+        if (this.inputs || this.outputs) {
+            const slotHeight = LiteGraph.NODE_SLOT_HEIGHT;
+            const startY = this.constructor.slot_start_y || 0;
+            const valueOffsetY = 14; // offset below port name baseline
+            const linkLabelOffsetY = valueOffsetY + 11; // connection labels below value
+
+            // Draw input port values + connection labels
+            if (this.inputs) {
+                for (let i = 0; i < this.inputs.length; i++) {
+                    const input = this.inputs[i];
+                    const value = this.portValues[input.name];
+                    const isActive = value !== 0 && value !== null && value !== undefined;
+                    const isPulsing = this.pulseTimers[input.name];
+
+                    ctx.fillStyle = isActive ? OVERVIEW_ACTIVE_COLOR : OVERVIEW_INACTIVE_COLOR;
+                    if (isPulsing) ctx.fillStyle = '#8BC34A';
+
+                    ctx.font = '9px monospace';
+                    const text = formatOverviewPortValue(value);
+                    const y = startY + (i + 0.75) * slotHeight;
+                    ctx.textAlign = 'left';
+                    ctx.fillText(text, 18, y + valueOffsetY);
+
+                    // Connection labels: "← Proc1, Proc2 +N" (only at mid zoom)
+                    if (showConnLabels) {
+                        const conns = this.portConnections[input.name];
+                        if (conns && conns.length > 0) {
+                            ctx.fillStyle = OVERVIEW_LINK_LABEL_COLOR;
+                            ctx.font = '8px sans-serif';
+                            ctx.fillText(formatPortConnectionLabel('←', conns), 18, y + linkLabelOffsetY);
+                        }
+                    }
+                }
+            }
+
+            // Draw output port values + connection labels (right-aligned)
+            if (this.outputs) {
+                for (let i = 0; i < this.outputs.length; i++) {
+                    const output = this.outputs[i];
+                    const value = this.portValues[output.name];
+                    const isActive = value !== 0 && value !== null && value !== undefined;
+                    const isPulsing = this.pulseTimers[output.name];
+
+                    ctx.fillStyle = isActive ? OVERVIEW_ACTIVE_COLOR : OVERVIEW_INACTIVE_COLOR;
+                    if (isPulsing) ctx.fillStyle = '#8BC34A';
+
+                    ctx.font = '9px monospace';
+                    const text = formatOverviewPortValue(value);
+                    const y = startY + (i + 0.75) * slotHeight;
+                    ctx.textAlign = 'right';
+                    ctx.fillText(text, this.size[0] - 18, y + valueOffsetY);
+
+                    // Connection labels: "→ Proc1, Proc2 +N" (only at mid zoom)
+                    if (showConnLabels) {
+                        const conns = this.portConnections[output.name];
+                        if (conns && conns.length > 0) {
+                            ctx.fillStyle = OVERVIEW_LINK_LABEL_COLOR;
+                            ctx.font = '8px sans-serif';
+                            ctx.fillText(formatPortConnectionLabel('→', conns), this.size[0] - 18, y + linkLabelOffsetY);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Restore alpha before drawing the hi outline — the outline stays at
+        // full opacity regardless of dim state (but a node is never __hi and
+        // __dim at the same time; see applyOverviewHighlight).
+        if (this.__dim) {
+            ctx.globalAlpha = wasAlpha;
+        }
+
+        // Highlighted neighbour outline (drawn on top of body + ports).
+        if (this.__hi) {
+            ctx.save();
+            ctx.strokeStyle = '#f0b040';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(0, 0, this.size[0], this.size[1]);
+            ctx.restore();
+        }
+    };
+
+    LiteGraph.registerNodeType('uniset/process', UniSetProcessNode);
+}
+
+// Format port value for display
+function formatOverviewPortValue(value) {
+    if (value === null || value === undefined) return '--';
+    if (typeof value === 'number') {
+        return Number.isInteger(value) ? String(value) : value.toFixed(2);
+    }
+    return String(value);
+}
+
+// Format connection label: "→ Proc1, Proc2 +3"
+function formatPortConnectionLabel(arrow, names) {
+    if (names.length <= OVERVIEW_MAX_LINK_LABELS) {
+        return `${arrow} ${names.join(', ')}`;
+    }
+    const shown = names.slice(0, OVERVIEW_MAX_LINK_LABELS).join(', ');
+    return `${arrow} ${shown} +${names.length - OVERVIEW_MAX_LINK_LABELS}`;
+}
+
+// Populate portConnections on all nodes from edge data
+function populatePortConnections(nodeMap, edges) {
+    // Clear existing connections
+    for (const lgNode of nodeMap.values()) {
+        lgNode.portConnections = {};
+    }
+
+    // For outputs: edge.fromNode's output port → edge.toNode consumes it
+    // For inputs: edge.toNode's input port → edge.fromNode produces it
+    for (const edge of edges) {
+        const sourceNode = nodeMap.get(edge.fromNode);
+        const targetNode = nodeMap.get(edge.toNode);
+
+        if (sourceNode) {
+            if (!sourceNode.portConnections[edge.fromPort]) {
+                sourceNode.portConnections[edge.fromPort] = [];
+            }
+            if (!sourceNode.portConnections[edge.fromPort].includes(edge.toNode)) {
+                sourceNode.portConnections[edge.fromPort].push(edge.toNode);
+            }
+        }
+
+        if (targetNode) {
+            if (!targetNode.portConnections[edge.toPort]) {
+                targetNode.portConnections[edge.toPort] = [];
+            }
+            if (!targetNode.portConnections[edge.toPort].includes(edge.fromNode)) {
+                targetNode.portConnections[edge.toPort].push(edge.fromNode);
+            }
+        }
+    }
+}
+
+
+// === 58-overview-state.js ===
+// ============================================================================
+// System Overview — persistent view state (localStorage)
+// ============================================================================
+// Key:  uniset-panel:overview:<serverId>
+// Schema: {v, zoom, offsetX, offsetY, toggles, searchQuery, manualPositions}
+// Public API:
+//   overviewStateDefault() -> default state object
+//   loadOverviewState(serverId) -> restored state or default
+//   saveOverviewState(serverId, state) -- debounced (300ms) save
+//   flushOverviewState(serverId, state) -- immediate save (used on beforeunload)
+// Versioning: bump OVERVIEW_STATE_VERSION when schema changes; old states reset.
+// ============================================================================
+
+const OVERVIEW_STATE_VERSION = 2;
+const OVERVIEW_STATE_DEBOUNCE_MS = 300;
+
+function overviewStateKey(serverId) {
+    return `uniset-panel:overview:${serverId}`;
+}
+
+function overviewStateDefault() {
+    return {
+        v: OVERVIEW_STATE_VERSION,
+        zoom: 1,
+        offsetX: 0,
+        offsetY: 0,
+        toggles: { wires: false, values: true, minimap: true, groupBackgrounds: false },
+        searchQuery: '',
+        manualPositions: {},
+    };
+}
+
+function loadOverviewState(serverId) {
+    try {
+        const raw = localStorage.getItem(overviewStateKey(serverId));
+        if (!raw) return overviewStateDefault();
+        const parsed = JSON.parse(raw);
+        if (parsed.v !== OVERVIEW_STATE_VERSION) {
+            console.warn('[overview-state] state version mismatch, resetting');
+            return overviewStateDefault();
+        }
+        // Shallow merge for top-level fields, deep-merge `toggles` so a
+        // persisted partial toggles object (e.g. {values:false}) does not wipe
+        // newer default toggle keys (wires/minimap/groupBackgrounds/...).
+        const defaults = overviewStateDefault();
+        const merged = Object.assign({}, defaults, parsed);
+        merged.toggles = Object.assign({}, defaults.toggles, parsed.toggles || {});
+        return merged;
+    } catch (e) {
+        console.warn('[overview-state] load failed:', e);
+        return overviewStateDefault();
+    }
+}
+
+const _overviewStateSaveTimers = {};
+function saveOverviewState(serverId, state) {
+    clearTimeout(_overviewStateSaveTimers[serverId]);
+    _overviewStateSaveTimers[serverId] = setTimeout(() => {
+        try {
+            localStorage.setItem(overviewStateKey(serverId), JSON.stringify(state));
+        } catch (e) {
+            console.warn('[overview-state] save failed:', e);
+        }
+    }, OVERVIEW_STATE_DEBOUNCE_MS);
+}
+
+function flushOverviewState(serverId, state) {
+    clearTimeout(_overviewStateSaveTimers[serverId]);
+    delete _overviewStateSaveTimers[serverId];
+    try {
+        localStorage.setItem(overviewStateKey(serverId), JSON.stringify(state));
+    } catch (e) {
+        console.warn('[overview-state] flush failed:', e);
+    }
+}
+
+// Attach global beforeunload flusher at load time.
+// Reads window.overviewInstances (defined in 58-overview-core.js).
+if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', () => {
+        const instances = window.overviewInstances || {};
+        for (const sid of Object.keys(instances)) {
+            const inst = instances[sid];
+            if (inst && inst.state) flushOverviewState(sid, inst.state);
+        }
+    });
+}
+
+
+// === 58-overview-trace.js ===
+// ============================================================================
+// System Overview — trace SSE subscription API (used by Spec 4 detail panel)
+// ============================================================================
+// Pure API module. Consumers:
+//   const t = window.UnisetOverview.trace.subscribe(sid, obj, 500, batch => ...);
+//   window.UnisetOverview.trace.unsubscribe(t);
+//   await window.UnisetOverview.trace.enable(sid, obj, 256);
+//   await window.UnisetOverview.trace.disable(sid, obj);
+// No DOM hooks here. Spec 4 panel drives lifecycle.
+// NOTE: always call as `window.UnisetOverview.trace.<method>(...)` — the
+// object-literal methods are not auto-bound; destructuring will lose `this`.
+
+window.UnisetOverview = window.UnisetOverview || {};
+
+window.UnisetOverview.trace = {
+    _sources: {}, // token → EventSource
+
+    subscribe: function(serverId, objectName, intervalMS, onBatch) {
+        const token = serverId + ':' + objectName + ':' + Date.now() + ':' +
+                      Math.random().toString(36).slice(2, 8);
+        const url = '/api/trace/events' +
+            '?object=' + encodeURIComponent(objectName) +
+            '&server=' + encodeURIComponent(serverId) +
+            '&interval=' + (intervalMS || 500);
+        const es = new EventSource(url);
+        es.addEventListener('trace', function(e) {
+            try {
+                if (typeof onBatch === 'function') onBatch(JSON.parse(e.data));
+            } catch (err) {
+                console.warn('[trace] parse failed:', err);
+            }
+        });
+        es.onerror = function(err) {
+            console.warn('[trace] SSE error:', err);
+        };
+        this._sources[token] = es;
+        return token;
+    },
+
+    unsubscribe: function(token) {
+        const es = this._sources[token];
+        if (es) {
+            es.close();
+            delete this._sources[token];
+        }
+    },
+
+    enable: async function(serverId, objectName, size) {
+        const url = '/api/trace/servers/' + encodeURIComponent(serverId) +
+                    '/objects/' + encodeURIComponent(objectName) +
+                    '/enable?size=' + encodeURIComponent(String(size));
+        try {
+            const resp = await fetch(url, { method: 'POST' });
+            let body = null;
+            try { body = await resp.json(); } catch (e) { body = null; }
+            return { status: resp.status, body: body };
+        } catch (err) {
+            console.warn('[trace] enable network error:', err);
+            return { status: 0, body: null };
+        }
+    },
+
+    disable: async function(serverId, objectName) {
+        const url = '/api/trace/servers/' + encodeURIComponent(serverId) +
+                    '/objects/' + encodeURIComponent(objectName) +
+                    '/disable';
+        try {
+            const resp = await fetch(url, { method: 'POST' });
+            let body = null;
+            try { body = await resp.json(); } catch (e) { body = null; }
+            return { status: resp.status, body: body };
+        } catch (err) {
+            console.warn('[trace] disable network error:', err);
+            return { status: 0, body: null };
+        }
+    },
+
+    _closeAll: function() {
+        const self = this;
+        Object.keys(this._sources).forEach(function(t) { self.unsubscribe(t); });
+    }
+};
+
+// Close all subscriptions on page unload.
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('beforeunload', function() {
+        try { window.UnisetOverview.trace._closeAll(); } catch (e) {}
+    });
+}
+
+
+// === 58-system-overview.js ===
+// ============================================================================
+// System Overview -- LiteGraph.js blueprint diagram of inter-process data flow
+// ============================================================================
+
+// UniSetProcessNode class + port-label helpers moved to 58-overview-node.js
+// (formatOverviewPortValue, formatPortConnectionLabel, populatePortConnections)
+//
+// orchestration (overviewInstances, openSystemOverview, createOverviewTab,
+// closeOverviewTab, openOverviewErrorTab, fetchOverviewData, showOverviewError,
+// showOverviewMessage, initOverviewGraph, buildOverviewGraph) moved to
+// 58-overview-core.js
+//
+// layout (findSlotIndex, applyOverviewLayout, autoLayoutOverview,
+// orderLayersByBarycenter, positionOverviewNodes) moved to 58-overview-layout.js.
+// Now autoLayoutOverview tries Sugiyama (dagre) first, falls back to H/V on
+// dagre absence.
+
+// ============================================================================
+// Fit viewport to the top-most block at maximum scale (with padding).
+// Used as the initial viewport for vertical layouts and for the Auto-layout
+// button: the user lands on the first block enlarged to almost fill the
+// canvas, then scrolls the wheel to reveal subsequent blocks. Use the Fit
+// button for an overview of all blocks.
+// ============================================================================
+
+function centerOverviewOnFirstBlock(lgCanvas, nodeMap) {
+    if (!lgCanvas || !lgCanvas.canvas || !nodeMap || nodeMap.size === 0) return;
+    let topNode = null;
+    for (const node of nodeMap.values()) {
+        if (!topNode || node.pos[1] < topNode.pos[1]) topNode = node;
+    }
+    if (!topNode) return;
+    const canvasEl = lgCanvas.canvas;
+    const titleH = LiteGraph.NODE_TITLE_HEIGHT || 30;
+    const padding = 40;
+    // LiteGraph draws the title bar above pos[1]; effective block height
+    // includes the title.
+    const blockW = Math.max(topNode.size[0], OVERVIEW_NODE_WIDTH);
+    const blockH = topNode.size[1] + titleH;
+    const scaleX = (canvasEl.width  - padding * 2) / blockW;
+    const scaleY = (canvasEl.height - padding * 2) / blockH;
+    // Cap at OVERVIEW_SCALE_MAX (or 3x as a sane fallback) so we don't
+    // zoom in past readable text rendering.
+    const cap = (typeof OVERVIEW_SCALE_MAX === 'number') ? OVERVIEW_SCALE_MAX : 3;
+    const scale = Math.max(0.1, Math.min(scaleX, scaleY, cap));
+    lgCanvas.ds.scale = scale;
+    // screen = scale * (world + offset)  =>  offset = screen/scale - world
+    const blockCenterX = topNode.pos[0] + blockW / 2;
+    const blockCenterY = topNode.pos[1] - titleH / 2 + blockH / 2; // account for title bar above pos[1]
+    lgCanvas.ds.offset = [
+        canvasEl.width  / (2 * scale) - blockCenterX,
+        canvasEl.height / (2 * scale) - blockCenterY
+    ];
+    lgCanvas.setDirty(true, true);
+}
+
+// ============================================================================
+// Fit to Screen
+// ============================================================================
+
+function fitOverviewToScreen(lgCanvas, graph) {
+    const nodes = graph._nodes;
+    if (!nodes || nodes.length === 0) return;
+
+    // Compute bounding box (use OVERVIEW_NODE_WIDTH as minimum — LiteGraph may
+    // report smaller size[0] while actually rendering wider due to port labels)
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const node of nodes) {
+        const nodeW = Math.max(node.size[0], OVERVIEW_NODE_WIDTH);
+        minX = Math.min(minX, node.pos[0]);
+        minY = Math.min(minY, node.pos[1]);
+        maxX = Math.max(maxX, node.pos[0] + nodeW);
+        maxY = Math.max(maxY, node.pos[1] + node.size[1]);
+    }
+
+    // Determine layout direction from the first overview instance
+    const firstInst = Object.values(overviewInstances).find(i => i.graph === graph);
+    const fitDirection = (firstInst && firstInst.direction) || 'horizontal';
+    const fitIsVertical = fitDirection === 'vertical';
+
+    // Check for routed links and expand bbox accordingly.
+    // Max stagger: 10 levels * 12px = 120px, plus base offset.
+    const links = graph.links || {};
+    const maxStagger = 140; // 20 base + 120 max stagger
+
+    if (fitIsVertical) {
+        // Vertical mode: all forward links route to the right, backward to the left.
+        let hasForward = false;
+        let hasBackward = false;
+        for (const link of Object.values(links)) {
+            const src = nodes.find(n => n.id === link.origin_id);
+            const dst = nodes.find(n => n.id === link.target_id);
+            if (!src || !dst) continue;
+            if (dst.pos[1] < src.pos[1] - 50) hasBackward = true;
+            else hasForward = true;
+            if (hasForward && hasBackward) break;
+        }
+        if (hasForward) maxX += maxStagger;
+        if (hasBackward) minX -= maxStagger;
+    } else {
+        // Horizontal mode: backward above, forward multi-layer below.
+        let hasRoutedAbove = false;
+        let hasRoutedBelow = false;
+        const threshold = OVERVIEW_NODE_WIDTH + OVERVIEW_MIN_LAYER_GAP;
+        for (const link of Object.values(links)) {
+            const src = nodes.find(n => n.id === link.origin_id);
+            const dst = nodes.find(n => n.id === link.target_id);
+            if (!src || !dst) continue;
+            if (dst.pos[0] < src.pos[0] - 50) hasRoutedAbove = true;
+            const dist = dst.pos[0] - src.pos[0];
+            if (dist > threshold) {
+                for (const n of nodes) {
+                    if (n.id === src.id || n.id === dst.id) continue;
+                    const nx = n.pos[0] + Math.max(n.size[0], OVERVIEW_NODE_WIDTH) / 2;
+                    if (nx > src.pos[0] && nx < dst.pos[0]) {
+                        hasRoutedBelow = true;
+                        break;
+                    }
+                }
+            }
+            if (hasRoutedAbove && hasRoutedBelow) break;
+        }
+        if (hasRoutedAbove) minY -= 160;
+        if (hasRoutedBelow) maxY += 160;
+    }
+
+    const graphWidth = maxX - minX;
+    const graphHeight = maxY - minY;
+
+    if (graphWidth <= 0 || graphHeight <= 0) return;
+
+    const canvasWidth = lgCanvas.canvas.width;
+    const canvasHeight = lgCanvas.canvas.height;
+
+    const padding = OVERVIEW_FIT_PADDING;
+    const scaleX = (canvasWidth - padding * 2) / graphWidth;
+    const scaleY = (canvasHeight - padding * 2) / graphHeight;
+    const scale = Math.min(scaleX, scaleY, 1); // don't zoom in beyond 1:1
+
+    lgCanvas.ds.scale = scale;
+    // Center the graph in canvas (offset is in screen coordinates)
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    lgCanvas.ds.offset[0] = canvasWidth / (2 * scale) - centerX;
+    lgCanvas.ds.offset[1] = canvasHeight / (2 * scale) - centerY;
+    lgCanvas.setDirty(true, true);
+}
+
+// ============================================================================
+// SSE integration: update port values when object_data arrives
+// ============================================================================
+
+function updateOverviewFromSSE(serverId, objectName, ioData) {
+    const instance = overviewInstances[serverId];
+    if (!instance || !instance.nodeMap) return;
+
+    const lgNode = instance.nodeMap.get(objectName);
+    if (!lgNode) return;
+
+    let changed = false;
+
+    // Update input port values
+    // ioData.in keys are internal (e.g. "in_raw_temp"), but portValues uses sensor name (e.g. "RawTemp_AI")
+    if (ioData.in) {
+        for (const ioVar of Object.values(ioData.in)) {
+            const portName = ioVar.name;
+            if (!portName) continue;
+            const newValue = ioVar.value;
+            if (lgNode.portValues[portName] !== newValue) {
+                lgNode.prevValues[portName] = lgNode.portValues[portName];
+                lgNode.portValues[portName] = newValue;
+                triggerOverviewPulse(lgNode, portName);
+                changed = true;
+            }
+        }
+    }
+
+    // Update output port values
+    if (ioData.out) {
+        for (const ioVar of Object.values(ioData.out)) {
+            const portName = ioVar.name;
+            if (!portName) continue;
+            const newValue = ioVar.value;
+            if (lgNode.portValues[portName] !== newValue) {
+                lgNode.prevValues[portName] = lgNode.portValues[portName];
+                lgNode.portValues[portName] = newValue;
+                triggerOverviewPulse(lgNode, portName);
+                changed = true;
+            }
+        }
+    }
+
+    if (changed) {
+        if (instance.canvas) {
+            instance.canvas.setDirty(true, true);
+        }
+    }
+}
+
+// Update link colors: active (non-zero source value) = green, inactive = gray.
+// Links whose source port is pulsing get a bright highlight color.
+function triggerOverviewPulse(lgNode, portName) {
+    // Clear existing timer
+    if (lgNode.pulseTimers[portName]) {
+        clearTimeout(lgNode.pulseTimers[portName]);
+    }
+
+    // Set pulse flag (used in onDrawForeground and link color)
+    lgNode.pulseTimers[portName] = setTimeout(() => {
+        delete lgNode.pulseTimers[portName];
+        // Repaint after pulse ends to restore normal colors
+        if (lgNode.graph) {
+            lgNode.graph.setDirtyCanvas(true, true);
+        }
+    }, OVERVIEW_PULSE_DURATION_MS);
 }
 
 
@@ -15760,6 +18264,1328 @@ class DashboardWidget {
 // Gauge Widget (SVG)
 // ============================================================================
 
+
+
+// === 60-detail-messagelog.js ===
+// ============================================================================
+// UObject Detail Panel — Message Log tab
+// ============================================================================
+
+var LOG_HARD_CAP = 5000;
+var LOG_FILTER_DEBOUNCE_MS = 150;
+
+// sanitizeLogTypeSlug produces a safe CSS-class fragment from rec.type.
+// Anything outside [A-Za-z0-9_-] is collapsed to a single dash so that
+// whitespace or punctuation in the raw type string can't split the class
+// attribute or inject new tokens.
+function sanitizeLogTypeSlug(type) {
+    return String(type || '').replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-|-$/g, '');
+}
+
+function subscribeTraceForDetail(inst) {
+    if (inst.traceToken) return;
+    if (!window.UnisetOverview || !window.UnisetOverview.trace) return;
+    inst.traceToken = window.UnisetOverview.trace.subscribe(
+        inst.serverId, inst.objectName, 500,
+        function(batch) { onTraceBatch(inst, batch); }
+    );
+}
+
+function unsubscribeTraceForDetail(inst) {
+    if (!inst.traceToken) return;
+    if (window.UnisetOverview && window.UnisetOverview.trace) {
+        window.UnisetOverview.trace.unsubscribe(inst.traceToken);
+    }
+    inst.traceToken = null;
+}
+
+function onTraceBatch(inst, batch) {
+    if (!batch) return;
+    // If called from the SSE subscribe callback (58-overview-trace.js),
+    // the argument is the full envelope {type, serverId, serverName,
+    // objectName, data, timestamp}. Unwrap .data. Unit tests call this
+    // with a flat TraceBatch directly — detect via shape (no .enabled
+    // at top level, but .data present).
+    if (batch.data && (typeof batch.enabled === 'undefined')) {
+        batch = batch.data;
+    }
+    inst.logEnabled = !!batch.enabled;
+    if (batch.overflow) inst.logOverflow = true;
+    if (!batch.records || inst.logPaused) {
+        renderMessageLog(inst);
+        return;
+    }
+
+    for (const rec of batch.records) {
+        inst.logBuffer.push(enrichLogRecord(inst, rec));
+        if (inst.logBuffer.length > LOG_HARD_CAP) {
+            inst.logBuffer.shift();
+        }
+    }
+    renderMessageLog(inst);
+}
+
+function enrichLogRecord(inst, rec) {
+    const snap = inst.snapshot;
+    // Build reverse map (sensor id → name) from inputs + outputs once
+    // per snapshot. Locals (variables) have no sensor id, so skipped.
+    if (!inst._reverseSensorMap || inst._reverseSensorMapSrc !== snap) {
+        const rev = {};
+        if (snap) {
+            for (const p of (snap.inputs || [])) rev[p.id] = p.name;
+            for (const p of (snap.outputs || [])) rev[p.id] = p.name;
+        }
+        inst._reverseSensorMap = rev;
+        inst._reverseSensorMapSrc = snap;
+    }
+    const out = Object.assign({}, rec);
+    if (rec.id != null && inst._reverseSensorMap[rec.id]) {
+        out.name = inst._reverseSensorMap[rec.id];
+    }
+    return out;
+}
+
+// matchesLogFilter accepts a query string and optional opts {regex, caseSensitive}.
+// Returns true when the record matches by Event/Name/Supplier (and id/value
+// for convenience, same as before). Empty query → match all.
+function matchesLogFilter(rec, query, opts) {
+    if (!query) return true;
+    opts = opts || {};
+    const haystack = [
+        rec.type || '', rec.name || '',
+        rec.supplier || (rec.supplier_id != null ? String(rec.supplier_id) : ''),
+        String(rec.id != null ? rec.id : ''),
+        String(rec.value != null ? rec.value : '')
+    ].join(' ');
+    if (opts.regex) {
+        try {
+            const re = new RegExp(query, opts.caseSensitive ? '' : 'i');
+            return re.test(haystack);
+        } catch (_) { /* fall through to substring on bad regex */ }
+    }
+    if (opts.caseSensitive) return haystack.indexOf(query) !== -1;
+    return haystack.toLowerCase().indexOf(query.toLowerCase()) !== -1;
+}
+
+function renderMessageLog(inst) {
+    const root = document.querySelector('#detail-tab-' +
+        inst.key.replace(/:/g, '_') + ' [data-inner-panel="messagelog"]');
+    if (!root) return;
+
+    if (!root.dataset.built) {
+        root.innerHTML =
+            '<div class="detail-log-toolbar">' +
+                '<span class="detail-log-label">Trace:</span>' +
+                ' <button class="btn btn-sm log-enable-toggle" title="Start/stop trace collection on the server (saves resources when off)"></button>' +
+                ' <span class="detail-log-label">Size:</span>' +
+                ' <select class="btn btn-sm log-size" title="Server-side ring buffer size (records)">' +
+                    '<option>64</option><option>128</option>' +
+                    '<option selected>256</option>' +
+                    '<option>512</option><option>1024</option>' +
+                '</select>' +
+                ' <button class="btn btn-sm log-pause" title="Pause/resume UI updates (server keeps recording)"></button>' +
+                ' <button class="btn btn-sm log-clear" title="Clear the displayed buffer">Clear</button>' +
+                ' <button class="btn btn-sm log-export" title="Download current buffer as CSV">Export CSV</button>' +
+            '</div>' +
+            '<div class="detail-log-filter log-filter-wrapper">' +
+                '<span class="detail-log-label">Filter:</span>' +
+                ' <input class="log-filter log-filter-input" type="text" ' +
+                       'placeholder="event / name / supplier" ' +
+                       'title="Filter by event/name/supplier (Esc to clear)"/>' +
+                ' <div class="log-filter-options">' +
+                    '<label class="log-filter-option" title="Treat query as a regular expression">' +
+                        '<input type="checkbox" class="log-filter-regex"> Regex' +
+                    '</label>' +
+                    '<label class="log-filter-option" title="Case sensitive match">' +
+                        '<input type="checkbox" class="log-filter-case"> Case' +
+                    '</label>' +
+                '</div>' +
+                ' <span class="log-match-count log-filter-count"></span>' +
+            '</div>' +
+            '<div class="detail-log-banner" hidden></div>' +
+            '<div class="detail-log-scroll"><table class="detail-log-table">' +
+                '<thead><tr>' +
+                    '<th>Time</th><th>Event</th><th>Name (id)</th>' +
+                    '<th>Val</th><th>Supplier</th>' +
+                '</tr></thead>' +
+                '<tbody></tbody>' +
+            '</table></div>';
+        root.dataset.built = '1';
+        wireLogToolbar(inst, root);
+    }
+
+    const enBtn = root.querySelector('.log-enable-toggle');
+    enBtn.textContent = inst.logEnabled ? 'Disable' : 'Enable';
+    enBtn.classList.toggle('btn-danger', !!inst.logEnabled);
+    enBtn.classList.toggle('btn-primary', !inst.logEnabled);
+    const pauseBtn = root.querySelector('.log-pause');
+    pauseBtn.textContent = inst.logPaused ? 'Resume' : 'Pause';
+    pauseBtn.classList.toggle('btn-primary', !!inst.logPaused);
+    const filterEl = root.querySelector('.log-filter');
+    if (filterEl.value !== (inst.state.logFilter || '')) {
+        filterEl.value = inst.state.logFilter || '';
+    }
+    const regexCb = root.querySelector('.log-filter-regex');
+    const caseCb  = root.querySelector('.log-filter-case');
+    regexCb.checked = !!inst.state.logFilterRegex;
+    caseCb.checked  = !!inst.state.logFilterCase;
+
+    const banner = root.querySelector('.detail-log-banner');
+    if (inst.logOverflow) {
+        banner.textContent = '⚠ Upstream overflow — some records dropped';
+        banner.hidden = false;
+    } else {
+        banner.hidden = true;
+    }
+
+    const tbody = root.querySelector('tbody');
+    const filter = inst.state.logFilter || '';
+    const filterOpts = {
+        regex: !!inst.state.logFilterRegex,
+        caseSensitive: !!inst.state.logFilterCase
+    };
+    const filtered = inst.logBuffer.filter(function(r) { return matchesLogFilter(r, filter, filterOpts); });
+    // Newest first: take the last 500 records, then reverse so that new
+    // events appear at the top of the table (standard log-viewer convention).
+    const visible = filtered.slice(-500).reverse();
+    const matchEl = root.querySelector('.log-filter-count');
+    if (matchEl) {
+        matchEl.textContent = filter
+            ? (filtered.length + '/' + inst.logBuffer.length)
+            : '';
+    }
+    let html = '';
+    for (const rec of visible) {
+        const time = formatLogTime(rec.time_us);
+        const delay = (rec.event_time_us && rec.time_us > rec.event_time_us)
+            ? '+' + ((rec.time_us - rec.event_time_us) / 1000).toFixed(1) + 'ms'
+            : '';
+        const name = rec.name || '';
+        const id = rec.id != null ? rec.id : '';
+        const val = rec.value != null ? rec.value : '';
+        const supplier = rec.supplier || (rec.supplier_id != null ? rec.supplier_id : '');
+        html += '<tr class="log-row log-type-' + sanitizeLogTypeSlug(rec.type) + '">';
+        html += '<td>' + escapeDetailText(time) + ' <small>' +
+                escapeDetailText(delay) + '</small></td>';
+        html += '<td>' + escapeDetailText(rec.type || '') + '</td>';
+        html += '<td>' + escapeDetailText(name) + ' (' + escapeDetailText(String(id)) + ')</td>';
+        html += '<td>' + escapeDetailText(String(val)) + '</td>';
+        html += '<td>' + escapeDetailText(String(supplier)) + '</td>';
+        html += '</tr>';
+    }
+    tbody.innerHTML = html;
+}
+
+function wireLogToolbar(inst, root) {
+    root.querySelector('.log-enable-toggle').addEventListener('click', async function() {
+        // inst.logEnabled is the "live" flag surfaced by SSE batches; the UI
+        // render reads it. Flipping it locally keeps the button in sync
+        // immediately instead of waiting for the next batch (which won't
+        // arrive at all once trace is disabled on the server).
+        if (inst.logEnabled) {
+            if (window.UnisetOverview && window.UnisetOverview.trace) {
+                await window.UnisetOverview.trace.disable(inst.serverId, inst.objectName);
+            }
+            inst.logEnabled = false;
+            inst.state.logEnabled = false;
+            unsubscribeTraceForDetail(inst);
+        } else {
+            if (window.UnisetOverview && window.UnisetOverview.trace) {
+                await window.UnisetOverview.trace.enable(inst.serverId, inst.objectName,
+                    inst.state.logSize || 256);
+            }
+            inst.logEnabled = true;
+            inst.state.logEnabled = true;
+            subscribeTraceForDetail(inst);
+        }
+        if (typeof saveDetailState === 'function') {
+            saveDetailState(inst.serverId, inst.objectName, captureState(inst));
+        }
+        renderMessageLog(inst);
+    });
+
+    root.querySelector('.log-size').addEventListener('change', async function(e) {
+        const newSize = parseInt(e.target.value, 10);
+        inst.state.logSize = newSize;
+        if (typeof saveDetailState === 'function') {
+            saveDetailState(inst.serverId, inst.objectName, captureState(inst));
+        }
+        if (inst.logEnabled && window.UnisetOverview && window.UnisetOverview.trace) {
+            await window.UnisetOverview.trace.disable(inst.serverId, inst.objectName);
+            await window.UnisetOverview.trace.enable(inst.serverId, inst.objectName, newSize);
+        }
+    });
+
+    root.querySelector('.log-pause').addEventListener('click', function() {
+        inst.logPaused = !inst.logPaused;
+        inst.state.logPaused = inst.logPaused;
+        if (typeof saveDetailState === 'function') {
+            saveDetailState(inst.serverId, inst.objectName, captureState(inst));
+        }
+        renderMessageLog(inst);
+    });
+
+    root.querySelector('.log-clear').addEventListener('click', function() {
+        inst.logBuffer = [];
+        inst.logOverflow = false;
+        renderMessageLog(inst);
+    });
+
+    root.querySelector('.log-export').addEventListener('click', function() {
+        exportLogCsv(inst);
+    });
+
+    // Filter has a debounced re-render to avoid re-rendering the table on
+    // every keystroke when the buffer is large. State is still saved
+    // synchronously so the value survives tab switches.
+    let filterDebounceTimer = null;
+    const filterInput = root.querySelector('.log-filter');
+    filterInput.addEventListener('input', function(e) {
+        inst.state.logFilter = e.target.value;
+        if (typeof saveDetailState === 'function') {
+            saveDetailState(inst.serverId, inst.objectName, captureState(inst));
+        }
+        if (filterDebounceTimer) clearTimeout(filterDebounceTimer);
+        filterDebounceTimer = setTimeout(function() {
+            filterDebounceTimer = null;
+            renderMessageLog(inst);
+        }, LOG_FILTER_DEBOUNCE_MS);
+    });
+    // Esc clears the filter and drops focus (matches LogViewer convention).
+    filterInput.addEventListener('keydown', function(e) {
+        if (e.key !== 'Escape') return;
+        e.preventDefault();
+        if (filterInput.value !== '') {
+            filterInput.value = '';
+            inst.state.logFilter = '';
+            if (filterDebounceTimer) {
+                clearTimeout(filterDebounceTimer);
+                filterDebounceTimer = null;
+            }
+            if (typeof saveDetailState === 'function') {
+                saveDetailState(inst.serverId, inst.objectName, captureState(inst));
+            }
+            renderMessageLog(inst);
+        }
+        filterInput.blur();
+    });
+
+    // Regex / Case toggles — re-render immediately, no debounce.
+    root.querySelector('.log-filter-regex').addEventListener('change', function(e) {
+        inst.state.logFilterRegex = e.target.checked;
+        if (typeof saveDetailState === 'function') {
+            saveDetailState(inst.serverId, inst.objectName, captureState(inst));
+        }
+        renderMessageLog(inst);
+    });
+    root.querySelector('.log-filter-case').addEventListener('change', function(e) {
+        inst.state.logFilterCase = e.target.checked;
+        if (typeof saveDetailState === 'function') {
+            saveDetailState(inst.serverId, inst.objectName, captureState(inst));
+        }
+        renderMessageLog(inst);
+    });
+}
+
+function formatLogTime(timeUs) {
+    if (!timeUs) return '—';
+    const ms = Math.floor(timeUs / 1000);
+    const d = new Date(ms);
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const ss = String(d.getSeconds()).padStart(2, '0');
+    const mmm = String(d.getMilliseconds()).padStart(3, '0');
+    return hh + ':' + mm + ':' + ss + '.' + mmm;
+}
+
+function logToCsv(inst) {
+    const lines = ['time_us,type,id,value,supplier_id'];
+    for (const rec of inst.logBuffer) {
+        lines.push([
+            rec.time_us != null ? rec.time_us : '',
+            rec.type || '',
+            rec.id != null ? rec.id : '',
+            rec.value != null ? rec.value : '',
+            rec.supplier_id != null ? rec.supplier_id : ''
+        ].join(','));
+    }
+    return lines.join('\n');
+}
+
+function exportLogCsv(inst) {
+    const csv = logToCsv(inst);
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = inst.objectName + '-log.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function() { URL.revokeObjectURL(url); }, 100);
+}
+
+
+// === 60-detail-panel.js ===
+// ============================================================================
+// UObject Detail Panel — entry point + tab lifecycle + inner-tab switch
+// ============================================================================
+// Listens for uniset:node-double-clicked from System Overview, creates
+// (or activates) a per-object tab holding Variables/Trends/Message Log.
+// Sub-modules (60-detail-variables.js etc.) are loaded later by concat
+// and wire their render functions at call time (typeof checks).
+
+var detailInstances = {};
+
+function detailPanelKey(serverId, objectName) {
+    return serverId + ':' + objectName;
+}
+
+function openDetailPanel(serverId, serverName, objectName) {
+    const key = detailPanelKey(serverId, objectName);
+    if (detailInstances[key]) {
+        activateDetailTab(key);
+        return detailInstances[key];
+    }
+
+    const state = (typeof loadDetailState === 'function')
+        ? loadDetailState(serverId, objectName)
+        : { activeInnerTab: 'variables' };
+
+    const inst = {
+        key: key,
+        serverId: serverId,
+        serverName: serverName,
+        objectName: objectName,
+        state: state,
+        snapshot: null,
+        snapshotTimer: null,
+        selectedTrends: new Set(state.selectedTrends || []),
+        trendsBuffer: {},
+        logBuffer: [],
+        traceToken: null
+    };
+    detailInstances[key] = inst;
+
+    createDetailTabDOM(inst);
+    applyInnerTab(inst, inst.state.activeInnerTab);
+
+    if (typeof registerDetailForFlush === 'function') {
+        registerDetailForFlush(serverId, objectName, function() {
+            return captureState(inst);
+        });
+    }
+
+    // Start snapshot poll (Variables + Trends both use it).
+    if (typeof startDetailSnapshotPoll === 'function') {
+        startDetailSnapshotPoll(inst);
+    }
+
+    // If persisted active tab is messagelog, subscribe immediately.
+    if (inst.state.activeInnerTab === 'messagelog' &&
+        typeof subscribeTraceForDetail === 'function') {
+        subscribeTraceForDetail(inst);
+    }
+
+    document.dispatchEvent(new CustomEvent('uniset:detail-opened', {
+        detail: { serverId, serverName, objectName, key }
+    }));
+
+    return inst;
+}
+
+function closeDetailPanel(key) {
+    const inst = detailInstances[key];
+    if (!inst) return;
+
+    if (typeof stopDetailSnapshotPoll === 'function') {
+        stopDetailSnapshotPoll(inst);
+    }
+    if (typeof unsubscribeTraceForDetail === 'function') {
+        unsubscribeTraceForDetail(inst);
+    }
+    if (typeof flushDetailStateImmediate === 'function') {
+        flushDetailStateImmediate(inst.serverId, inst.objectName, captureState(inst));
+    }
+    if (typeof unregisterDetailForFlush === 'function') {
+        unregisterDetailForFlush(inst.serverId, inst.objectName);
+    }
+
+    removeDetailTabDOM(inst);
+    delete detailInstances[key];
+
+    document.dispatchEvent(new CustomEvent('uniset:detail-closed', {
+        detail: { serverId: inst.serverId, objectName: inst.objectName, key }
+    }));
+}
+
+function captureState(inst) {
+    return Object.assign({}, inst.state, {
+        selectedTrends: Array.from(inst.selectedTrends)
+    });
+}
+
+function applyInnerTab(inst, tabName) {
+    inst.state.activeInnerTab = tabName;
+    if (typeof saveDetailState === 'function') {
+        saveDetailState(inst.serverId, inst.objectName, captureState(inst));
+    }
+
+    const root = document.getElementById('detail-tab-' + inst.key.replace(/:/g, '_'));
+    if (!root) return;
+    const buttons = root.querySelectorAll('.detail-inner-tabs > button');
+    buttons.forEach(function(b) {
+        if (b.getAttribute('data-inner') === tabName) b.classList.add('active');
+        else b.classList.remove('active');
+    });
+    const panels = root.querySelectorAll('[data-inner-panel]');
+    panels.forEach(function(p) {
+        if (p.getAttribute('data-inner-panel') === tabName) p.classList.add('active');
+        else p.classList.remove('active');
+    });
+
+    if (tabName === 'messagelog' && typeof subscribeTraceForDetail === 'function') {
+        subscribeTraceForDetail(inst);
+    }
+}
+
+function createDetailTabDOM(inst) {
+    const safeKey = inst.key.replace(/:/g, '_');
+    const root = document.createElement('div');
+    root.id = 'detail-tab-' + safeKey;
+    root.className = 'detail-panel';
+    root.dataset.key = inst.key;
+    root.innerHTML =
+        '<div class="detail-header">' +
+            '<span class="detail-obj">' + escapeDetailText(inst.objectName) + '</span>' +
+            '<span class="detail-server">Server: ' + escapeDetailText(inst.serverName) + '</span>' +
+        '</div>' +
+        '<div class="detail-inner-tabs">' +
+            '<button data-inner="variables">Variables</button>' +
+            '<button data-inner="trends">Trends</button>' +
+            '<button data-inner="messagelog">Message Log</button>' +
+        '</div>' +
+        '<div class="detail-inner-content">' +
+            '<div data-inner-panel="variables"></div>' +
+            '<div data-inner-panel="trends"></div>' +
+            '<div data-inner-panel="messagelog"></div>' +
+        '</div>';
+
+    root.querySelectorAll('.detail-inner-tabs > button').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            applyInnerTab(inst, btn.getAttribute('data-inner'));
+        });
+    });
+
+    const tabsHeader = document.getElementById('tabs-header');
+    const tabsContent = document.getElementById('tabs-content');
+    const placeholder = tabsContent.querySelector('.placeholder');
+    if (placeholder) placeholder.remove();
+
+    const tabBtn = document.createElement('button');
+    tabBtn.className = 'tab-btn';
+    tabBtn.dataset.name = inst.key;
+    tabBtn.dataset.objectType = 'Detail';
+    tabBtn.dataset.serverId = inst.serverId;
+    tabBtn.innerHTML =
+        '<span class="tab-type-badge">Detail</span>' +
+        '<span class="tab-server-badge" data-server-id="' + escapeDetailText(inst.serverId) + '">' +
+            escapeDetailText(inst.serverName) +
+        '</span>' +
+        escapeDetailText(inst.objectName) +
+        '<span class="close">&times;</span>';
+    tabBtn.addEventListener('click', function(e) {
+        if (e.target.classList.contains('close')) {
+            closeDetailPanel(inst.key);
+        } else if (typeof activateTab === 'function') {
+            activateTab(inst.key);
+        }
+    });
+    tabsHeader.appendChild(tabBtn);
+
+    const panel = document.createElement('div');
+    panel.className = 'tab-panel';
+    panel.dataset.name = inst.key;
+    panel.dataset.objectType = 'Detail';
+    panel.dataset.serverId = inst.serverId;
+    panel.appendChild(root);
+    tabsContent.appendChild(panel);
+
+    if (typeof state !== 'undefined' && state && state.tabs && typeof state.tabs.set === 'function') {
+        state.tabs.set(inst.key, {
+            charts: new Map(),
+            variables: {},
+            objectType: 'Detail',
+            renderer: null,
+            updateInterval: null,
+            displayName: inst.objectName,
+            serverId: inst.serverId,
+            serverName: inst.serverName
+        });
+    }
+
+    if (typeof activateTab === 'function') {
+        activateTab(inst.key);
+    }
+}
+
+function removeDetailTabDOM(inst) {
+    const safeKey = inst.key.replace(/:/g, '_');
+    const root = document.getElementById('detail-tab-' + safeKey);
+    const panel = root ? root.closest('.tab-panel') : null;
+
+    if (panel && panel.parentNode) {
+        panel.parentNode.removeChild(panel);
+    } else if (root && root.parentNode) {
+        root.parentNode.removeChild(root);
+    }
+
+    const tabBtn = document.querySelector('.tab-btn[data-name="' + cssEscapeTabKey(inst.key) + '"]');
+    if (tabBtn && tabBtn.parentNode) tabBtn.parentNode.removeChild(tabBtn);
+
+    if (typeof state !== 'undefined' && state && state.tabs && typeof state.tabs.delete === 'function') {
+        state.tabs.delete(inst.key);
+        if (state.tabs.size === 0) {
+            const tabsContent = document.getElementById('tabs-content');
+            if (tabsContent && !tabsContent.querySelector('.tab-panel')) {
+                tabsContent.innerHTML = '<div class="placeholder">Select an object from the list on the left</div>';
+            }
+            if (state.activeTab === inst.key) state.activeTab = null;
+        } else if (state.activeTab === inst.key) {
+            const next = state.tabs.keys().next().value;
+            if (next && typeof activateTab === 'function') activateTab(next);
+        }
+    }
+}
+
+function activateDetailTab(key) {
+    if (typeof activateTab === 'function' &&
+        typeof state !== 'undefined' && state && state.tabs && state.tabs.has && state.tabs.has(key)) {
+        activateTab(key);
+        return;
+    }
+    const safeKey = key.replace(/:/g, '_');
+    const el = document.getElementById('detail-tab-' + safeKey);
+    if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView();
+}
+
+function cssEscapeTabKey(key) {
+    if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') return CSS.escape(key);
+    return String(key).replace(/"/g, '\\"');
+}
+
+function escapeDetailText(s) {
+    return String(s).replace(/[&<>"']/g, function(c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;',
+                 '"': '&quot;', "'": '&#39;' }[c];
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Entry listeners
+// ---------------------------------------------------------------------------
+
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    document.addEventListener('uniset:node-double-clicked', function(e) {
+        const d = e.detail || {};
+        if (!d.serverId || !d.objectName) return;
+        openDetailPanel(d.serverId, d.serverName || d.serverId, d.objectName);
+    });
+
+    // When the System Overview is closed for a given server, tear down
+    // any detail panels that belong to that server (they can't poll or
+    // navigate back without the schema).
+    document.addEventListener('uniset:schema-closed', function(e) {
+        const serverId = e.detail && e.detail.serverId;
+        if (!serverId) return;
+        for (const key of Object.keys(detailInstances)) {
+            if (detailInstances[key].serverId === serverId) {
+                closeDetailPanel(key);
+            }
+        }
+    });
+}
+
+
+// === 60-detail-state.js ===
+// ============================================================================
+// UObject Detail Panel — per-panel state persistence (localStorage)
+// ============================================================================
+// Key pattern: uniset-panel:detail:<serverId>:<objectName>
+// Reuses the pattern established in 58-overview-state.js: debounced
+// save (300ms), flush on beforeunload, version-gated reset, silent
+// fail on quota/disabled storage.
+//
+// NOTE: Top-level identifiers must use `var` / `function` so indirect-eval
+// in unit tests promotes them to globals. `const` / `let` at top-level
+// stay in the eval scope and won't be visible to other loadSrc'd files
+// or tests — same convention as other 58-*/60-* modules.
+
+var DETAIL_STATE_VERSION = 1;
+var DETAIL_STATE_DEBOUNCE_MS = 300;
+
+function detailStateDefault() {
+    return {
+        v: DETAIL_STATE_VERSION,
+        activeInnerTab: 'variables',
+        selectedTrends: [],
+        trendsWindow: 60,
+        logFilter: '',
+        logFilterRegex: false,
+        logFilterCase: false,
+        logSize: 256,
+        logPaused: false,
+        logEnabled: false,
+        varsCollapsed: {
+            inputs: false,
+            outputs: false,
+            locals: true
+        }
+    };
+}
+
+function detailStateKey(serverId, objectName) {
+    return 'uniset-panel:detail:' + serverId + ':' + objectName;
+}
+
+function loadDetailState(serverId, objectName) {
+    const defaults = detailStateDefault();
+    try {
+        const raw = localStorage.getItem(detailStateKey(serverId, objectName));
+        if (!raw) return defaults;
+        const parsed = JSON.parse(raw);
+        if (parsed.v !== DETAIL_STATE_VERSION) {
+            console.warn('[detail-state] version mismatch, resetting');
+            return defaults;
+        }
+        const merged = Object.assign({}, defaults, parsed);
+        merged.varsCollapsed = Object.assign({}, defaults.varsCollapsed,
+            parsed.varsCollapsed || {});
+        return merged;
+    } catch (e) {
+        console.warn('[detail-state] load failed:', e);
+        return defaults;
+    }
+}
+
+var _detailStateSaveTimers = {};
+
+function saveDetailState(serverId, objectName, state) {
+    const key = detailStateKey(serverId, objectName);
+    if (_detailStateSaveTimers[key]) clearTimeout(_detailStateSaveTimers[key]);
+    _detailStateSaveTimers[key] = setTimeout(function() {
+        try {
+            localStorage.setItem(key, JSON.stringify(state));
+        } catch (e) {
+            console.warn('[detail-state] save failed:', e);
+        }
+        delete _detailStateSaveTimers[key];
+    }, DETAIL_STATE_DEBOUNCE_MS);
+}
+
+// flushDetailStateImmediate synchronously persists state, skipping debounce.
+// Used on beforeunload and critical lifecycle transitions.
+function flushDetailStateImmediate(serverId, objectName, state) {
+    const key = detailStateKey(serverId, objectName);
+    if (_detailStateSaveTimers[key]) {
+        clearTimeout(_detailStateSaveTimers[key]);
+        delete _detailStateSaveTimers[key];
+    }
+    try {
+        localStorage.setItem(key, JSON.stringify(state));
+    } catch (e) {
+        console.warn('[detail-state] flush failed:', e);
+    }
+}
+
+// Global beforeunload: caller must register each live panel's
+// (serverId, objectName, getStateFn) via registerDetailForFlush.
+// Value shape: { serverId, objectName, getStateFn }. We store the pair
+// explicitly instead of splitting the map key at flush time — serverId
+// may legitimately contain ':' (e.g. "host:8080"), which would break
+// key.split(':').
+var _detailFlushRegistry = {};
+
+function registerDetailForFlush(serverId, objectName, getStateFn) {
+    _detailFlushRegistry[serverId + ':' + objectName] = {
+        serverId: serverId,
+        objectName: objectName,
+        getStateFn: getStateFn
+    };
+}
+
+function unregisterDetailForFlush(serverId, objectName) {
+    delete _detailFlushRegistry[serverId + ':' + objectName];
+}
+
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('beforeunload', function() {
+        for (const key of Object.keys(_detailFlushRegistry)) {
+            const entry = _detailFlushRegistry[key];
+            try {
+                const state = entry.getStateFn();
+                flushDetailStateImmediate(entry.serverId, entry.objectName, state);
+            } catch (e) {
+                console.warn('[detail-state] beforeunload flush failed:', e);
+            }
+        }
+    });
+}
+
+
+// === 60-detail-trends.js ===
+// ============================================================================
+// UObject Detail Panel — Trends tab (client-side only; see Future Spec 5)
+// ============================================================================
+
+// Note: use var (not const) for top-level identifiers consumed across
+// modules via loadSrc indirect-eval (see Task 3.2 finding).
+var TREND_COLORS = ['#4fc3f7', '#81c784', '#ffb74d', '#e57373', '#ba68c8',
+                    '#ff8a65', '#a1887f', '#90a4ae', '#dce775', '#4db6ac'];
+
+function toggleTrendForDetail(inst, varName) {
+    if (inst.selectedTrends.has(varName)) {
+        inst.selectedTrends.delete(varName);
+        delete inst.trendsBuffer[varName];
+    } else {
+        inst.selectedTrends.add(varName);
+        inst.trendsBuffer[varName] = []; // empty; fills from snapshot poll
+    }
+    if (typeof saveDetailState === 'function') {
+        saveDetailState(inst.serverId, inst.objectName, captureState(inst));
+    }
+    renderTrends(inst);
+}
+
+function updateTrendsFromSnapshot(inst) {
+    if (!inst || !inst.snapshot) return;
+    const now = Date.now();
+    const windowSec = (inst.state && inst.state.trendsWindow) || 60;
+    const cutoff = windowSec > 0 ? now - windowSec * 1000 : 0;
+
+    const lookupValue = function(varName) {
+        for (const p of (inst.snapshot.inputs || [])) if (p.name === varName) return p.value;
+        for (const p of (inst.snapshot.outputs || [])) if (p.name === varName) return p.value;
+        if (inst.snapshot.variables && varName in inst.snapshot.variables) {
+            return inst.snapshot.variables[varName];
+        }
+        return undefined;
+    };
+
+    for (const varName of inst.selectedTrends) {
+        const value = lookupValue(varName);
+        if (value === undefined) continue;
+        const buf = (inst.trendsBuffer[varName] ||= []);
+        buf.push({ t: now, v: value });
+        if (windowSec > 0) {
+            while (buf.length && buf[0].t < cutoff) buf.shift();
+        }
+    }
+    if (inst.state && inst.state.activeInnerTab === 'trends') {
+        renderTrendsLive(inst);
+    }
+}
+
+function renderTrends(inst) {
+    const root = document.querySelector('#detail-tab-' +
+        inst.key.replace(/:/g, '_') + ' [data-inner-panel="trends"]');
+    if (!root) return;
+
+    if (inst.selectedTrends.size === 0) {
+        root.innerHTML = '<div class="detail-placeholder">' +
+            'Select variables in the Variables tab to add to trend.</div>';
+        return;
+    }
+
+    let html = '<div class="detail-trends-toolbar">';
+    html += '<span class="detail-log-label">Window:</span> ';
+    html += '<select class="btn btn-sm trends-window">';
+    const opts = [[30, '30s'], [60, '1m'], [300, '5m'], [0, 'All']];
+    for (const [val, label] of opts) {
+        const sel = (inst.state.trendsWindow === val) ? ' selected' : '';
+        html += '<option value="' + val + '"' + sel + '>' + label + '</option>';
+    }
+    html += '</select>';
+    html += ' <button class="btn btn-sm trends-clear">Clear</button>';
+    html += ' <button class="btn btn-sm trends-export">Export CSV</button>';
+    html += '</div>';
+
+    html += '<div class="detail-trends-charts">';
+    let colorIdx = 0;
+    for (const varName of inst.selectedTrends) {
+        const color = TREND_COLORS[colorIdx++ % TREND_COLORS.length];
+        html += '<div class="trend-row" data-var="' + escapeDetailText(varName) + '">';
+        html += '<div class="trend-row-header">' +
+                '<span class="trend-color" style="background:' + color + '"></span>' +
+                escapeDetailText(varName) + '</div>';
+        html += '<canvas class="trend-canvas" height="120"></canvas>';
+        html += '</div>';
+    }
+    html += '</div>';
+
+    root.innerHTML = html;
+
+    root.querySelector('.trends-window').addEventListener('change', function(e) {
+        inst.state.trendsWindow = parseInt(e.target.value, 10) || 0;
+        if (typeof saveDetailState === 'function') {
+            saveDetailState(inst.serverId, inst.objectName, captureState(inst));
+        }
+        renderTrends(inst);
+    });
+    root.querySelector('.trends-clear').addEventListener('click', function() {
+        for (const v of inst.selectedTrends) inst.trendsBuffer[v] = [];
+        renderTrendsLive(inst);
+    });
+    root.querySelector('.trends-export').addEventListener('click', function() {
+        exportTrendsCsv(inst);
+    });
+
+    renderTrendsLive(inst);
+}
+
+function renderTrendsLive(inst) {
+    const root = document.querySelector('#detail-tab-' +
+        inst.key.replace(/:/g, '_') + ' [data-inner-panel="trends"]');
+    if (!root) return;
+    let colorIdx = 0;
+    for (const varName of inst.selectedTrends) {
+        const safe = String(varName).replace(/["\\]/g, '\\$&');
+        const canvas = root.querySelector('.trend-row[data-var="' + safe + '"] canvas');
+        if (!canvas) continue;
+        drawTrendCanvas(canvas, inst.trendsBuffer[varName] || [],
+                        TREND_COLORS[colorIdx++ % TREND_COLORS.length]);
+    }
+}
+
+function drawTrendCanvas(canvas, points, color) {
+    if (typeof canvas.getContext !== 'function') return; // jsdom guard
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const w = canvas.width = canvas.clientWidth || 400;
+    const h = canvas.height;
+    ctx.fillStyle = '#1a1a24';
+    ctx.fillRect(0, 0, w, h);
+    if (points.length < 2) {
+        ctx.fillStyle = '#888';
+        ctx.font = '10px sans-serif';
+        ctx.fillText('collecting...', 8, 16);
+        return;
+    }
+    let minT = points[0].t, maxT = points[points.length - 1].t;
+    let minV = Infinity, maxV = -Infinity;
+    for (const p of points) {
+        if (typeof p.v !== 'number') continue;
+        if (p.v < minV) minV = p.v;
+        if (p.v > maxV) maxV = p.v;
+    }
+    if (!Number.isFinite(minV) || !Number.isFinite(maxV)) return;
+    if (minV === maxV) { minV -= 1; maxV += 1; }
+    const span = maxT - minT || 1;
+    const vSpan = maxV - minV || 1;
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let i = 0; i < points.length; i++) {
+        const p = points[i];
+        const x = ((p.t - minT) / span) * (w - 4) + 2;
+        const y = h - 4 - ((p.v - minV) / vSpan) * (h - 8);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+}
+
+function trendsToCsv(inst) {
+    const lines = ['timestamp_ms,variable,value'];
+    for (const varName of inst.selectedTrends) {
+        const buf = inst.trendsBuffer[varName] || [];
+        for (const p of buf) lines.push(p.t + ',' + varName + ',' + p.v);
+    }
+    return lines.join('\n');
+}
+
+function exportTrendsCsv(inst) {
+    const csv = trendsToCsv(inst);
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = inst.objectName + '-trends.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function() { URL.revokeObjectURL(url); }, 100);
+}
+
+
+// === 60-detail-variables.js ===
+// ============================================================================
+// UObject Detail Panel — Variables tab (reads flat snapshot from panel adapter)
+// ============================================================================
+// NOTE: Top-level identifiers must use `var` / `function` so indirect-eval in
+// unit tests promotes them to globals. `const` / `let` at top-level stay in
+// the eval scope and won't be visible to other loadSrc'd files or tests.
+
+var DETAIL_SNAPSHOT_POLL_MS = 500;
+
+function buildVariablesSections(snap) {
+    const out = {
+        inputs:  (snap && snap.inputs)  || [],
+        outputs: (snap && snap.outputs) || [],
+        locals: []
+    };
+    const vars = (snap && snap.variables) || {};
+    for (const name of Object.keys(vars).sort()) {
+        out.locals.push({ name: name, value: vars[name] });
+    }
+    return out;
+}
+
+// Render-strategy note: a full innerHTML replace would be triggered every
+// 500 ms by the snapshot poll, which destroys the chart-toggle checkboxes
+// and their click handlers mid-interaction. We rebuild the skeleton only
+// when the set of rows or the collapsed state changes; otherwise we just
+// update value cells in place (same pattern as IONC/Modbus renderers via
+// _animateCellValue).
+
+var DETAIL_VAR_GROUP_DEFS = [
+    { key: 'inputs', label: 'Inputs (io.in)' },
+    { key: 'outputs', label: 'Outputs (io.out)' },
+    { key: 'locals', label: 'Locals' }
+];
+
+function renderDetailVariables(inst) {
+    const root = document.querySelector('#detail-tab-' +
+        inst.key.replace(/:/g, '_') + ' [data-inner-panel="variables"]');
+    if (!root) return;
+
+    if (!inst.snapshot) {
+        root.innerHTML = '<div class="detail-placeholder">Loading snapshot...</div>';
+        root.dataset.built = '';
+        return;
+    }
+
+    const sections = buildVariablesSections(inst.snapshot);
+    const collapsed = (inst.state && inst.state.varsCollapsed) || {};
+
+    // Structure key = section collapsed state + list of variable names per
+    // section. Any change triggers a full rebuild; identical structure →
+    // fast path that only updates values.
+    const structureKey = JSON.stringify({
+        inputs:  { c: !!collapsed.inputs,  n: sections.inputs.map(x => x.name) },
+        outputs: { c: !!collapsed.outputs, n: sections.outputs.map(x => x.name) },
+        locals:  { c: !!collapsed.locals,  n: sections.locals.map(x => x.name) }
+    });
+
+    if (root.dataset.built === '1' && root.dataset.structureKey === structureKey) {
+        updateDetailVariableCells(inst, root, sections);
+        inst._prevVars = collectPrevVars(sections);
+        return;
+    }
+
+    root.innerHTML = buildDetailVariablesHTML(inst, sections, collapsed);
+    root.dataset.built = '1';
+    root.dataset.structureKey = structureKey;
+    wireDetailVariableHandlers(inst, root);
+    inst._prevVars = collectPrevVars(sections);
+}
+
+function buildDetailVariablesHTML(inst, sections, collapsed) {
+    let html = '';
+    for (const gd of DETAIL_VAR_GROUP_DEFS) {
+        const items = sections[gd.key];
+        const isCollapsed = !!collapsed[gd.key];
+        html += '<section data-section="' + gd.key + '">';
+        html += '<div class="detail-var-section-header" data-toggle="' + gd.key + '">';
+        html += '<span class="arrow' + (isCollapsed ? ' collapsed' : '') + '">▼</span>';
+        html += escapeDetailText(gd.label);
+        html += '<span class="count">' + items.length + '</span></div>';
+
+        if (!isCollapsed) {
+            html += '<table class="detail-var-table"><thead><tr>';
+            html += '<th class="col-chart"></th><th>Name</th><th>Value</th><th>Type</th></tr></thead><tbody>';
+            for (const it of items) {
+                const sensorId = (gd.key === 'inputs' || gd.key === 'outputs') ? it.id : null;
+                const rowClasses = (gd.key === 'inputs' || gd.key === 'outputs') ? 'forcible' : '';
+                const safeVar = escapeDetailText(it.name);
+                const chartId = 'detail-chart-' + inst.serverId + '-' + safeVar;
+                const onChart = inst.selectedTrends && inst.selectedTrends.has(it.name);
+                html += '<tr data-var="' + safeVar + '"';
+                if (sensorId != null) html += ' data-sensor-id="' + sensorId + '"';
+                html += ' data-section="' + gd.key + '" class="' + rowClasses + '">';
+                html += '<td class="col-chart">' +
+                        '<span class="chart-toggle">' +
+                            '<input type="checkbox" class="chart-toggle-input" id="' + chartId + '" data-var="' + safeVar + '"' + (onChart ? ' checked' : '') + '>' +
+                            '<label class="chart-toggle-label" for="' + chartId + '" title="Add to Trends">' +
+                                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+                                    '<path d="M3 3v18h18"/>' +
+                                    '<path d="M18 9l-5 5-4-4-3 3"/>' +
+                                '</svg>' +
+                            '</label>' +
+                        '</span>' +
+                        '</td>';
+                html += '<td>' + safeVar + '</td>';
+                html += '<td class="value-cell">' + formatVarValue(it.value) + '</td>';
+                html += '<td>' + detectVarType(it.value) + '</td></tr>';
+            }
+            html += '</tbody></table>';
+        }
+        html += '</section>';
+    }
+    return html;
+}
+
+function updateDetailVariableCells(inst, root, sections) {
+    const prev = inst._prevVars || {};
+    const groups = [sections.inputs, sections.outputs, sections.locals];
+    for (const group of groups) {
+        for (const it of group) {
+            const safeVar = escapeDetailText(it.name);
+            const tr = root.querySelector('tr[data-var="' + cssEscapeVar(safeVar) + '"]');
+            if (!tr) continue;
+            const cell = tr.querySelector('.value-cell');
+            if (cell) {
+                const newText = formatVarValue(it.value);
+                if (cell.textContent !== newText) {
+                    cell.textContent = newText;
+                    cell.classList.remove('value-changed');
+                    void cell.offsetWidth;
+                    cell.classList.add('value-changed');
+                }
+            }
+            // Keep the chart-toggle checkbox in sync with selectedTrends —
+            // user might have toggled the variable from the Trends tab.
+            const cb = tr.querySelector('.chart-toggle-input');
+            if (cb) {
+                const want = !!(inst.selectedTrends && inst.selectedTrends.has(it.name));
+                if (cb.checked !== want) cb.checked = want;
+            }
+        }
+    }
+}
+
+function cssEscapeVar(s) {
+    if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') return CSS.escape(s);
+    return String(s).replace(/"/g, '\\"');
+}
+
+function collectPrevVars(sections) {
+    const out = {};
+    for (const p of sections.inputs) out[p.name] = p.value;
+    for (const p of sections.outputs) out[p.name] = p.value;
+    for (const v of sections.locals) out[v.name] = v.value;
+    return out;
+}
+
+function wireDetailVariableHandlers(inst, root) {
+    root.querySelectorAll('.detail-var-section-header').forEach(function(h) {
+        h.addEventListener('click', function() {
+            const gk = h.getAttribute('data-toggle');
+            inst.state.varsCollapsed[gk] = !inst.state.varsCollapsed[gk];
+            if (typeof saveDetailState === 'function') {
+                saveDetailState(inst.serverId, inst.objectName, captureState(inst));
+            }
+            renderDetailVariables(inst);
+        });
+    });
+
+    // Chart-toggle checkbox: add/remove variable from Trends.
+    root.querySelectorAll('.chart-toggle-input').forEach(function(cb) {
+        cb.addEventListener('change', function() {
+            const name = cb.getAttribute('data-var');
+            if (typeof toggleTrendForDetail === 'function') {
+                toggleTrendForDetail(inst, name);
+            }
+        });
+    });
+
+    // Right-click on a row opens force/unforce context menu (for inputs/outputs).
+    root.querySelectorAll('tr[data-var]').forEach(function(tr) {
+        tr.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+            if (typeof showDetailVarContextMenu === 'function') {
+                const section = tr.getAttribute('data-section');
+                const sensorId = tr.dataset.sensorId ? parseInt(tr.dataset.sensorId, 10) : null;
+                showDetailVarContextMenu(inst, section, tr.getAttribute('data-var'), sensorId, e);
+            }
+        });
+    });
+}
+
+function formatVarValue(v) {
+    if (v === null || v === undefined) return '—';
+    if (typeof v === 'boolean') return v ? 'true' : 'false';
+    if (typeof v === 'number') return String(v);
+    return escapeDetailText(String(v));
+}
+
+function detectVarType(v) {
+    if (v === null) return 'null';
+    if (Array.isArray(v)) return 'array';
+    return typeof v;
+}
+
+function renderSnapshotError(inst, msg) {
+    const root = document.querySelector('#detail-tab-' +
+        inst.key.replace(/:/g, '_') + ' [data-inner-panel="variables"]');
+    if (!root) return;
+    root.innerHTML = '<div class="detail-error-banner">' +
+        escapeDetailText(msg) + '</div>';
+}
+
+function startDetailSnapshotPoll(inst) {
+    const fetchOnce = async function() {
+        try {
+            const url = '/api/servers/' + encodeURIComponent(inst.serverId) +
+                        '/objects/' + encodeURIComponent(inst.objectName) + '/snapshot';
+            const resp = await fetch(url);
+            if (!resp.ok) {
+                inst.snapshotError = 'status ' + resp.status;
+                // 404: object gone or never existed — stop polling and
+                // show a clear banner. Other non-2xx: transient, keep trying.
+                if (resp.status === 404) {
+                    stopDetailSnapshotPoll(inst);
+                    renderSnapshotError(inst,
+                        'Object not found on server (404). Poll stopped.');
+                }
+                return;
+            }
+            inst.snapshotError = null;
+            inst.snapshot = await resp.json();
+            renderDetailVariables(inst);
+            if (typeof updateTrendsFromSnapshot === 'function') {
+                updateTrendsFromSnapshot(inst);
+            }
+        } catch (e) {
+            inst.snapshotError = String(e);
+        }
+    };
+    fetchOnce();
+    inst.snapshotTimer = setInterval(fetchOnce, DETAIL_SNAPSHOT_POLL_MS);
+}
+
+function stopDetailSnapshotPoll(inst) {
+    if (inst.snapshotTimer) {
+        clearInterval(inst.snapshotTimer);
+        inst.snapshotTimer = null;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Force / Unforce via SharedMemory ionc endpoints
+// ---------------------------------------------------------------------------
+
+async function postForce(inst, sensorId, value) {
+    if (sensorId == null) return null;
+    const smObject = (inst.snapshot && inst.snapshot.sm_object) || 'SharedMemory';
+    const url = '/api/objects/' + encodeURIComponent(smObject) +
+                '/ionc/freeze?server=' + encodeURIComponent(inst.serverId);
+    const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sensor_id: sensorId, value: Number(value) })
+    });
+    const body = await resp.json().catch(() => null);
+    if (!resp.ok) {
+        handleForceError(resp.status, body, 'force');
+    }
+    return { status: resp.status, body: body };
+}
+
+async function postUnforce(inst, sensorId) {
+    if (sensorId == null) return null;
+    const smObject = (inst.snapshot && inst.snapshot.sm_object) || 'SharedMemory';
+    const url = '/api/objects/' + encodeURIComponent(smObject) +
+                '/ionc/unfreeze?server=' + encodeURIComponent(inst.serverId);
+    const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sensor_id: sensorId })
+    });
+    const body = await resp.json().catch(() => null);
+    if (!resp.ok) {
+        handleForceError(resp.status, body, 'unforce');
+    }
+    return { status: resp.status, body: body };
+}
+
+// TODO: replace alert() with a proper toast / modal dialog once the
+// project gains a shared notification widget. For now alert() guarantees
+// visibility on 403/409 and is consistent with other ad-hoc errors.
+function handleForceError(status, body, action) {
+    let msg;
+    if (status === 403) {
+        msg = action + ' failed: authentication required (missing --control-token?)';
+    } else if (status === 409) {
+        msg = action + ' conflict: sensor may already be in target state';
+    } else {
+        const detail = (body && body.error) || ('HTTP ' + status);
+        msg = action + ' failed: ' + detail;
+    }
+    if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+        window.alert(msg);
+    }
+    console.warn('[detail] ' + msg);
+}
+
+function showDetailVarContextMenu(inst, section, varName, sensorId, event) {
+    if (section !== 'inputs' && section !== 'outputs') return;
+    if (sensorId == null) return;
+
+    const existing = document.getElementById('detail-var-ctxmenu');
+    if (existing) existing.remove();
+
+    const currentValue = lookupSnapshotValue(inst.snapshot, varName);
+
+    const menu = document.createElement('div');
+    menu.id = 'detail-var-ctxmenu';
+    menu.className = 'detail-ctxmenu';
+    menu.style.position = 'fixed';
+    menu.style.left = event.clientX + 'px';
+    menu.style.top = event.clientY + 'px';
+
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.value = (typeof currentValue === 'number') ? currentValue : 0;
+
+    const forceBtn = document.createElement('button');
+    forceBtn.textContent = 'Force ' + varName;
+    forceBtn.addEventListener('click', async function() {
+        const v = input.value;
+        menu.remove();
+        await postForce(inst, sensorId, v);
+    });
+
+    const unforceBtn = document.createElement('button');
+    unforceBtn.textContent = 'Unforce';
+    unforceBtn.addEventListener('click', async function() {
+        menu.remove();
+        await postUnforce(inst, sensorId);
+    });
+
+    menu.appendChild(input);
+    menu.appendChild(forceBtn);
+    menu.appendChild(unforceBtn);
+    document.body.appendChild(menu);
+
+    setTimeout(function() {
+        document.addEventListener('click', function onOutside(e) {
+            if (!menu.contains(e.target)) {
+                menu.remove();
+                document.removeEventListener('click', onOutside);
+            }
+        });
+    }, 0);
+}
+
+function lookupSnapshotValue(snap, varName) {
+    if (!snap) return null;
+    for (const p of (snap.inputs || [])) if (p.name === varName) return p.value;
+    for (const p of (snap.outputs || [])) if (p.name === varName) return p.value;
+    if (snap.variables && varName in snap.variables) return snap.variables[varName];
+    return null;
+}
 
 
 // === 61-dashboard-widgets.js ===

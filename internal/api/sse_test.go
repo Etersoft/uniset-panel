@@ -13,6 +13,7 @@ import (
 
 	"github.com/pv/uniset-panel/internal/poller"
 	"github.com/pv/uniset-panel/internal/storage"
+	"github.com/pv/uniset-panel/internal/trace"
 	"github.com/pv/uniset-panel/internal/uniset"
 )
 
@@ -843,5 +844,106 @@ func TestSSEEventObjectsListJSON(t *testing.T) {
 	objects := eventData["objects"].([]interface{})
 	if len(objects) != 2 {
 		t.Errorf("expected 2 objects, got %d", len(objects))
+	}
+}
+
+// ============================================================================
+// Trace channel isolation tests (Spec 4 Task 2.6)
+// ============================================================================
+
+// TestSSE_traceOnlyFilter проверяет изоляцию trace-канала:
+// - обычный клиент получает object_data, но НЕ trace;
+// - trace-only клиент получает trace, но НЕ object_data.
+func TestSSE_traceOnlyFilter(t *testing.T) {
+	hub := NewSSEHub()
+
+	// 1. Обычный клиент, подписан на "DG_Control".
+	regular := hub.AddClient("DG_Control")
+	defer hub.RemoveClient(regular)
+
+	// 2. Trace-only клиент, подписан на "DG_Control".
+	traceClient := hub.AddTraceClient("DG_Control")
+	defer hub.RemoveClient(traceClient)
+
+	// 3. Broadcast object_data событие для "DG_Control".
+	hub.BroadcastObjectDataWithServer("srv1", "Server 1", "DG_Control",
+		&uniset.ObjectData{Name: "DG_Control"})
+
+	// 4. BroadcastTraceBatch для "DG_Control".
+	batch := trace.TraceBatch{
+		Enabled:  true,
+		Overflow: false,
+		Records:  nil,
+	}
+	hub.BroadcastTraceBatch("srv1", "Server 1", "DG_Control", batch)
+
+	// 5. Собираем события обычного клиента.
+	regularEvents := drainEvents(regular, 100*time.Millisecond)
+	if len(regularEvents) != 1 {
+		t.Fatalf("regular client: expected 1 event, got %d (%+v)", len(regularEvents), regularEvents)
+	}
+	if regularEvents[0].Type != EventObjectData {
+		t.Errorf("regular client: expected type=%s, got %s", EventObjectData, regularEvents[0].Type)
+	}
+	for _, ev := range regularEvents {
+		if ev.Type == EventTrace {
+			t.Errorf("regular client: must NOT receive trace events, got one")
+		}
+	}
+
+	// 6. Собираем события trace-клиента.
+	traceEvents := drainEvents(traceClient, 100*time.Millisecond)
+	if len(traceEvents) != 1 {
+		t.Fatalf("trace client: expected 1 event, got %d (%+v)", len(traceEvents), traceEvents)
+	}
+	if traceEvents[0].Type != EventTrace {
+		t.Errorf("trace client: expected type=%s, got %s", EventTrace, traceEvents[0].Type)
+	}
+	if traceEvents[0].ObjectName != "DG_Control" {
+		t.Errorf("trace client: expected ObjectName=DG_Control, got %s", traceEvents[0].ObjectName)
+	}
+	if traceEvents[0].ServerID != "srv1" {
+		t.Errorf("trace client: expected ServerID=srv1, got %s", traceEvents[0].ServerID)
+	}
+	for _, ev := range traceEvents {
+		if ev.Type == EventObjectData {
+			t.Errorf("trace client: must NOT receive object_data events, got one")
+		}
+	}
+}
+
+// TestSSE_traceClient_objectFilter проверяет, что trace-клиент,
+// подписанный на конкретный объект, не получает trace других объектов.
+func TestSSE_traceClient_objectFilter(t *testing.T) {
+	hub := NewSSEHub()
+
+	tc := hub.AddTraceClient("DG_Control")
+	defer hub.RemoveClient(tc)
+
+	// trace для другого объекта
+	hub.BroadcastTraceBatch("srv1", "Server 1", "OtherObj", trace.TraceBatch{Enabled: true})
+	// trace для своего объекта
+	hub.BroadcastTraceBatch("srv1", "Server 1", "DG_Control", trace.TraceBatch{Enabled: true})
+
+	events := drainEvents(tc, 100*time.Millisecond)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event (only DG_Control), got %d (%+v)", len(events), events)
+	}
+	if events[0].ObjectName != "DG_Control" {
+		t.Errorf("expected ObjectName=DG_Control, got %s", events[0].ObjectName)
+	}
+}
+
+// drainEvents читает все доступные события из канала клиента до истечения timeout.
+func drainEvents(c *sseClient, timeout time.Duration) []SSEEvent {
+	var events []SSEEvent
+	deadline := time.After(timeout)
+	for {
+		select {
+		case ev := <-c.events:
+			events = append(events, ev)
+		case <-deadline:
+			return events
+		}
 	}
 }

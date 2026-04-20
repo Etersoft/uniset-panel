@@ -22,7 +22,11 @@ Thumbs.db
 
 # Node modules cache for e2e tests
 .node_modules/
+node_modules/
 tests/node_modules/
 tests/test-results/
 tests/playwright-report/
 coverage.out
+
+# Playwright MCP debug artifacts
+.playwright-mcp/
