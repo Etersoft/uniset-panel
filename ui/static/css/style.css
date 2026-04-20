@@ -8688,6 +8688,16 @@ button.rotate-quick-btn:active {
     position: relative;
     min-height: 0;
     overflow: hidden;
+    display: flex;
+    flex-direction: row;
+}
+
+.overview-canvas-wrap {
+    flex: 1;
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .overview-toolbar {
@@ -8917,17 +8927,22 @@ body.overview-lod-min .uniset-process-node-details { display: none; }
    keep a horizontal buffer (right: 220px) equal to the minimap width + gutter
    to stay clear of the minimap when the panel grows tall. */
 .fb-status-panel {
-    position: absolute;
-    right: 220px;
-    top: 10px;
-    width: 240px;
-    max-height: 80vh;
+    position: relative;
+    flex-shrink: 0;
+    width: 280px;
+    height: 100%;
     overflow-y: auto;
     background: #1a1a24;
-    border: 1px solid #333;
+    border-left: 1px solid #333;
     padding: 10px;
-    z-index: 50;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+}
+.fb-status-panel .fb-list {
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
 }
 .fb-status-panel h3 {
     margin: 0 0 8px 0;

@@ -115,9 +115,21 @@ function scrollToOverviewNode(inst, node) {
     const s = ds.scale || 1;
     const canvasEl = inst.canvas.canvas;
     if (!canvasEl) return;
+    const nodeW = node.size ? node.size[0] : 0;
+    const nodeH = node.size ? node.size[1] : 0;
+    // LiteGraph applies the transform as ctx.scale(s).translate(off), so
+    // screen = s * (world + offset). For a world point p to land at screen
+    // center c we need offset = c/s - p.
     ds.offset = [
-        -node.pos[0] * s + canvasEl.width / 2,
-        -node.pos[1] * s + canvasEl.height / 2
+        canvasEl.width / (2 * s) - (node.pos[0] + nodeW / 2),
+        canvasEl.height / (2 * s) - (node.pos[1] + nodeH / 2)
     ];
     inst.canvas.setDirty(true, true);
+    if (inst.state) {
+        inst.state.offsetX = ds.offset[0];
+        inst.state.offsetY = ds.offset[1];
+        if (typeof saveOverviewState === 'function' && inst.serverId) {
+            saveOverviewState(inst.serverId, inst.state);
+        }
+    }
 }

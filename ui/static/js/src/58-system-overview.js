@@ -16,6 +16,30 @@
 // dagre absence.
 
 // ============================================================================
+// Center viewport on the first (top-most) block at scale = 1.
+// Used as the initial viewport for vertical layouts so the user starts at
+// actual size with one or two blocks visible, then scrolls wheel to reveal
+// subsequent blocks.
+// ============================================================================
+
+function centerOverviewOnFirstBlock(lgCanvas, nodeMap) {
+    if (!lgCanvas || !lgCanvas.canvas || !nodeMap || nodeMap.size === 0) return;
+    let topNode = null;
+    for (const node of nodeMap.values()) {
+        if (!topNode || node.pos[1] < topNode.pos[1]) topNode = node;
+    }
+    if (!topNode) return;
+    const canvasEl = lgCanvas.canvas;
+    const titleH = LiteGraph.NODE_TITLE_HEIGHT || 30;
+    lgCanvas.ds.scale = 1;
+    lgCanvas.ds.offset = [
+        -topNode.pos[0] - topNode.size[0] / 2 + canvasEl.width / 2,
+        -topNode.pos[1] + titleH + 24
+    ];
+    lgCanvas.setDirty(true, true);
+}
+
+// ============================================================================
 // Fit to Screen
 // ============================================================================
 

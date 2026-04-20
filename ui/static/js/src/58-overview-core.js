@@ -84,23 +84,25 @@ function createOverviewTab(tabKey, serverId, serverName) {
     const canvasId = `overview-canvas-${serverId}`;
     panel.innerHTML = `
         <div class="overview-container">
-            <div class="overview-toolbar">
-                <button class="overview-fit-btn" title="Fit to Screen">&#x26F6;</button>
-                <button class="overview-fit-btn overview-layout-btn" title="Auto-layout: minimize crossings">&#x2725;</button>
-                <button class="overview-direction-btn" title="Toggle layout direction: Horizontal / Vertical"><span class="overview-dir-icon-h">▬</span><span class="overview-dir-icon-v" style="display:none">▮</span></button>
-                <div class="overview-view-wrapper">
-                    <button type="button" id="overview-view-btn-${serverId}" class="overview-view-btn" title="Toggle Values / Wires / Minimap">View ▾</button>
-                    <div id="overview-view-menu-${serverId}" class="overview-view-menu hidden">
-                        <label><input type="checkbox" data-toggle="values"/> Values</label>
-                        <label><input type="checkbox" data-toggle="wires"/> Wires</label>
-                        <label><input type="checkbox" data-toggle="minimap"/> Minimap</label>
+            <div class="overview-canvas-wrap">
+                <div class="overview-toolbar">
+                    <button class="overview-fit-btn" title="Fit to Screen">&#x26F6;</button>
+                    <button class="overview-fit-btn overview-layout-btn" title="Auto-layout: minimize crossings">&#x2725;</button>
+                    <button class="overview-direction-btn" title="Toggle layout direction: Horizontal / Vertical"><span class="overview-dir-icon-h">▬</span><span class="overview-dir-icon-v" style="display:none">▮</span></button>
+                    <div class="overview-view-wrapper">
+                        <button type="button" id="overview-view-btn-${serverId}" class="overview-view-btn" title="Toggle Values / Wires / Minimap">View ▾</button>
+                        <div id="overview-view-menu-${serverId}" class="overview-view-menu hidden">
+                            <label><input type="checkbox" data-toggle="values"/> Values</label>
+                            <label><input type="checkbox" data-toggle="wires"/> Wires</label>
+                            <label><input type="checkbox" data-toggle="minimap"/> Minimap</label>
+                        </div>
                     </div>
+                    <button type="button" id="overview-svg-export-${serverId}" class="overview-svg-export" title="Export overview as SVG">SVG</button>
                 </div>
-                <button type="button" id="overview-svg-export-${serverId}" class="overview-svg-export" title="Export overview as SVG">SVG</button>
+                <div class="overview-loading">Loading overview data...</div>
+                <canvas id="${canvasId}"></canvas>
+                <div id="overview-minimap-${serverId}" class="overview-minimap"></div>
             </div>
-            <div class="overview-loading">Loading overview data...</div>
-            <canvas id="${canvasId}"></canvas>
-            <div id="overview-minimap-${serverId}" class="overview-minimap"></div>
             <div id="fb-status-panel-${serverId}" class="fb-status-panel"></div>
         </div>
     `;
@@ -132,9 +134,10 @@ function closeOverviewTab(tabKey, serverId) {
         if (instance.hotkeyHandler) {
             document.removeEventListener('keydown', instance.hotkeyHandler);
         }
-        // Detach Ctrl+wheel zoom listener (Task 9).
+        // Detach wheel handler (zoom + pan). Must match capture flag of
+        // attachOverviewWheelZoom to deregister correctly.
         if (instance.wheelZoomHandler && instance.canvas && instance.canvas.canvas) {
-            instance.canvas.canvas.removeEventListener('wheel', instance.wheelZoomHandler);
+            instance.canvas.canvas.removeEventListener('wheel', instance.wheelZoomHandler, { capture: true });
         }
         // Nulling minimap causes the rAF redraw loop to short-circuit on
         // next tick (see initOverviewMinimap in 58-overview-navigation.js).
@@ -312,6 +315,16 @@ function initOverviewGraph(tabKey, serverId, data) {
     lgCanvas.title_text_font = 'bold 14px sans-serif';
     lgCanvas.inner_text_font = '12px sans-serif';
 
+    // Suppress LiteGraph's canvas-drawn link lines when the Wires toggle is
+    // off. The existing .overview-no-wires CSS hides only text port-labels;
+    // the canvas-rendered splines ignore DOM classes, so we wrap the draw
+    // method and early-return when the body class is present.
+    const _origDrawConnections = lgCanvas.drawConnections.bind(lgCanvas);
+    lgCanvas.drawConnections = function(ctx) {
+        if (document.body.classList.contains('overview-no-wires')) return;
+        _origDrawConnections(ctx);
+    };
+
     // LiteGraph draws native link lines by default. Task 13 made them the
     // primary visual at scale >= 0.5; port text-labels (below) render only
     // at mid-zoom [0.25, 0.5) for orientation.
@@ -322,12 +335,12 @@ function initOverviewGraph(tabKey, serverId, data) {
     // Populate text connection labels on each node
     populatePortConnections(nodeMap, data.edges || []);
 
-    // Load saved direction from localStorage (default: horizontal)
+    // Load saved direction from localStorage (default: vertical).
     const dirLsKey = OVERVIEW_DIRECTION_LS_PREFIX + tabKey;
-    let direction = 'horizontal';
+    let direction = 'vertical';
     try {
         const saved = localStorage.getItem(dirLsKey);
-        if (saved === 'vertical') direction = 'vertical';
+        if (saved === 'horizontal') direction = 'horizontal';
     } catch (_) {}
 
     const getCanvasSize = () => ({ width: canvasEl.width, height: canvasEl.height });
@@ -351,9 +364,15 @@ function initOverviewGraph(tabKey, serverId, data) {
     };
     updateDirBtnIcon();
 
-    // Fit to screen after initial render
+    // Initial view: vertical layout opens at actual size (scale = 1) with
+    // the top block centered horizontally — user scrolls the wheel to reveal
+    // subsequent blocks. Horizontal layout still fits everything to screen.
     setTimeout(() => {
-        fitOverviewToScreen(lgCanvas, graph);
+        if (direction === 'vertical') {
+            centerOverviewOnFirstBlock(lgCanvas, nodeMap);
+        } else {
+            fitOverviewToScreen(lgCanvas, graph);
+        }
         if (typeof applyLOD === 'function') applyLOD(overviewInstances[serverId]);
     }, 100);
 
@@ -395,13 +414,16 @@ function initOverviewGraph(tabKey, serverId, data) {
         });
     }
 
-    // ResizeObserver on tabs-content to recalculate height
+    // ResizeObserver on tabs-content to recalculate height.
+    // The canvas sits in a dedicated wrap (flex-child) so its width is
+    // independent of the FB Status column's width.
+    const canvasWrap = canvasEl.parentElement || container;
     const resizeTarget = tabsContent || container;
     const resizeObserver = new ResizeObserver(() => {
         const newHeight = (tabsContent ? tabsContent.clientHeight : 600)
             - (tabsHeader ? tabsHeader.offsetHeight : 0);
         container.style.height = newHeight + 'px';
-        canvasEl.width = container.clientWidth;
+        canvasEl.width = canvasWrap.clientWidth;
         canvasEl.height = newHeight;
         lgCanvas.resize();
     });

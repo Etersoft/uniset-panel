@@ -97,29 +97,49 @@ function attachOverviewWheelZoom(inst) {
     if (!inst || !inst.canvas || !inst.canvas.canvas) return null;
     const dom = inst.canvas.canvas;
     const handler = function(e) {
-        // Plain wheel — pass-through to LiteGraph / browser.
-        if (!e.ctrlKey) return;
+        // Intercept before LiteGraph's native wheel-zoom handler fires.
         e.preventDefault();
+        e.stopImmediatePropagation();
 
+        // LiteGraph applies the transform as `ctx.scale(s,s).translate(off)`,
+        // so screen = s * (world + off) and therefore world = screen/s - off.
+        // (See LGraphCanvas.convertEventToCanvasOffset in litegraph.js.)
         const rect = dom.getBoundingClientRect();
-        const cx = e.clientX - rect.left;
-        const cy = e.clientY - rect.top;
+        // Map from CSS pixels (clientX/Y) to canvas-internal pixels, which is
+        // what ds.offset is measured in. rect.width may differ from
+        // canvas.width on HiDPI displays or when CSS scales the element.
+        const pxRatioX = dom.width / rect.width || 1;
+        const pxRatioY = dom.height / rect.height || 1;
+        const cx = (e.clientX - rect.left) * pxRatioX;
+        const cy = (e.clientY - rect.top) * pxRatioY;
         const s = inst.canvas.ds.scale || 1;
         const off = inst.canvas.ds.offset || [0, 0];
 
-        // Graph-space coords under cursor.
-        const wx = (cx - off[0]) / s;
-        const wy = (cy - off[1]) / s;
-        const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-        const newS = Math.max(OVERVIEW_SCALE_MIN, Math.min(OVERVIEW_SCALE_MAX, s * factor));
-
-        inst.canvas.ds.scale = newS;
-        inst.canvas.ds.offset = [cx - wx * newS, cy - wy * newS];
+        if (e.ctrlKey) {
+            // Ctrl+wheel: zoom around the cursor. World coords under the
+            // cursor must be invariant under the scale change:
+            //   world = cx/s - off   ==>   new_off = cx/newS - world
+            const wx = cx / s - off[0];
+            const wy = cy / s - off[1];
+            const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+            const newS = Math.max(OVERVIEW_SCALE_MIN, Math.min(OVERVIEW_SCALE_MAX, s * factor));
+            inst.canvas.ds.scale = newS;
+            inst.canvas.ds.offset = [cx / newS - wx, cy / newS - wy];
+            applyLOD(inst);
+        } else {
+            // Plain wheel: pan. Vertical by default; Shift — horizontal.
+            // offset is world-space, so delta (screen px) is divided by scale.
+            const delta = e.deltaY / s;
+            if (e.shiftKey) {
+                inst.canvas.ds.offset[0] -= delta;
+            } else {
+                inst.canvas.ds.offset[1] -= delta;
+            }
+        }
         inst.canvas.setDirty(true, true);
-        applyLOD(inst);
 
         if (inst.state) {
-            inst.state.zoom = newS;
+            inst.state.zoom = inst.canvas.ds.scale;
             inst.state.offsetX = inst.canvas.ds.offset[0];
             inst.state.offsetY = inst.canvas.ds.offset[1];
             if (typeof saveOverviewState === 'function' && inst.serverId) {
@@ -127,7 +147,9 @@ function attachOverviewWheelZoom(inst) {
             }
         }
     };
-    dom.addEventListener('wheel', handler, { passive: false });
+    // `capture: true` — run before LiteGraph's own wheel handler so our
+    // preventDefault + stopImmediatePropagation actually suppress it.
+    dom.addEventListener('wheel', handler, { passive: false, capture: true });
     return handler;
 }
 

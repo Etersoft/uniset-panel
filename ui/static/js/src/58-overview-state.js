@@ -11,7 +11,7 @@
 // Versioning: bump OVERVIEW_STATE_VERSION when schema changes; old states reset.
 // ============================================================================
 
-const OVERVIEW_STATE_VERSION = 1;
+const OVERVIEW_STATE_VERSION = 2;
 const OVERVIEW_STATE_DEBOUNCE_MS = 300;
 
 function overviewStateKey(serverId) {
@@ -24,7 +24,7 @@ function overviewStateDefault() {
         zoom: 1,
         offsetX: 0,
         offsetY: 0,
-        toggles: { wires: true, values: true, minimap: false, groupBackgrounds: false },
+        toggles: { wires: false, values: true, minimap: true, groupBackgrounds: false },
         searchQuery: '',
         manualPositions: {},
     };

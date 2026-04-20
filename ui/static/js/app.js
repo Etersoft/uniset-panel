@@ -15776,23 +15776,25 @@ function createOverviewTab(tabKey, serverId, serverName) {
     const canvasId = `overview-canvas-${serverId}`;
     panel.innerHTML = `
         <div class="overview-container">
-            <div class="overview-toolbar">
-                <button class="overview-fit-btn" title="Fit to Screen">&#x26F6;</button>
-                <button class="overview-fit-btn overview-layout-btn" title="Auto-layout: minimize crossings">&#x2725;</button>
-                <button class="overview-direction-btn" title="Toggle layout direction: Horizontal / Vertical"><span class="overview-dir-icon-h">▬</span><span class="overview-dir-icon-v" style="display:none">▮</span></button>
-                <div class="overview-view-wrapper">
-                    <button type="button" id="overview-view-btn-${serverId}" class="overview-view-btn" title="Toggle Values / Wires / Minimap">View ▾</button>
-                    <div id="overview-view-menu-${serverId}" class="overview-view-menu hidden">
-                        <label><input type="checkbox" data-toggle="values"/> Values</label>
-                        <label><input type="checkbox" data-toggle="wires"/> Wires</label>
-                        <label><input type="checkbox" data-toggle="minimap"/> Minimap</label>
+            <div class="overview-canvas-wrap">
+                <div class="overview-toolbar">
+                    <button class="overview-fit-btn" title="Fit to Screen">&#x26F6;</button>
+                    <button class="overview-fit-btn overview-layout-btn" title="Auto-layout: minimize crossings">&#x2725;</button>
+                    <button class="overview-direction-btn" title="Toggle layout direction: Horizontal / Vertical"><span class="overview-dir-icon-h">▬</span><span class="overview-dir-icon-v" style="display:none">▮</span></button>
+                    <div class="overview-view-wrapper">
+                        <button type="button" id="overview-view-btn-${serverId}" class="overview-view-btn" title="Toggle Values / Wires / Minimap">View ▾</button>
+                        <div id="overview-view-menu-${serverId}" class="overview-view-menu hidden">
+                            <label><input type="checkbox" data-toggle="values"/> Values</label>
+                            <label><input type="checkbox" data-toggle="wires"/> Wires</label>
+                            <label><input type="checkbox" data-toggle="minimap"/> Minimap</label>
+                        </div>
                     </div>
+                    <button type="button" id="overview-svg-export-${serverId}" class="overview-svg-export" title="Export overview as SVG">SVG</button>
                 </div>
-                <button type="button" id="overview-svg-export-${serverId}" class="overview-svg-export" title="Export overview as SVG">SVG</button>
+                <div class="overview-loading">Loading overview data...</div>
+                <canvas id="${canvasId}"></canvas>
+                <div id="overview-minimap-${serverId}" class="overview-minimap"></div>
             </div>
-            <div class="overview-loading">Loading overview data...</div>
-            <canvas id="${canvasId}"></canvas>
-            <div id="overview-minimap-${serverId}" class="overview-minimap"></div>
             <div id="fb-status-panel-${serverId}" class="fb-status-panel"></div>
         </div>
     `;
@@ -15824,9 +15826,10 @@ function closeOverviewTab(tabKey, serverId) {
         if (instance.hotkeyHandler) {
             document.removeEventListener('keydown', instance.hotkeyHandler);
         }
-        // Detach Ctrl+wheel zoom listener (Task 9).
+        // Detach wheel handler (zoom + pan). Must match capture flag of
+        // attachOverviewWheelZoom to deregister correctly.
         if (instance.wheelZoomHandler && instance.canvas && instance.canvas.canvas) {
-            instance.canvas.canvas.removeEventListener('wheel', instance.wheelZoomHandler);
+            instance.canvas.canvas.removeEventListener('wheel', instance.wheelZoomHandler, { capture: true });
         }
         // Nulling minimap causes the rAF redraw loop to short-circuit on
         // next tick (see initOverviewMinimap in 58-overview-navigation.js).
@@ -16004,6 +16007,16 @@ function initOverviewGraph(tabKey, serverId, data) {
     lgCanvas.title_text_font = 'bold 14px sans-serif';
     lgCanvas.inner_text_font = '12px sans-serif';
 
+    // Suppress LiteGraph's canvas-drawn link lines when the Wires toggle is
+    // off. The existing .overview-no-wires CSS hides only text port-labels;
+    // the canvas-rendered splines ignore DOM classes, so we wrap the draw
+    // method and early-return when the body class is present.
+    const _origDrawConnections = lgCanvas.drawConnections.bind(lgCanvas);
+    lgCanvas.drawConnections = function(ctx) {
+        if (document.body.classList.contains('overview-no-wires')) return;
+        _origDrawConnections(ctx);
+    };
+
     // LiteGraph draws native link lines by default. Task 13 made them the
     // primary visual at scale >= 0.5; port text-labels (below) render only
     // at mid-zoom [0.25, 0.5) for orientation.
@@ -16014,12 +16027,12 @@ function initOverviewGraph(tabKey, serverId, data) {
     // Populate text connection labels on each node
     populatePortConnections(nodeMap, data.edges || []);
 
-    // Load saved direction from localStorage (default: horizontal)
+    // Load saved direction from localStorage (default: vertical).
     const dirLsKey = OVERVIEW_DIRECTION_LS_PREFIX + tabKey;
-    let direction = 'horizontal';
+    let direction = 'vertical';
     try {
         const saved = localStorage.getItem(dirLsKey);
-        if (saved === 'vertical') direction = 'vertical';
+        if (saved === 'horizontal') direction = 'horizontal';
     } catch (_) {}
 
     const getCanvasSize = () => ({ width: canvasEl.width, height: canvasEl.height });
@@ -16043,9 +16056,15 @@ function initOverviewGraph(tabKey, serverId, data) {
     };
     updateDirBtnIcon();
 
-    // Fit to screen after initial render
+    // Initial view: vertical layout opens at actual size (scale = 1) with
+    // the top block centered horizontally — user scrolls the wheel to reveal
+    // subsequent blocks. Horizontal layout still fits everything to screen.
     setTimeout(() => {
-        fitOverviewToScreen(lgCanvas, graph);
+        if (direction === 'vertical') {
+            centerOverviewOnFirstBlock(lgCanvas, nodeMap);
+        } else {
+            fitOverviewToScreen(lgCanvas, graph);
+        }
         if (typeof applyLOD === 'function') applyLOD(overviewInstances[serverId]);
     }, 100);
 
@@ -16087,13 +16106,16 @@ function initOverviewGraph(tabKey, serverId, data) {
         });
     }
 
-    // ResizeObserver on tabs-content to recalculate height
+    // ResizeObserver on tabs-content to recalculate height.
+    // The canvas sits in a dedicated wrap (flex-child) so its width is
+    // independent of the FB Status column's width.
+    const canvasWrap = canvasEl.parentElement || container;
     const resizeTarget = tabsContent || container;
     const resizeObserver = new ResizeObserver(() => {
         const newHeight = (tabsContent ? tabsContent.clientHeight : 600)
             - (tabsHeader ? tabsHeader.offsetHeight : 0);
         container.style.height = newHeight + 'px';
-        canvasEl.width = container.clientWidth;
+        canvasEl.width = canvasWrap.clientWidth;
         canvasEl.height = newHeight;
         lgCanvas.resize();
     });
@@ -16422,11 +16444,23 @@ function scrollToOverviewNode(inst, node) {
     const s = ds.scale || 1;
     const canvasEl = inst.canvas.canvas;
     if (!canvasEl) return;
+    const nodeW = node.size ? node.size[0] : 0;
+    const nodeH = node.size ? node.size[1] : 0;
+    // LiteGraph applies the transform as ctx.scale(s).translate(off), so
+    // screen = s * (world + offset). For a world point p to land at screen
+    // center c we need offset = c/s - p.
     ds.offset = [
-        -node.pos[0] * s + canvasEl.width / 2,
-        -node.pos[1] * s + canvasEl.height / 2
+        canvasEl.width / (2 * s) - (node.pos[0] + nodeW / 2),
+        canvasEl.height / (2 * s) - (node.pos[1] + nodeH / 2)
     ];
     inst.canvas.setDirty(true, true);
+    if (inst.state) {
+        inst.state.offsetX = ds.offset[0];
+        inst.state.offsetY = ds.offset[1];
+        if (typeof saveOverviewState === 'function' && inst.serverId) {
+            saveOverviewState(inst.serverId, inst.state);
+        }
+    }
 }
 
 
@@ -17029,29 +17063,49 @@ function attachOverviewWheelZoom(inst) {
     if (!inst || !inst.canvas || !inst.canvas.canvas) return null;
     const dom = inst.canvas.canvas;
     const handler = function(e) {
-        // Plain wheel — pass-through to LiteGraph / browser.
-        if (!e.ctrlKey) return;
+        // Intercept before LiteGraph's native wheel-zoom handler fires.
         e.preventDefault();
+        e.stopImmediatePropagation();
 
+        // LiteGraph applies the transform as `ctx.scale(s,s).translate(off)`,
+        // so screen = s * (world + off) and therefore world = screen/s - off.
+        // (See LGraphCanvas.convertEventToCanvasOffset in litegraph.js.)
         const rect = dom.getBoundingClientRect();
-        const cx = e.clientX - rect.left;
-        const cy = e.clientY - rect.top;
+        // Map from CSS pixels (clientX/Y) to canvas-internal pixels, which is
+        // what ds.offset is measured in. rect.width may differ from
+        // canvas.width on HiDPI displays or when CSS scales the element.
+        const pxRatioX = dom.width / rect.width || 1;
+        const pxRatioY = dom.height / rect.height || 1;
+        const cx = (e.clientX - rect.left) * pxRatioX;
+        const cy = (e.clientY - rect.top) * pxRatioY;
         const s = inst.canvas.ds.scale || 1;
         const off = inst.canvas.ds.offset || [0, 0];
 
-        // Graph-space coords under cursor.
-        const wx = (cx - off[0]) / s;
-        const wy = (cy - off[1]) / s;
-        const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-        const newS = Math.max(OVERVIEW_SCALE_MIN, Math.min(OVERVIEW_SCALE_MAX, s * factor));
-
-        inst.canvas.ds.scale = newS;
-        inst.canvas.ds.offset = [cx - wx * newS, cy - wy * newS];
+        if (e.ctrlKey) {
+            // Ctrl+wheel: zoom around the cursor. World coords under the
+            // cursor must be invariant under the scale change:
+            //   world = cx/s - off   ==>   new_off = cx/newS - world
+            const wx = cx / s - off[0];
+            const wy = cy / s - off[1];
+            const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+            const newS = Math.max(OVERVIEW_SCALE_MIN, Math.min(OVERVIEW_SCALE_MAX, s * factor));
+            inst.canvas.ds.scale = newS;
+            inst.canvas.ds.offset = [cx / newS - wx, cy / newS - wy];
+            applyLOD(inst);
+        } else {
+            // Plain wheel: pan. Vertical by default; Shift — horizontal.
+            // offset is world-space, so delta (screen px) is divided by scale.
+            const delta = e.deltaY / s;
+            if (e.shiftKey) {
+                inst.canvas.ds.offset[0] -= delta;
+            } else {
+                inst.canvas.ds.offset[1] -= delta;
+            }
+        }
         inst.canvas.setDirty(true, true);
-        applyLOD(inst);
 
         if (inst.state) {
-            inst.state.zoom = newS;
+            inst.state.zoom = inst.canvas.ds.scale;
             inst.state.offsetX = inst.canvas.ds.offset[0];
             inst.state.offsetY = inst.canvas.ds.offset[1];
             if (typeof saveOverviewState === 'function' && inst.serverId) {
@@ -17059,7 +17113,9 @@ function attachOverviewWheelZoom(inst) {
             }
         }
     };
-    dom.addEventListener('wheel', handler, { passive: false });
+    // `capture: true` — run before LiteGraph's own wheel handler so our
+    // preventDefault + stopImmediatePropagation actually suppress it.
+    dom.addEventListener('wheel', handler, { passive: false, capture: true });
     return handler;
 }
 
@@ -17699,7 +17755,7 @@ function populatePortConnections(nodeMap, edges) {
 // Versioning: bump OVERVIEW_STATE_VERSION when schema changes; old states reset.
 // ============================================================================
 
-const OVERVIEW_STATE_VERSION = 1;
+const OVERVIEW_STATE_VERSION = 2;
 const OVERVIEW_STATE_DEBOUNCE_MS = 300;
 
 function overviewStateKey(serverId) {
@@ -17712,7 +17768,7 @@ function overviewStateDefault() {
         zoom: 1,
         offsetX: 0,
         offsetY: 0,
-        toggles: { wires: true, values: true, minimap: false, groupBackgrounds: false },
+        toggles: { wires: false, values: true, minimap: true, groupBackgrounds: false },
         searchQuery: '',
         manualPositions: {},
     };
@@ -17884,6 +17940,30 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
 // orderLayersByBarycenter, positionOverviewNodes) moved to 58-overview-layout.js.
 // Now autoLayoutOverview tries Sugiyama (dagre) first, falls back to H/V on
 // dagre absence.
+
+// ============================================================================
+// Center viewport on the first (top-most) block at scale = 1.
+// Used as the initial viewport for vertical layouts so the user starts at
+// actual size with one or two blocks visible, then scrolls wheel to reveal
+// subsequent blocks.
+// ============================================================================
+
+function centerOverviewOnFirstBlock(lgCanvas, nodeMap) {
+    if (!lgCanvas || !lgCanvas.canvas || !nodeMap || nodeMap.size === 0) return;
+    let topNode = null;
+    for (const node of nodeMap.values()) {
+        if (!topNode || node.pos[1] < topNode.pos[1]) topNode = node;
+    }
+    if (!topNode) return;
+    const canvasEl = lgCanvas.canvas;
+    const titleH = LiteGraph.NODE_TITLE_HEIGHT || 30;
+    lgCanvas.ds.scale = 1;
+    lgCanvas.ds.offset = [
+        -topNode.pos[0] - topNode.size[0] / 2 + canvasEl.width / 2,
+        -topNode.pos[1] + titleH + 24
+    ];
+    lgCanvas.setDirty(true, true);
+}
 
 // ============================================================================
 // Fit to Screen
