@@ -38,6 +38,12 @@ type SidebarConfig struct {
 	Groups  []SidebarGroupConfig `yaml:"groups,omitempty"`
 }
 
+// OverviewConfig описывает начальные настройки System Overview
+type OverviewConfig struct {
+	Patterns []string `yaml:"patterns,omitempty"` // glob-паттерны включения (e.g. "*Proc")
+	Exclude  []string `yaml:"exclude,omitempty"`  // glob-паттерны исключения (e.g. "Monitor*")
+}
+
 // ConfigFile представляет структуру YAML файла конфигурации
 type ConfigFile struct {
 	Servers         []ServerConfig   `yaml:"servers"`
@@ -48,6 +54,7 @@ type ConfigFile struct {
 	Control         *ControlConfig   `yaml:"control,omitempty"`         // Настройки контроля доступа
 	Journals        []JournalConfig  `yaml:"journals,omitempty"`        // Журналы сообщений (ClickHouse)
 	Sidebar         *SidebarConfig   `yaml:"sidebar,omitempty"`         // Конфигурация sidebar групп
+	Overview        *OverviewConfig  `yaml:"overview,omitempty"`        // Конфигурация System Overview
 }
 
 // LoadFromYAML загружает полную конфигурацию из YAML файла

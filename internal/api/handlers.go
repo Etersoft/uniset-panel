@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/pv/uniset-panel/internal/config"
 	"github.com/pv/uniset-panel/internal/dashboard"
+	"github.com/pv/uniset-panel/internal/debug"
 	"github.com/pv/uniset-panel/internal/ionc"
 	"github.com/pv/uniset-panel/internal/journal"
 	"github.com/pv/uniset-panel/internal/launcher"
@@ -26,6 +28,30 @@ import (
 const (
 	defaultHistoryCount = 100 // кол-во записей истории переменной по умолчанию
 )
+
+// DebugInterface — minimum contract for HandleSnapshot; fake-friendly.
+type DebugInterface interface {
+	Snapshot(ctx context.Context, serverID, objectName string) (*debug.Snapshot, error)
+}
+
+// TraceManagerInterface is the subset of *trace.Manager used by handlers.
+type TraceManagerInterface interface {
+	Subscribe(serverID, serverName, objectName string, intervalMS int64) string
+	Unsubscribe(token string)
+	PollerCount() int
+	StopAll()
+}
+
+// TraceResolver resolves serverID → host:port for trace proxy handlers.
+type TraceResolver interface {
+	GetServerAddress(serverID string) (host string, port int, err error)
+}
+
+// ServerNameResolver optionally returns a human-readable server name for
+// enriching SSE events. Implementations missing it fall back to serverID.
+type ServerNameResolver interface {
+	GetServerName(serverID string) string
+}
 
 type Handlers struct {
 	client          *uniset.Client
@@ -51,6 +77,11 @@ type Handlers struct {
 	journalMgr      *journal.Manager     // менеджер журналов сообщений
 	launcherMgr     *launcher.Manager              // менеджер Launcher'ов
 	sidebarConfig   *config.SidebarConfig          // конфиг sidebar (nil = дефолт по типам)
+	overviewConfig  *config.OverviewConfig         // конфиг overview (nil = показать все)
+	debugClient     DebugInterface                 // клиент для UObject debug snapshot (Spec 4)
+	traceMgr        TraceManagerInterface          // менеджер trace подписок (Spec 4)
+	traceResolver   TraceResolver                  // резолвер host:port для trace proxy (Spec 4)
+	httpClient      *http.Client                   // HTTP-клиент для исходящих proxy-запросов (Spec 4)
 }
 
 func NewHandlers(client *uniset.Client, store storage.Storage, p *poller.Poller, sensorCfg *sensorconfig.SensorConfig, pollInterval time.Duration) *Handlers {
@@ -110,6 +141,27 @@ func (h *Handlers) SetJournalManager(mgr *journal.Manager) {
 // SetServerManager устанавливает менеджер серверов
 func (h *Handlers) SetServerManager(mgr *server.Manager) {
 	h.serverMgr = mgr
+}
+
+// SetDebugClient wires the debug client (Spec 4).
+func (h *Handlers) SetDebugClient(c DebugInterface) {
+	h.debugClient = c
+}
+
+// SetTraceManager wires the trace manager (Spec 4).
+func (h *Handlers) SetTraceManager(m TraceManagerInterface) {
+	h.traceMgr = m
+}
+
+// SetTraceResolver wires the server resolver for trace proxy handlers.
+func (h *Handlers) SetTraceResolver(r TraceResolver) {
+	h.traceResolver = r
+}
+
+// SetHTTPClient sets an HTTP client for outbound proxy requests.
+// If not set, proxy handlers use http.DefaultClient.
+func (h *Handlers) SetHTTPClient(c *http.Client) {
+	h.httpClient = c
 }
 
 // SetControlsEnabled устанавливает доступность элементов управления IONC

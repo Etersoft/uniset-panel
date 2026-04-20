@@ -11,7 +11,7 @@ import (
 
 // SidebarItem представляет одну сущность в резолвленном дереве sidebar
 type SidebarItem struct {
-	Type        string `json:"type"`                  // "object", "launcher", "dashboard", "journal", "server"
+	Type        string `json:"type"`                  // "object", "launcher", "dashboard", "journal", "server", "overview"
 	Name        string `json:"name"`                  // ID для паттернов и открытия вкладок
 	DisplayName string `json:"displayName,omitempty"` // человекочитаемое имя для UI (если отличается от Name)
 	ServerID    string `json:"serverId,omitempty"`

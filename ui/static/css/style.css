@@ -8667,8 +8667,431 @@ button.rotate-quick-btn:active {
     color: #8a8aaa;
 }
 
+.entity-type-overview {
+    background: #1a2a3a;
+    color: #5ba8d9;
+}
+
+/* System Overview tab — canvas needs fixed height */
+.tab-panel[data-object-type="Overview"] {
+    padding: 0;
+    position: relative;
+}
+
+.tab-panel[data-object-type="Overview"].active {
+    display: flex;
+    flex-direction: column;
+}
+
+.overview-container {
+    flex: 1;
+    position: relative;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: row;
+}
+
+.overview-canvas-wrap {
+    flex: 1;
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.overview-toolbar {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 10;
+    display: flex;
+    gap: 4px;
+}
+
+.overview-fit-btn {
+    background: #2a2a3e;
+    color: #ccc;
+    border: 1px solid #444;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 28px;
+    text-align: center;
+}
+
+.overview-fit-btn:hover {
+    background: #3a3a4e;
+    color: #fff;
+}
+
+.overview-direction-btn {
+    background: #2a2a3e;
+    color: #ccc;
+    border: 1px solid #444;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 28px;
+    text-align: center;
+}
+
+.overview-direction-btn:hover {
+    background: #3a3a4e;
+    color: #fff;
+}
+
+/* Overview View dropdown (Task 14) + SVG export button */
+.overview-view-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.overview-view-btn,
+.overview-svg-export {
+    padding: 4px 10px;
+    background: #2a2a34;
+    color: #ddd;
+    border: 1px solid #333;
+    cursor: pointer;
+    margin-right: 4px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.overview-view-btn:hover,
+.overview-svg-export:hover {
+    background: #353540;
+}
+
+.overview-view-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: #1a1a24;
+    border: 1px solid #333;
+    padding: 6px;
+    z-index: 1000;
+    min-width: 140px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+    border-radius: 4px;
+    margin-top: 2px;
+}
+
+.overview-view-menu.hidden {
+    display: none;
+}
+
+.overview-view-menu label {
+    display: block;
+    padding: 4px 6px;
+    color: #ddd;
+    cursor: pointer;
+    user-select: none;
+    font-size: 12px;
+}
+
+.overview-view-menu label:hover {
+    background: #252530;
+}
+
+.overview-view-menu input[type=checkbox] {
+    margin-right: 6px;
+}
+
+.overview-container canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    outline: none;
+    border: none;
+}
+
+.overview-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #888;
+    font-size: 14px;
+}
 
 /* Sidebar collapsed — скрываем группы */
 .sidebar.collapsed #sidebar-groups {
     display: none;
 }
+
+/* ============================================================================
+   System Overview — hotkeys help overlay (Spec 3 Task 7)
+   ========================================================================= */
+#overview-help-overlay {
+    position: fixed;
+    top: 20%;
+    left: 30%;
+    width: 40%;
+    background: #222;
+    color: #eee;
+    padding: 20px;
+    border-radius: 8px;
+    z-index: 10000;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    font-family: sans-serif;
+}
+#overview-help-overlay.hidden {
+    display: none;
+}
+#overview-help-overlay h3 {
+    margin: 0 0 12px 0;
+    font-size: 15px;
+    color: #fff;
+}
+#overview-help-overlay kbd {
+    background: #444;
+    color: #eee;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 12px;
+    border: 1px solid #666;
+}
+#overview-help-overlay table {
+    width: 100%;
+    border-collapse: collapse;
+}
+#overview-help-overlay td {
+    padding: 4px 8px;
+    vertical-align: middle;
+}
+#overview-help-overlay td:first-child {
+    width: 120px;
+    text-align: right;
+}
+#overview-help-overlay button {
+    margin-top: 12px;
+    background: #3a3a4e;
+    color: #eee;
+    border: 1px solid #555;
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+#overview-help-overlay button:hover {
+    background: #4a4a5e;
+}
+
+/* Body toggles for Overview values / wires visibility (V / W hotkeys) */
+body.overview-no-values .overview-container .lgraphnode-port-value,
+body.overview-no-values .overview-port-value {
+    display: none;
+}
+body.overview-no-wires .overview-container .lgraphnode-port-connections,
+body.overview-no-wires .overview-port-connections {
+    display: none;
+}
+
+/* Floating minimap for System Overview (M hotkey / Task 8). Parent
+   `.overview-container` is position: relative, so this floats in its
+   bottom-right corner. Hidden by default (body class applied on init). */
+.overview-minimap {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    width: 200px;
+    height: 150px;
+    border: 1px solid #444;
+    background: #111;
+    z-index: 100;
+    cursor: crosshair;
+}
+body.overview-minimap-hidden .overview-minimap {
+    display: none;
+}
+
+/* Overview LOD (level-of-detail): applied via body class based on canvas
+   scale (Task 9). `overview-lod-low` triggers at scale < 0.5,
+   `overview-lod-min` at scale < 0.25. Main effect lives in
+   UniSetProcessNode.onDrawForeground (58-overview-node.js), which skips
+   detail rendering at lod-min. CSS rules below cover DOM overlays (if any
+   future overlays use these classes). */
+body.overview-lod-low .port-label { display: none; }
+body.overview-lod-min .uniset-process-node-details { display: none; }
+
+/* FB Status panel (Task 11, Spec 3). Floats at the top-right of the overview
+   container; minimap sits at the bottom-right so they don't overlap, but we
+   keep a horizontal buffer (right: 220px) equal to the minimap width + gutter
+   to stay clear of the minimap when the panel grows tall. */
+.fb-status-panel {
+    position: relative;
+    flex-shrink: 0;
+    width: 280px;
+    height: 100%;
+    overflow-y: auto;
+    background: #1a1a24;
+    border-left: 1px solid #333;
+    padding: 10px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+}
+.fb-status-panel .fb-list {
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+}
+.fb-status-panel h3 {
+    margin: 0 0 8px 0;
+    color: #ddd;
+    font-size: 14px;
+}
+.fb-status-panel .fb-status-search {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 4px 8px;
+    margin-bottom: 8px;
+    background: #0e0e18;
+    color: #ddd;
+    border: 1px solid #333;
+}
+.fb-status-panel .fb-status-search:focus {
+    outline: none;
+    border-color: #4a8cff;
+}
+.fb-status-panel .fb-card {
+    padding: 6px 8px;
+    border-bottom: 1px solid #2a2a34;
+    cursor: pointer;
+    color: #ccc;
+}
+.fb-status-panel .fb-card:hover {
+    background: #252530;
+}
+.fb-status-panel .fb-card .fb-type {
+    color: #888;
+    margin-left: 6px;
+    font-size: 0.85em;
+}
+.fb-status-panel .fb-empty {
+    color: #666;
+    padding: 8px;
+}
+/* When values are hidden via V-hotkey, also hide the supplementary
+   `(type)` annotation to keep the panel visually calm. */
+body.overview-no-values .fb-status-panel .fb-type {
+    display: none;
+}
+
+/* ==========================================================================
+   UObject Detail Panel (Spec 4)
+   ========================================================================== */
+
+.tab-panel[data-object-type="Detail"] {
+    padding: 0;
+    position: relative;
+}
+.tab-panel[data-object-type="Detail"].active {
+    display: flex;
+    flex-direction: column;
+}
+
+.detail-panel { background: #0e0e18; color: #ddd; display: flex;
+                flex-direction: column; flex: 1; min-height: 0; }
+.detail-header { padding: 8px 12px; background: #1a1a24;
+                 border-bottom: 1px solid #333; display: flex; gap: 16px; }
+.detail-header .detail-obj { font-weight: bold; font-size: 14px; }
+.detail-header .detail-server { color: #888; font-size: 12px; align-self: center; }
+
+.detail-inner-tabs { display: flex; background: #1a1a24;
+                     border-bottom: 1px solid #333; }
+.detail-inner-tabs button { padding: 6px 14px; background: transparent;
+                            color: #aaa; border: 0; border-bottom: 2px solid transparent;
+                            cursor: pointer; }
+.detail-inner-tabs button.active { color: #fff; border-bottom-color: #4fc3f7; }
+
+.detail-inner-content { flex: 1; min-height: 0; overflow: hidden; position: relative; }
+.detail-inner-content [data-inner-panel] { display: none;
+                                            position: absolute; inset: 0;
+                                            overflow-y: auto; padding: 8px; }
+.detail-inner-content [data-inner-panel].active { display: block; }
+
+.detail-placeholder { color: #666; padding: 16px; }
+.detail-error-banner { padding: 12px 16px; background: #5a2a2a;
+                       color: #fff; border-radius: 4px; margin: 8px; }
+
+/* Variables */
+.detail-var-section-header { background: #1a1a24; padding: 6px 10px;
+                              cursor: pointer; user-select: none;
+                              display: flex; align-items: center; gap: 6px;
+                              font-weight: bold; }
+.detail-var-section-header .arrow { transition: transform .2s; font-size: 10px; }
+.detail-var-section-header .arrow.collapsed { transform: rotate(-90deg); }
+.detail-var-section-header .count { color: #888; font-weight: normal;
+                                     font-size: 12px; margin-left: auto; }
+
+.detail-var-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.detail-var-table th.col-chart,
+.detail-var-table td.col-chart { width: 32px; text-align: center; padding: 2px; }
+.detail-var-table th, .detail-var-table td { padding: 4px 8px;
+                                              border-bottom: 1px solid #2a2a34; }
+.detail-var-table th { text-align: left; color: #888; background: #131320; }
+.detail-var-table tr.forced { background: rgba(240,176,64,0.08); }
+.detail-var-table tr.forcible { cursor: pointer; }
+.detail-var-table tr.forcible:hover { background: #1a1a24; }
+/* Value-change blink: reuses shared .value-changed keyframes (value-flash). */
+
+.detail-ctxmenu { background: #1a1a24; border: 1px solid #333; padding: 6px;
+                   z-index: 10000; display: flex; flex-direction: column; gap: 4px;
+                   min-width: 160px; }
+.detail-ctxmenu button { padding: 4px 8px; background: #2a2a34;
+                          color: #ddd; border: 0; cursor: pointer; }
+.detail-ctxmenu button:hover { background: #353540; }
+
+/* Trends */
+.detail-trends-toolbar { padding: 4px 8px; background: #1a1a24;
+                         border-bottom: 1px solid #333; display: flex;
+                         gap: 8px; align-items: center; font-size: 12px; }
+.detail-trends-charts .trend-row { border-bottom: 1px solid #2a2a34;
+                                    padding: 6px 0; }
+.detail-trends-charts .trend-row-header { font-size: 12px; color: #ddd;
+                                           display: flex; align-items: center;
+                                           gap: 8px; padding: 0 8px 4px 8px; }
+.detail-trends-charts .trend-color { width: 10px; height: 10px;
+                                      border-radius: 2px; display: inline-block; }
+.detail-trends-charts .trend-canvas { width: 100%; height: 120px; display: block; }
+
+/* Message Log */
+.detail-log-toolbar { padding: 6px 8px; background: #1a1a24;
+                       border-bottom: 1px solid #333; display: flex;
+                       gap: 6px; align-items: center; font-size: 12px;
+                       flex-wrap: wrap; }
+.detail-log-label { color: #8e8e8e; font-size: 12px; }
+.detail-log-filter { padding: 6px 8px; border-bottom: 1px solid #333;
+                     display: flex; gap: 6px; align-items: center; }
+.detail-log-filter input { flex: 1; box-sizing: border-box; padding: 4px 8px;
+                            background: #0e0e18; color: #ddd;
+                            border: 1px solid #333; border-radius: 4px;
+                            font-size: 12px; }
+.detail-log-filter input:focus { outline: none; border-color: #4a8cff; }
+
+/* <select> that uses .btn class — browser defaults override most .btn
+   properties, so we re-apply the look-and-feel via a more specific rule. */
+select.btn { appearance: none; -webkit-appearance: none; -moz-appearance: none;
+              padding-right: 22px;
+              background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%23ccc' d='M0 0l5 6 5-6z'/></svg>");
+              background-repeat: no-repeat;
+              background-position: right 6px center; }
+select.btn:hover { background-color: var(--bg-hover); }
+.detail-log-banner { padding: 4px 8px; background: #5a2a2a; color: #fff; }
+.detail-log-scroll { flex: 1; overflow-y: auto; }
+.detail-log-table { width: 100%; border-collapse: collapse; font-size: 11px;
+                     font-family: monospace; }
+.detail-log-table th, .detail-log-table td { padding: 2px 6px;
+                                               border-bottom: 1px solid #2a2a34; }
+.detail-log-table tr.log-type-sensorInfo { color: #4fc3f7; }
+.detail-log-table tr.log-type-timerInfo { color: #81c784; }
+.detail-log-table tr.log-type-sysCommand { color: #ffb74d; }

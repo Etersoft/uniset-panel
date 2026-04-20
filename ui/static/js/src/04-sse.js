@@ -120,6 +120,11 @@ function initSSE() {
             // Формируем ключ вкладки: serverId:objectName
             const tabKey = `${serverId}:${objectName}`;
 
+            // Обновляем System Overview (если открыт для этого сервера)
+            if (data.io && typeof updateOverviewFromSSE === 'function') {
+                updateOverviewFromSSE(serverId, objectName, data.io);
+            }
+
             // Обновляем UI только для открытых вкладок
             const tabState = state.tabs.get(tabKey);
             if (tabState) {
