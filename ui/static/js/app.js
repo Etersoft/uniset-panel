@@ -4627,23 +4627,20 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         // Останавливаем существующий генератор если есть
         this.stopGenerator(sensorId);
 
-        const sensorIdLocal = sensorId;
-        const self = this;
-
         const generator = new SignalGenerator({
             type, min, max, step, pause, pulseWidth, period,
             onTick: (value) => {
-                self.setValueForGenerator(sensorIdLocal, value);
+                this.setValueForGenerator(sensorId, value);
             }
         });
 
-        // Сохраняем минимальное состояние для UI (тип для setChartStepped, параметры для дальнейших нужд).
+        // Сохраняем минимальное состояние для UI (тип для setChartStepped,
+        // параметры для отображения в "active generator" баннере и сохранения preferences).
         const genState = {
-            sensorId: sensorIdLocal,
+            sensorId,
             type,
             min,
             max,
-            startTime: Date.now(),
             generator,        // ссылка на SignalGenerator — будет stop()'нута в stopGenerator
         };
 
@@ -4659,15 +4656,15 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         }
 
         generator.start();
-        this.activeGenerators.set(sensorIdLocal, genState);
+        this.activeGenerators.set(sensorId, genState);
 
         // Для square генератора включаем stepped режим на графике (меандр)
         if (type === 'square') {
-            this.setChartStepped(sensorIdLocal, true);
+            this.setChartStepped(sensorId, true);
         }
 
         // Перерисовываем строку для отображения индикатора
-        this.reRenderSensorRow(sensorIdLocal);
+        this.reRenderSensorRow(sensorId);
 
         // Сохраняем preferences (разные параметры для разных типов)
         let params = { min, max };
