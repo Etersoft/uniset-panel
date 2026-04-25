@@ -79,11 +79,20 @@ services:
     depends_on:
       viewer-multi:
         condition: service_healthy
+    # Entrypoint passes positional args to playwright if provided.
+    # Default (no args, e.g. `docker compose -f docker-compose.multi.yml up e2e-multi`): runs multi/.
+    # Override (e.g. `docker compose run --rm e2e-multi multi/foo.spec.ts`): runs only specified specs.
     entrypoint:
       - bash
       - -lc
       - |
+        set -e
         cd /tmp
         cp -r /app/* .
         npm install --no-fund --no-audit
-        npx playwright test multi/ --reporter=list
+        if [ "$#" -gt 0 ]; then
+          npx playwright test "$@" --reporter=list
+        else
+          npx playwright test multi/ --reporter=list
+        fi
+      - bash
