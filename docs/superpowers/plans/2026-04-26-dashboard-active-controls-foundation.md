@@ -10,6 +10,15 @@
 
 **Tech Stack:** ES6-классы, существующие глобалы (`controlledFetch`, `dashboardState`, `state.control`), Playwright + Docker для E2E, `go run ui/concat.go` для сборки `app.js`.
 
+**E2E command note:** В `docker-compose.yml` сервис `e2e` имеет жёстко закодированный entrypoint, который игнорирует позиционные аргументы и всегда запускает ВСЮ suite (`single/` + `integration/`). Чтобы запустить один spec, нужно переопределить entrypoint. Используем хелпер-команду:
+
+```bash
+docker compose run --rm --entrypoint bash e2e -lc \
+  'cd /tmp && cp -r /app/* . && npm install --no-fund --no-audit --silent && npx playwright test single/<spec-name>.spec.ts --reporter=list'
+```
+
+Эта форма используется во всех Step'ах плана, где нужно запустить конкретный spec.
+
 **Scope notes:**
 - Этот план НЕ реализует конкретные активные виджеты (toggle/checkbox/button/setpoint/generator) — для каждого будет свой план после согласования дизайна.
 - `WIDGET_TYPES` в `62-dashboard-manager.js` НЕ модифицируется в этом плане (нет регистрируемых типов).
@@ -59,7 +68,7 @@ Run: `docker compose --profile dev down`
 
 Затем запустить только generator e2e тест:
 
-Run: `docker compose run --rm e2e npx playwright test tests/single/generator.spec.ts`
+Run: `docker compose run --rm --entrypoint bash e2e -lc 'cd /tmp && cp -r /app/* . && npm install --no-fund --no-audit --silent && npx playwright test single/generator.spec.ts --reporter=list'`
 Expected: PASS (все assertions зелёные)
 
 Если упали — выяснить, чинятся ли они до начала рефакторинга (фиксить **до** Task 1.2). Не идти дальше с красным baseline'ом.
@@ -357,14 +366,14 @@ Expected: вывод `Generated static/js/app.js from N files`.
 
 - [ ] **Step 6: Прогнать generator E2E**
 
-Run: `docker compose run --rm e2e npx playwright test tests/single/generator.spec.ts`
+Run: `docker compose run --rm --entrypoint bash e2e -lc 'cd /tmp && cp -r /app/* . && npm install --no-fund --no-audit --silent && npx playwright test single/generator.spec.ts --reporter=list'`
 Expected: PASS — все те же assertions, что в Task 1.1 baseline.
 
 Если упало — починить (наиболее вероятно: пропущенный параметр в SignalGenerator-конструкторе или забытый side-effect, который был в inline-версии). Не двигаться дальше с красным.
 
 - [ ] **Step 7: Прогнать также `ionotifycontroller.spec.ts` для уверенности**
 
-Run: `docker compose run --rm e2e npx playwright test tests/single/ionotifycontroller.spec.ts`
+Run: `docker compose run --rm --entrypoint bash e2e -lc 'cd /tmp && cp -r /app/* . && npm install --no-fund --no-audit --silent && npx playwright test single/ionotifycontroller.spec.ts --reporter=list'`
 Expected: PASS.
 
 - [ ] **Step 8: Commit**
@@ -974,7 +983,7 @@ test.describe('ActiveDashboardWidget — base class smoke', () => {
 
 - [ ] **Step 3: Запустить тест — должен FAIL (без `__DEBUG_REGISTER_TEST_WIDGET` или CSS-классов могут быть проблемы)**
 
-Run: `docker compose run --rm e2e npx playwright test tests/single/dashboard-active-base.spec.ts`
+Run: `docker compose run --rm --entrypoint bash e2e -lc 'cd /tmp && cp -r /app/* . && npm install --no-fund --no-audit --silent && npx playwright test single/dashboard-active-base.spec.ts --reporter=list'`
 Expected: FAIL — на каком-то assertion'е (либо POST не той структуры, либо state не переключается, либо selectors не совпадают). Это ОК — это RED фаза TDD.
 
 - [ ] **Step 4: Починить под реальное поведение**
@@ -988,7 +997,7 @@ Expected: FAIL — на каком-то assertion'е (либо POST не той 
 
 - [ ] **Step 5: Запустить тест ещё раз — PASS**
 
-Run: `docker compose run --rm e2e npx playwright test tests/single/dashboard-active-base.spec.ts`
+Run: `docker compose run --rm --entrypoint bash e2e -lc 'cd /tmp && cp -r /app/* . && npm install --no-fund --no-audit --silent && npx playwright test single/dashboard-active-base.spec.ts --reporter=list'`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
@@ -1062,13 +1071,16 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 Run:
 ```bash
-docker compose run --rm e2e npx playwright test \
-  tests/single/generator.spec.ts \
-  tests/single/ionotifycontroller.spec.ts \
-  tests/single/dashboard.spec.ts \
-  tests/single/dashboard-sse.spec.ts \
-  tests/single/dashboard-widgets.spec.ts \
-  tests/single/dashboard-active-base.spec.ts
+docker compose run --rm --entrypoint bash e2e -lc \
+  'cd /tmp && cp -r /app/* . && npm install --no-fund --no-audit --silent && \
+   npx playwright test \
+     single/generator.spec.ts \
+     single/ionotifycontroller.spec.ts \
+     single/dashboard.spec.ts \
+     single/dashboard-sse.spec.ts \
+     single/dashboard-widgets.spec.ts \
+     single/dashboard-active-base.spec.ts \
+     --reporter=list'
 ```
 Expected: все PASS.
 
