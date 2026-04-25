@@ -58,13 +58,13 @@
 |---|---|
 | `ui/static/js/src/08-signal-generator.js` | Общий движок генератора сигналов (square/sin/cos/linear/random). Извлечён из IONC renderer'а. Префикс `08` — после core utils (06), до renderers (10+); IONC renderer (20+) и dashboard widgets (61+) могут на него ссылаться |
 | `ui/static/js/src/61-dashboard-active-base.js` | `ActiveDashboardWidget extends DashboardWidget` — общая логика write/feedback/edit-mode/состояний |
-| `ui/static/js/src/61-active-toggle.js` | `ToggleWidget extends ActiveDashboardWidget` |
-| `ui/static/js/src/61-active-checkbox.js` | `CheckboxWidget extends ActiveDashboardWidget` |
-| `ui/static/js/src/61-active-button.js` | `PushButtonWidget extends ActiveDashboardWidget` |
-| `ui/static/js/src/61-active-setpoint.js` | `SetpointWidget extends ActiveDashboardWidget` |
-| `ui/static/js/src/61-active-generator.js` | `GeneratorWidget extends ActiveDashboardWidget` |
+| `ui/static/js/src/61-dashboard-active-toggle.js` | `ToggleWidget extends ActiveDashboardWidget` |
+| `ui/static/js/src/61-dashboard-active-checkbox.js` | `CheckboxWidget extends ActiveDashboardWidget` |
+| `ui/static/js/src/61-dashboard-active-button.js` | `PushButtonWidget extends ActiveDashboardWidget` |
+| `ui/static/js/src/61-dashboard-active-setpoint.js` | `SetpointWidget extends ActiveDashboardWidget` |
+| `ui/static/js/src/61-dashboard-active-generator.js` | `GeneratorWidget extends ActiveDashboardWidget` |
 
-Префикс `61-` — между `61-dashboard-widgets.js` (пассивные виджеты) и `62-dashboard-manager.js` (реестр); порядок конкатенации (lex-order на имени) сохраняет зависимости: сначала `61-dashboard-active-base.js`, затем наследники `61-active-*.js`.
+Префикс **`61-dashboard-active-*.js`** — единый префикс гарантирует, что в конкатенации (lex-order на имени) `61-dashboard-active-base.js` подгрузится **раньше** наследников. Если использовать укороченные имена (`61-active-toggle.js`), они лексически окажутся до базового класса и сломают загрузку.
 
 **Изменяемые файлы:**
 
@@ -177,6 +177,9 @@ Mock-сервер (`tests/mock-server/server.js`) расширяется по н
 
 ## Открытые вопросы (на этапе реализации)
 
+- **CSS-маркер активного виджета.** В foundation CSS использует селектор `[data-type^="active-"]` (для edit-mode grayscale и `active-disabled`). Это работает только если все типы виджетов начинаются с префикса `active-` — что нарушает естественное именование (`toggle` vs `active-toggle`). Решение для первого widget-плана: сменить маркер на `container.dataset.activeWidget = 'true'` (выставлять в dashboard manager при `widget instanceof ActiveDashboardWidget`) и переписать CSS на `[data-active-widget="true"]`. Это позволит концретным виджетам называться естественно (`toggle`, `checkbox`, ...) и легко мигрировать существующие пассивные виджеты в active при необходимости.
+- **`active-disabled` индикатор отсутствует.** CSS-классы `.active-disabled` и `[data-control-blocked="true"]` определены, но базовый класс их не выставляет. `isInteractive()` сейчас просто молча игнорирует клик, без UX-фидбэка ("ничего не произошло"). Фикс на foundation-уровне в первом widget-плане: добавить в `ActiveDashboardWidget` метод `_updateInteractivityClass()`, вызывать при изменениях `editMode`/`controlToken`, выставлять `active-disabled` класс / `data-control-blocked` атрибут.
+- **Hardcoded `SharedMemory` в URL.** `61-dashboard-active-base.js:60` строит `/api/objects/SharedMemory/ionc/set?...`. На реальных кластерах IONC-объект может называться по-другому (`SharedMemory1`, `IOC`, etc.). Решение: либо `config.objectName` (default `'SharedMemory'`), либо автодетект через первый IONC-объект первого подключённого сервера. Решить в первом widget-плане.
 - **`sensor_id` — тип (резолв имени → ID).** Dashboard'е сейчас привязка к датчикам делается по **имени** (`config.sensor` — строка), а backend `POST /api/objects/{name}/ionc/set` (`internal/api/handlers_ionc.go:95`) ожидает `IONCSetRequest.SensorID` типа `int64`. В foundation смок-тесте это обнаружено (Task 4.2): тест мочит endpoint напрямую, потому что real backend отклоняет строковый `sensor_id`. Решение для concrete widget'ов (toggle/checkbox/etc):
   - Вариант A: хранить в `config.sensorId` (число) рядом с `config.sensor` (строка для UI), резолвить через IONC sensor lookup при сохранении конфига.
   - Вариант B: расширить backend POST API так, чтобы принимал и имя.
