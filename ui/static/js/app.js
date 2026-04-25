@@ -65,6 +65,17 @@ const DEFAULT_CHART_TIME_RANGE = 900;
 const TIME_AGO_MIN_SECONDS = 5;
 const TIME_AGO_MINUTES_THRESHOLD = 60;
 
+// ============================================================================
+// Active dashboard widgets — состояния записи
+// ============================================================================
+
+// Сколько ждать ответа от POST /ionc/set до показа состояния error.
+const WRITE_PENDING_TIMEOUT_MS = 5000;
+
+// Сколько отображать состояние "success" (зелёный индикатор) после удачной записи,
+// прежде чем вернуться в idle.
+const WRITE_SUCCESS_DISPLAY_MS = 1500;
+
 
 // === 00-state.js ===
 // Идентификатор сервера для SharedMemory (SM) событий
