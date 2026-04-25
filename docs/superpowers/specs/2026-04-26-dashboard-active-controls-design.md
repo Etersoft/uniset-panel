@@ -177,5 +177,11 @@ Mock-сервер (`tests/mock-server/server.js`) расширяется по н
 
 ## Открытые вопросы (на этапе реализации)
 
+- **`sensor_id` — тип (резолв имени → ID).** Dashboard'е сейчас привязка к датчикам делается по **имени** (`config.sensor` — строка), а backend `POST /api/objects/{name}/ionc/set` (`internal/api/handlers_ionc.go:95`) ожидает `IONCSetRequest.SensorID` типа `int64`. В foundation смок-тесте это обнаружено (Task 4.2): тест мочит endpoint напрямую, потому что real backend отклоняет строковый `sensor_id`. Решение для concrete widget'ов (toggle/checkbox/etc):
+  - Вариант A: хранить в `config.sensorId` (число) рядом с `config.sensor` (строка для UI), резолвить через IONC sensor lookup при сохранении конфига.
+  - Вариант B: расширить backend POST API так, чтобы принимал и имя.
+  - Вариант C: резолвить на лету в `writeValue()` через `state.sensorsByName` cache.
+  Конкретное решение — отдельный шаг в первом widget-плане (toggle).
+- **Overlay `.widget-header.hidden-title` перекрывает кликабельные элементы виджета.** Обнаружено в smoke-тесте (Task 4.2): `.widget-header` имеет `position:absolute; z-index:10` и перекрывает верхнюю полосу любого виджета. Real users тоже могут попадать в overlay вместо нужной кнопки. Concrete active widgets должны либо: (a) поднимать interactive elements ниже overlay'я (top padding), (b) подавлять overlay в view mode для active widget'ов, (c) применять `pointer-events: none` к overlay в view mode. Решить в первом widget-плане.
 - Возможен ли пакетный write API для генератора (несколько виджетов с одинаковым тиком → один POST). Решается, если возникнет проблема производительности.
 - Нужна ли в IONC renderer'е отдельная страховка, что при отключении SSE генераторы тоже останавливаются (возможно, уже есть).
