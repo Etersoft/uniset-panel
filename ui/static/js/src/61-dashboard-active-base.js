@@ -87,7 +87,11 @@ class ActiveDashboardWidget extends DashboardWidget {
             if (state !== 'idle') {
                 root.classList.add(`active-${state}`);
             }
-            root.title = message;
+            if (message) {
+                root.title = message;
+            } else {
+                root.removeAttribute('title');
+            }
         }
 
         // Очистить предыдущие таймеры
@@ -112,7 +116,9 @@ class ActiveDashboardWidget extends DashboardWidget {
             }, WRITE_SUCCESS_DISPLAY_MS);
         }
 
-        this.renderCommand(); // command может зависеть от state (например opacity)
+        // command может зависеть от state (например opacity).
+        // Guard: _setWriteState может вызываться до render() (writeValue может фейлиться синхронно).
+        if (this.element) this.renderCommand();
     }
 
     // ===== Edit-mode / control gating =====
