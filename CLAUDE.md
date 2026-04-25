@@ -239,6 +239,33 @@ make build
 | `00-state.js` | Глобальное состояние `state` |
 | `06-utils.js` | Утилиты: `escapeHtml()`, `debounce()` |
 | `10-base-renderer.js` | `BaseObjectRenderer`, все миксины (`FilterMixin`, `PinManagementMixin`, `ParamsManagerMixin` и др.) |
+| `08-signal-generator.js` | `SignalGenerator` — общий движок генерации сигналов (square/sin/cos/linear/random). Используется IONC renderer'ом и активным generator-виджетом dashboard'а |
+| `61-dashboard-active-base.js` | `ActiveDashboardWidget extends DashboardWidget` — базовый класс для write-capable виджетов dashboard'а |
+
+### Active dashboard widgets
+
+Для записи значений в датчики из dashboard'а используется базовый класс
+`ActiveDashboardWidget` (`61-dashboard-active-base.js`). Конкретные активные
+виджеты (toggle/checkbox/button/setpoint/generator) реализуются в файлах
+`61-active-*.js` и регистрируются в `WIDGET_TYPES` (`62-dashboard-manager.js`).
+
+**Контракт:**
+- `writeValue(value)` — POST через `controlledFetch` на `/api/objects/SharedMemory/ionc/set?server=...`
+- `update(value, error)` — приходит от SSE через dashboard manager, обновляет `feedbackValue`
+- `commandValue` / `feedbackValue` — раздельное хранение «команда vs обратная связь» (SCADA pattern)
+- `writeState`: `idle | pending | success | error` — отображается через CSS-классы `.active-*` на контейнере (стили в `style.css`)
+- `isInteractive()` — `false` в edit mode и при отсутствии controlToken
+- `requireConfirmation` — опция в config, по умолчанию выкл.
+- Override-точки в наследниках: `render()`, `renderCommand()`, `renderFeedback()`, `static getActiveConfigFields()`, `static parseActiveConfigFields()`
+
+**Generator engine:** общий движок `SignalGenerator` (`08-signal-generator.js`) переиспользуется
+IONC renderer'ом (`20-ionc-renderer.js`) и активным generator-виджетом (когда
+будет реализован).
+
+**E2E:** smoke-тест базового класса в `tests/single/dashboard-active-base.spec.ts`,
+использует `window.__DEBUG_REGISTER_TEST_WIDGET()` (debug-хук в конце
+`62-dashboard-manager.js`) для регистрации `TestActiveWidget` без
+production-регистрации в `WIDGET_TYPES`.
 
 ### Правила размещения кода
 
