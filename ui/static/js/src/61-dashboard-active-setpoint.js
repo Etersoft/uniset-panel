@@ -204,6 +204,12 @@ class SetpointWidget extends ActiveDashboardWidget {
     // ===== Style: stepper =====
     _renderStepper() {
         const unit = escapeHtml(this.config?.unit || '');
+        // Stepper не имеет Apply/Cancel кнопок — auto-apply on click +/- сразу
+        // отправляет POST. × cancel был добавлен раньше но оказался лишним:
+        // commandValue не «pending», команда уже ушла. Если оператор хочет
+        // вернуться — кликает обратное направление +/-. Esc на widget element
+        // всё ещё работает (через _cancel) — для случая когда юзер передумал
+        // через keyboard.
         this.element.innerHTML = `
             ${this._labelHtml()}
             <div class="setpoint-feedback" data-test="feedback"><strong data-test="feedback-value">--</strong>${unit ? '<span class="setpoint-unit">' + unit + '</span>' : ''}</div>
@@ -212,12 +218,10 @@ class SetpointWidget extends ActiveDashboardWidget {
                 <span class="setpoint-stepper-value" data-test="value" title="Двойной клик — точный ввод">--</span>
                 <button class="setpoint-step-btn" data-test="step-up" tabindex="-1">+</button>
             </div>
-            <button class="setpoint-cancel-btn" data-test="cancel-btn" title="Cancel (Esc) — return to feedback" tabindex="-1">×</button>
         `;
 
         const stepDown = this.element.querySelector('[data-test="step-down"]');
         const stepUp = this.element.querySelector('[data-test="step-up"]');
-        const cancelBtn = this.element.querySelector('[data-test="cancel-btn"]');
         const valueSpan = this.element.querySelector('[data-test="value"]');
         const step = this.config?.step ?? 1;
 
@@ -235,10 +239,8 @@ class SetpointWidget extends ActiveDashboardWidget {
         // — на Linux/Chrome preventDefault иногда пропускает фокус на 1 frame.
         stepDown.addEventListener('mousedown', (e) => e.preventDefault());
         stepUp.addEventListener('mousedown', (e) => e.preventDefault());
-        cancelBtn.addEventListener('mousedown', (e) => e.preventDefault());
         stepDown.addEventListener('click', (e) => { stepBy(-step, e); stepDown.blur(); });
         stepUp.addEventListener('click', (e) => { stepBy(step, e); stepUp.blur(); });
-        cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); this._cancel(); cancelBtn.blur(); });
 
         this._makeInlineEditable(valueSpan);
     }

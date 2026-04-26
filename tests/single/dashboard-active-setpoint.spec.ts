@@ -459,36 +459,14 @@ test.describe('SetpointWidget — fourth active widget', () => {
         expect(dirtyAfter).toBe(false);
     });
 
-    test('stepper has cancel button visible only in dirty state', async ({ page }) => {
+    test('stepper has NO cancel button (auto-apply on click — нет смысла)', async ({ page }) => {
         await createSetpointDashboard(page, { style: 'stepper' });
-        await page.evaluate(() => {
-            for (const [, w] of (window as any).dashboardState.widgets) {
-                w.feedbackValue = 4; w.renderFeedback();
-            }
-        });
-
-        // Initial: cancel hidden (no command pending)
-        let cancelDisplay = await page.evaluate(() => {
-            const btn = document.querySelector('[data-test="cancel-btn"]') as HTMLElement;
-            return getComputedStyle(btn).display;
-        });
-        expect(cancelDisplay).toBe('none');
-
-        // Click + → command pending → dirty → cancel visible
-        await page.evaluate(() => {
-            const plus = document.querySelector('[data-test="step-up"]') as HTMLElement;
-            plus.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-            plus.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-        });
-
-        cancelDisplay = await page.evaluate(() => {
-            const btn = document.querySelector('[data-test="cancel-btn"]') as HTMLElement;
-            return getComputedStyle(btn).display;
-        });
-        expect(cancelDisplay).not.toBe('none');
+        const cancelExists = await page.evaluate(() =>
+            !!document.querySelector('[data-test="cancel-btn"]'));
+        expect(cancelExists).toBe(false);
     });
 
-    test('stepper cancel button reverts command to feedback', async ({ page }) => {
+    test('stepper Esc (через widget keydown) возвращает к feedback', async ({ page }) => {
         await createSetpointDashboard(page, { style: 'stepper' });
         await page.evaluate(() => {
             for (const [, w] of (window as any).dashboardState.widgets) {
@@ -509,11 +487,11 @@ test.describe('SetpointWidget — fourth active widget', () => {
             document.querySelector('[data-test="value"]')?.textContent);
         expect(valueShown).toBe('7');
 
-        // Click × cancel button — should revert to feedback (4)
+        // Esc на widget container — _cancel revert
         await page.evaluate(() => {
-            const cancel = document.querySelector('[data-test="cancel-btn"]') as HTMLElement;
-            cancel.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-            cancel.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+            const widget = document.querySelector('.setpoint-widget') as HTMLElement;
+            widget.focus();
+            widget.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
         });
 
         valueShown = await page.evaluate(() =>

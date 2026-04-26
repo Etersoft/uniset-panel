@@ -182,6 +182,9 @@ class ActiveDashboardWidget extends DashboardWidget {
 
     // Toggles 'active-disabled' class and 'data-control-blocked' attr on the
     // widget container so CSS can show "click does nothing right now" state.
+    // Also sets `disabled` attribute on all form controls within this.element —
+    // native <input type=range> и <input type=text> игнорировали pointer-events:none
+    // (можно было drag'ать slider клавиатурой/keyboard). disabled — гарантия.
     _updateInteractivityClass() {
         const root = this.container;
         if (!root) return;
@@ -191,6 +194,12 @@ class ActiveDashboardWidget extends DashboardWidget {
             root.dataset.controlBlocked = 'true';
         } else {
             delete root.dataset.controlBlocked;
+        }
+        if (this.element) {
+            const formEls = this.element.querySelectorAll('input, select, button, textarea');
+            for (const el of formEls) {
+                el.disabled = !interactive;
+            }
         }
         this._recomputeTitle();
     }
@@ -244,10 +253,13 @@ class ActiveDashboardWidget extends DashboardWidget {
                 <small style="color:#6b7280">список загружается из /api/objects?type=IONotifyController</small>
             </div>
             <div class="widget-config-field">
-                <label>Sensor (autocomplete)</label>
-                <input type="text" class="widget-input" name="sensor" autocomplete="off"
-                       value="${escapeHtml(config.sensor || '')}" data-test="cfg-sensor">
-                <input type="hidden" name="sensorId" value="${config.sensorId ?? ''}" data-test="cfg-sensorId">
+                <label>Sensor</label>
+                <div class="sensor-select-wrap">
+                    <input type="text" class="widget-input sensor-select-input" name="sensor" autocomplete="off"
+                           placeholder="Click to select or type to search..."
+                           value="${escapeHtml(config.sensor || '')}" data-test="cfg-sensor">
+                    <input type="hidden" name="sensorId" value="${config.sensorId ?? ''}" data-test="cfg-sensorId">
+                </div>
             </div>
             ${styleSelect}
             <div class="widget-config-field">

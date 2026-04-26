@@ -69,5 +69,6 @@ const TIME_AGO_MINUTES_THRESHOLD = 60;
 const WRITE_PENDING_TIMEOUT_MS = 5000;
 
 // Сколько отображать состояние "success" (зелёный индикатор) после удачной записи,
-// прежде чем вернуться в idle.
-const WRITE_SUCCESS_DISPLAY_MS = 1500;
+// прежде чем вернуться в idle. Сделано короткой вспышкой — раньше 1500ms
+// читалось как «фокусная рамка осталась», теперь 400ms — мгновенный flash.
+const WRITE_SUCCESS_DISPLAY_MS = 400;

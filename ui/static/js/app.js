@@ -73,8 +73,9 @@ const TIME_AGO_MINUTES_THRESHOLD = 60;
 const WRITE_PENDING_TIMEOUT_MS = 5000;
 
 // Сколько отображать состояние "success" (зелёный индикатор) после удачной записи,
-// прежде чем вернуться в idle.
-const WRITE_SUCCESS_DISPLAY_MS = 1500;
+// прежде чем вернуться в idle. Сделано короткой вспышкой — раньше 1500ms
+// читалось как «фокусная рамка осталась», теперь 400ms — мгновенный flash.
+const WRITE_SUCCESS_DISPLAY_MS = 400;
 
 
 // === 00-state.js ===
@@ -16174,6 +16175,9 @@ class ActiveDashboardWidget extends DashboardWidget {
 
     // Toggles 'active-disabled' class and 'data-control-blocked' attr on the
     // widget container so CSS can show "click does nothing right now" state.
+    // Also sets `disabled` attribute on all form controls within this.element —
+    // native <input type=range> и <input type=text> игнорировали pointer-events:none
+    // (можно было drag'ать slider клавиатурой/keyboard). disabled — гарантия.
     _updateInteractivityClass() {
         const root = this.container;
         if (!root) return;
@@ -16183,6 +16187,12 @@ class ActiveDashboardWidget extends DashboardWidget {
             root.dataset.controlBlocked = 'true';
         } else {
             delete root.dataset.controlBlocked;
+        }
+        if (this.element) {
+            const formEls = this.element.querySelectorAll('input, select, button, textarea');
+            for (const el of formEls) {
+                el.disabled = !interactive;
+            }
         }
         this._recomputeTitle();
     }
@@ -16236,10 +16246,13 @@ class ActiveDashboardWidget extends DashboardWidget {
                 <small style="color:#6b7280">список загружается из /api/objects?type=IONotifyController</small>
             </div>
             <div class="widget-config-field">
-                <label>Sensor (autocomplete)</label>
-                <input type="text" class="widget-input" name="sensor" autocomplete="off"
-                       value="${escapeHtml(config.sensor || '')}" data-test="cfg-sensor">
-                <input type="hidden" name="sensorId" value="${config.sensorId ?? ''}" data-test="cfg-sensorId">
+                <label>Sensor</label>
+                <div class="sensor-select-wrap">
+                    <input type="text" class="widget-input sensor-select-input" name="sensor" autocomplete="off"
+                           placeholder="Click to select or type to search..."
+                           value="${escapeHtml(config.sensor || '')}" data-test="cfg-sensor">
+                    <input type="hidden" name="sensorId" value="${config.sensorId ?? ''}" data-test="cfg-sensorId">
+                </div>
             </div>
             ${styleSelect}
             <div class="widget-config-field">
@@ -17075,6 +17088,12 @@ class SetpointWidget extends ActiveDashboardWidget {
     // ===== Style: stepper =====
     _renderStepper() {
         const unit = escapeHtml(this.config?.unit || '');
+        // Stepper не имеет Apply/Cancel кнопок — auto-apply on click +/- сразу
+        // отправляет POST. × cancel был добавлен раньше но оказался лишним:
+        // commandValue не «pending», команда уже ушла. Если оператор хочет
+        // вернуться — кликает обратное направление +/-. Esc на widget element
+        // всё ещё работает (через _cancel) — для случая когда юзер передумал
+        // через keyboard.
         this.element.innerHTML = `
             ${this._labelHtml()}
             <div class="setpoint-feedback" data-test="feedback"><strong data-test="feedback-value">--</strong>${unit ? '<span class="setpoint-unit">' + unit + '</span>' : ''}</div>
@@ -17083,12 +17102,10 @@ class SetpointWidget extends ActiveDashboardWidget {
                 <span class="setpoint-stepper-value" data-test="value" title="Двойной клик — точный ввод">--</span>
                 <button class="setpoint-step-btn" data-test="step-up" tabindex="-1">+</button>
             </div>
-            <button class="setpoint-cancel-btn" data-test="cancel-btn" title="Cancel (Esc) — return to feedback" tabindex="-1">×</button>
         `;
 
         const stepDown = this.element.querySelector('[data-test="step-down"]');
         const stepUp = this.element.querySelector('[data-test="step-up"]');
-        const cancelBtn = this.element.querySelector('[data-test="cancel-btn"]');
         const valueSpan = this.element.querySelector('[data-test="value"]');
         const step = this.config?.step ?? 1;
 
@@ -17106,10 +17123,8 @@ class SetpointWidget extends ActiveDashboardWidget {
         // — на Linux/Chrome preventDefault иногда пропускает фокус на 1 frame.
         stepDown.addEventListener('mousedown', (e) => e.preventDefault());
         stepUp.addEventListener('mousedown', (e) => e.preventDefault());
-        cancelBtn.addEventListener('mousedown', (e) => e.preventDefault());
         stepDown.addEventListener('click', (e) => { stepBy(-step, e); stepDown.blur(); });
         stepUp.addEventListener('click', (e) => { stepBy(step, e); stepUp.blur(); });
-        cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); this._cancel(); cancelBtn.blur(); });
 
         this._makeInlineEditable(valueSpan);
     }

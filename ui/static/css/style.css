@@ -8703,11 +8703,46 @@ button.rotate-quick-btn:active {
     transition: opacity 0.15s, filter 0.15s;
 }
 
-.dashboard-widget.active-success,
-.dashboard-widget.transparent.active-success {
-    /* Кратковременная зелёная подсветка границы */
-    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.6) !important;
-    transition: box-shadow 0.2s;
+/* active-success — НЕ ставим box-shadow на весь widget container
+   (раньше выглядело как «фокусная рамка вокруг всего виджета»).
+   Вместо этого подсвечиваем сам элемент ввода — input/slider/track/button —
+   через child-selectors. Так оператор видит «команда от ЭТОГО элемента дошла»
+   без визуального шума на всём widget'е. */
+
+/* Setpoint — input style: рамка вокруг input */
+.dashboard-widget.active-success .setpoint-input {
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.7) !important;
+    transition: box-shadow 0.15s;
+}
+/* Setpoint — slider style: рамка вокруг slider */
+.dashboard-widget.active-success .setpoint-slider {
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.7) !important;
+    transition: box-shadow 0.15s;
+}
+/* Setpoint — stepper style: рамка вокруг кнопочного ряда */
+.dashboard-widget.active-success .setpoint-stepper-row {
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.7) !important;
+    transition: box-shadow 0.15s;
+}
+/* Toggle — slider style: track */
+.dashboard-widget.active-success .toggle-track {
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.7) !important;
+    transition: box-shadow 0.15s;
+}
+/* Toggle — checkbox style: квадратик */
+.dashboard-widget.active-success .toggle-cb {
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.7) !important;
+    transition: box-shadow 0.15s;
+}
+/* PushButton — кнопка */
+.dashboard-widget.active-success .pb-btn {
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.7) !important;
+    transition: box-shadow 0.15s;
+}
+/* Generator — toggle */
+.dashboard-widget.active-success .gen-toggle {
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.7) !important;
+    transition: box-shadow 0.15s;
 }
 
 .dashboard-widget.active-error,
@@ -8745,6 +8780,57 @@ button.rotate-quick-btn:active {
 .dashboard-widget.active-disabled .widget-content {
     pointer-events: none;
     cursor: not-allowed;
+}
+
+/* Active widgets — убираем все focus outlines (browser default :focus borders
+   на input/slider/button). В SCADA-context эти рамки выглядят как «помехи»
+   и не нужны: широта взаимодействия — мышь / touch. Disabled inputs от
+   `_updateInteractivityClass` уже не получают focus вообще, но для интерактивных
+   тоже глушим выделение. */
+.dashboard-widget[data-active-widget="true"] input:focus,
+.dashboard-widget[data-active-widget="true"] input:focus-visible,
+.dashboard-widget[data-active-widget="true"] button:focus,
+.dashboard-widget[data-active-widget="true"] button:focus-visible,
+.dashboard-widget[data-active-widget="true"] select:focus,
+.dashboard-widget[data-active-widget="true"] select:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+}
+/* Disabled inputs/buttons в active widgets — слегка прозрачные для явного
+   "выключенного" вида. Браузерный default делает их серыми, но комбинация
+   с opacity:0.6 родителя (active-disabled) даёт правильное чтение «inert». */
+.dashboard-widget[data-active-widget="true"] input:disabled,
+.dashboard-widget[data-active-widget="true"] button:disabled,
+.dashboard-widget[data-active-widget="true"] select:disabled {
+    cursor: not-allowed;
+}
+
+/* Sensor input в config dialog active widget'ов — добавляем визуальный
+   chevron справа чтобы оператор понял что это селектор из списка
+   (по клику открывается dropdown со всеми датчиками). Раньше выглядел
+   как обычный text input — было непонятно. */
+.sensor-select-wrap {
+    position: relative;
+    display: block;
+}
+.sensor-select-wrap .sensor-select-input {
+    width: 100%;
+    padding-right: 32px !important;
+    cursor: pointer;
+    box-sizing: border-box;
+}
+.sensor-select-wrap::after {
+    content: '';
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid #9ca3af;
+    pointer-events: none;
 }
 
 /* Индикатор расхождения command vs feedback (точка в углу виджета).
@@ -9239,12 +9325,6 @@ button.rotate-quick-btn:active {
 }
 .setpoint-widget.dirty .setpoint-stepper-value {
     color: #fbbf24;
-}
-/* Cancel × кнопка для stepper — показывается только в dirty state
-   (общее правило .setpoint-widget.dirty .setpoint-cancel-btn). */
-.setpoint-style-stepper .setpoint-cancel-btn {
-    margin-top: 4px;
-    align-self: center;
 }
 
 /* === Inline edit (общий для slider + stepper) === */
