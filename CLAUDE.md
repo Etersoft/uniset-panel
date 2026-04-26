@@ -239,6 +239,61 @@ make build
 | `00-state.js` | Глобальное состояние `state` |
 | `06-utils.js` | Утилиты: `escapeHtml()`, `debounce()` |
 | `10-base-renderer.js` | `BaseObjectRenderer`, все миксины (`FilterMixin`, `PinManagementMixin`, `ParamsManagerMixin` и др.) |
+| `08-signal-generator.js` | `SignalGenerator` — общий движок генерации сигналов (square/sin/cos/linear/random). Используется IONC renderer'ом и активным generator-виджетом dashboard'а |
+| `61-dashboard-active-base.js` | `ActiveDashboardWidget extends DashboardWidget` — базовый класс для write-capable виджетов dashboard'а |
+| `61-dashboard-active-toggle.js` | `ToggleWidget` — активный двух-состояный переключатель (DI/DO/AI/AO) |
+| `41-sensor-autocomplete.js` | `setupSensorAutocomplete(...)` — переиспользуемый IONC sensor selector с debounced search |
+
+### Active dashboard widgets
+
+Для записи значений в датчики из dashboard'а используется базовый класс
+`ActiveDashboardWidget` (`61-dashboard-active-base.js`). Конкретные активные
+виджеты (toggle/checkbox/button/setpoint/generator) реализуются в файлах
+**`61-dashboard-active-*.js`** (единый префикс гарантирует, что в lex-order
+конкатенации база загружается раньше наследников) и регистрируются в
+`WIDGET_TYPES` (`62-dashboard-manager.js`).
+
+**Контракт `ActiveDashboardWidget`:**
+- `writeValue(value)` — POST через `controlledFetch` на `/api/objects/{config.objectName}/ionc/set?server=...`
+  (default `objectName = 'SharedMemory'`, `sensor_id` берётся из `config.sensorId` с fallback на `config.sensor`)
+- `update(value, error)` — приходит от SSE через dashboard manager, обновляет `feedbackValue`
+- `commandValue` / `feedbackValue` — раздельное хранение «команда vs обратная связь» (SCADA pattern)
+- `writeState`: `idle | pending | success | error` — отображается через CSS-классы `.active-*` на контейнере (стили в `style.css`)
+- `isInteractive()` — `false` в edit mode и при отсутствии controlToken
+- `_updateInteractivityClass()` — реактивно обновляет `active-disabled` класс и `data-control-blocked` атрибут
+  по событиям `dashboardEditModeChanged` / `controlStatusChanged` (dispatched из dashboard-manager и control модулей)
+- `_recomputeTitle()` — единая точка владения tooltip'ом: приоритет `error message > 'Take control to interact' > пусто`
+- `requireConfirmation` — опция в config, по умолчанию выкл.
+- Override-точки в наследниках: `render()`, `renderCommand()`, `renderFeedback()`, `static getActiveConfigFields()`, `static parseActiveConfigFields()` (или весь `parseConfigForm()` если форма требует кастомного парсинга)
+
+**CSS-маркер:** dashboard-manager в `createWidget` выставляет `container.dataset.activeWidget = 'true'`
+для всех `widget instanceof ActiveDashboardWidget`. CSS правила (edit-mode grayscale, active-disabled)
+используют селектор `[data-active-widget="true"]` — развязаны от конкретных имён типов.
+
+**ToggleWidget (`61-dashboard-active-toggle.js`):** двух-состояный переключатель для DI/DO/AI/AO датчиков.
+Конфиг: `objectName` (IONC объект), `sensorId` (числовой ID), `valueOff`/`valueOn` (любые числа),
+`labelOff`/`labelOn` (текстовые подписи). Композиция: цвет track = feedback от сервера, позиция
+handle = последняя команда; жёлтая граница при расхождении command vs feedback; серый «unknown»
+при feedback ≠ valueOn ≠ valueOff (типично для AI/AO — фактическое число показывается в `title` tooltip).
+
+**Sensor autocomplete (`41-sensor-autocomplete.js`):** утилита
+`setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId)` — debounce 150ms,
+dropdown с keyboard navigation (↑↓/Enter/Esc), сохраняет (name, id) пару. Используется
+в config-формах активных widget'ов. При смене IONC объекта — `resetOnObjectChange()`
+обнуляет выбор.
+
+**Backend для UI:** `GET /api/objects?server=ID&type=IONotifyController` — отфильтрованный
+по типу список объектов с метаданными `[{name, objectType}]`. Без `type` — back-compat
+плоский список имён.
+
+**Generator engine:** общий движок `SignalGenerator` (`08-signal-generator.js`) переиспользуется
+IONC renderer'ом (`20-ionc-renderer.js`) и активным generator-виджетом (когда будет реализован).
+
+**E2E:** smoke-тест базового класса в `tests/single/dashboard-active-base.spec.ts`
+(использует `window.__DEBUG_REGISTER_TEST_WIDGET()` debug-хук). E2E ToggleWidget'а
+в `tests/single/dashboard-active-toggle.spec.ts` (8 сценариев: write-flow, состояния
+fb-on/off/unknown/diverge, custom labels, edit-mode block, control-token block,
+custom objectName routing).
 
 ### Правила размещения кода
 

@@ -8672,3 +8672,156 @@ button.rotate-quick-btn:active {
 .sidebar.collapsed #sidebar-groups {
     display: none;
 }
+
+/* ============================================================================
+ * Active dashboard widgets — состояния записи
+ * ============================================================================ */
+
+.dashboard-widget.active-pending {
+    /* Полупрозрачность во время POST */
+    opacity: 0.7;
+    filter: grayscale(0.3);
+    transition: opacity 0.15s, filter 0.15s;
+}
+
+.dashboard-widget.active-success {
+    /* Кратковременная зелёная подсветка границы */
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.6);
+    transition: box-shadow 0.2s;
+}
+
+.dashboard-widget.active-error {
+    /* Постоянная красная подсветка до следующей попытки */
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.8);
+    transition: box-shadow 0.2s;
+}
+
+/* В edit mode активные виджеты обесцвечиваются — пользователь видит,
+   что клики не записывают, а открывают конфиг. */
+.dashboard-grid.edit-mode .dashboard-widget[data-active-widget="true"] {
+    filter: grayscale(0.5);
+    opacity: 0.85;
+}
+
+/* Когда controlToken не активен / edit mode — визуально блокированный виджет. */
+.dashboard-widget[data-active-widget="true"][data-control-blocked="true"],
+.dashboard-widget.active-disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* Индикатор расхождения command vs feedback (точка в углу виджета).
+   Конкретные виджеты могут позиционировать .command-feedback-dot внутри
+   через свой layout. По умолчанию — справа сверху. */
+.command-feedback-dot {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #6b7280;          /* серый — нет команды / совпадает */
+    pointer-events: none;
+}
+.command-feedback-dot.match    { background: #22c55e; }   /* зелёный — feedback совпал с command */
+.command-feedback-dot.diverge  { background: #f59e0b; }   /* жёлтый — расхождение */
+.command-feedback-dot.errored  { background: #ef4444; }   /* красный — последняя запись с ошибкой */
+
+/* ============================================================================
+ * Sensor autocomplete dropdown (used by active widgets config form)
+ * ============================================================================ */
+.sensor-autocomplete-dropdown {
+    background: #0f172a;
+    border: 1px solid #4b5563;
+    border-radius: 4px;
+    max-height: 240px;
+    overflow-y: auto;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+}
+.sensor-autocomplete-item {
+    padding: 6px 10px;
+    cursor: pointer;
+    border-bottom: 1px solid #1f2937;
+}
+.sensor-autocomplete-item:hover,
+.sensor-autocomplete-item.active {
+    background: #1e3a5f;
+}
+.sensor-autocomplete-name {
+    color: #d8dce2;
+    font-size: 13px;
+    font-weight: 500;
+}
+.sensor-autocomplete-meta {
+    color: #9ca3af;
+    font-size: 10px;
+    margin-top: 2px;
+}
+.sensor-autocomplete-empty {
+    padding: 10px;
+    color: #6b7280;
+    font-size: 12px;
+    text-align: center;
+}
+
+/* ============================================================================
+ * ToggleWidget
+ * ============================================================================ */
+
+.toggle-widget {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 100%;
+    cursor: pointer;
+}
+
+.toggle-widget .toggle-name {
+    font-size: 13px;
+    color: #d8dce2;
+    font-weight: 600;
+    text-align: center;
+}
+
+.toggle-widget .toggle-track {
+    width: 72px;
+    height: 32px;
+    border-radius: 16px;
+    position: relative;
+    transition: background 0.15s, box-shadow 0.2s;
+}
+
+.toggle-widget .toggle-track .toggle-handle {
+    position: absolute;
+    top: 2px;
+    width: 28px;
+    height: 28px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,.4);
+    transition: left 0.15s;
+}
+
+.toggle-widget .toggle-track[data-handle-pos="left"]  .toggle-handle { left: 2px; }
+.toggle-widget .toggle-track[data-handle-pos="right"] .toggle-handle { left: 42px; }
+
+.toggle-widget .toggle-track.fb-on      { background: #22c55e; }
+.toggle-widget .toggle-track.fb-off     { background: #374151; border: 1px solid #4b5563; }
+.toggle-widget .toggle-track.fb-unknown { background: #1f2937; border: 1px dashed #6b7280; }
+
+.toggle-widget .toggle-track.diverge {
+    box-shadow: 0 0 0 2px #f59e0b, 0 0 8px rgba(245,158,11,0.4);
+}
+
+.toggle-widget .toggle-state-text {
+    font-size: 11px;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+@media (max-height: 80px) {
+    .toggle-widget .toggle-state-text { display: none; }
+}

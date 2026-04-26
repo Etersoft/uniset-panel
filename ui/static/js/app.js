@@ -65,6 +65,17 @@ const DEFAULT_CHART_TIME_RANGE = 900;
 const TIME_AGO_MIN_SECONDS = 5;
 const TIME_AGO_MINUTES_THRESHOLD = 60;
 
+// ============================================================================
+// Active dashboard widgets — состояния записи
+// ============================================================================
+
+// Сколько ждать ответа от POST /ionc/set до показа состояния error.
+const WRITE_PENDING_TIMEOUT_MS = 5000;
+
+// Сколько отображать состояние "success" (зелёный индикатор) после удачной записи,
+// прежде чем вернуться в idle.
+const WRITE_SUCCESS_DISPLAY_MS = 1500;
+
 
 // === 00-state.js ===
 // Идентификатор сервера для SharedMemory (SM) событий
@@ -287,13 +298,28 @@ function canControl() {
 
 // Обновление статуса контроля из данных сервера
 function updateControlStatus(status) {
+    // Equality check — control_status SSE event прилетает на каждом poll,
+    // не имеет смысла пересчитывать UI и dispatch'ить controlStatusChanged
+    // если ничего по существу не изменилось (особенно важно для активных
+    // widget'ов: каждый делает DOM mutations в _updateInteractivityClass).
+    const changed =
+        state.control.enabled       !== status.enabled       ||
+        state.control.hasController !== status.hasController ||
+        state.control.isController  !== status.isController;
+
     state.control.enabled = status.enabled;
     state.control.hasController = status.hasController;
     state.control.isController = status.isController;
     state.control.timeoutSec = status.timeoutSec || 60;
 
+    if (!changed) return;
+
     updateControlUI();
     updateAllControlButtons();
+    // Notify active dashboard widgets so they can refresh their interactivity class.
+    document.dispatchEvent(new CustomEvent('controlStatusChanged', {
+        detail: { ...state.control }
+    }));
 }
 
 // Обновление UI контроля (компактный индикатор в шапке)
@@ -1401,6 +1427,148 @@ function debounce(fn, delay) {
         timer = setTimeout(() => fn.apply(this, args), delay);
     };
 }
+
+
+// === 08-signal-generator.js ===
+// ============================================================================
+// SignalGenerator — общий движок генерации сигналов
+// (square/sin/cos/linear/random) с lifecycle тиков.
+//
+// Используется IONC renderer'ом (20-ionc-renderer.js) и активными виджетами
+// dashboard'а (61-active-generator.js).
+//
+// Контракт: pure value-functions + setInterval-менеджер + onTick колбэк.
+// ============================================================================
+
+class SignalGenerator {
+    /**
+     * @param {Object} cfg
+     * @param {string} cfg.type   'square' | 'sin' | 'cos' | 'linear' | 'random'
+     * @param {number} cfg.min
+     * @param {number} cfg.max
+     * @param {number} [cfg.step]         для linear/sin/cos
+     * @param {number} [cfg.pause]        для linear/sin/cos/square (мс)
+     * @param {number} [cfg.pulseWidth]   для square (мс)
+     * @param {number} [cfg.period]       для random (мс)
+     * @param {Function} cfg.onTick       (value) => void
+     */
+    constructor(cfg) {
+        this.type = cfg.type;
+        this.min = cfg.min;
+        this.max = cfg.max;
+        this.step = cfg.step;
+        this.pause = cfg.pause;
+        this.pulseWidth = cfg.pulseWidth;
+        this.period = cfg.period;
+        this.onTick = cfg.onTick;
+
+        this.intervalId = null;
+        this.startTime = 0;
+    }
+
+    // Интервал обновления подбирается по типу — ~20 обновлений за период.
+    computeUpdateInterval() {
+        if (this.type === 'square') {
+            return Math.max(50, Math.floor((this.pulseWidth + this.pause) / 20));
+        }
+        if (this.type === 'linear' || this.type === 'sin' || this.type === 'cos') {
+            return Math.min(this.pause, 50);
+        }
+        // random
+        return Math.max(50, Math.floor(this.period / 20));
+    }
+
+    // Чистая функция — текущее значение по elapsed-ms от startTime.
+    computeValue(elapsed) {
+        const range = this.max - this.min;
+        let value;
+
+        switch (this.type) {
+            case 'sin':
+            case 'cos': {
+                const numPoints = this.step;
+                const fullCycle = numPoints * this.pause;
+                const positionInCycle = elapsed % fullCycle;
+                const pointIndex = Math.floor(positionInCycle / this.pause);
+                const phase = (pointIndex / numPoints) * 2 * Math.PI;
+                const wave = this.type === 'sin' ? Math.sin(phase) : Math.cos(phase);
+                value = Math.round(this.min + (wave + 1) / 2 * range);
+                break;
+            }
+            case 'linear': {
+                const absStep = Math.abs(this.step);
+                const numStepsFirst = Math.floor(range / absStep) + 1;
+                const numStepsSecond = Math.floor(range / absStep) - 1;
+                const totalSteps = numStepsFirst + numStepsSecond;
+                const fullCycle = totalSteps * this.pause;
+                const positionInCycle = elapsed % fullCycle;
+                const stepNumber = Math.floor(positionInCycle / this.pause);
+
+                if (this.step > 0) {
+                    if (stepNumber < numStepsFirst) {
+                        value = this.min + stepNumber * absStep;
+                    } else {
+                        const downStepNumber = stepNumber - numStepsFirst;
+                        value = this.max - (downStepNumber + 1) * absStep;
+                    }
+                } else {
+                    if (stepNumber < numStepsFirst) {
+                        value = this.max - stepNumber * absStep;
+                    } else {
+                        const upStepNumber = stepNumber - numStepsFirst;
+                        value = this.min + (upStepNumber + 1) * absStep;
+                    }
+                }
+                break;
+            }
+            case 'random': {
+                value = Math.round(this.min + Math.random() * range);
+                break;
+            }
+            case 'square': {
+                const totalPeriod = this.pulseWidth + this.pause;
+                const positionInCycle = elapsed % totalPeriod;
+                value = positionInCycle < this.pulseWidth ? this.max : this.min;
+                break;
+            }
+            default:
+                value = this.min;
+        }
+
+        return Math.max(this.min, Math.min(this.max, value));
+    }
+
+    start() {
+        if (this.intervalId !== null) return; // уже запущен
+        this.startTime = Date.now();
+
+        const tick = () => {
+            const value = this.computeValue(Date.now() - this.startTime);
+            try {
+                this.onTick(value);
+            } catch (e) {
+                console.error('SignalGenerator: onTick error', e);
+            }
+        };
+
+        this.intervalId = setInterval(tick, this.computeUpdateInterval());
+        tick(); // первое значение сразу
+    }
+
+    stop() {
+        if (this.intervalId !== null) {
+            clearInterval(this.intervalId);
+            this.intervalId = null;
+        }
+    }
+
+    isRunning() {
+        return this.intervalId !== null;
+    }
+}
+
+// Экспорт в глобальную область (соответствует style остальных файлов src/)
+window.SignalGenerator = SignalGenerator;
 
 
 // === 10-base-renderer.js ===
@@ -4485,33 +4653,24 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         // Останавливаем существующий генератор если есть
         this.stopGenerator(sensorId);
 
-        const startTime = Date.now();
-        const self = this;
-        const objectName = this.objectName;
+        const generator = new SignalGenerator({
+            type, min, max, step, pause, pulseWidth, period,
+            onTick: (value) => {
+                this.setValueForGenerator(sensorId, value);
+            }
+        });
 
-        // Интервал обновления: ~20 обновлений за период для плавности
-        let updateInterval;
-        if (type === 'square') {
-            updateInterval = Math.max(50, Math.floor((pulseWidth + pause) / 20));
-        } else if (type === 'linear' || type === 'sin' || type === 'cos') {
-            // Для linear/sin/cos: обновляем с частотой паузы (или чаще для плавности)
-            updateInterval = Math.min(pause, 50);
-        } else {
-            // random
-            updateInterval = Math.max(50, Math.floor(period / 20));
-        }
-
-        // Состояние генератора (разные поля для разных типов)
+        // Сохраняем минимальное состояние для UI (тип для setChartStepped,
+        // параметры для отображения в "active generator" баннере и сохранения preferences).
         const genState = {
             sensorId,
             type,
             min,
             max,
-            startTime,
-            intervalId: null
+            generator,        // ссылка на SignalGenerator — будет stop()'нута в stopGenerator
         };
 
-        // Добавляем специфичные для типа параметры
+        // Тип-специфичные параметры — для отображения и сохранения preferences
         if (type === 'linear' || type === 'sin' || type === 'cos') {
             genState.pause = pause;
             genState.step = step;
@@ -4519,98 +4678,10 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             genState.pulseWidth = pulseWidth;
             genState.pause = pause;
         } else {
-            // random
             genState.period = period;
         }
 
-        // Функция генерации значения
-        const generateValue = () => {
-            const elapsed = Date.now() - genState.startTime;
-            let value;
-            const range = max - min;
-
-            switch (type) {
-                case 'sin':
-                case 'cos': {
-                    // Синусоида/косинусоида с заданным количеством точек
-                    // genState.step = количество точек на период
-                    // genState.pause = шаг обновления (мс)
-                    const numPoints = genState.step;
-                    const fullCycle = numPoints * genState.pause;
-                    const positionInCycle = elapsed % fullCycle;
-                    const pointIndex = Math.floor(positionInCycle / genState.pause);
-
-                    // Фаза от 0 до 2π
-                    const phase = (pointIndex / numPoints) * 2 * Math.PI;
-
-                    // Синус/косинус от -1 до 1
-                    const wave = type === 'sin' ? Math.sin(phase) : Math.cos(phase);
-
-                    // Масштабируем к диапазону min..max
-                    value = Math.round(min + (wave + 1) / 2 * range);
-                    break;
-                }
-                case 'linear': {
-                    // Пилообразный с шагом-инкрементом и паузой (как в SImitator)
-                    // Положительный шаг: min -> max -> min (начинаем с min, идём вверх)
-                    // Отрицательный шаг: max -> min -> max (начинаем с max, идём вниз)
-                    const absStep = Math.abs(genState.step);
-                    const numStepsFirst = Math.floor(range / absStep) + 1;
-                    const numStepsSecond = Math.floor(range / absStep) - 1;
-                    const totalSteps = numStepsFirst + numStepsSecond;
-                    const fullCycle = totalSteps * genState.pause;
-                    const positionInCycle = elapsed % fullCycle;
-                    const stepNumber = Math.floor(positionInCycle / genState.pause);
-
-                    if (genState.step > 0) {
-                        // Положительный шаг: min -> max -> min
-                        if (stepNumber < numStepsFirst) {
-                            // Вверх: min -> max
-                            value = min + stepNumber * absStep;
-                        } else {
-                            // Вниз: max-step -> min+step (НЕ включая min)
-                            const downStepNumber = stepNumber - numStepsFirst;
-                            value = max - (downStepNumber + 1) * absStep;
-                        }
-                    } else {
-                        // Отрицательный шаг: max -> min -> max
-                        if (stepNumber < numStepsFirst) {
-                            // Вниз: max -> min
-                            value = max - stepNumber * absStep;
-                        } else {
-                            // Вверх: min+step -> max-step (НЕ включая max)
-                            const upStepNumber = stepNumber - numStepsFirst;
-                            value = min + (upStepNumber + 1) * absStep;
-                        }
-                    }
-                    break;
-                }
-                case 'random': {
-                    value = Math.round(min + Math.random() * range);
-                    break;
-                }
-                case 'square': {
-                    // Прямоугольный с настраиваемой скважностью
-                    const totalPeriod = genState.pulseWidth + genState.pause;
-                    const positionInCycle = elapsed % totalPeriod;
-                    value = positionInCycle < genState.pulseWidth ? max : min;
-                    break;
-                }
-                default:
-                    value = min;
-            }
-
-            // Ограничиваем значение
-            value = Math.max(min, Math.min(max, value));
-
-            // Отправляем в API
-            self.setValueForGenerator(sensorId, value);
-        };
-
-        // Запускаем интервал
-        genState.intervalId = setInterval(generateValue, updateInterval);
-
-        // Сохраняем состояние генератора
+        generator.start();
         this.activeGenerators.set(sensorId, genState);
 
         // Для square генератора включаем stepped режим на графике (меандр)
@@ -4620,9 +4691,6 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         // Перерисовываем строку для отображения индикатора
         this.reRenderSensorRow(sensorId);
-
-        // Запускаем сразу
-        generateValue();
 
         // Сохраняем preferences (разные параметры для разных типов)
         let params = { min, max };
@@ -4657,7 +4725,9 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     stopGenerator(sensorId) {
         const genState = this.activeGenerators.get(sensorId);
         if (genState) {
-            clearInterval(genState.intervalId);
+            if (genState.generator) {
+                genState.generator.stop();
+            }
 
             // Возвращаем stepped режим к значению по умолчанию (isDiscrete)
             if (genState.type === 'square') {
@@ -4670,8 +4740,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     stopAllGenerators() {
-        this.activeGenerators.forEach((genState, sensorId) => {
-            clearInterval(genState.intervalId);
+        this.activeGenerators.forEach((genState) => {
+            if (genState.generator) genState.generator.stop();
         });
         this.activeGenerators.clear();
     }
@@ -12906,6 +12976,163 @@ async function fetchSensorsForServer(serverId) {
 // UI функции
 
 
+// === 41-sensor-autocomplete.js ===
+// ============================================================================
+// setupSensorAutocomplete — переиспользуемый IONC sensor selector.
+//
+// Привязывается к input'у. По вводу — debounce, fetch к
+// /api/objects/{objectName}/ionc/sensors?server=...&search=...&limit=20,
+// показывает выпадающий suggest. Клик/Enter — подставляет name + сохраняет
+// числовой id в hidden input. Стрелки ↑↓ — навигация. Esc — закрыть.
+// При смене objectName (через resetOnObjectChange()) — очищает выбор.
+// ============================================================================
+
+const SENSOR_AUTOCOMPLETE_DEBOUNCE_MS = 150;
+const SENSOR_AUTOCOMPLETE_LIMIT = 20;
+
+function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId) {
+    if (!inputEl) return null;
+
+    let dropdown = null;
+    let debounceTimer = null;
+    let activeIndex = -1;
+    let currentItems = [];
+
+    function destroyDropdown() {
+        if (dropdown) {
+            dropdown.remove();
+            dropdown = null;
+        }
+        activeIndex = -1;
+        currentItems = [];
+    }
+
+    function buildDropdown() {
+        destroyDropdown();
+        dropdown = document.createElement('div');
+        dropdown.className = 'sensor-autocomplete-dropdown';
+        // Положение — fixed с подсчётом координат относительно input'а.
+        const rect = inputEl.getBoundingClientRect();
+        dropdown.style.position = 'fixed';
+        dropdown.style.left = `${rect.left}px`;
+        dropdown.style.top = `${rect.bottom + 2}px`;
+        dropdown.style.width = `${rect.width}px`;
+        dropdown.style.zIndex = '10000';
+        document.body.appendChild(dropdown);
+    }
+
+    function renderItems(items) {
+        if (!dropdown) return;
+        currentItems = items;
+        if (items.length === 0) {
+            dropdown.innerHTML = '<div class="sensor-autocomplete-empty">Не найдено</div>';
+            return;
+        }
+        dropdown.innerHTML = items.map((s, idx) => `
+            <div class="sensor-autocomplete-item ${idx === activeIndex ? 'active' : ''}"
+                 data-idx="${idx}"
+                 data-id="${s.id}"
+                 data-name="${escapeHtml(s.name)}">
+                <div class="sensor-autocomplete-name">${escapeHtml(s.name)}</div>
+                <div class="sensor-autocomplete-meta">id=${s.id} · type=${escapeHtml(s.type || '?')} · value=${s.value ?? '—'}</div>
+            </div>
+        `).join('');
+        dropdown.querySelectorAll('.sensor-autocomplete-item').forEach(el => {
+            el.addEventListener('mousedown', (e) => {
+                e.preventDefault(); // prevent input blur before we read values
+                pickItem(parseInt(el.dataset.idx, 10));
+            });
+        });
+    }
+
+    function pickItem(idx) {
+        const item = currentItems[idx];
+        if (!item) return;
+        inputEl.value = item.name;
+        if (hiddenIdEl) hiddenIdEl.value = String(item.id);
+        destroyDropdown();
+    }
+
+    async function fetchAndShow(searchText) {
+        const objectName = (getObjectName && getObjectName()) || 'SharedMemory';
+        const serverId = (getServerId && getServerId()) || '';
+        if (!serverId) {
+            buildDropdown();
+            renderItems([]);
+            return;
+        }
+        try {
+            const url = `/api/objects/${encodeURIComponent(objectName)}/ionc/sensors`
+                + `?server=${encodeURIComponent(serverId)}`
+                + (searchText ? `&search=${encodeURIComponent(searchText)}` : '')
+                + `&limit=${SENSOR_AUTOCOMPLETE_LIMIT}`;
+            const resp = await fetch(url);
+            if (!resp.ok) {
+                buildDropdown();
+                renderItems([]);
+                return;
+            }
+            const data = await resp.json();
+            const items = data.sensors || [];
+            buildDropdown();
+            activeIndex = -1;
+            renderItems(items);
+        } catch (e) {
+            console.warn('sensor autocomplete fetch failed:', e);
+        }
+    }
+
+    inputEl.addEventListener('focus', () => {
+        fetchAndShow(inputEl.value.trim());
+    });
+
+    inputEl.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => fetchAndShow(inputEl.value.trim()),
+            SENSOR_AUTOCOMPLETE_DEBOUNCE_MS);
+    });
+
+    inputEl.addEventListener('keydown', (e) => {
+        if (!dropdown || currentItems.length === 0) return;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            activeIndex = Math.min(activeIndex + 1, currentItems.length - 1);
+            renderItems(currentItems);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            activeIndex = Math.max(activeIndex - 1, 0);
+            renderItems(currentItems);
+        } else if (e.key === 'Enter') {
+            if (activeIndex >= 0) {
+                e.preventDefault();
+                pickItem(activeIndex);
+            }
+        } else if (e.key === 'Escape') {
+            destroyDropdown();
+        }
+    });
+
+    inputEl.addEventListener('blur', () => {
+        // Delay so click on dropdown item fires first (mousedown handler runs).
+        setTimeout(destroyDropdown, 150);
+    });
+
+    return {
+        // Каллер вызывает при смене IONC объекта в форме конфига.
+        resetOnObjectChange() {
+            inputEl.value = '';
+            if (hiddenIdEl) hiddenIdEl.value = '';
+            destroyDropdown();
+        },
+        destroy() {
+            destroyDropdown();
+        }
+    };
+}
+
+window.setupSensorAutocomplete = setupSensorAutocomplete;
+
+
 // === 50-ui-tabs.js ===
 function renderObjectsList(data) {
     const list = document.getElementById('objects-list');
@@ -15760,6 +15987,494 @@ class DashboardWidget {
 // Gauge Widget (SVG)
 // ============================================================================
 
+
+
+// === 61-dashboard-active-base.js ===
+// ============================================================================
+// ActiveDashboardWidget — базовый класс для активных (write-capable) виджетов.
+//
+// Наследуется от DashboardWidget. Добавляет:
+//   - writeValue(value): запись через controlledFetch на /api/objects/.../ionc/set
+//   - writeState: 'idle' | 'pending' | 'success' | 'error'
+//   - commandValue: последняя команда, отправленная пользователем
+//   - feedbackValue: текущее значение датчика от сервера (= this.value базового класса)
+//   - isInteractive(): false в edit mode
+//   - needsConfirmation(): читает config.requireConfirmation
+//   - getConfigForm()/parseConfigForm(): расширяемые через
+//     getActiveConfigFields()/parseActiveConfigFields() в наследниках
+//
+// Конкретные виджеты (toggle/checkbox/button/setpoint/generator) реализуются
+// в отдельных файлах 61-active-*.js и регистрируются в WIDGET_TYPES.
+// ============================================================================
+
+class ActiveDashboardWidget extends DashboardWidget {
+    static type = 'active-base';
+    static displayName = 'Active Widget (base)';
+    static description = 'Base class for write-capable widgets';
+
+    constructor(id, config, container) {
+        super(id, config, container);
+        this.commandValue = null;
+        this.feedbackValue = null;
+        this.writeState = 'idle';
+        this._writeStateTimer = null;
+        this._pendingTimeoutTimer = null;
+
+        // Reactive interactivity: refresh active-disabled класс when edit mode
+        // or controlToken state changes.
+        this._interactivityListener = () => this._updateInteractivityClass();
+        document.addEventListener('dashboardEditModeChanged', this._interactivityListener);
+        document.addEventListener('controlStatusChanged', this._interactivityListener);
+    }
+
+    // ===== SSE feedback =====
+    update(value, error = null) {
+        this.feedbackValue = value;
+        this.value = value;
+        this.error = error;
+        this.renderFeedback();
+    }
+
+    // ===== Write =====
+    async writeValue(value) {
+        if (!this.isInteractive()) return;
+        if (this.needsConfirmation() && !await this._confirm(value)) return;
+
+        this.commandValue = value;
+        this._setWriteState('pending');
+
+        // sensorId — числовой ID, должен быть резолвлен заранее (autocomplete сохраняет
+        // его в config). config.sensor (имя) — fallback для smoke TestActiveWidget'а.
+        const sensorId = this.config?.sensorId ?? this.config?.sensor;
+        if (sensorId === undefined || sensorId === null || sensorId === '') {
+            this._setWriteState('error', 'Sensor not configured');
+            return;
+        }
+
+        const serverId = this._resolveServerId();
+        if (!serverId) {
+            this._setWriteState('error', 'No connected server');
+            return;
+        }
+
+        const objectName = this.config?.objectName || 'SharedMemory';
+        const url = `/api/objects/${encodeURIComponent(objectName)}/ionc/set?server=${encodeURIComponent(serverId)}`;
+        try {
+            const resp = await controlledFetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sensor_id: sensorId, value })
+            });
+            if (!resp.ok) {
+                const data = await resp.json().catch(() => ({}));
+                this._setWriteState('error', data.error || `HTTP ${resp.status}`);
+                return;
+            }
+            this._setWriteState('success');
+        } catch (e) {
+            this._setWriteState('error', e.message);
+        }
+    }
+
+    // ===== State helpers =====
+    _setWriteState(state, message = '') {
+        this.writeState = state;
+        this._lastWriteMessage = message;
+
+        // Обновить CSS-классы контейнера виджета
+        const root = this.container;
+        if (root) {
+            root.classList.remove('active-pending', 'active-success', 'active-error');
+            if (state !== 'idle') {
+                root.classList.add(`active-${state}`);
+            }
+            this._recomputeTitle();
+        }
+
+        // Очистить предыдущие таймеры
+        clearTimeout(this._writeStateTimer);
+        clearTimeout(this._pendingTimeoutTimer);
+        this._writeStateTimer = null;
+        this._pendingTimeoutTimer = null;
+
+        if (state === 'pending') {
+            // Защитный таймаут — если сервер молчит, переводим в error.
+            this._pendingTimeoutTimer = setTimeout(() => {
+                if (this.writeState === 'pending') {
+                    this._setWriteState('error', 'Write timed out');
+                }
+            }, WRITE_PENDING_TIMEOUT_MS);
+        } else if (state === 'success') {
+            // Через WRITE_SUCCESS_DISPLAY_MS возвращаемся в idle.
+            this._writeStateTimer = setTimeout(() => {
+                if (this.writeState === 'success') {
+                    this._setWriteState('idle');
+                }
+            }, WRITE_SUCCESS_DISPLAY_MS);
+        }
+
+        // command может зависеть от state (например opacity).
+        // Guard: _setWriteState может вызываться до render() (writeValue может фейлиться синхронно).
+        if (this.element) this.renderCommand();
+    }
+
+    // ===== Edit-mode / control gating =====
+    isInteractive() {
+        if (typeof dashboardState !== 'undefined' && dashboardState.editMode) return false;
+        if (typeof canControl === 'function' && !canControl()) return false;
+        return true;
+    }
+
+    // Единая точка владения title. Приоритет:
+    //   1. write error message (пока активен writeState='error')
+    //   2. control-blocked / edit-mode → 'Take control to interact'
+    //   3. пусто
+    // Вызывается из _setWriteState и _updateInteractivityClass — так оба источника
+    // не затирают друг друга и пользователь видит самую релевантную информацию.
+    _recomputeTitle() {
+        const root = this.container;
+        if (!root) return;
+        if (this.writeState === 'error' && this._lastWriteMessage) {
+            root.title = this._lastWriteMessage;
+            return;
+        }
+        if (!this.isInteractive()) {
+            root.title = 'Take control to interact';
+            return;
+        }
+        root.removeAttribute('title');
+    }
+
+    // Toggles 'active-disabled' class and 'data-control-blocked' attr on the
+    // widget container so CSS can show "click does nothing right now" state.
+    _updateInteractivityClass() {
+        const root = this.container;
+        if (!root) return;
+        const interactive = this.isInteractive();
+        root.classList.toggle('active-disabled', !interactive);
+        if (!interactive) {
+            root.dataset.controlBlocked = 'true';
+        } else {
+            delete root.dataset.controlBlocked;
+        }
+        this._recomputeTitle();
+    }
+
+    needsConfirmation() {
+        return !!this.config?.requireConfirmation;
+    }
+
+    async _confirm(value) {
+        // Простой confirm — конкретные виджеты могут override на красивый dialog.
+        return window.confirm(`Set ${this.config?.sensor || 'sensor'} = ${value}?`);
+    }
+
+    _resolveServerId() {
+        // Берём первый подключённый сервер (как делает dashboard для чтения).
+        if (typeof state === 'undefined' || !state.servers) return null;
+        for (const [id, server] of state.servers) {
+            if (server.connected) return id;
+        }
+        return null;
+    }
+
+    // ===== Render hooks (override в наследниках) =====
+    renderCommand() {
+        // Override: показать commandValue в DOM.
+    }
+
+    renderFeedback() {
+        // Override: показать feedbackValue в DOM.
+    }
+
+    // ===== Config form extension =====
+    static getConfigForm(config = {}) {
+        const baseFields = `
+            <div class="widget-config-field">
+                <label>Sensor</label>
+                <input type="text" class="widget-input" name="sensor"
+                       value="${escapeHtml(config.sensor || '')}"
+                       placeholder="Type to search..." autocomplete="off">
+            </div>
+            <div class="widget-config-field">
+                <label>Label</label>
+                <input type="text" class="widget-input" name="label"
+                       value="${escapeHtml(config.label || '')}" placeholder="Display label">
+            </div>
+            <div class="widget-config-field">
+                <label class="widget-checkbox-label">
+                    <input type="checkbox" name="requireConfirmation"
+                           ${config.requireConfirmation ? 'checked' : ''}>
+                    <span>Require confirmation before write</span>
+                </label>
+            </div>
+        `;
+        return baseFields + (this.getActiveConfigFields ? this.getActiveConfigFields(config) : '');
+    }
+
+    static getActiveConfigFields(config = {}) {
+        // Override: дополнительные поля специфичные для виджета.
+        return '';
+    }
+
+    static parseConfigForm(form) {
+        const base = {
+            sensor: form.querySelector('[name="sensor"]')?.value || '',
+            label: form.querySelector('[name="label"]')?.value || '',
+            requireConfirmation: form.querySelector('[name="requireConfirmation"]')?.checked || false,
+        };
+        const extra = this.parseActiveConfigFields ? this.parseActiveConfigFields(form) : {};
+        return { ...base, ...extra };
+    }
+
+    static parseActiveConfigFields(form) {
+        // Override: разобрать поля из getActiveConfigFields().
+        return {};
+    }
+
+    destroy() {
+        clearTimeout(this._writeStateTimer);
+        clearTimeout(this._pendingTimeoutTimer);
+        document.removeEventListener('dashboardEditModeChanged', this._interactivityListener);
+        document.removeEventListener('controlStatusChanged', this._interactivityListener);
+        super.destroy();
+    }
+}
+
+window.ActiveDashboardWidget = ActiveDashboardWidget;
+
+
+// === 61-dashboard-active-toggle.js ===
+// ============================================================================
+// ToggleWidget — переключатель между двумя числовыми значениями (DI/DO/AI/AO).
+// Слитая композиция: цвет track = feedback, позиция handle = command.
+// Жёлтая граница при расхождении command vs feedback.
+//
+// Config:
+//   sensor      — имя датчика (для отображения, autocomplete сохраняет имя)
+//   sensorId    — числовой ID датчика (используется в writeValue)
+//   objectName  — имя IONC-объекта (default 'SharedMemory')
+//   valueOff    — числовое значение OFF (default 0)
+//   valueOn     — числовое значение ON (default 1)
+//   labelOff    — текстовая подпись OFF (default 'OFF')
+//   labelOn     — текстовая подпись ON (default 'ON')
+//   label       — заголовок виджета (default = имя датчика)
+//   requireConfirmation — bool, наследуется от base
+// ============================================================================
+
+class ToggleWidget extends ActiveDashboardWidget {
+    static type = 'toggle';
+    static displayName = 'Toggle';
+    static description = 'Two-state switch (writes to digital or analog sensor)';
+    static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="5"/><circle cx="16" cy="12" r="3" fill="currentColor"/></svg>';
+    static defaultSize = { width: 3, height: 2 };
+    static minSize = { width: 2, height: 2 };
+    static maxSize = { width: 6, height: 3 };
+    // Opt-out из legacy in-memory sensor autocomplete (62-dashboard-manager.js).
+    // ToggleWidget использует setupSensorAutocomplete из 41-sensor-autocomplete.js,
+    // который умеет резолвить и сохранять числовой sensor_id.
+    static usesNewSensorAutocomplete = true;
+
+    // === Render ===
+    render() {
+        const label = this.config?.label || this.config?.sensor || 'Toggle';
+
+        this.element = document.createElement('div');
+        this.element.className = 'widget-content toggle-widget';
+        this.element.innerHTML = `
+            <div class="toggle-name" data-test="name">${escapeHtml(label)}</div>
+            <div class="toggle-track" data-test="track" data-handle-pos="left">
+                <div class="toggle-handle"></div>
+            </div>
+            <div class="toggle-state-text" data-test="state-text">${escapeHtml(this._currentLabel())}</div>
+        `;
+        this.container.appendChild(this.element);
+
+        this.element.querySelector('[data-test="track"]').addEventListener('click', () => this.onClick());
+
+        // Initial state — отрисовать по текущим feedback/command (могут быть null).
+        this.renderFeedback();
+        this.renderCommand();
+    }
+
+    // Возвращает labelOn если current value считается ON, иначе labelOff.
+    _currentLabel() {
+        const labelOff = this.config?.labelOff || 'OFF';
+        const labelOn = this.config?.labelOn || 'ON';
+        const current = this.commandValue ?? this.feedbackValue;
+        return current === this.config?.valueOn ? labelOn : labelOff;
+    }
+
+    onClick() {
+        // Если widget не интерактивен — клик игнорируется (writeValue сам это знает,
+        // но мы ещё не проходим path validation если просто вернём ничего).
+        if (!this.isInteractive()) return;
+        const valueOff = this.config?.valueOff ?? 0;
+        const valueOn = this.config?.valueOn ?? 1;
+        const current = this.commandValue ?? this.feedbackValue;
+        const next = current === valueOn ? valueOff : valueOn;
+        this.writeValue(next);
+    }
+
+    renderCommand() {
+        const track = this.element?.querySelector('[data-test="track"]');
+        if (!track) return;
+        const valueOn = this.config?.valueOn ?? 1;
+        // Position: командная (если есть command) — приоритет; иначе по feedback.
+        const refValue = this.commandValue ?? this.feedbackValue;
+        track.dataset.handlePos = refValue === valueOn ? 'right' : 'left';
+
+        // diverge: если command есть и НЕ совпадает с feedback (включая unknown).
+        const diverges = this.commandValue !== null
+            && this.commandValue !== undefined
+            && this.commandValue !== this.feedbackValue;
+        track.classList.toggle('diverge', !!diverges);
+
+        // Update state text (cmd-side).
+        const stateText = this.element?.querySelector('[data-test="state-text"]');
+        if (stateText) stateText.textContent = this._currentLabel();
+    }
+
+    renderFeedback() {
+        const track = this.element?.querySelector('[data-test="track"]');
+        if (!track) return;
+        const valueOff = this.config?.valueOff ?? 0;
+        const valueOn = this.config?.valueOn ?? 1;
+
+        track.classList.remove('fb-on', 'fb-off', 'fb-unknown');
+        if (this.feedbackValue === valueOn) {
+            track.classList.add('fb-on');
+        } else if (this.feedbackValue === valueOff) {
+            track.classList.add('fb-off');
+        } else {
+            track.classList.add('fb-unknown');
+        }
+
+        // Tooltip с фактическим числовым значением (для unknown — особенно полезно).
+        if (this.feedbackValue !== null && this.feedbackValue !== undefined) {
+            track.title = `actual: ${this.feedbackValue}`;
+        }
+
+        // Re-evaluate diverge after feedback update.
+        this.renderCommand();
+    }
+
+    // === Config form ===
+
+    static getActiveConfigFields(config = {}) {
+        return `
+            <div class="widget-config-field">
+                <label>IONC Object</label>
+                <select class="widget-input" name="objectName" data-test="cfg-objectName">
+                    <option value="${escapeHtml(config.objectName || 'SharedMemory')}" selected>${escapeHtml(config.objectName || 'SharedMemory')}</option>
+                </select>
+                <small style="color:#6b7280">список загружается из /api/objects?type=IONotifyController</small>
+            </div>
+            <div class="widget-config-field">
+                <label>Sensor (autocomplete)</label>
+                <input type="text" class="widget-input" name="sensor" autocomplete="off"
+                       value="${escapeHtml(config.sensor || '')}" data-test="cfg-sensor">
+                <input type="hidden" name="sensorId" value="${config.sensorId ?? ''}" data-test="cfg-sensorId">
+            </div>
+            <div class="widget-config-row">
+                <div class="widget-config-field">
+                    <label>valueOff</label>
+                    <input type="number" class="widget-input" name="valueOff"
+                           value="${config.valueOff ?? 0}" data-test="cfg-valueOff">
+                </div>
+                <div class="widget-config-field">
+                    <label>valueOn</label>
+                    <input type="number" class="widget-input" name="valueOn"
+                           value="${config.valueOn ?? 1}" data-test="cfg-valueOn">
+                </div>
+            </div>
+            <div class="widget-config-row">
+                <div class="widget-config-field">
+                    <label>labelOff</label>
+                    <input type="text" class="widget-input" name="labelOff"
+                           value="${escapeHtml(config.labelOff || '')}" placeholder="OFF" data-test="cfg-labelOff">
+                </div>
+                <div class="widget-config-field">
+                    <label>labelOn</label>
+                    <input type="text" class="widget-input" name="labelOn"
+                           value="${escapeHtml(config.labelOn || '')}" placeholder="ON" data-test="cfg-labelOn">
+                </div>
+            </div>
+        `;
+    }
+
+    static initConfigHandlers(form, config = {}) {
+        // Populate IONC Object dropdown.
+        const objectSelect = form.querySelector('[name="objectName"]');
+        const sensorInput = form.querySelector('[name="sensor"]');
+        const hiddenIdInput = form.querySelector('[name="sensorId"]');
+        if (!objectSelect || !sensorInput || !hiddenIdInput) return;
+
+        // Resolve serverId for the dropdown — use first connected (same default
+        // как в _resolveServerId() базового класса).
+        let serverId = '';
+        for (const [id, srv] of state.servers) {
+            if (srv.connected) { serverId = id; break; }
+        }
+
+        // Fetch IONC objects list.
+        if (serverId) {
+            fetch(`/api/objects?server=${encodeURIComponent(serverId)}&type=IONotifyController`)
+                .then(r => r.ok ? r.json() : { objects: [] })
+                .then(data => {
+                    const objs = data.objects || [];
+                    const currentValue = config.objectName || 'SharedMemory';
+                    objectSelect.innerHTML = objs.map(o => {
+                        const name = typeof o === 'string' ? o : o.name;
+                        return `<option value="${escapeHtml(name)}" ${name === currentValue ? 'selected' : ''}>${escapeHtml(name)}</option>`;
+                    }).join('');
+                    // Если currentValue нет в списке — добавим как disabled
+                    if (!objs.some(o => (typeof o === 'string' ? o : o.name) === currentValue)) {
+                        const opt = document.createElement('option');
+                        opt.value = currentValue;
+                        opt.textContent = `${currentValue} (текущий, не найден)`;
+                        opt.selected = true;
+                        objectSelect.prepend(opt);
+                    }
+                })
+                .catch(e => console.warn('Failed to load IONC objects:', e));
+        }
+
+        // Setup autocomplete on sensor input.
+        const ac = setupSensorAutocomplete(
+            sensorInput,
+            hiddenIdInput,
+            () => objectSelect.value,
+            () => serverId
+        );
+
+        // Reset sensor when object changes.
+        objectSelect.addEventListener('change', () => {
+            if (ac && typeof ac.resetOnObjectChange === 'function') {
+                ac.resetOnObjectChange();
+            }
+        });
+    }
+
+    static parseConfigForm(form) {
+        // Override base parseConfigForm to use sensor name + sensorId field.
+        const labelInput = form.querySelector('[name="label"]');
+        const requireConfInput = form.querySelector('[name="requireConfirmation"]');
+        return {
+            sensor:      form.querySelector('[name="sensor"]')?.value || '',
+            sensorId:    parseInt(form.querySelector('[name="sensorId"]')?.value, 10) || null,
+            objectName:  form.querySelector('[name="objectName"]')?.value || 'SharedMemory',
+            valueOff:    Number(form.querySelector('[name="valueOff"]')?.value ?? 0),
+            valueOn:     Number(form.querySelector('[name="valueOn"]')?.value ?? 1),
+            labelOff:    form.querySelector('[name="labelOff"]')?.value || '',
+            labelOn:     form.querySelector('[name="labelOn"]')?.value || '',
+            label:       labelInput?.value || '',
+            requireConfirmation: requireConfInput?.checked || false,
+        };
+    }
+}
+
+window.ToggleWidget = ToggleWidget;
 
 
 // === 61-dashboard-widgets.js ===
@@ -19012,6 +19727,7 @@ const WIDGET_TYPES = {
     'statusbar': StatusBarWidget,
     'bargraph': BarGraphWidget,
     'digital': DigitalWidget,
+    'toggle': ToggleWidget,
     'chart': ChartWidget
 };
 
@@ -19403,42 +20119,71 @@ class DashboardManager {
         }
     }
 
-    // Fetch sensor values from IONC API
+    // Fetch sensor values from IONC API, grouped by (serverId, objectName)
+    // taken from the consuming widget's config. Falls back to first connected
+    // server + 'SharedMemory' for sensors whose widget config doesn't specify them
+    // (back-compat for old saved dashboards).
     async fetchSensorValues(sensorNames) {
-        // Find SharedMemory server
-        let smServerId = null;
-        for (const [id, server] of state.servers) {
-            if (server.connected) {
-                smServerId = id;
-                break;
-            }
-        }
+        const defaultServerId = this._defaultIONCServerId();
+        if (!defaultServerId) return;
 
-        if (!smServerId) return;
+        // Build (serverId, objectName) → Set<sensorName> grouping.
+        // For each sensor we look at *all* widgets subscribed to it and pick
+        // the (serverId, objectName) of the first one with a non-default config.
+        // If none specifies, use defaults (first connected server, 'SharedMemory').
+        const groups = new Map(); // key: `${serverId}|${objectName}` → Set<sensorName>
 
-        // Fetch each sensor (could be optimized with batch API)
         for (const name of sensorNames) {
-            try {
-                const response = await fetch(`/api/objects/SharedMemory/ionc/sensors?server=${smServerId}&search=${encodeURIComponent(name)}&limit=1`);
-                if (response.ok) {
+            const widgetIds = dashboardState.sensorSubscriptions.get(name);
+            let serverId = defaultServerId;
+            let objectName = 'SharedMemory';
+            if (widgetIds && widgetIds.size > 0) {
+                const firstId = widgetIds.values().next().value;
+                const widget = dashboardState.widgets.get(firstId);
+                if (widget?.config?.objectName) objectName = widget.config.objectName;
+                if (widget?.config?.serverId) serverId = widget.config.serverId;
+            }
+            const key = `${serverId}|${objectName}`;
+            if (!groups.has(key)) groups.set(key, new Set());
+            groups.get(key).add(name);
+        }
+
+        // Fetch each group with a single search request per sensor (existing API
+        // doesn't support batch search — one call per name). Could be optimized
+        // later by switching to GET .../ionc/sensors with no search and filtering
+        // client-side when group is large.
+        for (const [key, namesSet] of groups) {
+            const [serverId, objectName] = key.split('|');
+            for (const name of namesSet) {
+                try {
+                    const url = `/api/objects/${encodeURIComponent(objectName)}/ionc/sensors`
+                        + `?server=${encodeURIComponent(serverId)}`
+                        + `&search=${encodeURIComponent(name)}&limit=1`;
+                    const response = await fetch(url);
+                    if (!response.ok) continue;
                     const data = await response.json();
-                    if (data.sensors && data.sensors.length > 0) {
-                        const sensor = data.sensors.find(s => s.name === name);
-                        if (sensor) {
-                            // Cache and update
-                            state.sensorValuesCache.set(name, {
-                                value: sensor.value,
-                                error: null,
-                                timestamp: Date.now()
-                            });
-                            this.handleSensorUpdate(name, sensor.value, null);
-                        }
-                    }
+                    if (!data.sensors || data.sensors.length === 0) continue;
+                    const sensor = data.sensors.find(s => s.name === name);
+                    if (!sensor) continue;
+                    state.sensorValuesCache.set(name, {
+                        value: sensor.value,
+                        error: null,
+                        timestamp: Date.now()
+                    });
+                    this.handleSensorUpdate(name, sensor.value, null);
+                } catch (err) {
+                    console.warn('Failed to fetch sensor value:', name, err);
                 }
-            } catch (err) {
-                console.warn('Failed to fetch sensor value:', name, err);
             }
         }
+    }
+
+    // Helper: pick the first connected server (used as default IO source).
+    _defaultIONCServerId() {
+        for (const [id, server] of state.servers) {
+            if (server.connected) return id;
+        }
+        return null;
     }
 
     createWidget(widgetConfig) {
@@ -19526,7 +20271,20 @@ class DashboardManager {
 
         // Create widget instance
         const widget = new WidgetClass(widgetConfig.id, widgetConfig.config || {}, container);
+
+        // Маркер для CSS правил (.dashboard-widget[data-active-widget="true"]):
+        // используется для edit-mode grayscale и active-disabled индикатора.
+        if (widget instanceof ActiveDashboardWidget) {
+            container.dataset.activeWidget = 'true';
+        }
+
         widget.render();
+
+        // Initial interactivity sync (без него виджет создаётся в правильном
+        // visual state до первого editMode toggle / controlToken event).
+        if (typeof widget._updateInteractivityClass === 'function') {
+            widget._updateInteractivityClass();
+        }
 
         // Inject title if configured (before widget-content, not inside)
         const title = widgetConfig.config?.title;
@@ -19830,9 +20588,14 @@ class DashboardManager {
         content.dataset.widgetId = widgetId || '';
         content.dataset.widgetType = type;
 
-        // Setup sensor autocomplete for all sensor inputs
-        this.setupSensorAutocomplete(content, 'sensor');
-        this.setupSensorAutocomplete(content, 'sensor2');
+        // Setup legacy in-memory sensor autocomplete for all sensor inputs.
+        // Active widgets с usesNewSensorAutocomplete=true используют свой собственный
+        // setupSensorAutocomplete (из 41-sensor-autocomplete.js) с резолвом sensor_id;
+        // пропускаем legacy attach, чтобы не было дублирующего dropdown'а на одном input.
+        if (!WidgetClass.usesNewSensorAutocomplete) {
+            this.setupSensorAutocomplete(content, 'sensor');
+            this.setupSensorAutocomplete(content, 'sensor2');
+        }
 
         // Setup chart widget autocomplete for zone sensor inputs
         if (type === 'chart') {
@@ -20403,6 +21166,9 @@ class DashboardManager {
 
     toggleEditMode() {
         dashboardState.editMode = !dashboardState.editMode;
+        document.dispatchEvent(new CustomEvent('dashboardEditModeChanged', {
+            detail: { editMode: dashboardState.editMode }
+        }));
 
         const editBtn = document.getElementById('dashboard-edit-btn');
         editBtn?.classList.toggle('active', dashboardState.editMode);
@@ -20846,6 +21612,55 @@ class DashboardManager {
 }
 
 // Dashboard migration
+
+// ============================================================================
+// DEBUG: регистрация test-only виджета для e2e тестов базового класса.
+// Только Playwright-тесты вызывают это. Не использовать в production.
+// ============================================================================
+window.__DEBUG_REGISTER_TEST_WIDGET = function () {
+    if (WIDGET_TYPES['test-active']) return;
+
+    class TestActiveWidget extends ActiveDashboardWidget {
+        static type = 'test-active';
+        static displayName = 'TEST Active';
+        static description = 'TEST-ONLY: smoke widget for ActiveDashboardWidget base';
+        static icon = '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16"/></svg>';
+        static defaultSize = { width: 4, height: 2 };
+
+        render() {
+            this.element = document.createElement('div');
+            this.element.className = 'widget-content test-active-widget';
+            this.element.innerHTML = `
+                <button class="test-active-btn" data-test="write-btn">SET 42</button>
+                <div class="test-active-feedback" data-test="feedback">--</div>
+                <div class="test-active-command" data-test="command">--</div>
+                <div class="test-active-state" data-test="state">idle</div>
+            `;
+            this.container.appendChild(this.element);
+
+            this.element.querySelector('[data-test="write-btn"]').addEventListener('click', () => {
+                this.writeValue(42);
+            });
+        }
+
+        renderCommand() {
+            const el = this.element?.querySelector('[data-test="command"]');
+            if (el) el.textContent = String(this.commandValue ?? '--');
+            const stateEl = this.element?.querySelector('[data-test="state"]');
+            if (stateEl) stateEl.textContent = this.writeState;
+        }
+
+        renderFeedback() {
+            const el = this.element?.querySelector('[data-test="feedback"]');
+            if (el) el.textContent = String(this.feedbackValue ?? '--');
+        }
+
+        static getActiveConfigFields() { return ''; }
+        static parseActiveConfigFields() { return {}; }
+    }
+
+    WIDGET_TYPES['test-active'] = TestActiveWidget;
+};
 
 
 // === 63-dashboard-dialogs.js ===

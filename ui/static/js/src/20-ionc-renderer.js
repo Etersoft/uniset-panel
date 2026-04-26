@@ -1277,33 +1277,24 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         // Останавливаем существующий генератор если есть
         this.stopGenerator(sensorId);
 
-        const startTime = Date.now();
-        const self = this;
-        const objectName = this.objectName;
+        const generator = new SignalGenerator({
+            type, min, max, step, pause, pulseWidth, period,
+            onTick: (value) => {
+                this.setValueForGenerator(sensorId, value);
+            }
+        });
 
-        // Интервал обновления: ~20 обновлений за период для плавности
-        let updateInterval;
-        if (type === 'square') {
-            updateInterval = Math.max(50, Math.floor((pulseWidth + pause) / 20));
-        } else if (type === 'linear' || type === 'sin' || type === 'cos') {
-            // Для linear/sin/cos: обновляем с частотой паузы (или чаще для плавности)
-            updateInterval = Math.min(pause, 50);
-        } else {
-            // random
-            updateInterval = Math.max(50, Math.floor(period / 20));
-        }
-
-        // Состояние генератора (разные поля для разных типов)
+        // Сохраняем минимальное состояние для UI (тип для setChartStepped,
+        // параметры для отображения в "active generator" баннере и сохранения preferences).
         const genState = {
             sensorId,
             type,
             min,
             max,
-            startTime,
-            intervalId: null
+            generator,        // ссылка на SignalGenerator — будет stop()'нута в stopGenerator
         };
 
-        // Добавляем специфичные для типа параметры
+        // Тип-специфичные параметры — для отображения и сохранения preferences
         if (type === 'linear' || type === 'sin' || type === 'cos') {
             genState.pause = pause;
             genState.step = step;
@@ -1311,98 +1302,10 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             genState.pulseWidth = pulseWidth;
             genState.pause = pause;
         } else {
-            // random
             genState.period = period;
         }
 
-        // Функция генерации значения
-        const generateValue = () => {
-            const elapsed = Date.now() - genState.startTime;
-            let value;
-            const range = max - min;
-
-            switch (type) {
-                case 'sin':
-                case 'cos': {
-                    // Синусоида/косинусоида с заданным количеством точек
-                    // genState.step = количество точек на период
-                    // genState.pause = шаг обновления (мс)
-                    const numPoints = genState.step;
-                    const fullCycle = numPoints * genState.pause;
-                    const positionInCycle = elapsed % fullCycle;
-                    const pointIndex = Math.floor(positionInCycle / genState.pause);
-
-                    // Фаза от 0 до 2π
-                    const phase = (pointIndex / numPoints) * 2 * Math.PI;
-
-                    // Синус/косинус от -1 до 1
-                    const wave = type === 'sin' ? Math.sin(phase) : Math.cos(phase);
-
-                    // Масштабируем к диапазону min..max
-                    value = Math.round(min + (wave + 1) / 2 * range);
-                    break;
-                }
-                case 'linear': {
-                    // Пилообразный с шагом-инкрементом и паузой (как в SImitator)
-                    // Положительный шаг: min -> max -> min (начинаем с min, идём вверх)
-                    // Отрицательный шаг: max -> min -> max (начинаем с max, идём вниз)
-                    const absStep = Math.abs(genState.step);
-                    const numStepsFirst = Math.floor(range / absStep) + 1;
-                    const numStepsSecond = Math.floor(range / absStep) - 1;
-                    const totalSteps = numStepsFirst + numStepsSecond;
-                    const fullCycle = totalSteps * genState.pause;
-                    const positionInCycle = elapsed % fullCycle;
-                    const stepNumber = Math.floor(positionInCycle / genState.pause);
-
-                    if (genState.step > 0) {
-                        // Положительный шаг: min -> max -> min
-                        if (stepNumber < numStepsFirst) {
-                            // Вверх: min -> max
-                            value = min + stepNumber * absStep;
-                        } else {
-                            // Вниз: max-step -> min+step (НЕ включая min)
-                            const downStepNumber = stepNumber - numStepsFirst;
-                            value = max - (downStepNumber + 1) * absStep;
-                        }
-                    } else {
-                        // Отрицательный шаг: max -> min -> max
-                        if (stepNumber < numStepsFirst) {
-                            // Вниз: max -> min
-                            value = max - stepNumber * absStep;
-                        } else {
-                            // Вверх: min+step -> max-step (НЕ включая max)
-                            const upStepNumber = stepNumber - numStepsFirst;
-                            value = min + (upStepNumber + 1) * absStep;
-                        }
-                    }
-                    break;
-                }
-                case 'random': {
-                    value = Math.round(min + Math.random() * range);
-                    break;
-                }
-                case 'square': {
-                    // Прямоугольный с настраиваемой скважностью
-                    const totalPeriod = genState.pulseWidth + genState.pause;
-                    const positionInCycle = elapsed % totalPeriod;
-                    value = positionInCycle < genState.pulseWidth ? max : min;
-                    break;
-                }
-                default:
-                    value = min;
-            }
-
-            // Ограничиваем значение
-            value = Math.max(min, Math.min(max, value));
-
-            // Отправляем в API
-            self.setValueForGenerator(sensorId, value);
-        };
-
-        // Запускаем интервал
-        genState.intervalId = setInterval(generateValue, updateInterval);
-
-        // Сохраняем состояние генератора
+        generator.start();
         this.activeGenerators.set(sensorId, genState);
 
         // Для square генератора включаем stepped режим на графике (меандр)
@@ -1412,9 +1315,6 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         // Перерисовываем строку для отображения индикатора
         this.reRenderSensorRow(sensorId);
-
-        // Запускаем сразу
-        generateValue();
 
         // Сохраняем preferences (разные параметры для разных типов)
         let params = { min, max };
@@ -1449,7 +1349,9 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     stopGenerator(sensorId) {
         const genState = this.activeGenerators.get(sensorId);
         if (genState) {
-            clearInterval(genState.intervalId);
+            if (genState.generator) {
+                genState.generator.stop();
+            }
 
             // Возвращаем stepped режим к значению по умолчанию (isDiscrete)
             if (genState.type === 'square') {
@@ -1462,8 +1364,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     stopAllGenerators() {
-        this.activeGenerators.forEach((genState, sensorId) => {
-            clearInterval(genState.intervalId);
+        this.activeGenerators.forEach((genState) => {
+            if (genState.generator) genState.generator.stop();
         });
         this.activeGenerators.clear();
     }

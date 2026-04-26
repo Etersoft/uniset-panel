@@ -12,6 +12,7 @@ const WIDGET_TYPES = {
     'statusbar': StatusBarWidget,
     'bargraph': BarGraphWidget,
     'digital': DigitalWidget,
+    'toggle': ToggleWidget,
     'chart': ChartWidget
 };
 
@@ -403,42 +404,71 @@ class DashboardManager {
         }
     }
 
-    // Fetch sensor values from IONC API
+    // Fetch sensor values from IONC API, grouped by (serverId, objectName)
+    // taken from the consuming widget's config. Falls back to first connected
+    // server + 'SharedMemory' for sensors whose widget config doesn't specify them
+    // (back-compat for old saved dashboards).
     async fetchSensorValues(sensorNames) {
-        // Find SharedMemory server
-        let smServerId = null;
-        for (const [id, server] of state.servers) {
-            if (server.connected) {
-                smServerId = id;
-                break;
-            }
-        }
+        const defaultServerId = this._defaultIONCServerId();
+        if (!defaultServerId) return;
 
-        if (!smServerId) return;
+        // Build (serverId, objectName) → Set<sensorName> grouping.
+        // For each sensor we look at *all* widgets subscribed to it and pick
+        // the (serverId, objectName) of the first one with a non-default config.
+        // If none specifies, use defaults (first connected server, 'SharedMemory').
+        const groups = new Map(); // key: `${serverId}|${objectName}` → Set<sensorName>
 
-        // Fetch each sensor (could be optimized with batch API)
         for (const name of sensorNames) {
-            try {
-                const response = await fetch(`/api/objects/SharedMemory/ionc/sensors?server=${smServerId}&search=${encodeURIComponent(name)}&limit=1`);
-                if (response.ok) {
+            const widgetIds = dashboardState.sensorSubscriptions.get(name);
+            let serverId = defaultServerId;
+            let objectName = 'SharedMemory';
+            if (widgetIds && widgetIds.size > 0) {
+                const firstId = widgetIds.values().next().value;
+                const widget = dashboardState.widgets.get(firstId);
+                if (widget?.config?.objectName) objectName = widget.config.objectName;
+                if (widget?.config?.serverId) serverId = widget.config.serverId;
+            }
+            const key = `${serverId}|${objectName}`;
+            if (!groups.has(key)) groups.set(key, new Set());
+            groups.get(key).add(name);
+        }
+
+        // Fetch each group with a single search request per sensor (existing API
+        // doesn't support batch search — one call per name). Could be optimized
+        // later by switching to GET .../ionc/sensors with no search and filtering
+        // client-side when group is large.
+        for (const [key, namesSet] of groups) {
+            const [serverId, objectName] = key.split('|');
+            for (const name of namesSet) {
+                try {
+                    const url = `/api/objects/${encodeURIComponent(objectName)}/ionc/sensors`
+                        + `?server=${encodeURIComponent(serverId)}`
+                        + `&search=${encodeURIComponent(name)}&limit=1`;
+                    const response = await fetch(url);
+                    if (!response.ok) continue;
                     const data = await response.json();
-                    if (data.sensors && data.sensors.length > 0) {
-                        const sensor = data.sensors.find(s => s.name === name);
-                        if (sensor) {
-                            // Cache and update
-                            state.sensorValuesCache.set(name, {
-                                value: sensor.value,
-                                error: null,
-                                timestamp: Date.now()
-                            });
-                            this.handleSensorUpdate(name, sensor.value, null);
-                        }
-                    }
+                    if (!data.sensors || data.sensors.length === 0) continue;
+                    const sensor = data.sensors.find(s => s.name === name);
+                    if (!sensor) continue;
+                    state.sensorValuesCache.set(name, {
+                        value: sensor.value,
+                        error: null,
+                        timestamp: Date.now()
+                    });
+                    this.handleSensorUpdate(name, sensor.value, null);
+                } catch (err) {
+                    console.warn('Failed to fetch sensor value:', name, err);
                 }
-            } catch (err) {
-                console.warn('Failed to fetch sensor value:', name, err);
             }
         }
+    }
+
+    // Helper: pick the first connected server (used as default IO source).
+    _defaultIONCServerId() {
+        for (const [id, server] of state.servers) {
+            if (server.connected) return id;
+        }
+        return null;
     }
 
     createWidget(widgetConfig) {
@@ -526,7 +556,20 @@ class DashboardManager {
 
         // Create widget instance
         const widget = new WidgetClass(widgetConfig.id, widgetConfig.config || {}, container);
+
+        // Маркер для CSS правил (.dashboard-widget[data-active-widget="true"]):
+        // используется для edit-mode grayscale и active-disabled индикатора.
+        if (widget instanceof ActiveDashboardWidget) {
+            container.dataset.activeWidget = 'true';
+        }
+
         widget.render();
+
+        // Initial interactivity sync (без него виджет создаётся в правильном
+        // visual state до первого editMode toggle / controlToken event).
+        if (typeof widget._updateInteractivityClass === 'function') {
+            widget._updateInteractivityClass();
+        }
 
         // Inject title if configured (before widget-content, not inside)
         const title = widgetConfig.config?.title;
@@ -830,9 +873,14 @@ class DashboardManager {
         content.dataset.widgetId = widgetId || '';
         content.dataset.widgetType = type;
 
-        // Setup sensor autocomplete for all sensor inputs
-        this.setupSensorAutocomplete(content, 'sensor');
-        this.setupSensorAutocomplete(content, 'sensor2');
+        // Setup legacy in-memory sensor autocomplete for all sensor inputs.
+        // Active widgets с usesNewSensorAutocomplete=true используют свой собственный
+        // setupSensorAutocomplete (из 41-sensor-autocomplete.js) с резолвом sensor_id;
+        // пропускаем legacy attach, чтобы не было дублирующего dropdown'а на одном input.
+        if (!WidgetClass.usesNewSensorAutocomplete) {
+            this.setupSensorAutocomplete(content, 'sensor');
+            this.setupSensorAutocomplete(content, 'sensor2');
+        }
 
         // Setup chart widget autocomplete for zone sensor inputs
         if (type === 'chart') {
@@ -1403,6 +1451,9 @@ class DashboardManager {
 
     toggleEditMode() {
         dashboardState.editMode = !dashboardState.editMode;
+        document.dispatchEvent(new CustomEvent('dashboardEditModeChanged', {
+            detail: { editMode: dashboardState.editMode }
+        }));
 
         const editBtn = document.getElementById('dashboard-edit-btn');
         editBtn?.classList.toggle('active', dashboardState.editMode);
@@ -1846,3 +1897,52 @@ class DashboardManager {
 }
 
 // Dashboard migration
+
+// ============================================================================
+// DEBUG: регистрация test-only виджета для e2e тестов базового класса.
+// Только Playwright-тесты вызывают это. Не использовать в production.
+// ============================================================================
+window.__DEBUG_REGISTER_TEST_WIDGET = function () {
+    if (WIDGET_TYPES['test-active']) return;
+
+    class TestActiveWidget extends ActiveDashboardWidget {
+        static type = 'test-active';
+        static displayName = 'TEST Active';
+        static description = 'TEST-ONLY: smoke widget for ActiveDashboardWidget base';
+        static icon = '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16"/></svg>';
+        static defaultSize = { width: 4, height: 2 };
+
+        render() {
+            this.element = document.createElement('div');
+            this.element.className = 'widget-content test-active-widget';
+            this.element.innerHTML = `
+                <button class="test-active-btn" data-test="write-btn">SET 42</button>
+                <div class="test-active-feedback" data-test="feedback">--</div>
+                <div class="test-active-command" data-test="command">--</div>
+                <div class="test-active-state" data-test="state">idle</div>
+            `;
+            this.container.appendChild(this.element);
+
+            this.element.querySelector('[data-test="write-btn"]').addEventListener('click', () => {
+                this.writeValue(42);
+            });
+        }
+
+        renderCommand() {
+            const el = this.element?.querySelector('[data-test="command"]');
+            if (el) el.textContent = String(this.commandValue ?? '--');
+            const stateEl = this.element?.querySelector('[data-test="state"]');
+            if (stateEl) stateEl.textContent = this.writeState;
+        }
+
+        renderFeedback() {
+            const el = this.element?.querySelector('[data-test="feedback"]');
+            if (el) el.textContent = String(this.feedbackValue ?? '--');
+        }
+
+        static getActiveConfigFields() { return ''; }
+        static parseActiveConfigFields() { return {}; }
+    }
+
+    WIDGET_TYPES['test-active'] = TestActiveWidget;
+};

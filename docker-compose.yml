@@ -185,14 +185,23 @@ services:
     depends_on:
       viewer:
         condition: service_healthy
+    # Entrypoint passes positional args to playwright if provided.
+    # Default (no args, e.g. `docker compose up e2e`): runs single/ + integration/.
+    # Override (e.g. `docker compose run --rm e2e single/foo.spec.ts`): runs only specified specs.
     entrypoint:
       - bash
       - -lc
       - |
+        set -e
         cd /tmp
         cp -r /app/* .
         npm install --no-fund --no-audit
-        npx playwright test single/ --reporter=list && npx playwright test integration/ --reporter=list
+        if [ "$#" -gt 0 ]; then
+          npx playwright test "$@" --reporter=list
+        else
+          npx playwright test single/ --reporter=list && npx playwright test integration/ --reporter=list
+        fi
+      - bash
 
   # Demo mock server - Diesel Generator Simulator
   # Usage: docker-compose --profile demo up demo-viewer

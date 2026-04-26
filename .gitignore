@@ -26,3 +26,6 @@ tests/node_modules/
 tests/test-results/
 tests/playwright-report/
 coverage.out
+
+# Visual brainstorming companion (superpowers)
+.superpowers/
