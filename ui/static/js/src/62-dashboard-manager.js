@@ -873,9 +873,14 @@ class DashboardManager {
         content.dataset.widgetId = widgetId || '';
         content.dataset.widgetType = type;
 
-        // Setup sensor autocomplete for all sensor inputs
-        this.setupSensorAutocomplete(content, 'sensor');
-        this.setupSensorAutocomplete(content, 'sensor2');
+        // Setup legacy in-memory sensor autocomplete for all sensor inputs.
+        // Active widgets с usesNewSensorAutocomplete=true используют свой собственный
+        // setupSensorAutocomplete (из 41-sensor-autocomplete.js) с резолвом sensor_id;
+        // пропускаем legacy attach, чтобы не было дублирующего dropdown'а на одном input.
+        if (!WidgetClass.usesNewSensorAutocomplete) {
+            this.setupSensorAutocomplete(content, 'sensor');
+            this.setupSensorAutocomplete(content, 'sensor2');
+        }
 
         // Setup chart widget autocomplete for zone sensor inputs
         if (type === 'chart') {

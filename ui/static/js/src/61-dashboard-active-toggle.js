@@ -23,6 +23,10 @@ class ToggleWidget extends ActiveDashboardWidget {
     static defaultSize = { width: 3, height: 2 };
     static minSize = { width: 2, height: 2 };
     static maxSize = { width: 6, height: 3 };
+    // Opt-out из legacy in-memory sensor autocomplete (62-dashboard-manager.js).
+    // ToggleWidget использует setupSensorAutocomplete из 41-sensor-autocomplete.js,
+    // который умеет резолвить и сохранять числовой sensor_id.
+    static usesNewSensorAutocomplete = true;
 
     // === Render ===
     render() {
