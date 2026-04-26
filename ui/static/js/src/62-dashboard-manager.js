@@ -403,42 +403,71 @@ class DashboardManager {
         }
     }
 
-    // Fetch sensor values from IONC API
+    // Fetch sensor values from IONC API, grouped by (serverId, objectName)
+    // taken from the consuming widget's config. Falls back to first connected
+    // server + 'SharedMemory' for sensors whose widget config doesn't specify them
+    // (back-compat for old saved dashboards).
     async fetchSensorValues(sensorNames) {
-        // Find SharedMemory server
-        let smServerId = null;
-        for (const [id, server] of state.servers) {
-            if (server.connected) {
-                smServerId = id;
-                break;
-            }
-        }
+        const defaultServerId = this._defaultIONCServerId();
+        if (!defaultServerId) return;
 
-        if (!smServerId) return;
+        // Build (serverId, objectName) → Set<sensorName> grouping.
+        // For each sensor we look at *all* widgets subscribed to it and pick
+        // the (serverId, objectName) of the first one with a non-default config.
+        // If none specifies, use defaults (first connected server, 'SharedMemory').
+        const groups = new Map(); // key: `${serverId}|${objectName}` → Set<sensorName>
 
-        // Fetch each sensor (could be optimized with batch API)
         for (const name of sensorNames) {
-            try {
-                const response = await fetch(`/api/objects/SharedMemory/ionc/sensors?server=${smServerId}&search=${encodeURIComponent(name)}&limit=1`);
-                if (response.ok) {
+            const widgetIds = dashboardState.sensorSubscriptions.get(name);
+            let serverId = defaultServerId;
+            let objectName = 'SharedMemory';
+            if (widgetIds && widgetIds.size > 0) {
+                const firstId = widgetIds.values().next().value;
+                const widget = dashboardState.widgets.get(firstId);
+                if (widget?.config?.objectName) objectName = widget.config.objectName;
+                if (widget?.config?.serverId) serverId = widget.config.serverId;
+            }
+            const key = `${serverId}|${objectName}`;
+            if (!groups.has(key)) groups.set(key, new Set());
+            groups.get(key).add(name);
+        }
+
+        // Fetch each group with a single search request per sensor (existing API
+        // doesn't support batch search — one call per name). Could be optimized
+        // later by switching to GET .../ionc/sensors with no search and filtering
+        // client-side when group is large.
+        for (const [key, namesSet] of groups) {
+            const [serverId, objectName] = key.split('|');
+            for (const name of namesSet) {
+                try {
+                    const url = `/api/objects/${encodeURIComponent(objectName)}/ionc/sensors`
+                        + `?server=${encodeURIComponent(serverId)}`
+                        + `&search=${encodeURIComponent(name)}&limit=1`;
+                    const response = await fetch(url);
+                    if (!response.ok) continue;
                     const data = await response.json();
-                    if (data.sensors && data.sensors.length > 0) {
-                        const sensor = data.sensors.find(s => s.name === name);
-                        if (sensor) {
-                            // Cache and update
-                            state.sensorValuesCache.set(name, {
-                                value: sensor.value,
-                                error: null,
-                                timestamp: Date.now()
-                            });
-                            this.handleSensorUpdate(name, sensor.value, null);
-                        }
-                    }
+                    if (!data.sensors || data.sensors.length === 0) continue;
+                    const sensor = data.sensors.find(s => s.name === name);
+                    if (!sensor) continue;
+                    state.sensorValuesCache.set(name, {
+                        value: sensor.value,
+                        error: null,
+                        timestamp: Date.now()
+                    });
+                    this.handleSensorUpdate(name, sensor.value, null);
+                } catch (err) {
+                    console.warn('Failed to fetch sensor value:', name, err);
                 }
-            } catch (err) {
-                console.warn('Failed to fetch sensor value:', name, err);
             }
         }
+    }
+
+    // Helper: pick the first connected server (used as default IO source).
+    _defaultIONCServerId() {
+        for (const [id, server] of state.servers) {
+            if (server.connected) return id;
+        }
+        return null;
     }
 
     createWidget(widgetConfig) {
