@@ -32,7 +32,7 @@ import (
 )
 
 // Version is set at build time via ldflags
-var Version = "0.1.3"
+var Version = "0.1.4"
 
 func main() {
 	cfg := config.Parse()
