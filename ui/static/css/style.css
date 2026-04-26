@@ -8729,6 +8729,19 @@ button.rotate-quick-btn:active {
     opacity: 0.6;
 }
 
+/* Содержимое active widget'а в blocked-state — disable клики и наследовать
+   not-allowed cursor. Без этого правила сама кнопка/track/checkbox принимали
+   клики и показывали cursor:pointer (writeValue() возвращал ранний guard,
+   но визуально оператору было непонятно почему widget полупрозрачный
+   при кликабельном контроле). Применяется только к .widget-content
+   (header с action кнопками — отдельный layer, в edit mode остаётся
+   полностью функциональным). */
+.dashboard-widget[data-active-widget="true"][data-control-blocked="true"] .widget-content,
+.dashboard-widget.active-disabled .widget-content {
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
 /* Индикатор расхождения command vs feedback (точка в углу виджета).
    Конкретные виджеты могут позиционировать .command-feedback-dot внутри
    через свой layout. По умолчанию — справа сверху. */
