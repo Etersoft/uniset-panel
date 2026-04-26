@@ -302,6 +302,34 @@ make build
 Серый «unknown» при `feedback ≠ valueOn ≠ valueOff` (типично для AI/AO) — фактическое
 число в `title` tooltip обоих стилей.
 
+**PushButtonWidget (`61-dashboard-active-button.js`):** write-only momentary/pulse
+кнопка для команд (RESET, START, STOP, ACK ALARM). Семантически отличается от
+toggle: нет двух-состоянного латча, feedback от своего sensor'а игнорируется
+(fire-and-forget команда).
+
+Конфиг: `objectName` (от base), `sensorId` (от base), `valueOn`/`valueOff` (числа),
+`mode` (`'pulse'` default | `'momentary'`), `pulseWidth` (ms, default 500), `style`,
+`label`, `requireConfirmation` (от base; в `momentary` режиме НЕ работает —
+warning в форме).
+
+**Поддерживаемые стили** через `static styles = ['flat', 'mushroom', 'pill']`:
+- **`flat`** (default, defaultSize 2×1): Material primary blue button. Для group
+  of buttons, частые действия.
+- **`mushroom`** (defaultSize 2×2 — через `getDefaultSizeForStyle`): SCADA-classic
+  круглая красная объёмная. Для emergency / mode switches (STOP, EMERGENCY).
+- **`pill`** (defaultSize 2×1): minimal outline pill, заполняется при нажатии.
+  Для частых маловажных действий (ACK ALARM).
+
+**Поведение:**
+- `pulse`: click → POST valueOn → wait `pulseWidth` ms → POST valueOff. Visual flash
+  (yellow, 300ms) для feedback мгновенно. Второй POST через `_writeValueRaw` — без
+  confirm dialog.
+- `momentary`: mousedown → POST valueOn; window-level mouseup → POST valueOff
+  (window-listener гарантирует release даже при mouseleave).
+
+`update()` override игнорирует SSE feedback от sensor'а. `renderCommand`/`renderFeedback` —
+no-op (push-button показывает только команду + общий writeState `pending`/`error`).
+
 **Sensor autocomplete (`41-sensor-autocomplete.js`):** утилита
 `setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId)` — debounce 150ms,
 dropdown с keyboard navigation (↑↓/Enter/Esc), сохраняет (name, id) пару. Используется
