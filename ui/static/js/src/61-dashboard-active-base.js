@@ -1,18 +1,37 @@
 // ============================================================================
 // ActiveDashboardWidget — базовый класс для активных (write-capable) виджетов.
 //
-// Наследуется от DashboardWidget. Добавляет:
+// Базовый класс предоставляет:
 //   - writeValue(value): запись через controlledFetch на /api/objects/.../ionc/set
-//   - writeState: 'idle' | 'pending' | 'success' | 'error'
-//   - commandValue: последняя команда, отправленная пользователем
-//   - feedbackValue: текущее значение датчика от сервера (= this.value базового класса)
-//   - isInteractive(): false в edit mode
+//   - writeState: 'idle' | 'pending' | 'success' | 'error' (с auto-revert/timeout)
+//   - commandValue / feedbackValue: раздельные «команда vs обратная связь» (SCADA)
+//   - isInteractive(): false в edit mode и без controlToken
+//   - _updateInteractivityClass(): реактивный active-disabled
+//   - _recomputeTitle(): единое управление tooltip'ом (приоритет: error > blocked > пусто)
 //   - needsConfirmation(): читает config.requireConfirmation
-//   - getConfigForm()/parseConfigForm(): расширяемые через
-//     getActiveConfigFields()/parseActiveConfigFields() в наследниках
+//   - static getConfigForm: рендерит objectName select + sensor input + hidden sensorId +
+//     style select (если styles.length > 1) + label + requireConfirmation
+//   - static parseConfigForm: парсит base поля + spread parseActiveConfigFields()
+//   - static initConfigHandlers: загружает IONC dropdown + setupSensorAutocomplete
 //
-// Конкретные виджеты (toggle/checkbox/button/setpoint/generator) реализуются
-// в отдельных файлах 61-active-*.js и регистрируются в WIDGET_TYPES.
+// Subclass contract (минимальный active widget):
+//   - render() — построить DOM, навесить interaction handlers
+//   - renderCommand() — отразить commandValue + writeState в DOM
+//   - renderFeedback() — отразить feedbackValue + error в DOM
+//
+// Опциональные override:
+//   - static getActiveConfigFields(config) — дополнительные поля формы
+//   - static parseActiveConfigFields(form) — парсинг этих полей (return {} merge'ится)
+//   - static styles + static defaultStyle — несколько визуальных стилей; base.getConfigForm
+//     автоматически рендерит style select когда styles.length > 1
+//   - _confirm(value) — заменить window.confirm на красивый dialog
+//
+// НЕ переопределять (наследуется и достаточно):
+//   - getConfigForm, parseConfigForm, initConfigHandlers, writeValue,
+//     usesNewSensorAutocomplete, _setWriteState, _recomputeTitle, _updateInteractivityClass.
+//
+// Конкретные виджеты реализуются в файлах 61-dashboard-active-*.js и регистрируются
+// в WIDGET_TYPES (62-dashboard-manager.js).
 // ============================================================================
 
 class ActiveDashboardWidget extends DashboardWidget {
@@ -266,7 +285,14 @@ class ActiveDashboardWidget extends DashboardWidget {
         return { ...base, ...extra };
     }
 
+    // IMPORTANT для subclass'ов: если переопределяешь — ОБЯЗАТЕЛЬНО вызывай
+    // super.initConfigHandlers(form, config) ровно ОДИН РАЗ. Двойной вызов
+    // навесит дублирующие listeners на sensor input и change на objectSelect.
+    // Idempotency guard ниже защищает от случайного повторного вызова.
     static initConfigHandlers(form, config = {}) {
+        if (form.dataset.activeHandlersWired === 'true') return;
+        form.dataset.activeHandlersWired = 'true';
+
         const objectSelect = form.querySelector('[name="objectName"]');
         const sensorInput = form.querySelector('[name="sensor"]');
         const hiddenIdInput = form.querySelector('[name="sensorId"]');
