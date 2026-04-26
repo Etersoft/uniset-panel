@@ -261,3 +261,135 @@ test.describe('ToggleWidget — first active widget', () => {
         expect(body.sensor_id).toBe(200);
     });
 });
+
+test.describe('ToggleWidget — checkbox style', () => {
+    test.beforeEach(async ({ page }) => {
+        await page.route('**/api/control/status', async (route) => {
+            await route.fulfill({ json: { enabled: true, isController: true, hasController: true, timeoutSec: 60 } });
+        });
+        await page.route('**/ionc/set**', async (route) => {
+            if (route.request().method() === 'POST') {
+                await route.fulfill({ json: { status: 'ok' } });
+            } else {
+                await route.continue();
+            }
+        });
+
+        await page.goto('/');
+        await page.waitForFunction(() =>
+            typeof (window as any).dashboardState !== 'undefined' &&
+            typeof (window as any).ToggleWidget !== 'undefined' &&
+            typeof (window as any).dashboardManager !== 'undefined'
+        );
+        // In-place mutation (matches existing slider tests pattern)
+        await page.evaluate(() => {
+            const w: any = window;
+            w.state.control.enabled = true;
+            w.state.control.isController = true;
+            w.state.control.hasController = true;
+            w.state.control.token = 'admin';
+        });
+        await page.waitForFunction(() => {
+            const w: any = window;
+            for (const [, srv] of (w.state?.servers || new Map())) {
+                if (srv.connected) return true;
+            }
+            return false;
+        }, { timeout: 10000 });
+    });
+
+    async function createCheckboxDashboard(page, configOverrides: Record<string, unknown> = {}) {
+        await page.evaluate((overrides) => {
+            const w: any = window;
+            const widgetCfg = {
+                id: 'cb-1',
+                type: 'toggle',
+                config: {
+                    sensor: 'TEST_PUMP',
+                    sensorId: 100,
+                    objectName: 'SharedMemory',
+                    style: 'checkbox',
+                    valueOff: 0,
+                    valueOn: 1,
+                    labelOff: 'OFF',
+                    labelOn: 'ON',
+                    label: 'PUMP',
+                    ...overrides,
+                },
+                position: { col: 0, row: 0, width: 2, height: 1 },
+            };
+            const dashCfg = {
+                meta: { name: 'TEST_CB', description: '' },
+                widgets: [widgetCfg],
+            };
+            w.dashboardState.dashboards.set('TEST_CB', dashCfg);
+            w.dashboardManager.loadDashboard('TEST_CB');
+            w.switchView('dashboard');
+        }, configOverrides);
+        await page.locator('[data-test="cb"]').first().waitFor({ state: 'visible', timeout: 5000 });
+    }
+
+    test('renders .toggle-cb (not .toggle-track) when style=checkbox', async ({ page }) => {
+        await createCheckboxDashboard(page);
+        await expect(page.locator('[data-test="cb"]').first()).toBeVisible();
+        await expect(page.locator('[data-test="track"]')).toHaveCount(0);
+        const container = page.locator('.toggle-widget.toggle-style-checkbox').first();
+        await expect(container).toBeVisible();
+    });
+
+    test('click anywhere on widget triggers writeValue', async ({ page }) => {
+        await createCheckboxDashboard(page);
+        await page.evaluate(() => {
+            const w: any = window;
+            w.dashboardState.widgets.get('cb-1').update(0);
+        });
+        const postPromise = page.waitForRequest(req =>
+            req.url().includes('/ionc/set') && req.method() === 'POST'
+        );
+        // Click on the name (not the checkbox itself) — should still trigger
+        await page.evaluate(() => {
+            const name = document.querySelector('[data-test="name"]') as HTMLElement;
+            name.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        });
+        const req = await postPromise;
+        const body = JSON.parse(req.postData() || '{}');
+        expect(body.value).toBe(1);
+    });
+
+    test('shows fb-on green check when feedback=valueOn', async ({ page }) => {
+        await createCheckboxDashboard(page);
+        await page.evaluate(() => {
+            const w: any = window;
+            w.dashboardState.widgets.get('cb-1').update(1);
+        });
+        const cb = page.locator('[data-test="cb"]').first();
+        await expect(cb).toHaveClass(/fb-on/);
+    });
+
+    test('shows fb-unknown dashed for non-binary value', async ({ page }) => {
+        await createCheckboxDashboard(page, { valueOff: 0, valueOn: 100 });
+        await page.evaluate(() => {
+            const w: any = window;
+            w.dashboardState.widgets.get('cb-1').update(47);
+        });
+        const cb = page.locator('[data-test="cb"]').first();
+        await expect(cb).toHaveClass(/fb-unknown/);
+        await expect(cb).toHaveAttribute('title', /actual:\s*47/);
+    });
+
+    test('diverge yellow border on root .toggle-widget (not .toggle-cb)', async ({ page }) => {
+        await createCheckboxDashboard(page);
+        await page.evaluate(() => {
+            const w: any = window;
+            w.dashboardState.widgets.get('cb-1').update(0);
+        });
+        await page.evaluate(() => {
+            const cb = document.querySelector('[data-test="cb"]') as HTMLElement;
+            cb.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        });
+        // diverge на корневом .toggle-widget
+        await expect(page.locator('.toggle-widget.toggle-style-checkbox').first()).toHaveClass(/diverge/);
+        // НЕ на .toggle-cb
+        await expect(page.locator('[data-test="cb"]').first()).not.toHaveClass(/diverge/);
+    });
+});
