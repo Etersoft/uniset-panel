@@ -8698,14 +8698,14 @@ button.rotate-quick-btn:active {
 
 /* В edit mode активные виджеты обесцвечиваются — пользователь видит,
    что клики не записывают, а открывают конфиг. */
-.dashboard-grid.edit-mode .dashboard-widget[data-type^="active-"]:not(.label-widget):not(.divider-widget) {
+.dashboard-grid.edit-mode .dashboard-widget[data-active-widget="true"] {
     filter: grayscale(0.5);
     opacity: 0.85;
 }
 
-/* Когда controlToken не активен — визуально блокированный виджет с курсором. */
-.dashboard-widget.active-disabled,
-.dashboard-widget[data-type^="active-"][data-control-blocked="true"] {
+/* Когда controlToken не активен / edit mode — визуально блокированный виджет. */
+.dashboard-widget[data-active-widget="true"][data-control-blocked="true"],
+.dashboard-widget.active-disabled {
     cursor: not-allowed;
     opacity: 0.6;
 }
