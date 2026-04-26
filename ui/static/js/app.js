@@ -19826,7 +19826,20 @@ class DashboardManager {
 
         // Create widget instance
         const widget = new WidgetClass(widgetConfig.id, widgetConfig.config || {}, container);
+
+        // Маркер для CSS правил (.dashboard-widget[data-active-widget="true"]):
+        // используется для edit-mode grayscale и active-disabled индикатора.
+        if (widget instanceof ActiveDashboardWidget) {
+            container.dataset.activeWidget = 'true';
+        }
+
         widget.render();
+
+        // Initial interactivity sync (без него виджет создаётся в правильном
+        // visual state до первого editMode toggle / controlToken event).
+        if (typeof widget._updateInteractivityClass === 'function') {
+            widget._updateInteractivityClass();
+        }
 
         // Inject title if configured (before widget-content, not inside)
         const title = widgetConfig.config?.title;
