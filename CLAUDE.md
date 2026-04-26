@@ -362,6 +362,42 @@ command (с tolerance step/2 — для AI/AO float) → dirty снимаетс�
 **Validation:** значения вне `[min, max]` обрезаются (clamp). В config-форме
 `step≤0` нормализуется в 1, при `min>max` пара свапается, NaN → 0/100.
 
+**GeneratorWidget (`61-dashboard-active-generator.js`):** обёртка вокруг
+SignalGenerator engine (`08-signal-generator.js`) для запуска тестовых
+сигналов в датчик с dashboard'а.
+
+Конфиг: `objectName` (от base), `sensorId` (от base), `label` (от base),
+`requireConfirmation` (от base), `type` (`square` default | `sin` | `cos`
+| `linear` | `random`), `min`/`max`, и conditional поля по типу:
+- `linear`/`sin`/`cos`: `step`, `pause` (ms)
+- `square`: `pulseWidth`, `pause` (ms)
+- `random`: `period` (ms)
+
+**Стиль один — `compact`** (defaultSize 3×1): label слева, текущее
+значение по центру (зелёный когда running, '--' когда stopped), toggle
+Start/Stop справа (зелёный фон когда running). `static styles = []` —
+base.getConfigForm не рендерит style select.
+
+**Behavior:**
+- Toggle on → создаёт `SignalGenerator` instance, `start()`, onTick →
+  `_writeRaw(value)` (custom helper, fire-and-forget POST без per-tick
+  confirm/state). serverId/sensorId/url cached в `_start` — не walk
+  state.servers Map каждый тик.
+- Toggle off → `signalGen.stop()`, instance = null, value → '--', cache cleared.
+- Double-start guard: `if (this._signalGen) return;` — защита от race.
+- POST error → автостоп + `active-error` (purple border + tooltip).
+- ControlToken released во время работы → автостоп через override
+  `_updateInteractivityClass`.
+- `destroy()` override → `_stop()` + `super.destroy()` (нет утечек таймеров).
+- `update()` override = no-op (SSE feedback игнорируется как у PushButton).
+- `requireConfirmation` спрашивается ОДИН РАЗ при Start, не на каждом тике.
+- Не persist running state между reload'ами (после reload всегда stopped).
+
+**Config form:** conditional поля по type через `initConfigHandlers` override —
+type select change handler показывает/скрывает соответствующие row'ы.
+Idempotency через `form.dataset.genHandlersWired`. Обязательно зовёт
+`super.initConfigHandlers` для sensor autocomplete + IONC dropdown.
+
 **Sensor autocomplete (`41-sensor-autocomplete.js`):** утилита
 `setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId)` — debounce 150ms,
 dropdown с keyboard navigation (↑↓/Enter/Esc), сохраняет (name, id) пару. Используется
