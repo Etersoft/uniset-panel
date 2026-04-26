@@ -231,6 +231,25 @@ func (m *Manager) GetServer(id string) (*Instance, bool) {
 	return instance, exists
 }
 
+// GetServerObjects возвращает имена объектов на одном сервере без итерации
+// всех (в отличие от GetAllObjectsGrouped). Возвращает кеш если сервер
+// недоступен (но кеш есть). Ошибка если сервер не найден или недоступен и
+// кеша нет.
+func (m *Manager) GetServerObjects(serverID string) ([]string, error) {
+	instance, exists := m.GetServer(serverID)
+	if !exists {
+		return nil, fmt.Errorf("server %q not found", serverID)
+	}
+	objects, err := instance.GetObjects()
+	if err != nil {
+		if cached := instance.GetCachedObjects(); cached != nil {
+			return cached, nil
+		}
+		return nil, err
+	}
+	return objects, nil
+}
+
 // GetServerByURL ищет сервер по URL
 func (m *Manager) GetServerByURL(url string) (*Instance, bool) {
 	m.mu.RLock()
