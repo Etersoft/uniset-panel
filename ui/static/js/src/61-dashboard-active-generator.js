@@ -39,6 +39,8 @@ class GeneratorWidget extends ActiveDashboardWidget {
         super(id, config, container);
         this._signalGen = null;
         this._lastTickValue = null;
+        this._writeUrl = null;
+        this._writeSensorId = undefined;
     }
 
     // === Render ===
@@ -81,18 +83,28 @@ class GeneratorWidget extends ActiveDashboardWidget {
     }
 
     async _confirm(sensorName) {
-        return window.confirm(`Start generator on ${sensorName}? Будет писать каждый тик.`);
+        return window.confirm(`Start generator on "${sensorName}"? It will write each tick.`);
     }
 
     // === Start/Stop ===
     _start() {
-        // Проверка: sensorId должен быть задан
+        // Resolve all params and validate at start.
         const sensorId = this.config?.sensorId ?? this.config?.sensor;
         if (sensorId === undefined || sensorId === null || sensorId === '') {
             this._setWriteState('error', 'Sensor not configured');
             return;
         }
-        // Создать SignalGenerator с config + onTick
+        const serverId = this._resolveServerId();
+        if (!serverId) {
+            this._setWriteState('error', 'No connected server');
+            return;
+        }
+        const objectName = this.config?.objectName || 'SharedMemory';
+        // S-3: guard against double-start (rapid double-toggle leak).
+        if (this._signalGen) return;
+        // I-1: cache write target — avoid re-resolving every tick.
+        this._writeUrl = `/api/objects/${encodeURIComponent(objectName)}/ionc/set?server=${encodeURIComponent(serverId)}`;
+        this._writeSensorId = sensorId;
         this._signalGen = new SignalGenerator({
             type: this.config?.type || 'square',
             min: this.config?.min ?? 0,
@@ -113,6 +125,8 @@ class GeneratorWidget extends ActiveDashboardWidget {
             this._signalGen = null;
         }
         this._lastTickValue = null;
+        this._writeUrl = null;
+        this._writeSensorId = undefined;
         this._updateValueDisplay(null);
         this._updateRunningUI(false);
     }
@@ -130,20 +144,16 @@ class GeneratorWidget extends ActiveDashboardWidget {
     // _writeRaw — fire-and-forget POST на ionc/set, без per-tick confirm/state.
     // Errors → _stop + setWriteState('error') → UI: purple border + tooltip.
     async _writeRaw(value) {
-        const sensorId = this.config?.sensorId ?? this.config?.sensor;
-        const serverId = this._resolveServerId();
-        if (!serverId) {
+        if (!this._writeUrl || this._writeSensorId === undefined) {
+            // Should not happen if _start succeeded, defensive
             this._stop();
-            this._setWriteState('error', 'No connected server');
             return;
         }
-        const objectName = this.config?.objectName || 'SharedMemory';
-        const url = `/api/objects/${encodeURIComponent(objectName)}/ionc/set?server=${encodeURIComponent(serverId)}`;
         try {
-            const resp = await controlledFetch(url, {
+            const resp = await controlledFetch(this._writeUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sensor_id: sensorId, value }),
+                body: JSON.stringify({ sensor_id: this._writeSensorId, value }),
             });
             if (!resp.ok) {
                 const data = await resp.json().catch(() => ({}));
