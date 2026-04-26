@@ -216,18 +216,78 @@ func (h *Handlers) GetConfig(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetObjects возвращает список доступных объектов
-// GET /api/objects
+// GetObjects возвращает список доступных объектов.
+//   GET /api/objects                                — плоский список имён (back-compat).
+//   GET /api/objects?server=ID                      — список имён с конкретного сервера.
+//   GET /api/objects?server=ID&type=IONotifyController — отфильтрованный список с типами.
+//
+// Когда type указан, возвращается [{name, objectType}, ...].
+// Без type — back-compat формат {objects: ["A","B",...]}.
 func (h *Handlers) GetObjects(w http.ResponseWriter, r *http.Request) {
-	list, err := h.client.GetObjectList()
+	serverID := r.URL.Query().Get("server")
+	typeFilter := r.URL.Query().Get("type")
+
+	// === Back-compat path: без server и type — старое поведение ===
+	if serverID == "" && typeFilter == "" {
+		list, err := h.client.GetObjectList()
+		if err != nil {
+			h.writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		h.writeJSON(w, map[string]interface{}{"objects": list})
+		return
+	}
+
+	// === Новый path: server указан ===
+	if h.serverMgr == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "server manager not configured")
+		return
+	}
+	if serverID == "" {
+		h.writeError(w, http.StatusBadRequest, "server parameter is required when type is specified")
+		return
+	}
+
+	// Получаем имена объектов на сервере
+	grouped, err := h.serverMgr.GetAllObjectsGrouped()
 	if err != nil {
 		h.writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	// Возвращаем в формате {objects: [...]} для совместимости с UI
-	h.writeJSON(w, map[string]interface{}{
-		"objects": list,
-	})
+	var names []string
+	for _, sg := range grouped {
+		if sg.ServerID == serverID {
+			names = sg.Objects
+			break
+		}
+	}
+
+	// Без type-фильтра — возвращаем плоский список имён (с server параметром)
+	if typeFilter == "" {
+		h.writeJSON(w, map[string]interface{}{"objects": names})
+		return
+	}
+
+	// С type-фильтром — для каждого имени запрашиваем object data и фильтруем по ObjectType.
+	// N+1 запросов; для типичных uniset-серверов N — десятки, приемлемо.
+	type objectWithType struct {
+		Name       string `json:"name"`
+		ObjectType string `json:"objectType"`
+	}
+	result := make([]objectWithType, 0, len(names))
+	for _, name := range names {
+		data, err := h.serverMgr.GetObjectData(serverID, name)
+		if err != nil || data == nil || data.Object == nil {
+			continue // пропускаем недоступные
+		}
+		if data.Object.ObjectType == typeFilter {
+			result = append(result, objectWithType{
+				Name:       name,
+				ObjectType: data.Object.ObjectType,
+			})
+		}
+	}
+	h.writeJSON(w, map[string]interface{}{"objects": result})
 }
 
 // GetObjectData возвращает текущие данные объекта
