@@ -5444,7 +5444,9 @@ td.ionc-col-add-buttons > *:last-child {
     transition: opacity 0.2s ease;
 }
 
-.dashboard-widget:hover .widget-actions,
+/* Action кнопки (Configure ⚙ + Remove) видны ТОЛЬКО в edit mode.
+   View mode для оператора — без отвлекающих overlay'ев при hover.
+   Стандарт SCADA: настройки доступны через переключение в Edit. */
 .dashboard-widget.edit-mode .widget-actions {
     opacity: 1;
 }
