@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 // Все типы виджетов
-const WIDGET_TYPES = ['gauge', 'level', 'led', 'label', 'divider', 'statusbar', 'bargraph', 'digital', 'chart'];
+const WIDGET_TYPES = ['gauge', 'level', 'led', 'label', 'divider', 'statusbar', 'bargraph', 'digital', 'toggle', 'chart'];
 
 async function openServerDashboard(page) {
   await page.goto('/');
@@ -180,7 +180,7 @@ test.describe('Dashboard — Edit mode', () => {
 
 test.describe('Dashboard — Widget Picker', () => {
 
-  test('Widget picker показывает все 9 типов виджетов', async ({ page }) => {
+  test('Widget picker показывает все 10 типов виджетов', async ({ page }) => {
     await createTestDashboard(page);
 
     // Открываем picker
@@ -190,7 +190,7 @@ test.describe('Dashboard — Widget Picker', () => {
     await expect(pickerOverlay).not.toHaveClass(/hidden/, { timeout: 3000 });
 
     const items = page.locator('.widget-picker-item');
-    await expect(items).toHaveCount(9);
+    await expect(items).toHaveCount(10);
 
     // Проверяем все типы
     for (const type of WIDGET_TYPES) {
