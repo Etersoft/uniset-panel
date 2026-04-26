@@ -13,6 +13,7 @@ const WIDGET_TYPES = {
     'bargraph': BarGraphWidget,
     'digital': DigitalWidget,
     'toggle': ToggleWidget,
+    'pushbutton': PushButtonWidget,
     'chart': ChartWidget
 };
 
