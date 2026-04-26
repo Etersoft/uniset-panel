@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -595,4 +596,42 @@ func TestManagerCallbacksPassedToInstance(t *testing.T) {
 	if !called {
 		t.Error("status callback was not called - callback may not have been passed to instance")
 	}
+}
+
+func TestGetServerObjects(t *testing.T) {
+	srv := mockUnisetServer()
+	defer srv.Close()
+
+	store := storage.NewMemoryStorage()
+	mgr := NewManager(store, 5*time.Second, time.Hour, "TestProc", 0)
+
+	cfg := config.ServerConfig{
+		ID:   "srv1",
+		URL:  srv.URL,
+		Name: "Test Server 1",
+	}
+	if err := mgr.AddServer(cfg); err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+	defer mgr.RemoveServer("srv1")
+
+	t.Run("found", func(t *testing.T) {
+		names, err := mgr.GetServerObjects("srv1")
+		if err != nil {
+			t.Fatalf("err: %v", err)
+		}
+		if len(names) != 2 {
+			t.Fatalf("want 2 names, got %d (%v)", len(names), names)
+		}
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		_, err := mgr.GetServerObjects("nonexistent")
+		if err == nil {
+			t.Fatal("expected error for nonexistent server, got nil")
+		}
+		if !strings.Contains(err.Error(), "not found") {
+			t.Errorf("expected 'not found' in error, got: %v", err)
+		}
+	})
 }
