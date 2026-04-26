@@ -2837,6 +2837,14 @@ func TestGetObjects_TypeFilter(t *testing.T) {
 			query:      "?type=IONotifyController",
 			wantStatus: http.StatusBadRequest,
 		},
+		{
+			// Back-compat path (no params): handler инициализируется без h.client,
+			// поэтому back-compat branch попадает в nil-guard и возвращает 503.
+			// Сам факт что код идёт по back-compat branch (а не 400/200) — главное.
+			name:       "no params back-compat (no client → 503)",
+			query:      "",
+			wantStatus: http.StatusServiceUnavailable,
+		},
 	}
 
 	for _, tc := range tests {

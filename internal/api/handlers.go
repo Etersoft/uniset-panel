@@ -229,6 +229,10 @@ func (h *Handlers) GetObjects(w http.ResponseWriter, r *http.Request) {
 
 	// === Back-compat path: без server и type — старое поведение ===
 	if serverID == "" && typeFilter == "" {
+		if h.client == nil {
+			h.writeError(w, http.StatusServiceUnavailable, "uniset client not configured")
+			return
+		}
 		list, err := h.client.GetObjectList()
 		if err != nil {
 			h.writeError(w, http.StatusBadGateway, err.Error())
@@ -270,6 +274,9 @@ func (h *Handlers) GetObjects(w http.ResponseWriter, r *http.Request) {
 
 	// С type-фильтром — для каждого имени запрашиваем object data и фильтруем по ObjectType.
 	// N+1 запросов; для типичных uniset-серверов N — десятки, приемлемо.
+	// TODO(cache): ввести per-server кеш типов (invalidate по object list change),
+	// если фильтр станет hot-path. Сейчас вызывается только при открытии config-формы
+	// активного widget'а, поэтому защёлки кеша преждевременны.
 	type objectWithType struct {
 		Name       string `json:"name"`
 		ObjectType string `json:"objectType"`
@@ -278,7 +285,7 @@ func (h *Handlers) GetObjects(w http.ResponseWriter, r *http.Request) {
 	for _, name := range names {
 		data, err := h.serverMgr.GetObjectData(serverID, name)
 		if err != nil || data == nil || data.Object == nil {
-			continue // пропускаем недоступные
+			continue // пропускаем недоступные (server-level errors уже залогированы в Manager)
 		}
 		if data.Object.ObjectType == typeFilter {
 			result = append(result, objectWithType{
