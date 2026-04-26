@@ -339,6 +339,41 @@ class ActiveDashboardWidget extends DashboardWidget {
 - **Кэш ID датчиков по имени.** При выборе sensor через autocomplete сохраняем оба (`sensor: "PUMP_M1_S"`, `sensorId: 42`). Что делать, если ID на сервере изменится между сохранением и использованием? Низкая вероятность (UniSet ID статичны через uniset-config), но technically может случиться при ребуте с новым XML. Защита: при HTTP 4xx от backend — попробовать резолв заново через `/sensors?search=<name>&limit=1` и retry один раз.
 - **`labelOff`/`labelOn` показывать или нет** при размере виджета 2×1 (минимальный)? Возможно скрывать при `width <= 2`. Решить при реализации CSS responsive (или просто всегда показывать — если не помещается, обрезать).
 
+## Final code review findings (TODO для следующих widget'ов)
+
+Полное ревью реализации toggle выявило 4 момента, которые работают, но
+их стоит улучшить в будущих widget-планах:
+
+- **I-1: dual title ownership.** `ToggleWidget.renderFeedback` устанавливает
+  `track.title = "actual: <value>"` напрямую на inner-элементе, а базовый
+  `_recomputeTitle` пишет на `this.container`. Не пересекаются (разные
+  элементы), но UX непоследователен: пользователь видит `actual:`-tooltip
+  на самом track'е и `Take control to interact` вокруг него. **Будущий
+  widget**: либо контракт «subclasses contributes _titleHints() → base
+  resolves в одном месте», либо прямое перекрытие через subclass-override
+  `_recomputeTitle`.
+- **I-2: GetObjects iterates всех серверов.** `handlers.go:256` зовёт
+  `serverMgr.GetAllObjectsGrouped()` и фильтрует по `serverID`, что
+  приводит к N HTTP roundtrips для multi-server конфига при каждом
+  открытии config-формы. **Фикс**: добавить `serverMgr.GetServerObjects(serverID)`
+  и использовать его. Маленький рефактор, делается в любом widget-плане.
+- **I-3: read-pathway тест проверяет write URL.** `dashboard-active-toggle.spec.ts`
+  «read-pathway» test асертит `/ionc/set` URL — это write. Реальный
+  read-path (fetchSensorValues с правильным objectName) не покрыт.
+  **Будущий widget**: добавить отдельный test, мочащий
+  `/api/objects/{configured}/ionc/sensors`.
+- **I-4: ChartWidget exempt из grouping.** `fetchSensorValues` группирует
+  через `sensorSubscriptions`, а ChartWidget использует `chartSubscriptions`
+  и может иметь свой read-pathway. **Проверить** в плане для setpoint
+  виджета (там тоже может быть свой fetch).
+
+Также reviewer отметил, что **`config.sensorId` и `config.objectName` —
+универсальные** для всех 5 запланированных активных виджетов. Стоит
+promote их в `ActiveDashboardWidget` базовый класс (вместе с
+`usesNewSensorAutocomplete=true` дефолтом). Это убирает дубль `parseConfigForm`
+в каждом виджете и делает opt-in поведение ToggleWidget'а дефолтом для
+всех активных виджетов. Сделать в первом из следующих planов (checkbox).
+
 ## Future enhancements (не в этом плане)
 
 - **Несколько визуальных стилей toggle.** По аналогии с `GaugeWidget` (style: `'semicircle' | 'arc270' | 'speedometer' | 'dual'`), у toggle тоже могут быть разные внешние виды:
