@@ -8726,3 +8726,40 @@ button.rotate-quick-btn:active {
 .command-feedback-dot.match    { background: #22c55e; }   /* зелёный — feedback совпал с command */
 .command-feedback-dot.diverge  { background: #f59e0b; }   /* жёлтый — расхождение */
 .command-feedback-dot.errored  { background: #ef4444; }   /* красный — последняя запись с ошибкой */
+
+/* ============================================================================
+ * Sensor autocomplete dropdown (used by active widgets config form)
+ * ============================================================================ */
+.sensor-autocomplete-dropdown {
+    background: #0f172a;
+    border: 1px solid #4b5563;
+    border-radius: 4px;
+    max-height: 240px;
+    overflow-y: auto;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+}
+.sensor-autocomplete-item {
+    padding: 6px 10px;
+    cursor: pointer;
+    border-bottom: 1px solid #1f2937;
+}
+.sensor-autocomplete-item:hover,
+.sensor-autocomplete-item.active {
+    background: #1e3a5f;
+}
+.sensor-autocomplete-name {
+    color: #d8dce2;
+    font-size: 13px;
+    font-weight: 500;
+}
+.sensor-autocomplete-meta {
+    color: #9ca3af;
+    font-size: 10px;
+    margin-top: 2px;
+}
+.sensor-autocomplete-empty {
+    padding: 10px;
+    color: #6b7280;
+    font-size: 12px;
+    text-align: center;
+}
