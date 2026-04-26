@@ -15851,6 +15851,12 @@ class ActiveDashboardWidget extends DashboardWidget {
         this.writeState = 'idle';
         this._writeStateTimer = null;
         this._pendingTimeoutTimer = null;
+
+        // Reactive interactivity: refresh active-disabled класс when edit mode
+        // or controlToken state changes.
+        this._interactivityListener = () => this._updateInteractivityClass();
+        document.addEventListener('dashboardEditModeChanged', this._interactivityListener);
+        document.addEventListener('controlStatusChanged', this._interactivityListener);
     }
 
     // ===== SSE feedback =====
@@ -15869,8 +15875,10 @@ class ActiveDashboardWidget extends DashboardWidget {
         this.commandValue = value;
         this._setWriteState('pending');
 
-        const sensor = this.config?.sensor;
-        if (!sensor) {
+        // sensorId — числовой ID, должен быть резолвлен заранее (autocomplete сохраняет
+        // его в config). config.sensor (имя) — fallback для smoke TestActiveWidget'а.
+        const sensorId = this.config?.sensorId ?? this.config?.sensor;
+        if (sensorId === undefined || sensorId === null || sensorId === '') {
             this._setWriteState('error', 'Sensor not configured');
             return;
         }
@@ -15881,12 +15889,13 @@ class ActiveDashboardWidget extends DashboardWidget {
             return;
         }
 
-        const url = `/api/objects/SharedMemory/ionc/set?server=${encodeURIComponent(serverId)}`;
+        const objectName = this.config?.objectName || 'SharedMemory';
+        const url = `/api/objects/${encodeURIComponent(objectName)}/ionc/set?server=${encodeURIComponent(serverId)}`;
         try {
             const resp = await controlledFetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sensor_id: sensor, value })
+                body: JSON.stringify({ sensor_id: sensorId, value })
             });
             if (!resp.ok) {
                 const data = await resp.json().catch(() => ({}));
@@ -15950,6 +15959,23 @@ class ActiveDashboardWidget extends DashboardWidget {
         if (typeof dashboardState !== 'undefined' && dashboardState.editMode) return false;
         if (typeof canControl === 'function' && !canControl()) return false;
         return true;
+    }
+
+    // Toggles 'active-disabled' class and 'data-control-blocked' attr on the
+    // widget container so CSS can show "click does nothing right now" state.
+    _updateInteractivityClass() {
+        const root = this.container || this.element;
+        if (!root) return;
+        const interactive = this.isInteractive();
+        root.classList.toggle('active-disabled', !interactive);
+        if (!interactive) {
+            root.dataset.controlBlocked = 'true';
+            // Не затираем title если там сообщение об ошибке записи.
+            if (!root.title) root.title = 'Take control to interact';
+        } else {
+            delete root.dataset.controlBlocked;
+            if (root.title === 'Take control to interact') root.title = '';
+        }
     }
 
     needsConfirmation() {
@@ -16027,6 +16053,8 @@ class ActiveDashboardWidget extends DashboardWidget {
     destroy() {
         clearTimeout(this._writeStateTimer);
         clearTimeout(this._pendingTimeoutTimer);
+        document.removeEventListener('dashboardEditModeChanged', this._interactivityListener);
+        document.removeEventListener('controlStatusChanged', this._interactivityListener);
         super.destroy();
     }
 }
