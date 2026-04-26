@@ -16279,7 +16279,13 @@ class ActiveDashboardWidget extends DashboardWidget {
     static parseConfigForm(form) {
         const base = {
             sensor:     form.querySelector('[name="sensor"]')?.value || '',
-            sensorId:   parseInt(form.querySelector('[name="sensorId"]')?.value, 10) || null,
+            sensorId:   (() => {
+                const raw = form.querySelector('[name="sensorId"]')?.value;
+                if (raw === '' || raw === undefined || raw === null) return null;
+                const n = parseInt(raw, 10);
+                // sensorId=0 валиден (раньше `parseInt('0',10) || null === null` теряло его).
+                return Number.isFinite(n) ? n : null;
+            })(),
             objectName: form.querySelector('[name="objectName"]')?.value || 'SharedMemory',
             label:      form.querySelector('[name="label"]')?.value || '',
             requireConfirmation: form.querySelector('[name="requireConfirmation"]')?.checked || false,
@@ -16508,11 +16514,10 @@ class PushButtonWidget extends ActiveDashboardWidget {
                         <option value="momentary" ${mode === 'momentary' ? 'selected' : ''}>momentary</option>
                     </select>
                 </div>
-                <div class="widget-config-field">
+                <div class="widget-config-field" data-pulse-only style="display:${mode === 'pulse' ? '' : 'none'}">
                     <label>Pulse width (ms)</label>
                     <input type="number" class="widget-input" name="pulseWidth"
                            value="${config.pulseWidth ?? 500}" min="50" data-test="cfg-pulseWidth">
-                    <small style="color:#6b7280">Применяется только в pulse mode</small>
                 </div>
             </div>
             <div class="widget-config-row">
@@ -16535,19 +16540,30 @@ class PushButtonWidget extends ActiveDashboardWidget {
 
     static initConfigHandlers(form, config = {}) {
         super.initConfigHandlers(form, config);
-        // Дополнительно: показывать warning при выборе momentary mode.
+        // Дополнительно: при смене mode показывать/скрывать pulseWidth field
+        // (relevant только для pulse) + momentary warning.
         const modeSel = form.querySelector('[name="mode"]');
         const warning = form.querySelector('[data-momentary-warning]');
-        if (!modeSel || !warning) return;
-        const update = () => { warning.style.display = modeSel.value === 'momentary' ? '' : 'none'; };
+        const pulseField = form.querySelector('[data-pulse-only]');
+        if (!modeSel) return;
+        const update = () => {
+            const isMomentary = modeSel.value === 'momentary';
+            if (warning)    warning.style.display    = isMomentary ? '' : 'none';
+            if (pulseField) pulseField.style.display = isMomentary ? 'none' : '';
+        };
         modeSel.addEventListener('change', update);
         update();
     }
 
     static parseActiveConfigFields(form) {
+        const pulseRaw = parseInt(form.querySelector('[name="pulseWidth"]')?.value, 10);
+        // pulseWidth: clamp к [50, ∞) — html min=50 это hint, не enforcement.
+        // Number.isFinite check вместо `|| 500` — иначе pulseWidth=0 неправильно
+        // парсится как 500 (falsy-zero).
+        const pulseWidth = Number.isFinite(pulseRaw) ? Math.max(50, pulseRaw) : 500;
         return {
             mode:       form.querySelector('[name="mode"]')?.value || 'pulse',
-            pulseWidth: parseInt(form.querySelector('[name="pulseWidth"]')?.value, 10) || 500,
+            pulseWidth,
             valueOff:   Number(form.querySelector('[name="valueOff"]')?.value ?? 0),
             valueOn:    Number(form.querySelector('[name="valueOn"]')?.value ?? 1),
         };
@@ -17558,9 +17574,17 @@ class ToggleWidget extends ActiveDashboardWidget {
     }
 
     static parseActiveConfigFields(form) {
+        const valueOff = Number(form.querySelector('[name="valueOff"]')?.value ?? 0);
+        let valueOn = Number(form.querySelector('[name="valueOn"]')?.value ?? 1);
+        // Защита от degenerate config: valueOff === valueOn делает click no-op
+        // (current===valueOn?valueOff:valueOn возвращает valueOn). Если совпали,
+        // принудительно ставим valueOn = valueOff + 1, чтобы toggle хотя бы что-то делал.
+        if (valueOn === valueOff) {
+            valueOn = valueOff + 1;
+        }
         return {
-            valueOff: Number(form.querySelector('[name="valueOff"]')?.value ?? 0),
-            valueOn:  Number(form.querySelector('[name="valueOn"]')?.value ?? 1),
+            valueOff,
+            valueOn,
             labelOff: form.querySelector('[name="labelOff"]')?.value || '',
             labelOn:  form.querySelector('[name="labelOn"]')?.value || '',
         };

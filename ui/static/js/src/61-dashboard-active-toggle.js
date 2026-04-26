@@ -207,9 +207,17 @@ class ToggleWidget extends ActiveDashboardWidget {
     }
 
     static parseActiveConfigFields(form) {
+        const valueOff = Number(form.querySelector('[name="valueOff"]')?.value ?? 0);
+        let valueOn = Number(form.querySelector('[name="valueOn"]')?.value ?? 1);
+        // Защита от degenerate config: valueOff === valueOn делает click no-op
+        // (current===valueOn?valueOff:valueOn возвращает valueOn). Если совпали,
+        // принудительно ставим valueOn = valueOff + 1, чтобы toggle хотя бы что-то делал.
+        if (valueOn === valueOff) {
+            valueOn = valueOff + 1;
+        }
         return {
-            valueOff: Number(form.querySelector('[name="valueOff"]')?.value ?? 0),
-            valueOn:  Number(form.querySelector('[name="valueOn"]')?.value ?? 1),
+            valueOff,
+            valueOn,
             labelOff: form.querySelector('[name="labelOff"]')?.value || '',
             labelOn:  form.querySelector('[name="labelOn"]')?.value || '',
         };

@@ -286,7 +286,13 @@ class ActiveDashboardWidget extends DashboardWidget {
     static parseConfigForm(form) {
         const base = {
             sensor:     form.querySelector('[name="sensor"]')?.value || '',
-            sensorId:   parseInt(form.querySelector('[name="sensorId"]')?.value, 10) || null,
+            sensorId:   (() => {
+                const raw = form.querySelector('[name="sensorId"]')?.value;
+                if (raw === '' || raw === undefined || raw === null) return null;
+                const n = parseInt(raw, 10);
+                // sensorId=0 валиден (раньше `parseInt('0',10) || null === null` теряло его).
+                return Number.isFinite(n) ? n : null;
+            })(),
             objectName: form.querySelector('[name="objectName"]')?.value || 'SharedMemory',
             label:      form.querySelector('[name="label"]')?.value || '',
             requireConfirmation: form.querySelector('[name="requireConfirmation"]')?.checked || false,

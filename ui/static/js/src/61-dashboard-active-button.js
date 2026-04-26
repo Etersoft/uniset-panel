@@ -141,11 +141,10 @@ class PushButtonWidget extends ActiveDashboardWidget {
                         <option value="momentary" ${mode === 'momentary' ? 'selected' : ''}>momentary</option>
                     </select>
                 </div>
-                <div class="widget-config-field">
+                <div class="widget-config-field" data-pulse-only style="display:${mode === 'pulse' ? '' : 'none'}">
                     <label>Pulse width (ms)</label>
                     <input type="number" class="widget-input" name="pulseWidth"
                            value="${config.pulseWidth ?? 500}" min="50" data-test="cfg-pulseWidth">
-                    <small style="color:#6b7280">Применяется только в pulse mode</small>
                 </div>
             </div>
             <div class="widget-config-row">
@@ -168,19 +167,30 @@ class PushButtonWidget extends ActiveDashboardWidget {
 
     static initConfigHandlers(form, config = {}) {
         super.initConfigHandlers(form, config);
-        // Дополнительно: показывать warning при выборе momentary mode.
+        // Дополнительно: при смене mode показывать/скрывать pulseWidth field
+        // (relevant только для pulse) + momentary warning.
         const modeSel = form.querySelector('[name="mode"]');
         const warning = form.querySelector('[data-momentary-warning]');
-        if (!modeSel || !warning) return;
-        const update = () => { warning.style.display = modeSel.value === 'momentary' ? '' : 'none'; };
+        const pulseField = form.querySelector('[data-pulse-only]');
+        if (!modeSel) return;
+        const update = () => {
+            const isMomentary = modeSel.value === 'momentary';
+            if (warning)    warning.style.display    = isMomentary ? '' : 'none';
+            if (pulseField) pulseField.style.display = isMomentary ? 'none' : '';
+        };
         modeSel.addEventListener('change', update);
         update();
     }
 
     static parseActiveConfigFields(form) {
+        const pulseRaw = parseInt(form.querySelector('[name="pulseWidth"]')?.value, 10);
+        // pulseWidth: clamp к [50, ∞) — html min=50 это hint, не enforcement.
+        // Number.isFinite check вместо `|| 500` — иначе pulseWidth=0 неправильно
+        // парсится как 500 (falsy-zero).
+        const pulseWidth = Number.isFinite(pulseRaw) ? Math.max(50, pulseRaw) : 500;
         return {
             mode:       form.querySelector('[name="mode"]')?.value || 'pulse',
-            pulseWidth: parseInt(form.querySelector('[name="pulseWidth"]')?.value, 10) || 500,
+            pulseWidth,
             valueOff:   Number(form.querySelector('[name="valueOff"]')?.value ?? 0),
             valueOn:    Number(form.querySelector('[name="valueOn"]')?.value ?? 1),
         };
