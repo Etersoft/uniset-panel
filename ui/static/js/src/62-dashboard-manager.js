@@ -12,6 +12,7 @@ const WIDGET_TYPES = {
     'statusbar': StatusBarWidget,
     'bargraph': BarGraphWidget,
     'digital': DigitalWidget,
+    'toggle': ToggleWidget,
     'chart': ChartWidget
 };
 
