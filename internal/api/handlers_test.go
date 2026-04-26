@@ -2731,3 +2731,177 @@ func TestGetUNetSenders_ServerError(t *testing.T) {
 		t.Errorf("expected status 502, got %d", w.Code)
 	}
 }
+
+// === GetObjects ?type= filter tests (Task 1.2) ===
+
+// startMockUnisetWithTypes возвращает httptest сервер, отдающий список объектов и
+// их данные в формате uniset HTTP API. У каждого объекта проставлен ObjectType.
+func startMockUnisetWithTypes(t *testing.T, objects map[string]string) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+
+	// /api/v2/list — список имён объектов
+	mux.HandleFunc("/api/v2/list", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		names := make([]string, 0, len(objects))
+		for n := range objects {
+			names = append(names, n)
+		}
+		_ = json.NewEncoder(w).Encode(names)
+	})
+
+	// /api/v2/{name} — данные объекта (включая object.objectType)
+	for name, objectType := range objects {
+		name, objectType := name, objectType
+		mux.HandleFunc("/api/v2/"+name, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			payload := map[string]interface{}{
+				"object": map[string]interface{}{
+					"id":         1,
+					"name":       name,
+					"objectType": objectType,
+					"isActive":   true,
+				},
+			}
+			_ = json.NewEncoder(w).Encode(payload)
+		})
+	}
+
+	return httptest.NewServer(mux)
+}
+
+func TestGetObjects_TypeFilter(t *testing.T) {
+	mock := startMockUnisetWithTypes(t, map[string]string{
+		"SharedMemory":  "IONotifyController",
+		"SharedMemory2": "IONotifyController",
+		"MBSlave1":      "ModbusSlave",
+		"OPCUA1":        "OPCUAExchange",
+	})
+	defer mock.Close()
+
+	store := storage.NewMemoryStorage()
+	mgr := server.NewManager(store, 5*time.Second, time.Hour, "TestProc", 0)
+	if err := mgr.AddServer(config.ServerConfig{
+		ID:   "srv1",
+		URL:  mock.URL,
+		Name: "Test Server srv1",
+	}); err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+	defer mgr.RemoveServer("srv1")
+
+	h := &Handlers{
+		storage:      store,
+		sseHub:       NewSSEHub(),
+		pollInterval: 5 * time.Second,
+	}
+	h.SetServerManager(mgr)
+
+	tests := []struct {
+		name        string
+		query       string
+		wantStatus  int
+		wantNames   []string
+		wantHasType bool
+	}{
+		{
+			name:        "server only — flat names",
+			query:       "?server=srv1",
+			wantStatus:  http.StatusOK,
+			wantNames:   []string{"SharedMemory", "SharedMemory2", "MBSlave1", "OPCUA1"},
+			wantHasType: false,
+		},
+		{
+			name:        "type filter IONotifyController",
+			query:       "?server=srv1&type=IONotifyController",
+			wantStatus:  http.StatusOK,
+			wantNames:   []string{"SharedMemory", "SharedMemory2"},
+			wantHasType: true,
+		},
+		{
+			name:        "type filter ModbusSlave",
+			query:       "?server=srv1&type=ModbusSlave",
+			wantStatus:  http.StatusOK,
+			wantNames:   []string{"MBSlave1"},
+			wantHasType: true,
+		},
+		{
+			name:        "type filter no matches",
+			query:       "?server=srv1&type=NotExisting",
+			wantStatus:  http.StatusOK,
+			wantNames:   []string{},
+			wantHasType: true,
+		},
+		{
+			name:       "type without server",
+			query:      "?type=IONotifyController",
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/objects"+tc.query, nil)
+			rr := httptest.NewRecorder()
+			h.GetObjects(rr, req)
+
+			if rr.Code != tc.wantStatus {
+				t.Fatalf("status: want %d, got %d (body: %s)", tc.wantStatus, rr.Code, rr.Body.String())
+			}
+			if rr.Code != http.StatusOK {
+				return
+			}
+
+			var resp map[string]json.RawMessage
+			if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			objsRaw, ok := resp["objects"]
+			if !ok {
+				t.Fatalf("response missing objects field: %s", rr.Body.String())
+			}
+
+			gotNames := []string{}
+			if tc.wantHasType {
+				var arr []struct {
+					Name       string `json:"name"`
+					ObjectType string `json:"objectType"`
+				}
+				if err := json.Unmarshal(objsRaw, &arr); err != nil {
+					t.Fatalf("unmarshal typed array: %v (body: %s)", err, rr.Body.String())
+				}
+				for _, o := range arr {
+					gotNames = append(gotNames, o.Name)
+				}
+			} else {
+				var arr []string
+				if err := json.Unmarshal(objsRaw, &arr); err != nil {
+					t.Fatalf("unmarshal flat names: %v (body: %s)", err, rr.Body.String())
+				}
+				gotNames = arr
+			}
+
+			if !sameSet(gotNames, tc.wantNames) {
+				t.Errorf("names: want %v, got %v", tc.wantNames, gotNames)
+			}
+		})
+	}
+}
+
+// sameSet returns true if a and b contain the same elements regardless of order.
+func sameSet(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	count := map[string]int{}
+	for _, x := range a {
+		count[x]++
+	}
+	for _, x := range b {
+		if count[x] == 0 {
+			return false
+		}
+		count[x]--
+	}
+	return true
+}
