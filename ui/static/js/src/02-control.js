@@ -44,6 +44,10 @@ function updateControlStatus(status) {
 
     updateControlUI();
     updateAllControlButtons();
+    // Notify active dashboard widgets so they can refresh their interactivity class.
+    document.dispatchEvent(new CustomEvent('controlStatusChanged', {
+        detail: { ...state.control }
+    }));
 }
 
 // Обновление UI контроля (компактный индикатор в шапке)

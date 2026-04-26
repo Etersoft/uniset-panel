@@ -1403,6 +1403,9 @@ class DashboardManager {
 
     toggleEditMode() {
         dashboardState.editMode = !dashboardState.editMode;
+        document.dispatchEvent(new CustomEvent('dashboardEditModeChanged', {
+            detail: { editMode: dashboardState.editMode }
+        }));
 
         const editBtn = document.getElementById('dashboard-edit-btn');
         editBtn?.classList.toggle('active', dashboardState.editMode);

@@ -305,6 +305,10 @@ function updateControlStatus(status) {
 
     updateControlUI();
     updateAllControlButtons();
+    // Notify active dashboard widgets so they can refresh their interactivity class.
+    document.dispatchEvent(new CustomEvent('controlStatusChanged', {
+        detail: { ...state.control }
+    }));
 }
 
 // Обновление UI контроля (компактный индикатор в шапке)
@@ -20671,6 +20675,9 @@ class DashboardManager {
 
     toggleEditMode() {
         dashboardState.editMode = !dashboardState.editMode;
+        document.dispatchEvent(new CustomEvent('dashboardEditModeChanged', {
+            detail: { editMode: dashboardState.editMode }
+        }));
 
         const editBtn = document.getElementById('dashboard-edit-btn');
         editBtn?.classList.toggle('active', dashboardState.editMode);
