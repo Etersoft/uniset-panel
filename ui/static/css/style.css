@@ -5411,6 +5411,12 @@ td.ionc-col-add-buttons > *:last-child {
     min-height: 0;
     padding: 4px;
     z-index: 10;
+    /* В view mode header — invisible overlay, не должен ловить клики
+       (active widgets под ним должны получать клики на свои элементы). */
+    pointer-events: none;
+}
+.dashboard-widget.edit-mode .widget-header.hidden-title {
+    pointer-events: auto;
 }
 
 .widget-header.hidden-title .widget-title {
@@ -5442,6 +5448,11 @@ td.ionc-col-add-buttons > *:last-child {
     gap: 4px;
     opacity: 0;
     transition: opacity 0.2s ease;
+    /* В view mode action-кнопки невидимы (opacity:0) И не ловят клики
+       (pointer-events:none). Без pointer-events невидимая шестерёнка
+       перехватывала бы клик на active widget (например click по push button
+       открывал бы config dialog вместо триггера команды). */
+    pointer-events: none;
 }
 
 /* Action кнопки (Configure ⚙ + Remove) видны ТОЛЬКО в edit mode.
@@ -5449,6 +5460,7 @@ td.ionc-col-add-buttons > *:last-child {
    Стандарт SCADA: настройки доступны через переключение в Edit. */
 .dashboard-widget.edit-mode .widget-actions {
     opacity: 1;
+    pointer-events: auto;
 }
 
 .widget-action-btn {
