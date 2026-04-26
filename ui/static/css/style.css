@@ -8783,6 +8783,13 @@ button.rotate-quick-btn:active {
     color: #d8dce2;
     font-weight: 600;
     text-align: center;
+    /* Длинный label обрезается с ellipsis вместо wrap'а в 2+ строки
+       (wrap съедает место, отведённое на track). */
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 0;
 }
 
 .toggle-widget .toggle-track {
@@ -8796,6 +8803,9 @@ button.rotate-quick-btn:active {
        за правую границу в fb-on состоянии. */
     box-sizing: border-box;
     border: 1px solid transparent;
+    /* Иначе flex-column сжимает track до нескольких пикселей если
+       name text wrapped в 2+ строки (длинный label). */
+    flex-shrink: 0;
 }
 
 .toggle-widget .toggle-track .toggle-handle {

@@ -348,6 +348,14 @@ class ActiveDashboardWidget extends DashboardWidget {
   `.toggle-track` базовый стиль, теперь все три состояния имеют тот же
   outer size 72×32 px и handle позиции (left:2 / left:42) консистентны.
   Подтверждено визуально через playwright screenshot после фикса.
+- **✓ FIXED: Wrap длинного label сжимал track по вертикали.** Длинное
+  имя ("TEMP SETPOINT (AI)") wrap'илось в 2 строки, flex-column сжимал
+  track до 2px (вместо 32px) — визуально «наезжает по вертикали».
+  Поправлено: на `.toggle-name` добавлены `white-space:nowrap`,
+  `overflow:hidden`, `text-overflow:ellipsis`, `flex-shrink:0`. На
+  `.toggle-track` добавлен `flex-shrink:0` — защита от сжатия в любых
+  flex-условиях. Длинный label теперь обрезается ellipsis'ом
+  ("TEMP SETPOIN...") вместо ломки layout'а.
 - **TODO: Auto-create при программном `loadDashboard`.** При первом
   `loadDashboard()` программно injected dashboard'а (через
   `dashboardState.dashboards.set()`) создаётся «лишний» widget с
