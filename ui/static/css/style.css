@@ -5505,10 +5505,15 @@ td.ionc-col-add-buttons > *:last-child {
     background: linear-gradient(135deg, transparent 50%, var(--border-color) 50%);
     border-radius: 0 0 var(--comp-border-radius) 0;
     z-index: 20; /* Above chart widget internal resizers */
+    /* В view mode resize handle invisible (opacity:0). Без pointer-events:none
+       hit-test ловит его в правом нижнем углу widget'а — пользователь видит
+       курсор se-resize рядом с активной кнопкой. Включается в edit mode. */
+    pointer-events: none;
 }
 
 .edit-mode .widget-resize-handle {
     opacity: 0.6;
+    pointer-events: auto;
 }
 
 .edit-mode .widget-resize-handle:hover {
