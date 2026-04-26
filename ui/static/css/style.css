@@ -8840,3 +8840,64 @@ button.rotate-quick-btn:active {
 @media (max-height: 80px) {
     .toggle-widget .toggle-state-text { display: none; }
 }
+
+/* ============================================================================
+ * ToggleWidget — checkbox style (config.style === 'checkbox')
+ * ============================================================================ */
+
+.toggle-widget.toggle-style-checkbox {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 0 12px;
+    cursor: pointer;
+}
+
+.toggle-widget .toggle-cb {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: 2px solid #6b7280;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, border-color 0.15s, box-shadow 0.2s;
+    flex-shrink: 0;
+    background: transparent;
+}
+
+.toggle-widget .toggle-cb.fb-on {
+    background: #22c55e;
+    border-color: #22c55e;
+}
+.toggle-widget .toggle-cb.fb-on::after {
+    content: '✓';
+    color: #fff;
+    font-weight: bold;
+    font-size: 16px;
+    line-height: 1;
+}
+
+.toggle-widget .toggle-cb.fb-off {
+    background: transparent;
+    border-color: #6b7280;
+}
+
+.toggle-widget .toggle-cb.fb-unknown {
+    background: #1f2937;
+    border-style: dashed;
+    border-color: #6b7280;
+}
+.toggle-widget .toggle-cb.fb-unknown::after {
+    content: '?';
+    color: #9ca3af;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+/* diverge для checkbox — на корневом .toggle-widget (а не на .toggle-cb).
+   Слайдер использует .toggle-track.diverge — это правило не пересекается. */
+.toggle-widget.toggle-style-checkbox.diverge {
+    box-shadow: 0 0 0 2px #f59e0b, 0 0 6px rgba(245, 158, 11, 0.5);
+}
