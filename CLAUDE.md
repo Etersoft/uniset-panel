@@ -264,7 +264,21 @@ make build
   по событиям `dashboardEditModeChanged` / `controlStatusChanged` (dispatched из dashboard-manager и control модулей)
 - `_recomputeTitle()` — единая точка владения tooltip'ом: приоритет `error message > 'Take control to interact' > пусто`
 - `requireConfirmation` — опция в config, по умолчанию выкл.
-- Override-точки в наследниках: `render()`, `renderCommand()`, `renderFeedback()`, `static getActiveConfigFields()`, `static parseActiveConfigFields()` (или весь `parseConfigForm()` если форма требует кастомного парсинга)
+- `usesNewSensorAutocomplete = true` — дефолт; dashboard-manager пропускает legacy in-memory autocomplete для всех ActiveDashboardWidget'ов
+- `static getConfigForm` базового класса рендерит objectName select + sensor input + hidden sensorId + style select (когда `static styles.length > 1`) + label + requireConfirmation
+- `static parseConfigForm` базового класса парсит base поля (sensor/sensorId/objectName/label/requireConfirmation/style) + spread `parseActiveConfigFields()`
+- `static initConfigHandlers` базового класса загружает IONC objects dropdown и подключает `setupSensorAutocomplete` с `resetOnObjectChange`. Idempotent через `form.dataset.activeHandlersWired`
+
+**Subclass contract — переопределяй:**
+- `render()`, `renderCommand()`, `renderFeedback()` — DOM/обновления
+- `static getActiveConfigFields(config)` — дополнительные поля формы
+- `static parseActiveConfigFields(form)` — парсинг этих полей (return `{}` merge'ится в config)
+- `static styles = [...]` + `static defaultStyle` — несколько визуальных стилей; base рендерит style select автоматически
+- `_confirm(value)` — заменить `window.confirm` на красивый dialog
+
+**Subclass contract — НЕ трогай:**
+- `getConfigForm`, `parseConfigForm`, `initConfigHandlers`, `writeValue`, `usesNewSensorAutocomplete`,
+  `_setWriteState`, `_recomputeTitle`, `_updateInteractivityClass` — наследуется и достаточно
 
 **CSS-маркер:** dashboard-manager в `createWidget` выставляет `container.dataset.activeWidget = 'true'`
 для всех `widget instanceof ActiveDashboardWidget`. CSS правила (edit-mode grayscale, active-disabled)
@@ -272,9 +286,21 @@ make build
 
 **ToggleWidget (`61-dashboard-active-toggle.js`):** двух-состояный переключатель для DI/DO/AI/AO датчиков.
 Конфиг: `objectName` (IONC объект), `sensorId` (числовой ID), `valueOff`/`valueOn` (любые числа),
-`labelOff`/`labelOn` (текстовые подписи). Композиция: цвет track = feedback от сервера, позиция
-handle = последняя команда; жёлтая граница при расхождении command vs feedback; серый «unknown»
-при feedback ≠ valueOn ≠ valueOff (типично для AI/AO — фактическое число показывается в `title` tooltip).
+`labelOff`/`labelOn` (текстовые подписи), `style` (default `'slider'` — список из `static styles`).
+
+**Поддерживаемые стили** через `static styles = ['slider', 'checkbox']`:
+- **`slider`** (default, defaultSize 3×2): слитая композиция — цвет track = feedback,
+  позиция handle = command, жёлтая граница на `.toggle-track` при divergence.
+  Layout column: name (top) + track + state-text (bottom).
+- **`checkbox`** (defaultSize 2×1 рекомендован): material flat 24×24 + label справа.
+  ✓ при ON, dashed «?» при unknown, жёлтая граница на корневом `.toggle-widget` при divergence.
+  Click anywhere on widget triggers writeValue. Layout row: `[checkbox] name`.
+
+`render()` диспатчит на `renderSlider()` / `renderCheckbox()` по `config.style`. Аналогично
+`renderCommand()` / `renderFeedback()`. Корневой div получает класс `toggle-style-{slider|checkbox}`.
+
+Серый «unknown» при `feedback ≠ valueOn ≠ valueOff` (типично для AI/AO) — фактическое
+число в `title` tooltip обоих стилей.
 
 **Sensor autocomplete (`41-sensor-autocomplete.js`):** утилита
 `setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId)` — debounce 150ms,
@@ -291,9 +317,10 @@ IONC renderer'ом (`20-ionc-renderer.js`) и активным generator-вид�
 
 **E2E:** smoke-тест базового класса в `tests/single/dashboard-active-base.spec.ts`
 (использует `window.__DEBUG_REGISTER_TEST_WIDGET()` debug-хук). E2E ToggleWidget'а
-в `tests/single/dashboard-active-toggle.spec.ts` (8 сценариев: write-flow, состояния
-fb-on/off/unknown/diverge, custom labels, edit-mode block, control-token block,
-custom objectName routing).
+в `tests/single/dashboard-active-toggle.spec.ts` (13 сценариев: 8 для slider —
+write-flow, состояния fb-on/off/unknown/diverge, custom labels, edit-mode block,
+control-token block, custom objectName routing; 5 для checkbox style — render
+.toggle-cb, click anywhere triggers write, fb-on/unknown, diverge на root).
 
 ### Правила размещения кода
 
