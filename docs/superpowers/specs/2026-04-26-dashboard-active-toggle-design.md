@@ -341,24 +341,20 @@ class ActiveDashboardWidget extends DashboardWidget {
 
 ## Visual QA findings (после live demo через Playwright)
 
-- **Handle overflow в `fb-on` состоянии.** Track `width:72px; height:32px`,
-  handle `width:28px; height:28px; top:2px`, при `data-handle-pos="right"` —
-  `left:42px` (handle занимает x=42..70, padding 2px справа). На практике
-  визуально handle PUMP M1 (зелёный, fb-on, RUN) **выходит за правую границу
-  track'а**. Причина: `fb-off` и `fb-unknown` имеют `border:1px solid ...`
-  (фактический width 74px), а `fb-on` — без border (фактический width 72px).
-  Handle позиции рассчитаны на 74px, поэтому в fb-on состоянии не помещаются.
-  **Фикс**: либо добавить transparent `border:1px solid transparent` для `fb-on`
-  (выровнять по box dimensions), либо использовать `box-sizing: border-box` на
-  track'е, либо переписать handle позиции через `right:2px` для правого
-  положения (без вычислений). Низкоуровневая правка CSS, делается в первом
-  следующем widget-плане.
-- **Auto-save при программном `loadDashboard`.** При первом `loadDashboard()`
-  программно injected dashboard'а (через `dashboardState.dashboards.set()`)
-  создаётся «лишний» widget с дефолтными config'ами. Видимо `loadDashboard`
-  триггерит config dialog (или auto-create) для каждого widget'а. Изучить
-  и поправить если действительно баг (а не side-effect моего injection
-  scenario, не происходящий в нормальном UI flow «Add Widget»).
+- **✓ FIXED: Handle overflow в `fb-on` состоянии.** Track ранее имел
+  inconsistent box dimensions (border у fb-off/unknown, без — у fb-on),
+  handle вылезал за правую границу в fb-on. Поправлено: добавлены
+  `box-sizing: border-box` и `border: 1px solid transparent` на
+  `.toggle-track` базовый стиль, теперь все три состояния имеют тот же
+  outer size 72×32 px и handle позиции (left:2 / left:42) консистентны.
+  Подтверждено визуально через playwright screenshot после фикса.
+- **TODO: Auto-create при программном `loadDashboard`.** При первом
+  `loadDashboard()` программно injected dashboard'а (через
+  `dashboardState.dashboards.set()`) создаётся «лишний» widget с
+  дефолтными config'ами. Видимо `loadDashboard` триггерит config
+  dialog/auto-create для каждого widget'а. Не воспроизводится в
+  нормальном UI flow «Add Widget»; влияет только на программные
+  E2E/demo сценарии. Изучить в первом следующем widget-плане.
 
 ## Final code review findings (TODO для следующих widget'ов)
 

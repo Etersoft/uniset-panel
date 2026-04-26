@@ -8791,6 +8791,11 @@ button.rotate-quick-btn:active {
     border-radius: 16px;
     position: relative;
     transition: background 0.15s, box-shadow 0.2s;
+    /* Унифицирует размер: fb-off/unknown имеют border:1px, fb-on — без.
+       Без border-box handle позиции (рассчитанные на 74px) выезжают
+       за правую границу в fb-on состоянии. */
+    box-sizing: border-box;
+    border: 1px solid transparent;
 }
 
 .toggle-widget .toggle-track .toggle-handle {
