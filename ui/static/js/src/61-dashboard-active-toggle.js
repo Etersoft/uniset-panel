@@ -24,12 +24,28 @@ class ToggleWidget extends ActiveDashboardWidget {
     static minSize = { width: 2, height: 2 };
     static maxSize = { width: 6, height: 3 };
 
+    // Доступные визуальные стили. base.getConfigForm рендерит style select
+    // когда length > 1.
+    static styles = ['slider', 'checkbox'];
+    static defaultStyle = 'slider';
+
     // === Render ===
     render() {
-        const label = this.config?.label || this.config?.sensor || 'Toggle';
+        if (this._currentStyle() === 'checkbox') {
+            this.renderCheckbox();
+        } else {
+            this.renderSlider();
+        }
+    }
 
+    _currentStyle() {
+        return this.config?.style || ToggleWidget.defaultStyle;
+    }
+
+    renderSlider() {
+        const label = this.config?.label || this.config?.sensor || 'Toggle';
         this.element = document.createElement('div');
-        this.element.className = 'widget-content toggle-widget';
+        this.element.className = 'widget-content toggle-widget toggle-style-slider';
         this.element.innerHTML = `
             <div class="toggle-name" data-test="name">${escapeHtml(label)}</div>
             <div class="toggle-track" data-test="track" data-handle-pos="left">
@@ -38,10 +54,25 @@ class ToggleWidget extends ActiveDashboardWidget {
             <div class="toggle-state-text" data-test="state-text">${escapeHtml(this._currentLabel())}</div>
         `;
         this.container.appendChild(this.element);
-
         this.element.querySelector('[data-test="track"]').addEventListener('click', () => this.onClick());
 
-        // Initial state — отрисовать по текущим feedback/command (могут быть null).
+        // Initial state — отрисовать по текущим feedback/command.
+        this.renderFeedback();
+        this.renderCommand();
+    }
+
+    renderCheckbox() {
+        const label = this.config?.label || this.config?.sensor || 'Toggle';
+        this.element = document.createElement('div');
+        this.element.className = 'widget-content toggle-widget toggle-style-checkbox';
+        this.element.innerHTML = `
+            <div class="toggle-cb" data-test="cb"></div>
+            <div class="toggle-name" data-test="name">${escapeHtml(label)}</div>
+        `;
+        this.container.appendChild(this.element);
+        // Click anywhere on widget triggers writeValue (standard checkbox UX).
+        this.element.addEventListener('click', () => this.onClick());
+
         this.renderFeedback();
         this.renderCommand();
     }
@@ -66,30 +97,51 @@ class ToggleWidget extends ActiveDashboardWidget {
     }
 
     renderCommand() {
+        if (this._currentStyle() === 'checkbox') {
+            this.renderCheckboxCommand();
+        } else {
+            this.renderSliderCommand();
+        }
+    }
+
+    renderSliderCommand() {
         const track = this.element?.querySelector('[data-test="track"]');
         if (!track) return;
         const valueOn = this.config?.valueOn ?? 1;
-        // Position: командная (если есть command) — приоритет; иначе по feedback.
         const refValue = this.commandValue ?? this.feedbackValue;
         track.dataset.handlePos = refValue === valueOn ? 'right' : 'left';
-
-        // diverge: если command есть и НЕ совпадает с feedback (включая unknown).
         const diverges = this.commandValue !== null
             && this.commandValue !== undefined
             && this.commandValue !== this.feedbackValue;
         track.classList.toggle('diverge', !!diverges);
-
-        // Update state text (cmd-side).
         const stateText = this.element?.querySelector('[data-test="state-text"]');
         if (stateText) stateText.textContent = this._currentLabel();
     }
 
+    renderCheckboxCommand() {
+        // diverge применяется к корневому .toggle-widget (yellow box-shadow вокруг
+        // всего widget'а лучше читается чем вокруг 24px чекбокса).
+        const root = this.element;
+        if (!root) return;
+        const diverges = this.commandValue !== null
+            && this.commandValue !== undefined
+            && this.commandValue !== this.feedbackValue;
+        root.classList.toggle('diverge', !!diverges);
+    }
+
     renderFeedback() {
+        if (this._currentStyle() === 'checkbox') {
+            this.renderCheckboxFeedback();
+        } else {
+            this.renderSliderFeedback();
+        }
+    }
+
+    renderSliderFeedback() {
         const track = this.element?.querySelector('[data-test="track"]');
         if (!track) return;
         const valueOff = this.config?.valueOff ?? 0;
         const valueOn = this.config?.valueOn ?? 1;
-
         track.classList.remove('fb-on', 'fb-off', 'fb-unknown');
         if (this.feedbackValue === valueOn) {
             track.classList.add('fb-on');
@@ -98,13 +150,28 @@ class ToggleWidget extends ActiveDashboardWidget {
         } else {
             track.classList.add('fb-unknown');
         }
-
-        // Tooltip с фактическим числовым значением (для unknown — особенно полезно).
         if (this.feedbackValue !== null && this.feedbackValue !== undefined) {
             track.title = `actual: ${this.feedbackValue}`;
         }
+        this.renderCommand();
+    }
 
-        // Re-evaluate diverge after feedback update.
+    renderCheckboxFeedback() {
+        const cb = this.element?.querySelector('[data-test="cb"]');
+        if (!cb) return;
+        const valueOff = this.config?.valueOff ?? 0;
+        const valueOn = this.config?.valueOn ?? 1;
+        cb.classList.remove('fb-on', 'fb-off', 'fb-unknown');
+        if (this.feedbackValue === valueOn) {
+            cb.classList.add('fb-on');
+        } else if (this.feedbackValue === valueOff) {
+            cb.classList.add('fb-off');
+        } else {
+            cb.classList.add('fb-unknown');
+        }
+        if (this.feedbackValue !== null && this.feedbackValue !== undefined) {
+            cb.title = `actual: ${this.feedbackValue}`;
+        }
         this.renderCommand();
     }
 
