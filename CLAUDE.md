@@ -258,7 +258,7 @@ make build
   (default `objectName = 'SharedMemory'`, `sensor_id` берётся из `config.sensorId` с fallback на `config.sensor`)
 - `update(value, error)` — приходит от SSE через dashboard manager, обновляет `feedbackValue`
 - `commandValue` / `feedbackValue` — раздельное хранение «команда vs обратная связь» (SCADA pattern)
-- `writeState`: `idle | pending | success | error` — отображается через CSS-классы `.active-*` на контейнере (стили в `style.css`)
+- `writeState`: `idle | pending | success | error` — отображается через CSS-классы `.active-*` на контейнере (стили в `style.css`). Цвета: success — зелёный, error — **пурпурный** (НЕ красный: в SCADA red зарезервирован за процессными авариями). Dirty (для setpoint) — янтарный (`#fbbf24`).
 - `isInteractive()` — `false` в edit mode и при отсутствии controlToken
 - `_updateInteractivityClass()` — реактивно обновляет `active-disabled` класс и `data-control-blocked` атрибут
   по событиям `dashboardEditModeChanged` / `controlStatusChanged` (dispatched из dashboard-manager и control модулей)
@@ -329,6 +329,38 @@ warning в форме).
 
 `update()` override игнорирует SSE feedback от sensor'а. `renderCommand`/`renderFeedback` —
 no-op (push-button показывает только команду + общий writeState `pending`/`error`).
+
+**SetpointWidget (`61-dashboard-active-setpoint.js`):** числовой задатчик
+для AI/AO датчиков. Произвольное значение в `[min, max]` с шагом `step`.
+
+Конфиг: `objectName` (от base), `sensorId` (от base), `min`/`max`/`step`
+(числа), `unit` (текст: '°C', '%', 'Pa'), `applyMode` (`'manual'` default |
+`'auto'`), `style`, `label` (от base), `requireConfirmation` (от base).
+
+**Поддерживаемые стили** через `static styles = ['input', 'slider', 'stepper']`:
+- **`input`** (default, defaultSize 3×2): текстовый input + Apply кнопка.
+  В dirty state (cmd ≠ fb) — жёлтая граница input'а, видны Apply + Cancel.
+  Enter = apply, Esc = cancel.
+- **`slider`** (defaultSize 3×2): horizontal slider + value-label сверху +
+  min/max подписи снизу. В manual mode change-event (release) триггерит apply.
+- **`stepper`** (defaultSize 3×2): кнопки `−` / `+` + value-label.
+  Stepper всегда auto-apply on click (applyMode игнорируется).
+
+**Apply mode:**
+- `manual`: пользователь явно жмёт Apply (или Enter). До того value «dirty».
+- `auto`: debounce 500ms на input/slider change → автоотправка.
+
+**Inline-edit:** двойной клик на value-display (slider или stepper) →
+input на месте → Enter apply / Esc cancel / blur apply. Используется для
+точного ввода когда slider/stepper неудобен. Inline-edit Enter/blur всегда
+применяет независимо от applyMode (иначе slider+manual+inline → soft-lock).
+
+**Two-way:** `feedbackValue` от SSE + `commandValue` (что пользователь
+установил, до Apply). Расхождение → CSS `.dirty`. Когда feedback догнал
+command (с tolerance step/2 — для AI/AO float) → dirty снимается автоматически.
+
+**Validation:** значения вне `[min, max]` обрезаются (clamp). В config-форме
+`step≤0` нормализуется в 1, при `min>max` пара свапается, NaN → 0/100.
 
 **Sensor autocomplete (`41-sensor-autocomplete.js`):** утилита
 `setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId)` — debounce 150ms,

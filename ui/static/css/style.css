@@ -8703,15 +8703,20 @@ button.rotate-quick-btn:active {
     transition: opacity 0.15s, filter 0.15s;
 }
 
-.dashboard-widget.active-success {
+.dashboard-widget.active-success,
+.dashboard-widget.transparent.active-success {
     /* Кратковременная зелёная подсветка границы */
-    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.6);
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.6) !important;
     transition: box-shadow 0.2s;
 }
 
-.dashboard-widget.active-error {
-    /* Постоянная красная подсветка до следующей попытки */
-    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.8);
+.dashboard-widget.active-error,
+.dashboard-widget.transparent.active-error {
+    /* Подсветка для write-error (POST не прошёл).
+       Не используем красный — в SCADA red = процессная авария (alarm/fault),
+       а здесь это operational issue (network/permission/validation).
+       Пурпурный — визуально заметный, но семантически нейтральный. */
+    box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.85) !important;
     transition: box-shadow 0.2s;
 }
 
@@ -9014,4 +9019,244 @@ button.rotate-quick-btn:active {
 @keyframes pb-pulse-flash {
     0%   { background: #fbbf24; box-shadow: 0 0 8px rgba(251, 191, 36, 0.8); }
     100% { /* возврат к нормали — каскадом из стиля */ }
+}
+
+/* ============================================================================
+ * SetpointWidget — base layout
+ * ============================================================================ */
+
+.setpoint-widget {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 10px;
+    box-sizing: border-box;
+    gap: 6px;
+}
+
+.setpoint-widget .setpoint-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #d8dce2;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+.setpoint-widget .setpoint-feedback {
+    font-size: 11px;
+    color: #9ca3af;
+    display: flex;
+    align-items: baseline;
+    gap: 2px;
+}
+.setpoint-widget .setpoint-feedback strong {
+    color: #22c55e;
+    font-family: monospace;
+    font-weight: 600;
+}
+.setpoint-widget .setpoint-unit {
+    font-size: 11px;
+    color: #9ca3af;
+    margin-left: 4px;
+}
+
+/* Скрыть native spin buttons у number input'ов (как в input style, так и в inline-edit) */
+.setpoint-input::-webkit-outer-spin-button,
+.setpoint-input::-webkit-inner-spin-button,
+.setpoint-inline-edit::-webkit-outer-spin-button,
+.setpoint-inline-edit::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.setpoint-input,
+.setpoint-inline-edit {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+/* === Style: input === */
+.setpoint-style-input .setpoint-input-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+.setpoint-style-input .setpoint-input {
+    width: 100px;
+    padding: 8px 10px;
+    background: #0f172a;
+    border: 2px solid #6b7280;
+    border-radius: 4px;
+    color: #d8dce2;
+    text-align: right;
+    font-family: monospace;
+    font-size: 14px;
+    font-weight: 600;
+    box-sizing: border-box;
+}
+.setpoint-widget.dirty .setpoint-input {
+    border-color: #fbbf24;
+    background: #1e293b;
+}
+
+.setpoint-apply-btn {
+    padding: 6px 12px;
+    background: #3b82f6;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 12px;
+    display: none;
+}
+.setpoint-cancel-btn {
+    padding: 6px 8px;
+    background: transparent;
+    color: #9ca3af;
+    border: 1px solid #4b5563;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    display: none;
+}
+.setpoint-widget.dirty .setpoint-apply-btn,
+.setpoint-widget.dirty .setpoint-cancel-btn {
+    display: inline-block;
+}
+
+/* === Style: slider === */
+.setpoint-style-slider {
+    width: 100%;
+    padding: 8px 14px;
+}
+.setpoint-style-slider .setpoint-slider-wrap {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: center;
+}
+.setpoint-style-slider .setpoint-slider-value-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+.setpoint-style-slider .setpoint-slider-value {
+    font-size: 18px;
+    font-weight: 600;
+    color: #d8dce2;
+    font-family: monospace;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 3px;
+    transition: background 0.1s;
+}
+.setpoint-style-slider .setpoint-slider-value:hover {
+    background: #374151;
+}
+.setpoint-widget.dirty .setpoint-slider-value {
+    color: #fbbf24;
+}
+.setpoint-style-slider .setpoint-slider {
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    background: #374151;
+    border-radius: 3px;
+    outline: none;
+}
+.setpoint-style-slider .setpoint-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    background: #3b82f6;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid #fff;
+}
+.setpoint-style-slider .setpoint-slider-labels {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    font-size: 10px;
+    color: #6b7280;
+}
+
+/* === Style: stepper === */
+.setpoint-style-stepper .setpoint-stepper-row {
+    display: flex;
+    align-items: center;
+    background: #0f172a;
+    border-radius: 6px;
+    overflow: hidden;
+}
+.setpoint-style-stepper .setpoint-step-btn {
+    width: 32px;
+    height: 32px;
+    background: #374151;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    user-select: none;
+    /* Полностью отключаем визуальный focus indicator —
+       кнопки tabindex=-1 (не доступны через Tab), а mousedown.preventDefault
+       не передаёт focus при клике. Любой :focus / :focus-visible / outline
+       выглядел как мерцание после каждого клика. */
+    outline: none !important;
+}
+.setpoint-style-stepper .setpoint-step-btn:focus,
+.setpoint-style-stepper .setpoint-step-btn:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+}
+.setpoint-style-stepper .setpoint-step-btn:hover {
+    background: #4b5563;
+}
+.setpoint-style-stepper .setpoint-step-btn:active {
+    background: #1e293b;
+}
+.setpoint-style-stepper .setpoint-stepper-value {
+    padding: 0 14px;
+    min-width: 70px;
+    text-align: center;
+    color: #d8dce2;
+    font-family: monospace;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    line-height: 32px;
+    transition: background 0.1s;
+}
+.setpoint-style-stepper .setpoint-stepper-value:hover {
+    background: #1e293b;
+}
+.setpoint-widget.dirty .setpoint-stepper-value {
+    color: #fbbf24;
+}
+/* Cancel × кнопка для stepper — показывается только в dirty state
+   (общее правило .setpoint-widget.dirty .setpoint-cancel-btn). */
+.setpoint-style-stepper .setpoint-cancel-btn {
+    margin-top: 4px;
+    align-self: center;
+}
+
+/* === Inline edit (общий для slider + stepper) === */
+.setpoint-inline-edit {
+    padding: 4px 8px;
+    background: #0f172a;
+    border: 2px solid #fbbf24;
+    border-radius: 4px;
+    color: #d8dce2;
+    font-family: monospace;
+    font-size: 14px;
+    width: 70px;
+    text-align: right;
+    outline: none;
 }

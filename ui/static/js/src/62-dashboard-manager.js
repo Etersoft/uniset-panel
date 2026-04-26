@@ -14,6 +14,7 @@ const WIDGET_TYPES = {
     'digital': DigitalWidget,
     'toggle': ToggleWidget,
     'pushbutton': PushButtonWidget,
+    'setpoint': SetpointWidget,
     'chart': ChartWidget
 };
 
