@@ -252,18 +252,11 @@ func (h *Handlers) GetObjects(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Получаем имена объектов на сервере
-	grouped, err := h.serverMgr.GetAllObjectsGrouped()
+	// Получаем имена объектов на сервере (single-server lookup)
+	names, err := h.serverMgr.GetServerObjects(serverID)
 	if err != nil {
 		h.writeError(w, http.StatusBadGateway, err.Error())
 		return
-	}
-	var names []string
-	for _, sg := range grouped {
-		if sg.ServerID == serverID {
-			names = sg.Objects
-			break
-		}
 	}
 
 	// Без type-фильтра — возвращаем плоский список имён (с server параметром)
