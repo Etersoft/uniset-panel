@@ -23,10 +23,6 @@ class ToggleWidget extends ActiveDashboardWidget {
     static defaultSize = { width: 3, height: 2 };
     static minSize = { width: 2, height: 2 };
     static maxSize = { width: 6, height: 3 };
-    // Opt-out из legacy in-memory sensor autocomplete (62-dashboard-manager.js).
-    // ToggleWidget использует setupSensorAutocomplete из 41-sensor-autocomplete.js,
-    // который умеет резолвить и сохранять числовой sensor_id.
-    static usesNewSensorAutocomplete = true;
 
     // === Render ===
     render() {
@@ -116,19 +112,6 @@ class ToggleWidget extends ActiveDashboardWidget {
 
     static getActiveConfigFields(config = {}) {
         return `
-            <div class="widget-config-field">
-                <label>IONC Object</label>
-                <select class="widget-input" name="objectName" data-test="cfg-objectName">
-                    <option value="${escapeHtml(config.objectName || 'SharedMemory')}" selected>${escapeHtml(config.objectName || 'SharedMemory')}</option>
-                </select>
-                <small style="color:#6b7280">список загружается из /api/objects?type=IONotifyController</small>
-            </div>
-            <div class="widget-config-field">
-                <label>Sensor (autocomplete)</label>
-                <input type="text" class="widget-input" name="sensor" autocomplete="off"
-                       value="${escapeHtml(config.sensor || '')}" data-test="cfg-sensor">
-                <input type="hidden" name="sensorId" value="${config.sensorId ?? ''}" data-test="cfg-sensorId">
-            </div>
             <div class="widget-config-row">
                 <div class="widget-config-field">
                     <label>valueOff</label>
@@ -156,73 +139,12 @@ class ToggleWidget extends ActiveDashboardWidget {
         `;
     }
 
-    static initConfigHandlers(form, config = {}) {
-        // Populate IONC Object dropdown.
-        const objectSelect = form.querySelector('[name="objectName"]');
-        const sensorInput = form.querySelector('[name="sensor"]');
-        const hiddenIdInput = form.querySelector('[name="sensorId"]');
-        if (!objectSelect || !sensorInput || !hiddenIdInput) return;
-
-        // Resolve serverId for the dropdown — use first connected (same default
-        // как в _resolveServerId() базового класса).
-        let serverId = '';
-        for (const [id, srv] of state.servers) {
-            if (srv.connected) { serverId = id; break; }
-        }
-
-        // Fetch IONC objects list.
-        if (serverId) {
-            fetch(`/api/objects?server=${encodeURIComponent(serverId)}&type=IONotifyController`)
-                .then(r => r.ok ? r.json() : { objects: [] })
-                .then(data => {
-                    const objs = data.objects || [];
-                    const currentValue = config.objectName || 'SharedMemory';
-                    objectSelect.innerHTML = objs.map(o => {
-                        const name = typeof o === 'string' ? o : o.name;
-                        return `<option value="${escapeHtml(name)}" ${name === currentValue ? 'selected' : ''}>${escapeHtml(name)}</option>`;
-                    }).join('');
-                    // Если currentValue нет в списке — добавим как disabled
-                    if (!objs.some(o => (typeof o === 'string' ? o : o.name) === currentValue)) {
-                        const opt = document.createElement('option');
-                        opt.value = currentValue;
-                        opt.textContent = `${currentValue} (текущий, не найден)`;
-                        opt.selected = true;
-                        objectSelect.prepend(opt);
-                    }
-                })
-                .catch(e => console.warn('Failed to load IONC objects:', e));
-        }
-
-        // Setup autocomplete on sensor input.
-        const ac = setupSensorAutocomplete(
-            sensorInput,
-            hiddenIdInput,
-            () => objectSelect.value,
-            () => serverId
-        );
-
-        // Reset sensor when object changes.
-        objectSelect.addEventListener('change', () => {
-            if (ac && typeof ac.resetOnObjectChange === 'function') {
-                ac.resetOnObjectChange();
-            }
-        });
-    }
-
-    static parseConfigForm(form) {
-        // Override base parseConfigForm to use sensor name + sensorId field.
-        const labelInput = form.querySelector('[name="label"]');
-        const requireConfInput = form.querySelector('[name="requireConfirmation"]');
+    static parseActiveConfigFields(form) {
         return {
-            sensor:      form.querySelector('[name="sensor"]')?.value || '',
-            sensorId:    parseInt(form.querySelector('[name="sensorId"]')?.value, 10) || null,
-            objectName:  form.querySelector('[name="objectName"]')?.value || 'SharedMemory',
-            valueOff:    Number(form.querySelector('[name="valueOff"]')?.value ?? 0),
-            valueOn:     Number(form.querySelector('[name="valueOn"]')?.value ?? 1),
-            labelOff:    form.querySelector('[name="labelOff"]')?.value || '',
-            labelOn:     form.querySelector('[name="labelOn"]')?.value || '',
-            label:       labelInput?.value || '',
-            requireConfirmation: requireConfInput?.checked || false,
+            valueOff: Number(form.querySelector('[name="valueOff"]')?.value ?? 0),
+            valueOn:  Number(form.querySelector('[name="valueOn"]')?.value ?? 1),
+            labelOff: form.querySelector('[name="labelOff"]')?.value || '',
+            labelOn:  form.querySelector('[name="labelOn"]')?.value || '',
         };
     }
 }

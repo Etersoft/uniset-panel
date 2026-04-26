@@ -19,6 +19,14 @@ class ActiveDashboardWidget extends DashboardWidget {
     static type = 'active-base';
     static displayName = 'Active Widget (base)';
     static description = 'Base class for write-capable widgets';
+    // Active widgets всегда используют setupSensorAutocomplete (41-sensor-autocomplete.js).
+    // dashboard-manager skip'ает legacy in-memory sensor autocomplete для widget'ов
+    // c этим флагом. См. 62-dashboard-manager.js setupConfigDialog.
+    static usesNewSensorAutocomplete = true;
+    // Subclasses с несколькими стилями (toggle: ['slider','checkbox']) задают список;
+    // base getConfigForm рендерит style select когда length > 1.
+    static styles = [];
+    static defaultStyle = '';
 
     constructor(id, config, container) {
         super(id, config, container);
@@ -197,13 +205,32 @@ class ActiveDashboardWidget extends DashboardWidget {
 
     // ===== Config form extension =====
     static getConfigForm(config = {}) {
+        const styleSelect = (this.styles && this.styles.length > 1)
+            ? `
+            <div class="widget-config-field">
+                <label>Style</label>
+                <select class="widget-input" name="style" data-test="cfg-style">
+                    ${this.styles.map(s => `<option value="${escapeHtml(s)}" ${(config.style || this.defaultStyle) === s ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
+                </select>
+            </div>
+            `
+            : '';
+
         const baseFields = `
             <div class="widget-config-field">
-                <label>Sensor</label>
-                <input type="text" class="widget-input" name="sensor"
-                       value="${escapeHtml(config.sensor || '')}"
-                       placeholder="Type to search..." autocomplete="off">
+                <label>IONC Object</label>
+                <select class="widget-input" name="objectName" data-test="cfg-objectName">
+                    <option value="${escapeHtml(config.objectName || 'SharedMemory')}" selected>${escapeHtml(config.objectName || 'SharedMemory')}</option>
+                </select>
+                <small style="color:#6b7280">список загружается из /api/objects?type=IONotifyController</small>
             </div>
+            <div class="widget-config-field">
+                <label>Sensor (autocomplete)</label>
+                <input type="text" class="widget-input" name="sensor" autocomplete="off"
+                       value="${escapeHtml(config.sensor || '')}" data-test="cfg-sensor">
+                <input type="hidden" name="sensorId" value="${config.sensorId ?? ''}" data-test="cfg-sensorId">
+            </div>
+            ${styleSelect}
             <div class="widget-config-field">
                 <label>Label</label>
                 <input type="text" class="widget-input" name="label"
@@ -227,12 +254,66 @@ class ActiveDashboardWidget extends DashboardWidget {
 
     static parseConfigForm(form) {
         const base = {
-            sensor: form.querySelector('[name="sensor"]')?.value || '',
-            label: form.querySelector('[name="label"]')?.value || '',
+            sensor:     form.querySelector('[name="sensor"]')?.value || '',
+            sensorId:   parseInt(form.querySelector('[name="sensorId"]')?.value, 10) || null,
+            objectName: form.querySelector('[name="objectName"]')?.value || 'SharedMemory',
+            label:      form.querySelector('[name="label"]')?.value || '',
             requireConfirmation: form.querySelector('[name="requireConfirmation"]')?.checked || false,
         };
+        const styleEl = form.querySelector('[name="style"]');
+        if (styleEl) base.style = styleEl.value;
         const extra = this.parseActiveConfigFields ? this.parseActiveConfigFields(form) : {};
         return { ...base, ...extra };
+    }
+
+    static initConfigHandlers(form, config = {}) {
+        const objectSelect = form.querySelector('[name="objectName"]');
+        const sensorInput = form.querySelector('[name="sensor"]');
+        const hiddenIdInput = form.querySelector('[name="sensorId"]');
+        if (!objectSelect || !sensorInput || !hiddenIdInput) return;
+
+        // Resolve serverId — first connected server (как в _resolveServerId).
+        let serverId = '';
+        for (const [id, srv] of state.servers) {
+            if (srv.connected) { serverId = id; break; }
+        }
+
+        // Populate IONC objects dropdown.
+        if (serverId) {
+            fetch(`/api/objects?server=${encodeURIComponent(serverId)}&type=IONotifyController`)
+                .then(r => r.ok ? r.json() : { objects: [] })
+                .then(data => {
+                    const objs = data.objects || [];
+                    const currentValue = config.objectName || 'SharedMemory';
+                    objectSelect.innerHTML = objs.map(o => {
+                        const name = typeof o === 'string' ? o : o.name;
+                        return `<option value="${escapeHtml(name)}" ${name === currentValue ? 'selected' : ''}>${escapeHtml(name)}</option>`;
+                    }).join('');
+                    if (!objs.some(o => (typeof o === 'string' ? o : o.name) === currentValue)) {
+                        const opt = document.createElement('option');
+                        opt.value = currentValue;
+                        opt.textContent = `${currentValue} (текущий, не найден)`;
+                        opt.selected = true;
+                        objectSelect.prepend(opt);
+                    }
+                })
+                .catch(e => console.warn('Failed to load IONC objects:', e));
+        }
+
+        // Setup sensor autocomplete.
+        const ac = setupSensorAutocomplete(
+            sensorInput,
+            hiddenIdInput,
+            () => objectSelect.value,
+            () => serverId
+        );
+
+        // Reset sensor on object change.
+        objectSelect.addEventListener('change', () => {
+            if (ac && typeof ac.resetOnObjectChange === 'function') {
+                ac.resetOnObjectChange();
+            }
+        });
     }
 
     static parseActiveConfigFields(form) {
