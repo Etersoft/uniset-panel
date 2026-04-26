@@ -8763,3 +8763,65 @@ button.rotate-quick-btn:active {
     font-size: 12px;
     text-align: center;
 }
+
+/* ============================================================================
+ * ToggleWidget
+ * ============================================================================ */
+
+.toggle-widget {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 100%;
+    cursor: pointer;
+}
+
+.toggle-widget .toggle-name {
+    font-size: 13px;
+    color: #d8dce2;
+    font-weight: 600;
+    text-align: center;
+}
+
+.toggle-widget .toggle-track {
+    width: 72px;
+    height: 32px;
+    border-radius: 16px;
+    position: relative;
+    transition: background 0.15s, box-shadow 0.2s;
+}
+
+.toggle-widget .toggle-track .toggle-handle {
+    position: absolute;
+    top: 2px;
+    width: 28px;
+    height: 28px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,.4);
+    transition: left 0.15s;
+}
+
+.toggle-widget .toggle-track[data-handle-pos="left"]  .toggle-handle { left: 2px; }
+.toggle-widget .toggle-track[data-handle-pos="right"] .toggle-handle { left: 42px; }
+
+.toggle-widget .toggle-track.fb-on      { background: #22c55e; }
+.toggle-widget .toggle-track.fb-off     { background: #374151; border: 1px solid #4b5563; }
+.toggle-widget .toggle-track.fb-unknown { background: #1f2937; border: 1px dashed #6b7280; }
+
+.toggle-widget .toggle-track.diverge {
+    box-shadow: 0 0 0 2px #f59e0b, 0 0 8px rgba(245,158,11,0.4);
+}
+
+.toggle-widget .toggle-state-text {
+    font-size: 11px;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+@media (max-height: 80px) {
+    .toggle-widget .toggle-state-text { display: none; }
+}
