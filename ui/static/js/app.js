@@ -298,10 +298,21 @@ function canControl() {
 
 // Обновление статуса контроля из данных сервера
 function updateControlStatus(status) {
+    // Equality check — control_status SSE event прилетает на каждом poll,
+    // не имеет смысла пересчитывать UI и dispatch'ить controlStatusChanged
+    // если ничего по существу не изменилось (особенно важно для активных
+    // widget'ов: каждый делает DOM mutations в _updateInteractivityClass).
+    const changed =
+        state.control.enabled       !== status.enabled       ||
+        state.control.hasController !== status.hasController ||
+        state.control.isController  !== status.isController;
+
     state.control.enabled = status.enabled;
     state.control.hasController = status.hasController;
     state.control.isController = status.isController;
     state.control.timeoutSec = status.timeoutSec || 60;
+
+    if (!changed) return;
 
     updateControlUI();
     updateAllControlButtons();
@@ -15914,17 +15925,13 @@ class ActiveDashboardWidget extends DashboardWidget {
         this._lastWriteMessage = message;
 
         // Обновить CSS-классы контейнера виджета
-        const root = this.container || this.element;
+        const root = this.container;
         if (root) {
             root.classList.remove('active-pending', 'active-success', 'active-error');
             if (state !== 'idle') {
                 root.classList.add(`active-${state}`);
             }
-            if (message) {
-                root.title = message;
-            } else {
-                root.removeAttribute('title');
-            }
+            this._recomputeTitle();
         }
 
         // Очистить предыдущие таймеры
@@ -15961,21 +15968,39 @@ class ActiveDashboardWidget extends DashboardWidget {
         return true;
     }
 
+    // Единая точка владения title. Приоритет:
+    //   1. write error message (пока активен writeState='error')
+    //   2. control-blocked / edit-mode → 'Take control to interact'
+    //   3. пусто
+    // Вызывается из _setWriteState и _updateInteractivityClass — так оба источника
+    // не затирают друг друга и пользователь видит самую релевантную информацию.
+    _recomputeTitle() {
+        const root = this.container;
+        if (!root) return;
+        if (this.writeState === 'error' && this._lastWriteMessage) {
+            root.title = this._lastWriteMessage;
+            return;
+        }
+        if (!this.isInteractive()) {
+            root.title = 'Take control to interact';
+            return;
+        }
+        root.removeAttribute('title');
+    }
+
     // Toggles 'active-disabled' class and 'data-control-blocked' attr on the
     // widget container so CSS can show "click does nothing right now" state.
     _updateInteractivityClass() {
-        const root = this.container || this.element;
+        const root = this.container;
         if (!root) return;
         const interactive = this.isInteractive();
         root.classList.toggle('active-disabled', !interactive);
         if (!interactive) {
             root.dataset.controlBlocked = 'true';
-            // Не затираем title если там сообщение об ошибке записи.
-            if (!root.title) root.title = 'Take control to interact';
         } else {
             delete root.dataset.controlBlocked;
-            if (root.title === 'Take control to interact') root.title = '';
         }
+        this._recomputeTitle();
     }
 
     needsConfirmation() {

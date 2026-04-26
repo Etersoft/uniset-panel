@@ -37,10 +37,21 @@ function canControl() {
 
 // Обновление статуса контроля из данных сервера
 function updateControlStatus(status) {
+    // Equality check — control_status SSE event прилетает на каждом poll,
+    // не имеет смысла пересчитывать UI и dispatch'ить controlStatusChanged
+    // если ничего по существу не изменилось (особенно важно для активных
+    // widget'ов: каждый делает DOM mutations в _updateInteractivityClass).
+    const changed =
+        state.control.enabled       !== status.enabled       ||
+        state.control.hasController !== status.hasController ||
+        state.control.isController  !== status.isController;
+
     state.control.enabled = status.enabled;
     state.control.hasController = status.hasController;
     state.control.isController = status.isController;
     state.control.timeoutSec = status.timeoutSec || 60;
+
+    if (!changed) return;
 
     updateControlUI();
     updateAllControlButtons();
