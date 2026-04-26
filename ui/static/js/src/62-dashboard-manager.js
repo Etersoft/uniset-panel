@@ -15,6 +15,7 @@ const WIDGET_TYPES = {
     'toggle': ToggleWidget,
     'pushbutton': PushButtonWidget,
     'setpoint': SetpointWidget,
+    'generator': GeneratorWidget,
     'chart': ChartWidget
 };
 
