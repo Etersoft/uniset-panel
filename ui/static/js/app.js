@@ -21042,8 +21042,13 @@ class DashboardManager {
         this.selectEl.innerHTML = html;
         this.selectEl.value = currentValue;
 
-        // Also update sidebar dashboards list
+        // Also update sidebar dashboards list (legacy hidden section + новые
+        // sidebar groups). renderSidebarGroups читает 'user-dashboards' из
+        // localStorage — saveDashboard уже обновил key, нужно re-render.
         this.updateSidebarDashboards();
+        if (typeof renderSidebarGroups === 'function') {
+            renderSidebarGroups();
+        }
     }
 
     updateSidebarDashboards() {
