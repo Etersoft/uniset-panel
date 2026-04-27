@@ -5720,6 +5720,13 @@ td.ionc-col-add-buttons > *:last-child {
     grid-template-columns: repeat(3, 1fr);
     gap: 12px;
     padding: 20px;
+    /* widget-dialog родитель имеет max-height:90vh + overflow:hidden — нужно
+       чтобы содержимое прокручивалось внутри (с 13+ widget'ами в 3 колонках
+       не помещается на маленьких экранах). flex:1 + min-height:0 — стандартный
+       trick чтобы flex child мог shrink ниже своего content height. */
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
 }
 
 .widget-picker-item {
