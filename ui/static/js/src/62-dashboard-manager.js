@@ -297,28 +297,43 @@ class DashboardManager {
     // Single-shot: на первом load после deploy заполняет serverId первым connected
     // и objectName='SharedMemory' (дефолт IONC), сохраняет dashboard config обратно.
     // На следующих load'ах no-op (уже есть оба поля).
-    // Не используем instanceof ActiveDashboardWidget напрямую — проверяем по контракту
-    // (config.sensor || config.sensorId — sensor отсутствует в pure-display widget'ах
-    // вроде label/divider, которые валидны без serverId).
+    //
+    // Покрытие — все widget типы которым нужны sensor подписки:
+    //   - active widgets (toggle/button/setpoint/generator) — cfg.sensor
+    //   - StatusBar — cfg.items[*].sensor
+    //   - Chart — cfg.zones[*].sensors[*]
+    //   - BarGraph — cfg.sensors[*] (если есть)
+    // Pure-display widgets (label/divider) без sensor контракта — пропускаются.
+    //
+    // Atomic: если serverId не резолвится (cold init, state.servers ещё пустой),
+    // НЕ пишем objectName в одиночку. Иначе сохранили бы half-migrated config
+    // с objectName но без serverId, и `updateSensorSubscriptions` всё равно skip'нет
+    // widget. На следующем load после установки соединения миграция отработает целиком.
     _migrateLegacyServerIds() {
+        const needsServer = (cfg) =>
+            cfg.sensor || cfg.sensorId ||
+            (Array.isArray(cfg.items) && cfg.items.some(it => it?.sensor)) ||
+            (Array.isArray(cfg.zones) && cfg.zones.some(z => Array.isArray(z?.sensors) && z.sensors.length > 0)) ||
+            (Array.isArray(cfg.sensors) && cfg.sensors.length > 0);
+
         let dirty = false;
         for (const widget of dashboardState.widgets.values()) {
             const cfg = widget?.config;
             if (!cfg) continue;
-            if (!(cfg.sensor || cfg.sensorId)) continue;
+            if (!needsServer(cfg)) continue;
 
-            if (!cfg.serverId) {
-                const fallback = this._resolveFirstConnectedServerId();
-                if (fallback) {
-                    cfg.serverId = fallback;
-                    dirty = true;
-                    console.log(`Migrated legacy widget ${widget.id}: serverId=${fallback}`);
-                }
-            }
-            if (!cfg.objectName) {
-                cfg.objectName = 'SharedMemory';
+            // Atomic check: для half-state (есть один — нет другого) нужно резолвить serverId.
+            // Если не получилось — пропускаем widget, миграция повторится на следующем load.
+            if (cfg.serverId && cfg.objectName) continue;
+            const resolvedServerId = cfg.serverId || this._resolveFirstConnectedServerId();
+            if (!resolvedServerId) continue;
+
+            const filled = {};
+            if (!cfg.serverId)   { cfg.serverId = resolvedServerId; filled.serverId = resolvedServerId; }
+            if (!cfg.objectName) { cfg.objectName = 'SharedMemory'; filled.objectName = 'SharedMemory'; }
+            if (Object.keys(filled).length > 0) {
                 dirty = true;
-                console.log(`Migrated legacy widget ${widget.id}: objectName=SharedMemory`);
+                console.info('dashboard: migrated legacy widget', widget.id, filled);
             }
         }
         if (dirty && typeof dashboardState.currentDashboard === 'string') {
