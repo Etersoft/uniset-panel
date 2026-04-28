@@ -21222,6 +21222,48 @@ class DashboardManager {
         });
     }
 
+    // Resolve первый connected server. Используется для legacy fallback и migration.
+    _resolveFirstConnectedServerId() {
+        if (typeof state === 'undefined' || !state.servers) return null;
+        for (const [id, server] of state.servers) {
+            if (server.connected) return id;
+        }
+        return null;
+    }
+
+    // Auto-migrate legacy widget configs без serverId / objectName.
+    // Single-shot: на первом load после deploy заполняет serverId первым connected
+    // и objectName='SharedMemory' (дефолт IONC), сохраняет dashboard config обратно.
+    // На следующих load'ах no-op (уже есть оба поля).
+    // Не используем instanceof ActiveDashboardWidget напрямую — проверяем по контракту
+    // (config.sensor || config.sensorId — sensor отсутствует в pure-display widget'ах
+    // вроде label/divider, которые валидны без serverId).
+    _migrateLegacyServerIds() {
+        let dirty = false;
+        for (const widget of dashboardState.widgets.values()) {
+            const cfg = widget?.config;
+            if (!cfg) continue;
+            if (!(cfg.sensor || cfg.sensorId)) continue;
+
+            if (!cfg.serverId) {
+                const fallback = this._resolveFirstConnectedServerId();
+                if (fallback) {
+                    cfg.serverId = fallback;
+                    dirty = true;
+                    console.log(`Migrated legacy widget ${widget.id}: serverId=${fallback}`);
+                }
+            }
+            if (!cfg.objectName) {
+                cfg.objectName = 'SharedMemory';
+                dirty = true;
+                console.log(`Migrated legacy widget ${widget.id}: objectName=SharedMemory`);
+            }
+        }
+        if (dirty && typeof dashboardState.currentDashboard === 'string') {
+            this.saveDashboard(dashboardState.currentDashboard);
+        }
+    }
+
     async loadDashboard(name) {
         if (!name) {
             this.clearDashboard();
@@ -21306,6 +21348,7 @@ class DashboardManager {
         });
 
         // Subscribe to sensor updates
+        this._migrateLegacyServerIds();
         this.updateSensorSubscriptions();
 
         // Initialize widgets with cached/fetched values
