@@ -96,10 +96,13 @@ class ActiveDashboardWidget extends DashboardWidget {
             return;
         }
 
-        const serverId = this._resolveServerId();
+        const serverId = this.config?.serverId ?? this._resolveServerId();
         if (!serverId) {
-            this._setWriteState('error', 'No connected server');
+            this._setWriteState('error', 'No server configured');
             return;
+        }
+        if (!this.config?.serverId) {
+            console.warn(`Active widget ${this.id || '<unknown>'}: serverId missing in config, using fallback ${serverId} — config will be migrated on next dashboard load`);
         }
 
         const objectName = this.config?.objectName || 'SharedMemory';
@@ -254,7 +257,25 @@ class ActiveDashboardWidget extends DashboardWidget {
             `
             : '';
 
+        // Server dropdown — первое поле, определяет список IONC objects ниже.
+        // Показываем connected серверы + текущий config.serverId (даже если disconnected),
+        // чтобы юзер видел свой выбор.
+        const currentServerId = config.serverId || '';
+        let serverOptions = '';
+        for (const [id, srv] of state.servers) {
+            if (srv.connected || id === currentServerId) {
+                const sel = id === currentServerId ? 'selected' : '';
+                serverOptions += `<option value="${escapeHtml(id)}" ${sel}>${escapeHtml(srv.name || id)}</option>`;
+            }
+        }
+
         const baseFields = `
+            <div class="widget-config-field">
+                <label>Server</label>
+                <select class="widget-input" name="serverId" data-test="cfg-serverId">
+                    ${serverOptions}
+                </select>
+            </div>
             <div class="widget-config-field">
                 <label>IONC Object</label>
                 <select class="widget-input" name="objectName" data-test="cfg-objectName">
@@ -295,6 +316,7 @@ class ActiveDashboardWidget extends DashboardWidget {
 
     static parseConfigForm(form) {
         const base = {
+            serverId:   form.querySelector('[name="serverId"]')?.value || null,
             sensor:     form.querySelector('[name="sensor"]')?.value || '',
             sensorId:   (() => {
                 const raw = form.querySelector('[name="sensorId"]')?.value;
@@ -321,24 +343,24 @@ class ActiveDashboardWidget extends DashboardWidget {
         if (form.dataset.activeHandlersWired === 'true') return;
         form.dataset.activeHandlersWired = 'true';
 
+        const serverSelect = form.querySelector('[name="serverId"]');
         const objectSelect = form.querySelector('[name="objectName"]');
         const sensorInput = form.querySelector('[name="sensor"]');
         const hiddenIdInput = form.querySelector('[name="sensorId"]');
-        if (!objectSelect || !sensorInput || !hiddenIdInput) return;
+        if (!serverSelect || !objectSelect || !sensorInput || !hiddenIdInput) return;
 
-        // Resolve serverId — first connected server (как в _resolveServerId).
-        let serverId = '';
-        for (const [id, srv] of state.servers) {
-            if (srv.connected) { serverId = id; break; }
-        }
-
-        // Populate IONC objects dropdown.
-        if (serverId) {
+        // Helper: загрузить IONC objects для текущего serverId.
+        const loadIONCObjects = (serverId) => {
+            if (!serverId) {
+                objectSelect.innerHTML = '<option value="" disabled selected>(выберите Server)</option>';
+                return;
+            }
             fetch(`/api/objects?server=${encodeURIComponent(serverId)}&type=IONotifyController`)
                 .then(r => r.ok ? r.json() : { objects: [] })
                 .then(data => {
                     const objs = data.objects || [];
-                    const currentValue = config.objectName || 'SharedMemory';
+                    // При смене сервера preferred = config.objectName, иначе первый из списка.
+                    const currentValue = objectSelect.value || config.objectName || 'SharedMemory';
                     objectSelect.innerHTML = objs.map(o => {
                         const name = typeof o === 'string' ? o : o.name;
                         return `<option value="${escapeHtml(name)}" ${name === currentValue ? 'selected' : ''}>${escapeHtml(name)}</option>`;
@@ -352,17 +374,28 @@ class ActiveDashboardWidget extends DashboardWidget {
                     }
                 })
                 .catch(e => console.warn('Failed to load IONC objects:', e));
-        }
+        };
 
-        // Setup sensor autocomplete.
+        // Initial load для текущего serverId.
+        loadIONCObjects(serverSelect.value);
+
+        // Setup sensor autocomplete (читает текущий serverId из form, не cached).
         const ac = setupSensorAutocomplete(
             sensorInput,
             hiddenIdInput,
             () => objectSelect.value,
-            () => serverId
+            () => serverSelect.value
         );
 
-        // Reset sensor on object change.
+        // Server change → reload objects + reset sensor.
+        serverSelect.addEventListener('change', () => {
+            loadIONCObjects(serverSelect.value);
+            if (ac && typeof ac.resetOnObjectChange === 'function') {
+                ac.resetOnObjectChange();
+            }
+        });
+
+        // Object change → reset sensor.
         objectSelect.addEventListener('change', () => {
             if (ac && typeof ac.resetOnObjectChange === 'function') {
                 ac.resetOnObjectChange();
