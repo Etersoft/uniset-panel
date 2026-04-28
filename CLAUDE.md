@@ -254,8 +254,8 @@ make build
 `WIDGET_TYPES` (`62-dashboard-manager.js`).
 
 **Контракт `ActiveDashboardWidget`:**
-- `writeValue(value)` — POST через `controlledFetch` на `/api/objects/{config.objectName}/ionc/set?server=...`
-  (default `objectName = 'SharedMemory'`, `sensor_id` берётся из `config.sensorId` с fallback на `config.sensor`)
+- `writeValue(value)` — orchestrator: проверяет `isInteractive()` + `_confirm()`, затем дёргает `_doWrite(value)`. Главный entry point для UI-инициированной записи (click handler виджета).
+- `_doWrite(value)` — actual fetch на `/api/objects/{config.objectName}/ionc/set?server=...` без UI guards. Используется напрямую для release/OFF path push-button'ов и подобных операций где second POST должен дойти даже если controlToken отозван между ON и OFF (иначе actuator виснет в ON). Server validation (sensorId/serverId/objectName) сохраняется. Default `objectName = 'SharedMemory'`, `sensor_id` из `config.sensorId` с fallback на `config.sensor`.
 - `update(value, error)` — приходит от SSE через dashboard manager, обновляет `feedbackValue`
 - `commandValue` / `feedbackValue` — раздельное хранение «команда vs обратная связь» (SCADA pattern)
 - `writeState`: `idle | pending | success | error` — отображается через CSS-классы `.active-*` на контейнере (стили в `style.css`). Цвета: success — зелёный, error — **пурпурный** (НЕ красный: в SCADA red зарезервирован за процессными авариями). Dirty (для setpoint) — янтарный (`#fbbf24`).
@@ -277,7 +277,7 @@ make build
 - `_confirm(value)` — заменить `window.confirm` на красивый dialog
 
 **Subclass contract — НЕ трогай:**
-- `getConfigForm`, `parseConfigForm`, `initConfigHandlers`, `writeValue`, `usesNewSensorAutocomplete`,
+- `getConfigForm`, `parseConfigForm`, `initConfigHandlers`, `writeValue`, `_doWrite`, `usesNewSensorAutocomplete`,
   `_setWriteState`, `_recomputeTitle`, `_updateInteractivityClass` — наследуется и достаточно
 
 **CSS-маркер:** dashboard-manager в `createWidget` выставляет `container.dataset.activeWidget = 'true'`
@@ -322,10 +322,12 @@ warning в форме).
 
 **Поведение:**
 - `pulse`: click → POST valueOn → wait `pulseWidth` ms → POST valueOff. Visual flash
-  (yellow, 300ms) для feedback мгновенно. Второй POST через `_writeValueRaw` — без
-  confirm dialog.
+  (yellow, 300ms) для feedback мгновенно. Второй POST через `_writeValueRaw` (= base
+  `_doWrite`) — без confirm dialog **и без isInteractive guard**: если controlToken
+  отозван между ON и pulseWidth-таймером, OFF всё равно дойдёт. Иначе actuator завис бы в ON.
 - `momentary`: mousedown → POST valueOn; window-level mouseup → POST valueOff
-  (window-listener гарантирует release даже при mouseleave).
+  (window-listener гарантирует release даже при mouseleave). Release path также
+  через `_writeValueRaw` — bypass interactivity guard.
 
 `update()` override игнорирует SSE feedback от sensor'а. `renderCommand`/`renderFeedback` —
 no-op (push-button показывает только команду + общий writeState `pending`/`error`).

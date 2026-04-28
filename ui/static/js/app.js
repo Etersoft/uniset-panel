@@ -16078,10 +16078,20 @@ class ActiveDashboardWidget extends DashboardWidget {
     }
 
     // ===== Write =====
+    // Orchestrator: проверяет UI guards (interactive + confirmation), затем
+    // делегирует actual fetch в _doWrite().
     async writeValue(value) {
         if (!this.isInteractive()) return;
         if (this.needsConfirmation() && !await this._confirm(value)) return;
+        await this._doWrite(value);
+    }
 
+    // Actual fetch + writeState handling. БЕЗ interactive/confirm guards.
+    // Используется напрямую активными widget'ами для release/OFF path,
+    // где critical чтобы second POST дошёл даже если controlToken был
+    // отозван между ON и OFF (push-button release, pulse trailing edge).
+    // Валидирует только sensorId/serverId/objectName.
+    async _doWrite(value) {
         this.commandValue = value;
         this._setWriteState('pending');
 
@@ -16504,12 +16514,14 @@ class PushButtonWidget extends ActiveDashboardWidget {
         btn.addEventListener('touchstart', onDown);
     }
 
-    // Вспомогательный write без confirm dialog (для второго шага pulse / release momentary).
+    // Release/OFF path для pulse trailing edge и momentary mouseup.
+    // Вызывает _doWrite напрямую — пропускает isInteractive() и confirm.
+    // Это критично: между нажатием (ON отправлен) и release пользователь мог
+    // отдать controlToken, выйти из edit-mode и т.п. Если бы мы прошли через
+    // writeValue() с её guard'ами, OFF не отправился бы → actuator завис в ON.
+    // Server validation (sensorId/serverId/objectName) сохраняется внутри _doWrite.
     async _writeValueRaw(value) {
-        const orig = this.config?.requireConfirmation;
-        if (this.config) this.config.requireConfirmation = false;
-        try { await this.writeValue(value); }
-        finally { if (this.config) this.config.requireConfirmation = orig; }
+        await this._doWrite(value);
     }
 
     // Push-button doesn't visualize commandValue or feedbackValue — overrides пустые.

@@ -71,10 +71,20 @@ class ActiveDashboardWidget extends DashboardWidget {
     }
 
     // ===== Write =====
+    // Orchestrator: проверяет UI guards (interactive + confirmation), затем
+    // делегирует actual fetch в _doWrite().
     async writeValue(value) {
         if (!this.isInteractive()) return;
         if (this.needsConfirmation() && !await this._confirm(value)) return;
+        await this._doWrite(value);
+    }
 
+    // Actual fetch + writeState handling. БЕЗ interactive/confirm guards.
+    // Используется напрямую активными widget'ами для release/OFF path,
+    // где critical чтобы second POST дошёл даже если controlToken был
+    // отозван между ON и OFF (push-button release, pulse trailing edge).
+    // Валидирует только sensorId/serverId/objectName.
+    async _doWrite(value) {
         this.commandValue = value;
         this._setWriteState('pending');
 
