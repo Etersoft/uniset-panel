@@ -23,6 +23,7 @@ Thumbs.db
 # Node modules cache for e2e tests
 .node_modules/
 tests/node_modules/
+tests/unit/node_modules/
 tests/test-results/
 tests/playwright-report/
 coverage.out

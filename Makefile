@@ -1,4 +1,4 @@
-.PHONY: build run test js-tests js-tests-multi coverage clean app demo test-integration clickhouse-up clickhouse-down
+.PHONY: build run test js-tests js-tests-multi js-tests-unit js-tests-all coverage clean app demo test-integration clickhouse-up clickhouse-down
 
 # Generate app.js from source modules
 app:
@@ -36,8 +36,12 @@ js-tests-multi:
 	docker compose -f docker-compose.multi.yml up --build --abort-on-container-exit --exit-code-from e2e-multi
 	docker compose -f docker-compose.multi.yml down
 
-# All E2E tests
-js-tests-all: js-tests js-tests-multi
+# Frontend unit tests (vitest + jsdom)
+js-tests-unit:
+	cd tests/unit && npm install --no-fund --no-audit && npx vitest run
+
+# All E2E + unit tests
+js-tests-all: js-tests js-tests-multi js-tests-unit
 
 # Clean
 clean:
