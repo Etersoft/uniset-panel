@@ -1388,10 +1388,10 @@ class BaseObjectRenderer {
 
     // ========== Общие методы для работы с графиками ==========
 
-    // Проверить, добавлен ли датчик на график
+    // Проверить, добавлен ли датчик на график.
+    // Read по tabKey с fallback на objectName (внутри функции) для legacy данных.
     isSensorOnChart(sensorName) {
-        // Используем objectName (displayName) для localStorage - это имя объекта без serverId
-        const addedSensors = getExternalSensorsFromStorage(this.objectName);
+        const addedSensors = getExternalSensorsFromStorage(this.tabKey, this.objectName);
         return addedSensors.has(sensorName);
     }
 
@@ -1400,8 +1400,8 @@ class BaseObjectRenderer {
     toggleSensorChart(sensor) {
         if (!sensor || !sensor.name) return;
 
-        // Используем objectName (displayName) для localStorage
-        const addedSensors = getExternalSensorsFromStorage(this.objectName);
+        // Read по tabKey (с legacy fallback внутри функции).
+        const addedSensors = getExternalSensorsFromStorage(this.tabKey, this.objectName);
 
         if (addedSensors.has(sensor.name)) {
             // Удаляем с графика
@@ -1419,9 +1419,11 @@ class BaseObjectRenderer {
                 chartOptions: chartOptions
             };
 
-            // Добавляем в список внешних датчиков (сохраняем полные данные)
+            // Добавляем в список внешних датчиков (сохраняем полные данные).
+            // Write всегда по tabKey, чтобы дубликат objectName на разных серверах
+            // не смешивался.
             addedSensors.set(sensor.name, sensorForChart);
-            saveExternalSensorsToStorage(this.objectName, addedSensors);
+            saveExternalSensorsToStorage(this.tabKey, addedSensors);
 
             // Добавляем в state.sensorsByName если его там нет
             if (!state.sensorsByName.has(sensor.name)) {

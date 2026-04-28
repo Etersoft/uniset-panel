@@ -2963,10 +2963,10 @@ class BaseObjectRenderer {
 
     // ========== Общие методы для работы с графиками ==========
 
-    // Проверить, добавлен ли датчик на график
+    // Проверить, добавлен ли датчик на график.
+    // Read по tabKey с fallback на objectName (внутри функции) для legacy данных.
     isSensorOnChart(sensorName) {
-        // Используем objectName (displayName) для localStorage - это имя объекта без serverId
-        const addedSensors = getExternalSensorsFromStorage(this.objectName);
+        const addedSensors = getExternalSensorsFromStorage(this.tabKey, this.objectName);
         return addedSensors.has(sensorName);
     }
 
@@ -2975,8 +2975,8 @@ class BaseObjectRenderer {
     toggleSensorChart(sensor) {
         if (!sensor || !sensor.name) return;
 
-        // Используем objectName (displayName) для localStorage
-        const addedSensors = getExternalSensorsFromStorage(this.objectName);
+        // Read по tabKey (с legacy fallback внутри функции).
+        const addedSensors = getExternalSensorsFromStorage(this.tabKey, this.objectName);
 
         if (addedSensors.has(sensor.name)) {
             // Удаляем с графика
@@ -2994,9 +2994,11 @@ class BaseObjectRenderer {
                 chartOptions: chartOptions
             };
 
-            // Добавляем в список внешних датчиков (сохраняем полные данные)
+            // Добавляем в список внешних датчиков (сохраняем полные данные).
+            // Write всегда по tabKey, чтобы дубликат objectName на разных серверах
+            // не смешивался.
             addedSensors.set(sensor.name, sensorForChart);
-            saveExternalSensorsToStorage(this.objectName, addedSensors);
+            saveExternalSensorsToStorage(this.tabKey, addedSensors);
 
             // Добавляем в state.sensorsByName если его там нет
             if (!state.sensorsByName.has(sensor.name)) {
@@ -8197,12 +8199,16 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
             }
         });
 
-        // Click outside to hide autocomplete
-        document.addEventListener('click', (e) => {
+        // Click outside to hide autocomplete.
+        // Сохраняем reference, чтобы destroy() мог снять — без этого после
+        // пересоздания renderer'а оставались висячие listeners, которые держали
+        // ссылку на старый instance и срабатывали на чужих экранах.
+        this._docClickHandler = (e) => {
             if (!e.target.closest('.uwsgate-add-sensor')) {
                 this.hideAutocomplete();
             }
-        });
+        };
+        document.addEventListener('click', this._docClickHandler);
 
         // Highlight toggle
         const highlightCheckbox = getElementInTab(this.tabKey, `uwsgate-highlight-${this.objectName}`);
@@ -8752,6 +8758,12 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
     destroy() {
         super.destroy();
         this.destroyLogViewer();
+
+        // Снимаем document click listener, навешенный в setupEventListeners.
+        if (this._docClickHandler) {
+            document.removeEventListener('click', this._docClickHandler);
+            this._docClickHandler = null;
+        }
 
         // Unsubscribe from all sensors when tab closes
         if (this.sensors.size > 0) {
@@ -12792,10 +12804,12 @@ function removeExternalSensor(tabKey, sensorName, options = {}) {
         }
     }
 
-    // Снять галочку в любой таблице по data-sensor-name (Modbus, OPCUA и др.)
-    const chartCheckbox = document.querySelector(`.chart-checkbox[data-sensor-name="${CSS.escape(sensorName)}"]`);
-    if (chartCheckbox) {
-        chartCheckbox.checked = false;
+    // Снять галочку в любой таблице по data-sensor-name (Modbus, OPCUA и др.).
+    // Scoped lookup: при дубликате sensorName на разных вкладках нельзя снимать
+    // галочку в чужой вкладке (правило DOM lookup из CLAUDE.md).
+    const chartCheckboxes = getElementsInTab(tabKey, `.chart-checkbox[data-sensor-name="${CSS.escape(sensorName)}"]`);
+    if (chartCheckboxes && chartCheckboxes.length > 0) {
+        chartCheckboxes[0].checked = false;
     }
 
     // Снять галочку в таблице UWebSocketGate (по data-name)
@@ -17448,8 +17462,9 @@ class ToggleWidget extends ActiveDashboardWidget {
     _currentLabel() {
         const labelOff = this.config?.labelOff || 'OFF';
         const labelOn = this.config?.labelOn || 'ON';
+        const valueOn = this.config?.valueOn ?? 1;
         const current = this.commandValue ?? this.feedbackValue;
-        return current === this.config?.valueOn ? labelOn : labelOff;
+        return current === valueOn ? labelOn : labelOff;
     }
 
     onClick() {
@@ -21488,7 +21503,12 @@ class DashboardManager {
             }
         });
         dashboardState.widgets.clear();
+        // Чистим все три карты подписок одновременно с widgets — иначе stale
+        // sensor/setpoint/chart subscriptions будут слать update'ы к destroy'нутым widget'ам
+        // до следующего updateSensorSubscriptions.
         dashboardState.sensorSubscriptions.clear();
+        dashboardState.setpointSubscriptions.clear();
+        dashboardState.chartSubscriptions.clear();
     }
 
     clearDashboard() {
@@ -22434,33 +22454,54 @@ class DashboardManager {
     }
 
     enableDragAndDrop() {
+        // Сохраняем bound handlers, чтобы disableDragAndDrop мог их снять.
+        // Без этого listeners накапливались при каждом toggle edit-mode.
+        this._dndHandlers = this._dndHandlers || new Map(); // widgetId -> {dragstart, dragend}
+
         dashboardState.widgets.forEach((widget, id) => {
             widget.container.draggable = true;
+            // Если уже было повешено (повторный enable без disable) — не дублируем.
+            if (this._dndHandlers.has(id)) return;
 
-            widget.container.addEventListener('dragstart', (e) => {
+            const onDragStart = (e) => {
                 e.dataTransfer.setData('text/plain', id);
                 widget.container.classList.add('dragging');
-            });
-
-            widget.container.addEventListener('dragend', () => {
+            };
+            const onDragEnd = () => {
                 widget.container.classList.remove('dragging');
-            });
+            };
+            widget.container.addEventListener('dragstart', onDragStart);
+            widget.container.addEventListener('dragend', onDragEnd);
+            this._dndHandlers.set(id, { onDragStart, onDragEnd });
         });
 
-        this.gridEl?.addEventListener('dragover', (e) => {
-            e.preventDefault();
-        });
-
-        this.gridEl?.addEventListener('drop', (e) => {
-            e.preventDefault();
-            // TODO: Implement grid position calculation
-        });
+        if (this.gridEl && !this._gridDndHandlers) {
+            const onDragOver = (e) => e.preventDefault();
+            const onDrop = (e) => {
+                e.preventDefault();
+                // TODO: Implement grid position calculation
+            };
+            this.gridEl.addEventListener('dragover', onDragOver);
+            this.gridEl.addEventListener('drop', onDrop);
+            this._gridDndHandlers = { onDragOver, onDrop };
+        }
     }
 
     disableDragAndDrop() {
-        dashboardState.widgets.forEach((widget) => {
+        dashboardState.widgets.forEach((widget, id) => {
             widget.container.draggable = false;
+            const handlers = this._dndHandlers?.get(id);
+            if (handlers) {
+                widget.container.removeEventListener('dragstart', handlers.onDragStart);
+                widget.container.removeEventListener('dragend', handlers.onDragEnd);
+                this._dndHandlers.delete(id);
+            }
         });
+        if (this.gridEl && this._gridDndHandlers) {
+            this.gridEl.removeEventListener('dragover', this._gridDndHandlers.onDragOver);
+            this.gridEl.removeEventListener('drop', this._gridDndHandlers.onDrop);
+            this._gridDndHandlers = null;
+        }
     }
 
     updateSensorSubscriptions() {

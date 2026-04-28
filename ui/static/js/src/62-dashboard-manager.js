@@ -656,7 +656,12 @@ class DashboardManager {
             }
         });
         dashboardState.widgets.clear();
+        // Чистим все три карты подписок одновременно с widgets — иначе stale
+        // sensor/setpoint/chart subscriptions будут слать update'ы к destroy'нутым widget'ам
+        // до следующего updateSensorSubscriptions.
         dashboardState.sensorSubscriptions.clear();
+        dashboardState.setpointSubscriptions.clear();
+        dashboardState.chartSubscriptions.clear();
     }
 
     clearDashboard() {
@@ -1602,33 +1607,54 @@ class DashboardManager {
     }
 
     enableDragAndDrop() {
+        // Сохраняем bound handlers, чтобы disableDragAndDrop мог их снять.
+        // Без этого listeners накапливались при каждом toggle edit-mode.
+        this._dndHandlers = this._dndHandlers || new Map(); // widgetId -> {dragstart, dragend}
+
         dashboardState.widgets.forEach((widget, id) => {
             widget.container.draggable = true;
+            // Если уже было повешено (повторный enable без disable) — не дублируем.
+            if (this._dndHandlers.has(id)) return;
 
-            widget.container.addEventListener('dragstart', (e) => {
+            const onDragStart = (e) => {
                 e.dataTransfer.setData('text/plain', id);
                 widget.container.classList.add('dragging');
-            });
-
-            widget.container.addEventListener('dragend', () => {
+            };
+            const onDragEnd = () => {
                 widget.container.classList.remove('dragging');
-            });
+            };
+            widget.container.addEventListener('dragstart', onDragStart);
+            widget.container.addEventListener('dragend', onDragEnd);
+            this._dndHandlers.set(id, { onDragStart, onDragEnd });
         });
 
-        this.gridEl?.addEventListener('dragover', (e) => {
-            e.preventDefault();
-        });
-
-        this.gridEl?.addEventListener('drop', (e) => {
-            e.preventDefault();
-            // TODO: Implement grid position calculation
-        });
+        if (this.gridEl && !this._gridDndHandlers) {
+            const onDragOver = (e) => e.preventDefault();
+            const onDrop = (e) => {
+                e.preventDefault();
+                // TODO: Implement grid position calculation
+            };
+            this.gridEl.addEventListener('dragover', onDragOver);
+            this.gridEl.addEventListener('drop', onDrop);
+            this._gridDndHandlers = { onDragOver, onDrop };
+        }
     }
 
     disableDragAndDrop() {
-        dashboardState.widgets.forEach((widget) => {
+        dashboardState.widgets.forEach((widget, id) => {
             widget.container.draggable = false;
+            const handlers = this._dndHandlers?.get(id);
+            if (handlers) {
+                widget.container.removeEventListener('dragstart', handlers.onDragStart);
+                widget.container.removeEventListener('dragend', handlers.onDragEnd);
+                this._dndHandlers.delete(id);
+            }
         });
+        if (this.gridEl && this._gridDndHandlers) {
+            this.gridEl.removeEventListener('dragover', this._gridDndHandlers.onDragOver);
+            this.gridEl.removeEventListener('drop', this._gridDndHandlers.onDrop);
+            this._gridDndHandlers = null;
+        }
     }
 
     updateSensorSubscriptions() {

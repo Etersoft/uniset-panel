@@ -197,12 +197,16 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
             }
         });
 
-        // Click outside to hide autocomplete
-        document.addEventListener('click', (e) => {
+        // Click outside to hide autocomplete.
+        // Сохраняем reference, чтобы destroy() мог снять — без этого после
+        // пересоздания renderer'а оставались висячие listeners, которые держали
+        // ссылку на старый instance и срабатывали на чужих экранах.
+        this._docClickHandler = (e) => {
             if (!e.target.closest('.uwsgate-add-sensor')) {
                 this.hideAutocomplete();
             }
-        });
+        };
+        document.addEventListener('click', this._docClickHandler);
 
         // Highlight toggle
         const highlightCheckbox = getElementInTab(this.tabKey, `uwsgate-highlight-${this.objectName}`);
@@ -752,6 +756,12 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
     destroy() {
         super.destroy();
         this.destroyLogViewer();
+
+        // Снимаем document click listener, навешенный в setupEventListeners.
+        if (this._docClickHandler) {
+            document.removeEventListener('click', this._docClickHandler);
+            this._docClickHandler = null;
+        }
 
         // Unsubscribe from all sensors when tab closes
         if (this.sensors.size > 0) {

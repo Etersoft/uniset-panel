@@ -731,10 +731,12 @@ function removeExternalSensor(tabKey, sensorName, options = {}) {
         }
     }
 
-    // Снять галочку в любой таблице по data-sensor-name (Modbus, OPCUA и др.)
-    const chartCheckbox = document.querySelector(`.chart-checkbox[data-sensor-name="${CSS.escape(sensorName)}"]`);
-    if (chartCheckbox) {
-        chartCheckbox.checked = false;
+    // Снять галочку в любой таблице по data-sensor-name (Modbus, OPCUA и др.).
+    // Scoped lookup: при дубликате sensorName на разных вкладках нельзя снимать
+    // галочку в чужой вкладке (правило DOM lookup из CLAUDE.md).
+    const chartCheckboxes = getElementsInTab(tabKey, `.chart-checkbox[data-sensor-name="${CSS.escape(sensorName)}"]`);
+    if (chartCheckboxes && chartCheckboxes.length > 0) {
+        chartCheckboxes[0].checked = false;
     }
 
     // Снять галочку в таблице UWebSocketGate (по data-name)

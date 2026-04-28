@@ -81,8 +81,9 @@ class ToggleWidget extends ActiveDashboardWidget {
     _currentLabel() {
         const labelOff = this.config?.labelOff || 'OFF';
         const labelOn = this.config?.labelOn || 'ON';
+        const valueOn = this.config?.valueOn ?? 1;
         const current = this.commandValue ?? this.feedbackValue;
-        return current === this.config?.valueOn ? labelOn : labelOff;
+        return current === valueOn ? labelOn : labelOff;
     }
 
     onClick() {

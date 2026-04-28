@@ -244,8 +244,13 @@ class ActiveDashboardWidget extends DashboardWidget {
 | cmd=OFF, feedback=ON | зелёный | слева | жёлтая |
 | cmd=*, feedback=unknown | серый-dashed (`fb-unknown`) | по cmd | жёлтая (если есть cmd) |
 | pending (POST в полёте) | как cmd; opacity 0.7 | по cmd | — |
-| error (POST упал) | как было; красная граница | — | красная |
+| error (POST упал) | как было; пурпурная граница¹ | — | пурпурная¹ |
 | disabled (read-only / edit) | как есть; opacity 0.5; grayscale | — | — |
+
+¹ **Цвет write-error — пурпурный, не красный.** В SCADA-семантике red зарезервирован
+за процессными авариями (alarm/critical state), поэтому ошибка записи (operational
+issue, не процессная) отрисовывается в пурпурной палитре. Зафиксировано в
+CLAUDE.md в разделе про `ActiveDashboardWidget`.
 
 ## CSS
 

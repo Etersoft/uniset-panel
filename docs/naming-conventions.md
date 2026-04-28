@@ -103,16 +103,22 @@ These functions operate within a single object's context:
 
 ## localStorage Keys
 
+Все ключи, привязанные к вкладке, **пишутся по `tabKey`** (формат `${serverId}:${objectName}`).
+Это единственный способ корректно различать одинаковые `objectName` на разных серверах.
+При **чтении** допустим fallback на `objectName` для совместимости со старыми данными
+(см. CLAUDE.md, раздел "localStorage ключи").
+
 | Key | Format | Description |
 |-----|--------|-------------|
 | `uniset-panel-collapsed` | `{sectionId: boolean}` | Collapsed state of sections |
 | `uniset-panel-section-order` | `{tabKey: [sectionIds]}` | Order of sections per tab |
-| `uniset-panel-ionc-pinned` | `{objectName: [ids]}` | Pinned IONC sensors |
-| `uniset-panel-mb-pinned` | `{objectName: [ids]}` | Pinned Modbus Master registers |
-| `uniset-panel-mbs-pinned` | `{objectName: [ids]}` | Pinned Modbus Slave registers |
-| `uniset-panel-opcua-pinned` | `{objectName: [ids]}` | Pinned OPCUA Exchange sensors |
-| `uniset-panel-opcuasrv-pinned` | `{objectName: [ids]}` | Pinned OPCUA Server sensors |
-| `uniset-panel-io-pinned` | `{objectName: [ids]}` | Pinned IO variables |
+| `uniset-panel-ionc-pinned` | `{tabKey: [ids]}` | Pinned IONC sensors (read: tabKey → objectName fallback) |
+| `uniset-panel-mb-pinned` | `{tabKey: [ids]}` | Pinned Modbus Master registers (read: tabKey → objectName fallback) |
+| `uniset-panel-mbs-pinned` | `{tabKey: [ids]}` | Pinned Modbus Slave registers (read: tabKey → objectName fallback) |
+| `uniset-panel-opcua-pinned` | `{tabKey: [ids]}` | Pinned OPCUA Exchange sensors (read: tabKey → objectName fallback) |
+| `uniset-panel-opcuasrv-pinned` | `{tabKey: [ids]}` | Pinned OPCUA Server sensors (read: tabKey → objectName fallback) |
+| `uniset-panel-io-pinned` | `{${tabKey}-${type}: [ids]}` | Pinned IO variables (composite key) |
+| `uniset-panel-external-sensors-${tabKey}` | `[sensorData]` | External chart sensors per tab (read: tabKey → objectName fallback) |
 | `uwsgate-pinned-${tabKey}` | `[names]` | Pinned UWebSocketGate sensors (по именам) |
 | `uwsgate-subscriptions-${tabKey}` | `[names]` | UWebSocketGate subscriptions (по именам) |
 
