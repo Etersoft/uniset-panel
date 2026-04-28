@@ -13,9 +13,9 @@ const dashboardState = window.dashboardState = {
     editMode: false,
     selectedWidgetId: null, // selected widget for keyboard movement
     widgets: new Map(),     // widgetId -> widget instance
-    sensorSubscriptions: new Map(), // sensorName -> Set of widgetIds
-    setpointSubscriptions: new Map(), // sensor2Name -> Set of widgetIds (for dual scale)
-    chartSubscriptions: new Map(), // sensorName -> Set of widgetIds (for chart widgets)
+    sensorSubscriptions: new Map(), // sensorKey -> Set of widgetIds (sensorKey = ${serverId}|${objectName}|${sensorName})
+    setpointSubscriptions: new Map(), // sensorKey -> Set of widgetIds (для setpoint sensor2)
+    chartSubscriptions: new Map(), // sensorKey -> Set of widgetIds
     pendingImport: null     // pending import data
 };
 

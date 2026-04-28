@@ -212,18 +212,19 @@ function initSSE() {
             const { objectName, serverId } = event;
             const sensors = event.data;
 
-            // Cache sensor values for dashboard initialization
+            // Cache sensor values for dashboard initialization (по sensorKey).
             const now = Date.now();
             for (const sensor of sensors) {
-                state.sensorValuesCache.set(sensor.name, {
+                const key = makeSensorKey(serverId, objectName, sensor.name);
+                state.sensorValuesCache.set(key, {
                     value: sensor.value,
                     error: sensor.error || null,
                     timestamp: now
                 });
             }
 
-            // Обновляем виджеты на dashboard
-            updateDashboardWidgets(sensors, event.timestamp || null);
+            // Обновляем виджеты на dashboard (с контекстом для построения sensorKey).
+            updateDashboardWidgets(sensors, { serverId, objectName, timestamp: event.timestamp || null });
 
             const tabKey = `${serverId}:${objectName}`;
             const tabState = state.tabs.get(tabKey);
@@ -250,7 +251,7 @@ function initSSE() {
             const { objectName, serverId } = event;
             const registers = event.data;
 
-            updateDashboardWidgets(registers, event.timestamp);
+            updateDashboardWidgets(registers, { serverId, objectName, timestamp: event.timestamp || null });
 
             const tabKey = `${serverId}:${objectName}`;
             const tabState = state.tabs.get(tabKey);
@@ -281,7 +282,7 @@ function initSSE() {
             const { objectName, serverId } = event;
             const sensors = event.data;
 
-            updateDashboardWidgets(sensors, event.timestamp);
+            updateDashboardWidgets(sensors, { serverId, objectName, timestamp: event.timestamp || null });
 
             const tabKey = `${serverId}:${objectName}`;
             const tabState = state.tabs.get(tabKey);
@@ -311,7 +312,7 @@ function initSSE() {
             const { objectName, serverId } = event;
             const sensors = event.data;
 
-            updateDashboardWidgets(sensors, event.timestamp);
+            updateDashboardWidgets(sensors, { serverId, objectName, timestamp: event.timestamp || null });
 
             const tabKey = `${serverId}:${objectName}`;
             const tabState = state.tabs.get(tabKey);

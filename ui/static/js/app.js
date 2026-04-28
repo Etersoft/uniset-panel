@@ -93,7 +93,7 @@ const state = window.state = {
     activeTab: null,
     sensors: new Map(), // sensorId -> sensorInfo
     sensorsByName: new Map(), // sensorName -> sensorInfo
-    sensorValuesCache: new Map(), // sensorName -> { value, error, timestamp } - cache for dashboard init
+    sensorValuesCache: new Map(), // sensorKey -> { value, error, timestamp } — cache for dashboard init. sensorKey = `${serverId}|${objectName}|${sensorName}` (см. 09-sensor-key.js)
     timeRange: DEFAULT_CHART_TIME_RANGE, // секунды (по умолчанию 15 минут)
     sidebarCollapsed: false, // свёрнутая боковая панель
     collapsedSections: {}, // состояние спойлеров
@@ -927,18 +927,19 @@ function initSSE() {
             const { objectName, serverId } = event;
             const sensors = event.data;
 
-            // Cache sensor values for dashboard initialization
+            // Cache sensor values for dashboard initialization (по sensorKey).
             const now = Date.now();
             for (const sensor of sensors) {
-                state.sensorValuesCache.set(sensor.name, {
+                const key = makeSensorKey(serverId, objectName, sensor.name);
+                state.sensorValuesCache.set(key, {
                     value: sensor.value,
                     error: sensor.error || null,
                     timestamp: now
                 });
             }
 
-            // Обновляем виджеты на dashboard
-            updateDashboardWidgets(sensors, event.timestamp || null);
+            // Обновляем виджеты на dashboard (с контекстом для построения sensorKey).
+            updateDashboardWidgets(sensors, { serverId, objectName, timestamp: event.timestamp || null });
 
             const tabKey = `${serverId}:${objectName}`;
             const tabState = state.tabs.get(tabKey);
@@ -965,7 +966,7 @@ function initSSE() {
             const { objectName, serverId } = event;
             const registers = event.data;
 
-            updateDashboardWidgets(registers, event.timestamp);
+            updateDashboardWidgets(registers, { serverId, objectName, timestamp: event.timestamp || null });
 
             const tabKey = `${serverId}:${objectName}`;
             const tabState = state.tabs.get(tabKey);
@@ -996,7 +997,7 @@ function initSSE() {
             const { objectName, serverId } = event;
             const sensors = event.data;
 
-            updateDashboardWidgets(sensors, event.timestamp);
+            updateDashboardWidgets(sensors, { serverId, objectName, timestamp: event.timestamp || null });
 
             const tabKey = `${serverId}:${objectName}`;
             const tabState = state.tabs.get(tabKey);
@@ -1026,7 +1027,7 @@ function initSSE() {
             const { objectName, serverId } = event;
             const sensors = event.data;
 
-            updateDashboardWidgets(sensors, event.timestamp);
+            updateDashboardWidgets(sensors, { serverId, objectName, timestamp: event.timestamp || null });
 
             const tabKey = `${serverId}:${objectName}`;
             const tabState = state.tabs.get(tabKey);
@@ -15947,9 +15948,9 @@ const dashboardState = window.dashboardState = {
     editMode: false,
     selectedWidgetId: null, // selected widget for keyboard movement
     widgets: new Map(),     // widgetId -> widget instance
-    sensorSubscriptions: new Map(), // sensorName -> Set of widgetIds
-    setpointSubscriptions: new Map(), // sensor2Name -> Set of widgetIds (for dual scale)
-    chartSubscriptions: new Map(), // sensorName -> Set of widgetIds (for chart widgets)
+    sensorSubscriptions: new Map(), // sensorKey -> Set of widgetIds (sensorKey = ${serverId}|${objectName}|${sensorName})
+    setpointSubscriptions: new Map(), // sensorKey -> Set of widgetIds (для setpoint sensor2)
+    chartSubscriptions: new Map(), // sensorKey -> Set of widgetIds
     pendingImport: null     // pending import data
 };
 
@@ -21261,96 +21262,76 @@ class DashboardManager {
 
     // Initialize widgets with current sensor values (from cache or API)
     async initializeWidgetValues() {
-        // Collect unique sensor names from subscriptions
-        const sensorNames = new Set();
-        for (const sensorName of dashboardState.sensorSubscriptions.keys()) {
-            sensorNames.add(sensorName);
-        }
-        for (const sensorName of dashboardState.setpointSubscriptions.keys()) {
-            sensorNames.add(sensorName);
-        }
-        for (const sensorName of dashboardState.chartSubscriptions.keys()) {
-            sensorNames.add(sensorName);
-        }
+        // Collect unique sensorKeys from subscriptions (после Step 2.5 ключи Map'ов
+        // — это полные sensorKey, не короткие имена).
+        const sensorKeys = new Set();
+        for (const k of dashboardState.sensorSubscriptions.keys()) sensorKeys.add(k);
+        for (const k of dashboardState.setpointSubscriptions.keys()) sensorKeys.add(k);
+        for (const k of dashboardState.chartSubscriptions.keys()) sensorKeys.add(k);
 
-        if (sensorNames.size === 0) return;
+        if (sensorKeys.size === 0) return;
 
-        // First, try to use cached values from SSE events
-        const uncachedSensors = [];
-        for (const name of sensorNames) {
-            const cached = state.sensorValuesCache.get(name);
+        // First, try to use cached values from SSE events.
+        const uncachedKeys = [];
+        for (const cacheKey of sensorKeys) {
+            const cached = state.sensorValuesCache.get(cacheKey);
             if (cached) {
                 // Use cached value (not older than 60 seconds)
                 if (Date.now() - cached.timestamp < 60000) {
-                    this.handleSensorUpdate(name, cached.value, cached.error);
+                    this.handleSensorUpdate(cacheKey, cached.value, cached.error);
                 } else {
-                    uncachedSensors.push(name);
+                    uncachedKeys.push(cacheKey);
                 }
             } else {
-                uncachedSensors.push(name);
+                uncachedKeys.push(cacheKey);
             }
         }
 
         // For uncached sensors, try to fetch from API
-        if (uncachedSensors.length > 0) {
-            this.fetchSensorValues(uncachedSensors);
+        if (uncachedKeys.length > 0) {
+            this.fetchSensorValues(uncachedKeys);
         }
     }
 
-    // Fetch sensor values from IONC API, grouped by (serverId, objectName)
-    // taken from the consuming widget's config. Falls back to first connected
-    // server + 'SharedMemory' for sensors whose widget config doesn't specify them
-    // (back-compat for old saved dashboards).
-    async fetchSensorValues(sensorNames) {
-        const defaultServerId = this._defaultIONCServerId();
-        if (!defaultServerId) return;
+    // Fetch sensor values from IONC API. Принимает массив sensorKey'ев
+    // (каждый ключ уже кодирует serverId|objectName|sensorName — Step 2.6).
+    // Группирует по (serverId, objectName), делает один search request
+    // на каждый sensorName (текущий API не поддерживает batch search).
+    async fetchSensorValues(sensorKeys) {
+        // Group by (serverId, objectName).
+        // grpKey = `${serverId}|${objectName}` → Map<sensorName, sensorKey>.
+        const groups = new Map();
 
-        // Build (serverId, objectName) → Set<sensorName> grouping.
-        // For each sensor we look at *all* widgets subscribed to it and pick
-        // the (serverId, objectName) of the first one with a non-default config.
-        // If none specifies, use defaults (first connected server, 'SharedMemory').
-        const groups = new Map(); // key: `${serverId}|${objectName}` → Set<sensorName>
-
-        for (const name of sensorNames) {
-            const widgetIds = dashboardState.sensorSubscriptions.get(name);
-            let serverId = defaultServerId;
-            let objectName = 'SharedMemory';
-            if (widgetIds && widgetIds.size > 0) {
-                const firstId = widgetIds.values().next().value;
-                const widget = dashboardState.widgets.get(firstId);
-                if (widget?.config?.objectName) objectName = widget.config.objectName;
-                if (widget?.config?.serverId) serverId = widget.config.serverId;
-            }
-            const key = `${serverId}|${objectName}`;
-            if (!groups.has(key)) groups.set(key, new Set());
-            groups.get(key).add(name);
+        for (const key of sensorKeys) {
+            const parsed = parseSensorKey(key);
+            if (!parsed) continue; // legacy / malformed — пропускаем
+            const grpKey = `${parsed.serverId}|${parsed.objectName}`;
+            if (!groups.has(grpKey)) groups.set(grpKey, new Map());
+            groups.get(grpKey).set(parsed.sensorName, key);
         }
 
-        // Fetch each group with a single search request per sensor (existing API
-        // doesn't support batch search — one call per name). Could be optimized
-        // later by switching to GET .../ionc/sensors with no search and filtering
-        // client-side when group is large.
-        for (const [key, namesSet] of groups) {
-            const [serverId, objectName] = key.split('|');
-            for (const name of namesSet) {
+        for (const [grpKey, nameToKey] of groups) {
+            const [serverId, objectName] = grpKey.split('|');
+            for (const [sensorName, sensorKey] of nameToKey) {
                 try {
                     const url = `/api/objects/${encodeURIComponent(objectName)}/ionc/sensors`
                         + `?server=${encodeURIComponent(serverId)}`
-                        + `&search=${encodeURIComponent(name)}&limit=1`;
+                        + `&search=${encodeURIComponent(sensorName)}&limit=1`;
                     const response = await fetch(url);
                     if (!response.ok) continue;
                     const data = await response.json();
                     if (!data.sensors || data.sensors.length === 0) continue;
-                    const sensor = data.sensors.find(s => s.name === name);
+                    const sensor = data.sensors.find(s => s.name === sensorName);
                     if (!sensor) continue;
-                    state.sensorValuesCache.set(name, {
+                    const writeKey = makeSensorKey(serverId, objectName, sensor.name);
+                    state.sensorValuesCache.set(writeKey, {
                         value: sensor.value,
                         error: null,
                         timestamp: Date.now()
                     });
-                    this.handleSensorUpdate(name, sensor.value, null);
+                    this.handleSensorUpdate(writeKey, sensor.value, null);
                 } catch (err) {
-                    console.warn('Failed to fetch sensor value:', name, err);
+                    console.warn('Failed to fetch sensor value:', sensorKey, err);
                 }
             }
         }
@@ -22547,54 +22528,65 @@ class DashboardManager {
         dashboardState.setpointSubscriptions.clear();
         dashboardState.chartSubscriptions.clear();
 
+        // Helper: добавить (key, id) в Map<key, Set<id>>
+        const addSub = (map, key, id) => {
+            if (!map.has(key)) map.set(key, new Set());
+            map.get(key).add(id);
+        };
+
         dashboardState.widgets.forEach((widget, id) => {
-            // Main sensor subscription
-            const sensor = widget.config?.sensor;
-            if (sensor) {
-                if (!dashboardState.sensorSubscriptions.has(sensor)) {
-                    dashboardState.sensorSubscriptions.set(sensor, new Set());
-                }
-                dashboardState.sensorSubscriptions.get(sensor).add(id);
+            const cfg = widget.config;
+            if (!cfg) return;
+            const serverId = cfg.serverId;
+            const objectName = cfg.objectName;
+
+            // Main sensor subscription. Без serverId+objectName ключ не строим
+            // (legacy widget — миграция заполнит на следующем load).
+            if (cfg.sensor && serverId && objectName) {
+                addSub(dashboardState.sensorSubscriptions,
+                    makeSensorKey(serverId, objectName, cfg.sensor), id);
             }
 
-            // Setpoint sensor subscription (for dual scale)
-            const sensor2 = widget.config?.sensor2;
-            if (sensor2) {
-                if (!dashboardState.setpointSubscriptions.has(sensor2)) {
-                    dashboardState.setpointSubscriptions.set(sensor2, new Set());
+            // Setpoint sensor subscription (sensor2 — может иметь свой objectName2).
+            if (cfg.sensor2 && serverId) {
+                const obj2 = cfg.objectName2 || objectName;
+                if (obj2) {
+                    addSub(dashboardState.setpointSubscriptions,
+                        makeSensorKey(serverId, obj2, cfg.sensor2), id);
                 }
-                dashboardState.setpointSubscriptions.get(sensor2).add(id);
             }
 
-            // StatusBar items subscription (multiple sensors in items array)
-            const items = widget.config?.items;
-            if (Array.isArray(items)) {
-                items.forEach(item => {
-                    if (item.sensor) {
-                        if (!dashboardState.sensorSubscriptions.has(item.sensor)) {
-                            dashboardState.sensorSubscriptions.set(item.sensor, new Set());
-                        }
-                        dashboardState.sensorSubscriptions.get(item.sensor).add(id);
+            // StatusBar items (multiple sensors).
+            if (Array.isArray(cfg.items) && serverId && objectName) {
+                cfg.items.forEach(item => {
+                    if (item?.sensor) {
+                        addSub(dashboardState.sensorSubscriptions,
+                            makeSensorKey(serverId, objectName, item.sensor), id);
                     }
                 });
             }
 
-            // Chart widget subscriptions (multiple sensors from zones)
-            if (widget instanceof ChartWidget && typeof widget.getSensorNames === 'function') {
+            // Chart widget subscriptions (multiple sensors from zones).
+            if (widget instanceof ChartWidget && typeof widget.getSensorNames === 'function'
+                    && serverId && objectName) {
                 const sensorNames = widget.getSensorNames();
                 for (const sensorName of sensorNames) {
-                    if (!dashboardState.chartSubscriptions.has(sensorName)) {
-                        dashboardState.chartSubscriptions.set(sensorName, new Set());
-                    }
-                    dashboardState.chartSubscriptions.get(sensorName).add(id);
+                    addSub(dashboardState.chartSubscriptions,
+                        makeSensorKey(serverId, objectName, sensorName), id);
                 }
             }
         });
     }
 
-    handleSensorUpdate(sensorName, value, error = null, timestamp = null) {
+    handleSensorUpdate(sensorKey, value, error = null, timestamp = null) {
+        // sensorKey = ${serverId}|${objectName}|${sensorName} — canonical identity.
+        // Извлекаем sensorName для legacy callbacks (updateBySensor / updateSensor),
+        // которые внутри widget'ов всё ещё работают с короткими именами.
+        const parsed = (typeof parseSensorKey === 'function') ? parseSensorKey(sensorKey) : null;
+        const sensorName = parsed?.sensorName ?? sensorKey;
+
         // Main sensor updates
-        const widgetIds = dashboardState.sensorSubscriptions.get(sensorName);
+        const widgetIds = dashboardState.sensorSubscriptions.get(sensorKey);
         if (widgetIds) {
             widgetIds.forEach(id => {
                 const widget = dashboardState.widgets.get(id);
@@ -22610,7 +22602,7 @@ class DashboardManager {
         }
 
         // Setpoint sensor updates
-        const setpointWidgetIds = dashboardState.setpointSubscriptions.get(sensorName);
+        const setpointWidgetIds = dashboardState.setpointSubscriptions.get(sensorKey);
         if (setpointWidgetIds) {
             setpointWidgetIds.forEach(id => {
                 const widget = dashboardState.widgets.get(id);
@@ -22621,7 +22613,7 @@ class DashboardManager {
         }
 
         // Chart widget updates
-        const chartWidgetIds = dashboardState.chartSubscriptions.get(sensorName);
+        const chartWidgetIds = dashboardState.chartSubscriptions.get(sensorKey);
         if (chartWidgetIds) {
             chartWidgetIds.forEach(id => {
                 const widget = dashboardState.widgets.get(id);
@@ -23392,9 +23384,15 @@ function addSensorToDashboard(sensorName, sensorLabel, dashboardName, widgetType
 // Global dashboard manager instance (exposed on window for tests)
 let dashboardManager = window.dashboardManager = null;
 
-// Helper to update dashboard widgets from SSE events
-function updateDashboardWidgets(sensors, timestamp = null) {
+// Helper to update dashboard widgets from SSE events.
+// ctx: { serverId, objectName, timestamp } — нужен для построения sensorKey
+// (canonical identity sensors во frontend — см. CLAUDE.md "Sensor identity").
+function updateDashboardWidgets(sensors, ctx) {
     if (!dashboardManager || !sensors) return;
+    if (!ctx || !ctx.serverId || !ctx.objectName) {
+        console.warn('updateDashboardWidgets: ctx без serverId/objectName, skip');
+        return;
+    }
 
     for (const sensor of sensors) {
         const name = sensor.name;
@@ -23402,7 +23400,8 @@ function updateDashboardWidgets(sensors, timestamp = null) {
         const error = sensor.error || null;
 
         if (name !== undefined && value !== undefined) {
-            dashboardManager.handleSensorUpdate(name, value, error, timestamp);
+            const key = makeSensorKey(ctx.serverId, ctx.objectName, name);
+            dashboardManager.handleSensorUpdate(key, value, error, ctx.timestamp || null);
         }
     }
 }

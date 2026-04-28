@@ -522,9 +522,15 @@ function addSensorToDashboard(sensorName, sensorLabel, dashboardName, widgetType
 // Global dashboard manager instance (exposed on window for tests)
 let dashboardManager = window.dashboardManager = null;
 
-// Helper to update dashboard widgets from SSE events
-function updateDashboardWidgets(sensors, timestamp = null) {
+// Helper to update dashboard widgets from SSE events.
+// ctx: { serverId, objectName, timestamp } — нужен для построения sensorKey
+// (canonical identity sensors во frontend — см. CLAUDE.md "Sensor identity").
+function updateDashboardWidgets(sensors, ctx) {
     if (!dashboardManager || !sensors) return;
+    if (!ctx || !ctx.serverId || !ctx.objectName) {
+        console.warn('updateDashboardWidgets: ctx без serverId/objectName, skip');
+        return;
+    }
 
     for (const sensor of sensors) {
         const name = sensor.name;
@@ -532,7 +538,8 @@ function updateDashboardWidgets(sensors, timestamp = null) {
         const error = sensor.error || null;
 
         if (name !== undefined && value !== undefined) {
-            dashboardManager.handleSensorUpdate(name, value, error, timestamp);
+            const key = makeSensorKey(ctx.serverId, ctx.objectName, name);
+            dashboardManager.handleSensorUpdate(key, value, error, ctx.timestamp || null);
         }
     }
 }
