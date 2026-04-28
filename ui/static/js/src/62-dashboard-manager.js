@@ -451,14 +451,6 @@ class DashboardManager {
         }
     }
 
-    // Helper: pick the first connected server (used as default IO source).
-    _defaultIONCServerId() {
-        for (const [id, server] of state.servers) {
-            if (server.connected) return id;
-        }
-        return null;
-    }
-
     createWidget(widgetConfig) {
         const WidgetClass = WIDGET_TYPES[widgetConfig.type];
         if (!WidgetClass) {
