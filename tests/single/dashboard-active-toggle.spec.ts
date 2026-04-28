@@ -66,6 +66,15 @@ test.describe('ToggleWidget — first active widget', () => {
             return false;
         }, { timeout: 15000 });
 
+        // Принудительно ставим state.servers с известным mock id —
+        // widget config будет явно указывать serverId='mock-srv', чтобы тесты
+        // проверяли persist-path, а не legacy fallback на первый connected.
+        await page.evaluate(() => {
+            const w = window as any;
+            w.state.servers.clear();
+            w.state.servers.set('mock-srv', { id: 'mock-srv', name: 'Mock', url: 'http://mock', connected: true });
+        });
+
         // Очищаем пользовательские дашборды для изоляции.
         await page.evaluate(() => {
             localStorage.removeItem('user-dashboards');
@@ -85,6 +94,7 @@ test.describe('ToggleWidget — first active widget', () => {
                 id: 'tw-1',
                 type: 'toggle',
                 config: {
+                    serverId: 'mock-srv',
                     sensor: 'TEST_PUMP',
                     sensorId: 100,
                     objectName: 'SharedMemory',
@@ -257,6 +267,10 @@ test.describe('ToggleWidget — first active widget', () => {
         });
         const req = await postPromise;
         expect(req.url()).toContain('/api/objects/SharedMemory2/ionc/set');
+        // Проверяем что POST идёт именно на configured serverId, не fallback.
+        const url = new URL(req.url());
+        const serverParam = url.searchParams.get('server');
+        expect(serverParam).toBe('mock-srv');
         const body = JSON.parse(req.postData() || '{}');
         expect(body.sensor_id).toBe(200);
     });
@@ -296,6 +310,14 @@ test.describe('ToggleWidget — checkbox style', () => {
             }
             return false;
         }, { timeout: 10000 });
+
+        // Принудительно ставим state.servers с известным mock id для consistency
+        // с slider-блоком — widget config явно указывает serverId='mock-srv'.
+        await page.evaluate(() => {
+            const w: any = window;
+            w.state.servers.clear();
+            w.state.servers.set('mock-srv', { id: 'mock-srv', name: 'Mock', url: 'http://mock', connected: true });
+        });
     });
 
     async function createCheckboxDashboard(page, configOverrides: Record<string, unknown> = {}) {
@@ -305,6 +327,7 @@ test.describe('ToggleWidget — checkbox style', () => {
                 id: 'cb-1',
                 type: 'toggle',
                 config: {
+                    serverId: 'mock-srv',
                     sensor: 'TEST_PUMP',
                     sensorId: 100,
                     objectName: 'SharedMemory',

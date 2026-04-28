@@ -126,6 +126,30 @@ test.describe('ActiveDashboardWidget — base class smoke', () => {
         await expect(commandEl).toHaveText('42');
     });
 
+    test('serverId persists в widget config', async ({ page }) => {
+        await page.evaluate(() => {
+            const w = window as any;
+            w.state.servers.clear();
+            w.state.servers.set('srv-test', { id: 'srv-test', name: 'Test', url: 'http://test', connected: true });
+            w.dashboardManager.clearWidgets();
+            w.dashboardManager.createWidget({
+                id: 'sw1',
+                type: 'toggle',
+                config: {
+                    serverId: 'srv-test',
+                    objectName: 'SharedMemory',
+                    sensor: 'X',
+                    sensorId: 1,
+                    valueOff: 0,
+                    valueOn: 1
+                },
+                position: { col: 0, row: 0, width: 3, height: 2 }
+            });
+        });
+        const sid = await page.evaluate(() => (window as any).dashboardState.widgets.get('sw1').config.serverId);
+        expect(sid).toBe('srv-test');
+    });
+
     test('edit mode: клик не вызывает write', async ({ page }) => {
         await loadTestDashboard(page, 'TEST_EDIT');
 
