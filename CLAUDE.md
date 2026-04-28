@@ -700,3 +700,33 @@ function setupIOResize(tabKey, objectName, type) {
 - **НЕ** создавать новые стили для одинаковых элементов - использовать существующие общие классы
 
 Полная документация: `docs/naming-conventions.md`
+
+## Sensor identity (multi-server)
+
+Для уникальной идентификации датчика во frontend используется
+**`sensorKey`** — строка формата `${serverId}|${objectName}|${sensorName}`
+(разделитель `|`, чтобы не путать с `:` в `tabKey`).
+
+Helper: `makeSensorKey(serverId, objectName, sensorName)` /
+`parseSensorKey(key)` в `09-sensor-key.js`.
+
+**Правила:**
+
+| Сценарий | Ключ |
+|---|---|
+| Подписка / cache в dashboard | `sensorKey` |
+| API path | `objectName` (path) + `serverId` (query) |
+| UI display label | `sensorName` (короткое имя) |
+| Active widget config | сохранять `serverId` + `objectName` + `sensor` (имя) + `sensorId` (числовой) |
+
+**Запрещено:**
+- `Map<sensorName, ...>` для dashboard-wide state (cache, подписки, routing)
+- `_resolveServerId()` как primary source — только legacy fallback с warning
+- Передавать sensors в dashboard update path без `(serverId, objectName)` контекста
+
+SSE handler `ionc_sensor_batch` уже получает `serverId` и `objectName` в
+payload — используй их для построения `sensorKey` при cache/routing.
+
+Когда добавляешь новую активную widget'у — base class уже сохраняет
+`serverId` через unified `getConfigForm`/`parseConfigForm`. Subclass этим
+не занимается.
