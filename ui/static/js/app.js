@@ -16061,8 +16061,13 @@ class DashboardWidget {
 //   - _confirm(value) — заменить window.confirm на красивый dialog
 //
 // НЕ переопределять (наследуется и достаточно):
-//   - getConfigForm, parseConfigForm, initConfigHandlers, writeValue,
+//   - getConfigForm, parseConfigForm, initConfigHandlers, writeValue, _doWrite,
 //     usesNewSensorAutocomplete, _setWriteState, _recomputeTitle, _updateInteractivityClass.
+//
+// Persisted base config поля: serverId, sensor, sensorId, objectName, label,
+// requireConfirmation, style. Subclass добавляет свои через
+// parseActiveConfigFields/getActiveConfigFields — НЕ перекрывай serverId
+// и не возвращай его из parseActiveConfigFields.
 //
 // Конкретные виджеты реализуются в файлах 61-dashboard-active-*.js и регистрируются
 // в WIDGET_TYPES (62-dashboard-manager.js).
@@ -16135,7 +16140,10 @@ class ActiveDashboardWidget extends DashboardWidget {
             this._setWriteState('error', 'No server configured');
             return;
         }
-        if (!this.config?.serverId) {
+        // Warn один раз на widget lifetime — legacy widget'ы могут писать N раз/сек
+        // (generator) или сериями (push-button pulse), spam в console не нужен.
+        if (!this.config?.serverId && !this._serverIdFallbackWarned) {
+            this._serverIdFallbackWarned = true;
             console.warn(`Active widget ${this.id || '<unknown>'}: serverId missing in config, using fallback ${serverId} — config will be migrated on next dashboard load`);
         }
 
@@ -16302,6 +16310,11 @@ class ActiveDashboardWidget extends DashboardWidget {
                 serverOptions += `<option value="${escapeHtml(id)}" ${sel}>${escapeHtml(srv.name || id)}</option>`;
             }
         }
+        // Edge: state.servers пустой при cold load (SSE ещё не приехал) — показать
+        // placeholder чтобы юзер не видел пустой select без объяснения.
+        if (!serverOptions) {
+            serverOptions = '<option value="" disabled selected>(нет доступных серверов)</option>';
+        }
 
         const baseFields = `
             <div class="widget-config-field">
@@ -16384,7 +16397,12 @@ class ActiveDashboardWidget extends DashboardWidget {
         if (!serverSelect || !objectSelect || !sensorInput || !hiddenIdInput) return;
 
         // Helper: загрузить IONC objects для текущего serverId.
+        // Token guard: при быстром переключении Server'а (A→B→A...) ответ A может
+        // прийти ПОСЛЕ B и затереть UI. loadToken растёт на каждом вызове, в .then
+        // сравнивается — устаревший response игнорируется.
+        let loadToken = 0;
         const loadIONCObjects = (serverId) => {
+            const myToken = ++loadToken;
             if (!serverId) {
                 objectSelect.innerHTML = '<option value="" disabled selected>(выберите Server)</option>';
                 return;
@@ -16392,6 +16410,7 @@ class ActiveDashboardWidget extends DashboardWidget {
             fetch(`/api/objects?server=${encodeURIComponent(serverId)}&type=IONotifyController`)
                 .then(r => r.ok ? r.json() : { objects: [] })
                 .then(data => {
+                    if (myToken !== loadToken) return; // stale response, skip
                     const objs = data.objects || [];
                     // При смене сервера preferred = config.objectName, иначе первый из списка.
                     const currentValue = objectSelect.value || config.objectName || 'SharedMemory';
