@@ -196,6 +196,248 @@ test.describe('Dashboard multi-server isolation', () => {
         expect(req.url()).not.toContain('server=mock1');
     });
 
+    test('two IONC objects same server: SSE routing по objectName', async ({ page }) => {
+        // Сценарий: один сервер, два IONC объекта 'SM_A' и 'SM_B', оба с
+        // одинаковым sensor name 'Temp'. Widget1 подписан на SM_A.Temp,
+        // widget2 — на SM_B.Temp. SSE event для SM_A не должен обновить SM_B.
+        await page.evaluate(async () => {
+            const w = window as any;
+            const cfg = {
+                meta: { name: 'TEST_TWO_OBJECTS', description: '' },
+                widgets: [
+                    {
+                        id: 'w-sm-a',
+                        type: 'toggle',
+                        config: {
+                            serverId: 'mock1', objectName: 'SM_A',
+                            sensor: 'Temp', sensorId: 1,
+                            valueOff: 0, valueOn: 1
+                        },
+                        position: { col: 0, row: 0, width: 3, height: 2 }
+                    },
+                    {
+                        id: 'w-sm-b',
+                        type: 'toggle',
+                        config: {
+                            serverId: 'mock1', objectName: 'SM_B',
+                            sensor: 'Temp', sensorId: 1,
+                            valueOff: 0, valueOn: 1
+                        },
+                        position: { col: 3, row: 0, width: 3, height: 2 }
+                    }
+                ]
+            };
+            w.dashboardState.dashboards.set('TEST_TWO_OBJECTS', cfg);
+            await w.dashboardManager.loadDashboard('TEST_TWO_OBJECTS');
+            if (typeof w.switchView === 'function') w.switchView('dashboard');
+        });
+
+        // SSE с objectName=SM_A → только w-sm-a.
+        await page.evaluate(() => {
+            const w = window as any;
+            w.updateDashboardWidgets(
+                [{ name: 'Temp', value: 42 }],
+                { serverId: 'mock1', objectName: 'SM_A', timestamp: Date.now() }
+            );
+        });
+        let result = await page.evaluate(() => {
+            const w = window as any;
+            return {
+                a: w.dashboardState.widgets.get('w-sm-a')?.feedbackValue ?? null,
+                b: w.dashboardState.widgets.get('w-sm-b')?.feedbackValue ?? null
+            };
+        });
+        expect(result.a).toBe(42);
+        expect(result.b).toBeNull();
+
+        // SSE с objectName=SM_B → только w-sm-b (a остаётся 42).
+        await page.evaluate(() => {
+            const w = window as any;
+            w.updateDashboardWidgets(
+                [{ name: 'Temp', value: 77 }],
+                { serverId: 'mock1', objectName: 'SM_B', timestamp: Date.now() }
+            );
+        });
+        result = await page.evaluate(() => {
+            const w = window as any;
+            return {
+                a: w.dashboardState.widgets.get('w-sm-a')?.feedbackValue ?? null,
+                b: w.dashboardState.widgets.get('w-sm-b')?.feedbackValue ?? null
+            };
+        });
+        expect(result.a).toBe(42); // не изменился
+        expect(result.b).toBe(77);
+    });
+
+    test('full matrix 2×2: 2 servers × 2 objects, same sensor name — independent routing', async ({ page }) => {
+        // Полная матрица: каждый из 4 widget'ов получает SSE только для своего
+        // (serverId, objectName, sensorName) триплета.
+        await page.evaluate(async () => {
+            const w = window as any;
+            const mk = (id: string, srv: string, obj: string) => ({
+                id, type: 'toggle',
+                config: {
+                    serverId: srv, objectName: obj,
+                    sensor: 'Temp', sensorId: 1,
+                    valueOff: 0, valueOn: 1
+                },
+                position: { col: 0, row: 0, width: 3, height: 2 }
+            });
+            const cfg = {
+                meta: { name: 'TEST_MATRIX', description: '' },
+                widgets: [
+                    mk('w-1a', 'mock1', 'SM_A'),
+                    mk('w-1b', 'mock1', 'SM_B'),
+                    mk('w-2a', 'mock2', 'SM_A'),
+                    mk('w-2b', 'mock2', 'SM_B'),
+                ]
+            };
+            w.dashboardState.dashboards.set('TEST_MATRIX', cfg);
+            await w.dashboardManager.loadDashboard('TEST_MATRIX');
+            if (typeof w.switchView === 'function') w.switchView('dashboard');
+        });
+
+        // Серия 4 SSE events — каждый на свою точку матрицы. Уникальное value
+        // на каждую, чтобы matched widget гарантированно отличался от unmatched.
+        await page.evaluate(() => {
+            const w = window as any;
+            w.updateDashboardWidgets([{ name: 'Temp', value: 11 }],
+                { serverId: 'mock1', objectName: 'SM_A', timestamp: Date.now() });
+            w.updateDashboardWidgets([{ name: 'Temp', value: 22 }],
+                { serverId: 'mock1', objectName: 'SM_B', timestamp: Date.now() });
+            w.updateDashboardWidgets([{ name: 'Temp', value: 33 }],
+                { serverId: 'mock2', objectName: 'SM_A', timestamp: Date.now() });
+            w.updateDashboardWidgets([{ name: 'Temp', value: 44 }],
+                { serverId: 'mock2', objectName: 'SM_B', timestamp: Date.now() });
+        });
+
+        const values = await page.evaluate(() => {
+            const w = window as any;
+            return {
+                a1: w.dashboardState.widgets.get('w-1a')?.feedbackValue ?? null,
+                b1: w.dashboardState.widgets.get('w-1b')?.feedbackValue ?? null,
+                a2: w.dashboardState.widgets.get('w-2a')?.feedbackValue ?? null,
+                b2: w.dashboardState.widgets.get('w-2b')?.feedbackValue ?? null,
+            };
+        });
+        expect(values.a1).toBe(11);
+        expect(values.b1).toBe(22);
+        expect(values.a2).toBe(33);
+        expect(values.b2).toBe(44);
+    });
+
+    test("initial fetch routing: 4 widget'а → 4 GET'а на правильные (server, object) пары", async ({ page }) => {
+        // Перехватываем все GET /api/objects/*/ionc/sensors. После
+        // loadDashboard fetchSensorValues должен сделать запрос для каждой
+        // уникальной (serverId, objectName, sensorName) с правильным URL.
+        const captured: Array<{ object: string; server: string; search: string }> = [];
+        await page.route('**/api/objects/*/ionc/sensors**', async (route, req) => {
+            if (req.method() !== 'GET') return route.continue();
+            const url = new URL(req.url());
+            // Path: /api/objects/{object}/ionc/sensors
+            const m = url.pathname.match(/^\/api\/objects\/([^/]+)\/ionc\/sensors$/);
+            captured.push({
+                object: m ? decodeURIComponent(m[1]) : '',
+                server: url.searchParams.get('server') || '',
+                search: url.searchParams.get('search') || '',
+            });
+            await route.fulfill({
+                status: 200, contentType: 'application/json',
+                body: JSON.stringify({ sensors: [{ id: 1, name: 'Temp', value: 0 }] })
+            });
+        });
+
+        await page.evaluate(async () => {
+            const w = window as any;
+            const mk = (id: string, srv: string, obj: string) => ({
+                id, type: 'toggle',
+                config: {
+                    serverId: srv, objectName: obj,
+                    sensor: 'Temp', sensorId: 1,
+                    valueOff: 0, valueOn: 1
+                },
+                position: { col: 0, row: 0, width: 3, height: 2 }
+            });
+            const cfg = {
+                meta: { name: 'TEST_FETCH_MATRIX' },
+                widgets: [
+                    mk('w-1a', 'mock1', 'SM_A'),
+                    mk('w-1b', 'mock1', 'SM_B'),
+                    mk('w-2a', 'mock2', 'SM_A'),
+                    mk('w-2b', 'mock2', 'SM_B'),
+                ]
+            };
+            w.dashboardState.dashboards.set('TEST_FETCH_MATRIX', cfg);
+            await w.dashboardManager.loadDashboard('TEST_FETCH_MATRIX');
+            if (typeof w.switchView === 'function') w.switchView('dashboard');
+        });
+        // Дать fetchSensorValues отработать (он async внутри loadDashboard).
+        await page.waitForTimeout(800);
+
+        // Ожидаем по одному запросу на каждую (server, object) пару — sensor
+        // name везде 'Temp', search должен быть 'Temp'.
+        const wanted = [
+            { server: 'mock1', object: 'SM_A' },
+            { server: 'mock1', object: 'SM_B' },
+            { server: 'mock2', object: 'SM_A' },
+            { server: 'mock2', object: 'SM_B' },
+        ];
+        for (const w of wanted) {
+            const found = captured.find(c =>
+                c.server === w.server && c.object === w.object && c.search === 'Temp'
+            );
+            expect(found, `fetch missing for server=${w.server} object=${w.object}`).toBeDefined();
+        }
+    });
+
+    test("write routing matrix: каждый widget POST'ит на свой (server, object)", async ({ page }) => {
+        // 4 widget'а, каждый при writeValue должен POST'ить на:
+        //   /api/objects/{configured object}/ionc/set?server={configured server}
+        await page.evaluate(async () => {
+            const w = window as any;
+            const mk = (id: string, srv: string, obj: string) => ({
+                id, type: 'toggle',
+                config: {
+                    serverId: srv, objectName: obj,
+                    sensor: 'Temp', sensorId: 1,
+                    valueOff: 0, valueOn: 1
+                },
+                position: { col: 0, row: 0, width: 3, height: 2 }
+            });
+            const cfg = {
+                meta: { name: 'TEST_WRITE_MATRIX' },
+                widgets: [
+                    mk('w-1a', 'mock1', 'SM_A'),
+                    mk('w-1b', 'mock1', 'SM_B'),
+                    mk('w-2a', 'mock2', 'SM_A'),
+                    mk('w-2b', 'mock2', 'SM_B'),
+                ]
+            };
+            w.dashboardState.dashboards.set('TEST_WRITE_MATRIX', cfg);
+            await w.dashboardManager.loadDashboard('TEST_WRITE_MATRIX');
+            if (typeof w.switchView === 'function') w.switchView('dashboard');
+        });
+
+        const checkWrite = async (wid: string, expectServer: string, expectObject: string) => {
+            const postPromise = page.waitForRequest(req =>
+                req.url().includes('/ionc/set') && req.method() === 'POST'
+            );
+            await page.evaluate((id) => {
+                const w = window as any;
+                w.dashboardState.widgets.get(id).writeValue(1);
+            }, wid);
+            const req = await postPromise;
+            const url = new URL(req.url());
+            expect(url.pathname).toBe(`/api/objects/${expectObject}/ionc/set`);
+            expect(url.searchParams.get('server')).toBe(expectServer);
+        };
+
+        await checkWrite('w-1a', 'mock1', 'SM_A');
+        await checkWrite('w-1b', 'mock1', 'SM_B');
+        await checkWrite('w-2a', 'mock2', 'SM_A');
+        await checkWrite('w-2b', 'mock2', 'SM_B');
+    });
+
     test('auto-migration: legacy config без serverId → migrated to first connected', async ({ page }) => {
         await page.evaluate(async () => {
             const w = window as any;
