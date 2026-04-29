@@ -16593,16 +16593,20 @@ class PushButtonWidget extends ActiveDashboardWidget {
     static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>';
     static styles = ['flat', 'mushroom', 'pill'];
     static defaultStyle = 'flat';
-    static defaultSize = { width: 2, height: 1 };
+    // Default — для flat (наиболее частый стиль). 2×1 был тесен: текст
+    // вроде «STOP/EMERGENCY» налезал на края, оператору неудобно. 3×2 даёт
+    // запас под надпись и читается как полноценная command button.
+    static defaultSize = { width: 3, height: 2 };
     static minSize = { width: 2, height: 1 };
     static maxSize = { width: 6, height: 3 };
 
-    // Helper: подсказка для выбора размера на стороне формы конфига
-    // (dashboard-manager при первом создании использует static defaultSize;
-    // юзер может ресайзить вручную drag handle'ом).
+    // Style-aware default size — dashboard-manager.createWidget использует
+    // этот helper при размещении нового виджета (если style уже выбран
+    // в config), иначе fallback на static defaultSize.
     static getDefaultSizeForStyle(style) {
-        if (style === 'mushroom') return { width: 2, height: 2 };
-        return { width: 2, height: 1 };
+        if (style === 'mushroom') return { width: 3, height: 3 };
+        if (style === 'pill')     return { width: 3, height: 1 };
+        return { width: 3, height: 2 }; // flat
     }
 
     // === SSE feedback override — игнорируем (push-button fire-and-forget) ===
@@ -22271,10 +22275,16 @@ class DashboardManager {
                 }
             }
         } else {
-            // Add new widget with default size
+            // Add new widget with default size. Style-aware override:
+            // PushButton mushroom круглый и хочет 3×3, flat 3×2, pill 3×1.
+            // Если у класса есть getDefaultSizeForStyle и юзер выбрал style
+            // в форме конфига — используем тот размер, иначе static defaultSize.
             const newId = `widget-${Date.now()}`;
-            const width = WidgetClass.defaultSize.width;
-            const height = WidgetClass.defaultSize.height;
+            const sizeOverride = (typeof WidgetClass.getDefaultSizeForStyle === 'function' && config.style)
+                ? WidgetClass.getDefaultSizeForStyle(config.style)
+                : null;
+            const width  = sizeOverride?.width  ?? WidgetClass.defaultSize.width;
+            const height = sizeOverride?.height ?? WidgetClass.defaultSize.height;
             const position = this.findEmptyPosition(width, height);
 
             const widgetConfig = {

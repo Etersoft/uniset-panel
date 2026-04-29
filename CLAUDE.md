@@ -312,12 +312,15 @@ toggle: нет двух-состоянного латча, feedback от сво�
 `label`, `requireConfirmation` (от base; в `momentary` режиме НЕ работает —
 warning в форме).
 
-**Поддерживаемые стили** через `static styles = ['flat', 'mushroom', 'pill']`:
-- **`flat`** (default, defaultSize 2×1): Material primary blue button. Для group
-  of buttons, частые действия.
-- **`mushroom`** (defaultSize 2×2 — через `getDefaultSizeForStyle`): SCADA-classic
+**Поддерживаемые стили** через `static styles = ['flat', 'mushroom', 'pill']`.
+Размер при размещении: dashboard-manager в createWidget берёт
+`getDefaultSizeForStyle(config.style)` если есть style в config, иначе
+fallback на `static defaultSize` (3×2 — для flat по умолчанию).
+- **`flat`** (default, defaultSize 3×2): Material primary blue button. 3×2 даёт
+  запас под надпись (раньше 2×1 был тесен — текст налезал на края).
+- **`mushroom`** (defaultSize 3×3 через `getDefaultSizeForStyle`): SCADA-classic
   круглая красная объёмная. Для emergency / mode switches (STOP, EMERGENCY).
-- **`pill`** (defaultSize 2×1): minimal outline pill, заполняется при нажатии.
+- **`pill`** (defaultSize 3×1): minimal outline pill, заполняется при нажатии.
   Для частых маловажных действий (ACK ALARM).
 
 **Поведение:**

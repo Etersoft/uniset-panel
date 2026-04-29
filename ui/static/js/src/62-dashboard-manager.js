@@ -1204,10 +1204,16 @@ class DashboardManager {
                 }
             }
         } else {
-            // Add new widget with default size
+            // Add new widget with default size. Style-aware override:
+            // PushButton mushroom круглый и хочет 3×3, flat 3×2, pill 3×1.
+            // Если у класса есть getDefaultSizeForStyle и юзер выбрал style
+            // в форме конфига — используем тот размер, иначе static defaultSize.
             const newId = `widget-${Date.now()}`;
-            const width = WidgetClass.defaultSize.width;
-            const height = WidgetClass.defaultSize.height;
+            const sizeOverride = (typeof WidgetClass.getDefaultSizeForStyle === 'function' && config.style)
+                ? WidgetClass.getDefaultSizeForStyle(config.style)
+                : null;
+            const width  = sizeOverride?.width  ?? WidgetClass.defaultSize.width;
+            const height = sizeOverride?.height ?? WidgetClass.defaultSize.height;
             const position = this.findEmptyPosition(width, height);
 
             const widgetConfig = {
