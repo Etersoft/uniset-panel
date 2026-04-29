@@ -438,6 +438,126 @@ test.describe('Dashboard multi-server isolation', () => {
         await checkWrite('w-2b', 'mock2', 'SM_B');
     });
 
+    test("backend subscribe: каждый active widget POST'ит /ionc/subscribe со своим sensorId", async ({ page }) => {
+        // Без явного subscribe backend BasePoller.poll() не poll'ит объект
+        // (subsSnapshot пустой) → SSE не приходит → widget вечно '--'.
+        // Проверяем: после loadDashboard для каждой пары (serverId, objectName)
+        // уходит POST /ionc/subscribe с правильным телом sensor_ids.
+        const captured: Array<{ object: string; server: string; sensorIds: number[] }> = [];
+        await page.route('**/api/objects/*/ionc/subscribe**', async (route, req) => {
+            if (req.method() !== 'POST') return route.continue();
+            const url = new URL(req.url());
+            const m = url.pathname.match(/^\/api\/objects\/([^/]+)\/ionc\/subscribe$/);
+            const body = JSON.parse(req.postData() || '{}');
+            captured.push({
+                object: m ? decodeURIComponent(m[1]) : '',
+                server: url.searchParams.get('server') || '',
+                sensorIds: Array.isArray(body.sensor_ids) ? body.sensor_ids : [],
+            });
+            await route.fulfill({
+                status: 200, contentType: 'application/json',
+                body: JSON.stringify({ status: 'subscribed' })
+            });
+        });
+
+        await page.evaluate(async () => {
+            const w = window as any;
+            const mk = (id: string, srv: string, obj: string, sid: number) => ({
+                id, type: 'toggle',
+                config: {
+                    serverId: srv, objectName: obj,
+                    sensor: 'Temp', sensorId: sid,
+                    valueOff: 0, valueOn: 1
+                },
+                position: { col: 0, row: 0, width: 3, height: 2 }
+            });
+            const cfg = {
+                meta: { name: 'TEST_SUB_BACKEND' },
+                widgets: [
+                    mk('w-1a', 'mock1', 'SM_A', 101),
+                    mk('w-1b', 'mock1', 'SM_B', 201),
+                    mk('w-2a', 'mock2', 'SM_A', 301),
+                ]
+            };
+            w.dashboardState.dashboards.set('TEST_SUB_BACKEND', cfg);
+            await w.dashboardManager.loadDashboard('TEST_SUB_BACKEND');
+            if (typeof w.switchView === 'function') w.switchView('dashboard');
+        });
+        await page.waitForTimeout(500);
+
+        // Ждём subscribe POST для каждой уникальной (server, object) пары.
+        const wanted = [
+            { server: 'mock1', object: 'SM_A', sensorId: 101 },
+            { server: 'mock1', object: 'SM_B', sensorId: 201 },
+            { server: 'mock2', object: 'SM_A', sensorId: 301 },
+        ];
+        for (const w of wanted) {
+            const found = captured.find(c =>
+                c.server === w.server && c.object === w.object && c.sensorIds.includes(w.sensorId)
+            );
+            expect(found, `subscribe missing for server=${w.server} object=${w.object} sensorId=${w.sensorId}`).toBeDefined();
+        }
+    });
+
+    test('backend subscribe: widget с одинаковыми (server, object) группируются в один POST', async ({ page }) => {
+        // Два widget'а на одной (server, object) паре → один POST с обоими sensor_ids
+        // (а не два отдельных). Проверяет batching по (serverId, objectName).
+        const captured: Array<{ object: string; server: string; sensorIds: number[] }> = [];
+        await page.route('**/api/objects/*/ionc/subscribe**', async (route, req) => {
+            if (req.method() !== 'POST') return route.continue();
+            const url = new URL(req.url());
+            const m = url.pathname.match(/^\/api\/objects\/([^/]+)\/ionc\/subscribe$/);
+            const body = JSON.parse(req.postData() || '{}');
+            captured.push({
+                object: m ? decodeURIComponent(m[1]) : '',
+                server: url.searchParams.get('server') || '',
+                sensorIds: Array.isArray(body.sensor_ids) ? body.sensor_ids : [],
+            });
+            await route.fulfill({
+                status: 200, contentType: 'application/json',
+                body: JSON.stringify({ status: 'subscribed' })
+            });
+        });
+
+        await page.evaluate(async () => {
+            const w = window as any;
+            const cfg = {
+                meta: { name: 'TEST_SUB_BATCH' },
+                widgets: [
+                    {
+                        id: 'w-pump',
+                        type: 'toggle',
+                        config: {
+                            serverId: 'mock1', objectName: 'SharedMemory',
+                            sensor: 'PUMP', sensorId: 100,
+                            valueOff: 0, valueOn: 1
+                        },
+                        position: { col: 0, row: 0, width: 3, height: 2 }
+                    },
+                    {
+                        id: 'w-valve',
+                        type: 'toggle',
+                        config: {
+                            serverId: 'mock1', objectName: 'SharedMemory',
+                            sensor: 'VALVE', sensorId: 200,
+                            valueOff: 0, valueOn: 1
+                        },
+                        position: { col: 3, row: 0, width: 3, height: 2 }
+                    }
+                ]
+            };
+            w.dashboardState.dashboards.set('TEST_SUB_BATCH', cfg);
+            await w.dashboardManager.loadDashboard('TEST_SUB_BATCH');
+            if (typeof w.switchView === 'function') w.switchView('dashboard');
+        });
+        await page.waitForTimeout(500);
+
+        // Ровно один POST для (mock1, SharedMemory) с обоими sensorId внутри.
+        const sm = captured.filter(c => c.server === 'mock1' && c.object === 'SharedMemory');
+        expect(sm.length).toBe(1);
+        expect(sm[0].sensorIds.sort()).toEqual([100, 200]);
+    });
+
     test('auto-migration: legacy config без serverId → migrated to first connected', async ({ page }) => {
         await page.evaluate(async () => {
             const w = window as any;

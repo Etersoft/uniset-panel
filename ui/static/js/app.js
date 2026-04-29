@@ -22826,6 +22826,58 @@ class DashboardManager {
                 }
             }
         });
+
+        // Backend-side IONC subscribe для active widget'ов. Без этого
+        // BasePoller.poll() видит пустой subscriptions snapshot и не делает
+        // poll объекта → SSE не приходит → widget вечно показывает '--'.
+        // Chart-renderers подписываются через subscribeToIONCSensor(); active
+        // dashboard widgets раньше полагались на side-effect от других
+        // подписчиков (object открыт во вкладке Objects). Если ни один tab
+        // объект не открыт — active widget оставался без данных. Этот call
+        // решает проблему явно.
+        this._subscribeActiveSensorsBackend();
+    }
+
+    // Группирует sensorId'ы по (serverId, objectName) и шлёт POST
+    // /api/objects/{name}/ionc/subscribe?server={id} { sensor_ids: [...] }.
+    // Subscribe идёмpotent на backend (Subscribe просто добавляет в Map),
+    // поэтому повторные вызовы при редактировании безопасны.
+    // Unsubscribe не делаем сознательно: backend подписки shared между
+    // viewer'ами, и dashboard'у нельзя «отписать чужие».
+    _subscribeActiveSensorsBackend() {
+        // grpKey = `${serverId}|${objectName}` → Set<sensorId>.
+        const groups = new Map();
+
+        const collect = (cfg) => {
+            if (!cfg?.serverId || !cfg?.objectName) return;
+            const ids = [];
+            if (Number.isFinite(cfg.sensorId))  ids.push(cfg.sensorId);
+            if (Number.isFinite(cfg.sensorId2)) ids.push(cfg.sensorId2);
+            if (Array.isArray(cfg.items)) {
+                cfg.items.forEach(it => {
+                    if (Number.isFinite(it?.sensorId)) ids.push(it.sensorId);
+                });
+            }
+            if (ids.length === 0) return;
+            const k = `${cfg.serverId}|${cfg.objectName}`;
+            if (!groups.has(k)) groups.set(k, new Set());
+            ids.forEach(id => groups.get(k).add(id));
+        };
+
+        dashboardState.widgets.forEach(widget => collect(widget?.config));
+
+        for (const [grpKey, idSet] of groups) {
+            const sepIdx = grpKey.indexOf('|');
+            const serverId   = grpKey.slice(0, sepIdx);
+            const objectName = grpKey.slice(sepIdx + 1);
+            const url = `/api/objects/${encodeURIComponent(objectName)}/ionc/subscribe`
+                + `?server=${encodeURIComponent(serverId)}`;
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sensor_ids: Array.from(idSet) })
+            }).catch(err => console.warn('dashboard: subscribe failed', grpKey, err));
+        }
     }
 
     handleSensorUpdate(sensorKey, value, error = null, timestamp = null) {
