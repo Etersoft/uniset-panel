@@ -92,7 +92,15 @@ const state = window.state = {
     tabs: new Map(), // tabKey -> { charts, updateInterval, chartStartTime, objectType, renderer, serverId, serverName, displayName }
     activeTab: null,
     sensors: new Map(), // sensorId -> sensorInfo
+    // Legacy global registry — keyed by short sensorName. На multi-server панели
+    // первый встретившийся sensor wins, остальные с тем же именем игнорируются.
+    // Безопасен только для search/autocomplete (UI dedupe). Per-row metadata
+    // (textname в renderer'ах) должна ходить через sensorsByKey, иначе при
+    // одинаковых именах на разных серверах юзер видит metadata от чужого объекта.
     sensorsByName: new Map(), // sensorName -> sensorInfo
+    // Multi-server-aware registry: key = sensorKey (`${serverId}|${objectName}|${sensorName}`).
+    // Используется в renderer'ах и точечных lookup'ах, где известен полный context.
+    sensorsByKey: new Map(), // sensorKey -> sensorInfo (см. 09-sensor-key.js)
     sensorValuesCache: new Map(), // sensorKey -> { value, error, timestamp } — cache for dashboard init. sensorKey = `${serverId}|${objectName}|${sensorName}` (см. 09-sensor-key.js)
     timeRange: DEFAULT_CHART_TIME_RANGE, // секунды (по умолчанию 15 минут)
     sidebarCollapsed: false, // свёрнутая боковая панель
@@ -1387,6 +1395,28 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// Экранирование строки для вставки внутрь HTML-атрибута (`attr="..."`).
+// escapeHtml() не покрывает кавычки/апострофы (textContent → innerHTML
+// сериализует только <, >, &), поэтому в attribute context кавычка в
+// значении ломает разметку. Используй здесь, когда подставляешь dynamic
+// данные внутрь quoted attribute.
+function escapeAttr(text) {
+    if (text === null || text === undefined) return '';
+    const s = String(text);
+    if (s === '') return '';
+    return s
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+if (typeof globalThis !== 'undefined') {
+    globalThis.escapeHtml = escapeHtml;
+    globalThis.escapeAttr = escapeAttr;
 }
 
 // Универсальный resize-handle: mousedown → mousemove → mouseup паттерн
@@ -3032,6 +3062,15 @@ class BaseObjectRenderer {
                 state.sensorsByName.set(sensor.name, sensorForChart);
                 state.sensors.set(sensor.id, sensorForChart);
             }
+            // Multi-server-aware: всегда обновляем scoped запись по
+            // (serverId, this.objectName, sensor.name) — позволяет render'у
+            // подтянуть правильный textname/comment без коллизии с одноимёнными
+            // sensor'ами на других серверах.
+            const _serverId = state.tabs.get(this.tabKey)?.serverId || '';
+            state.sensorsByKey.set(
+                makeSensorKey(_serverId, this.objectName, sensor.name),
+                sensorForChart
+            );
 
             // Создаём график с опциями, специфичными для типа рендерера
             createExternalSensorChart(this.tabKey, sensorForChart, this.getChartOptions());
@@ -3067,7 +3106,7 @@ class BaseObjectRenderer {
                            class="chart-checkbox chart-toggle-input"
                            id="${checkboxId}"
                            data-sensor-id="${sensorId}"
-                           data-sensor-name="${escapeHtml(sensorName)}"
+                           data-sensor-name="${escapeAttr(sensorName)}"
                            ${isOnChart ? 'checked' : ''}>
                     <label class="chart-toggle-label" for="${checkboxId}" title="Add to Chart">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -3077,8 +3116,8 @@ class BaseObjectRenderer {
                     </label>
                 </span>
                 <button class="dashboard-add-btn"
-                        data-sensor-name="${escapeHtml(sensorName)}"
-                        data-sensor-label="${escapeHtml(label)}"
+                        data-sensor-name="${escapeAttr(sensorName)}"
+                        data-sensor-label="${escapeAttr(label)}"
                         title="Add to Dashboard">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="3" width="7" height="7" rx="1"/>
@@ -3655,7 +3694,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         } catch (err) {
             console.error('Error loading IONC sensors:', err);
             if (tbody) {
-                tbody.innerHTML = `<tr><td colspan="9" class="ionc-error">Error загрузки: ${err.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" class="ionc-error">Error загрузки: ${escapeHtml(err.message)}</td></tr>`;
             }
         } finally {
             this.loading = false;
@@ -3889,8 +3928,11 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     sortRenderVisible() { this.renderVisibleSensors(); }
 
     renderSensorRow(sensor, isPinned) {
-        // Получаем textname из справочника сенсоров (конфигурации)
-        const sensorInfo = state.sensorsByName.get(sensor.name);
+        // Multi-server-aware lookup: те же sensor.name могут существовать на
+        // разных серверах с разными textname. Берём scoped запись по
+        // (serverId, objectName, name); fallback на legacy by-name внутри helper.
+        const serverId = state.tabs.get(this.tabKey)?.serverId || '';
+        const sensorInfo = getSensorInfoByKey(serverId, this.objectName, sensor.name);
         const textname = sensorInfo?.textname || sensor.textname || '';
 
         const frozenClass = sensor.frozen ? 'ionc-sensor-frozen' : '';
@@ -3948,7 +3990,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                                class="ionc-chart-checkbox chart-toggle-input"
                                id="ionc-chart-${this.objectName}-${varName}"
                                data-id="${sensor.id}"
-                               data-name="${escapeHtml(sensor.name)}"
+                               data-name="${escapeAttr(sensor.name)}"
                                ${isOnChart ? 'checked' : ''}>
                         <label class="chart-toggle-label" for="ionc-chart-${this.objectName}-${varName}" title="Add to Chart">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -3958,8 +4000,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                         </label>
                     </span>
                     <button class="dashboard-add-btn"
-                            data-sensor-name="${escapeHtml(sensor.name)}"
-                            data-sensor-label="${escapeHtml(textname || sensor.name)}"
+                            data-sensor-name="${escapeAttr(sensor.name)}"
+                            data-sensor-label="${escapeAttr(textname || sensor.name)}"
                             title="Add to Dashboard">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <rect x="3" y="3" width="7" height="7" rx="1"/>
@@ -3970,7 +4012,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                     </button>
                 </td>
                 <td class="ionc-col-id">${sensor.id}</td>
-                <td class="ionc-col-name" title="${escapeHtml(textname)}">${escapeHtml(sensor.name)}</td>
+                <td class="ionc-col-name" title="${escapeAttr(textname)}">${escapeHtml(sensor.name)}</td>
                 <td class="ionc-col-type"><span class="type-badge type-${sensor.type}">${sensor.type}</span></td>
                 <td class="ionc-col-value">
                     ${sensor.frozen && sensor.real_value !== undefined && sensor.real_value !== sensor.value
@@ -3983,7 +4025,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                     }
                 </td>
                 <td class="ionc-col-flags">${flags.join(' ') || '—'}</td>
-                <td class="ionc-col-supplier" id="ionc-supplier-${this.objectName}-${sensor.id}" title="${escapeHtml(supplierValue)}">${escapeHtml(supplierValue)}</td>
+                <td class="ionc-col-supplier" id="ionc-supplier-${this.objectName}-${sensor.id}" title="${escapeAttr(supplierValue)}">${escapeHtml(supplierValue)}</td>
                 <td class="ionc-col-consumers">
                     <button class="ionc-btn ionc-btn-consumers" data-id="${sensor.id}" title="Show consumers">👥</button>
                 </td>
@@ -5888,13 +5930,13 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
                 </td>
                 ${this.renderAddButtonsCell(sensor.id, sensor.name, 'opcua', sensor.textname || sensor.name)}
                 <td class="col-id">${sensor.id ?? '—'}</td>
-                <td class="col-name" title="${escapeHtml(sensor.textname || sensor.comment || '')}">${escapeHtml(sensor.name || '')}</td>
+                <td class="col-name" title="${escapeAttr(sensor.textname || sensor.comment || '')}">${escapeHtml(sensor.name || '')}</td>
                 <td class="col-type"><span class="${typeBadgeClass}">${iotype || '—'}</span></td>
                 <td class="col-value">${sensor.value ?? '—'}</td>
                 <td class="col-tick">${sensor.tick ?? '—'}</td>
                 <td class="col-vtype">${sensor.vtype || '—'}</td>
                 <td class="col-precision">${sensor.precision ?? '—'}</td>
-                <td class="col-status ${sensor.status && sensor.status.toLowerCase() !== 'ok' ? 'status-bad' : ''}" title="${escapeHtml(sensor.status || '')}">${escapeHtml(sensor.status || '—')}</td>
+                <td class="col-status ${sensor.status && sensor.status.toLowerCase() !== 'ok' ? 'status-bad' : ''}" title="${escapeAttr(sensor.status || '')}">${escapeHtml(sensor.status || '—')}</td>
             </tr>
         `}).join('');
 
@@ -6758,7 +6800,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
                     </td>
                     ${this.renderAddButtonsCell(reg.id, reg.name, 'mbreg', reg.textname || reg.name)}
                     <td class="col-id">${reg.id}</td>
-                    <td class="col-name" title="${escapeHtml(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
+                    <td class="col-name" title="${escapeAttr(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
                     <td class="col-type">${reg.iotype ? `<span class="type-badge type-${reg.iotype}">${reg.iotype}</span>` : ''}</td>
                     <td class="col-value">${reg.value !== undefined ? reg.value : ''}</td>
                     <td class="col-device"><span class="mb-respond ${respondClass}">${deviceAddr || ''}</span></td>
@@ -7289,7 +7331,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
                     </td>
                     ${this.renderAddButtonsCell(reg.id, reg.name, 'mbsreg', reg.textname || reg.name)}
                     <td class="col-id">${reg.id}</td>
-                    <td class="col-name" title="${escapeHtml(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
+                    <td class="col-name" title="${escapeAttr(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
                     <td class="col-type">${reg.iotype ? `<span class="type-badge type-${reg.iotype}">${reg.iotype}</span>` : ''}</td>
                     <td class="col-value">${reg.value !== undefined ? reg.value : ''}</td>
                     <td class="col-mbaddr">${mbAddr || ''}</td>
@@ -7721,7 +7763,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
             tr.innerHTML = `
                 <td class="variable-name">${name}</td>
                 <td class="variable-value">${current !== undefined ? formatValue(current) : '—'}</td>
-                <td><input class="opcua-param-input" data-name="${name}" value="${current !== undefined ? current : ''}"></td>
+                <td><input class="opcua-param-input" data-name="${escapeAttr(name)}" value="${escapeAttr(current !== undefined ? current : '')}"></td>
             `;
             tbody.appendChild(tr);
         });
@@ -7915,7 +7957,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
                 </td>
                 ${this.renderAddButtonsCell(sensor.id, sensor.name, 'opcuasrv', sensor.textname || sensor.name)}
                 <td>${sensor.id || ''}</td>
-                <td class="sensor-name" title="${escapeHtml(sensor.textname || sensor.comment || '')}">${sensor.name || ''}</td>
+                <td class="sensor-name" title="${escapeAttr(sensor.textname || sensor.comment || '')}">${escapeHtml(sensor.name || '')}</td>
                 <td><span class="${typeBadgeClass}">${iotype}</span></td>
                 <td class="sensor-value">${sensor.value !== undefined ? formatValue(sensor.value) : '—'}</td>
                 <td>${sensor.vtype || ''}</td>
@@ -8332,7 +8374,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         this.selectedAutocompleteIndex = 0;
 
         container.innerHTML = matches.map((s, i) => `
-            <div class="uwsgate-autocomplete-item${i === 0 ? ' selected' : ''}" data-name="${escapeHtml(s.name)}">
+            <div class="uwsgate-autocomplete-item${i === 0 ? ' selected' : ''}" data-name="${escapeAttr(s.name)}">
                 <span class="sensor-name">${escapeHtml(s.name)}</span>
                 <span class="type-badge type-${s.iotype}">${s.iotype || '?'}</span>
                 ${s.textname ? `<span class="sensor-textname">${escapeHtml(s.textname)}</span>` : ''}
@@ -8518,28 +8560,28 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         const pinIcon = isPinned ? '📌' : '○';
         const pinTitle = isPinned ? 'Unpin' : 'Pin';
         return `
-            <tr class="uwsgate-sensor-row ${errorClass} ${pinnedClass}" data-sensor-name="${escapeHtml(sensor.name)}">
+            <tr class="uwsgate-sensor-row ${errorClass} ${pinnedClass}" data-sensor-name="${escapeAttr(sensor.name)}">
                 <td class="col-pin">
-                    <span class="${pinToggleClass}" data-name="${escapeHtml(sensor.name)}" title="${pinTitle}">
+                    <span class="${pinToggleClass}" data-name="${escapeAttr(sensor.name)}" title="${pinTitle}">
                         ${pinIcon}
                     </span>
                 </td>
                 <td class="col-add-buttons add-buttons-col">
                     <span class="chart-toggle">
                         <input type="checkbox"
-                               id="${escapeHtml(checkboxId)}"
+                               id="${escapeAttr(checkboxId)}"
                                class="uwsgate-chart-checkbox chart-toggle-input"
-                               data-name="${escapeHtml(sensor.name)}"
+                               data-name="${escapeAttr(sensor.name)}"
                                ${isOnChart ? 'checked' : ''}>
-                        <label class="chart-toggle-label" for="${escapeHtml(checkboxId)}" title="Add to Chart">
+                        <label class="chart-toggle-label" for="${escapeAttr(checkboxId)}" title="Add to Chart">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-3 3"/>
                             </svg>
                         </label>
                     </span>
                     <button class="dashboard-add-btn"
-                            data-sensor-name="${escapeHtml(sensor.name)}"
-                            data-sensor-label="${escapeHtml(sensor.textname || sensor.name)}"
+                            data-sensor-name="${escapeAttr(sensor.name)}"
+                            data-sensor-label="${escapeAttr(sensor.textname || sensor.name)}"
                             title="Add to Dashboard">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <rect x="3" y="3" width="7" height="7" rx="1"/>
@@ -8550,13 +8592,13 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
                     </button>
                 </td>
                 <td class="col-id">${sensor.id}</td>
-                <td class="col-name" title="${escapeHtml(sensor.textname || sensor.name)}">${escapeHtml(sensor.name)}</td>
+                <td class="col-name" title="${escapeAttr(sensor.textname || sensor.name)}">${escapeHtml(sensor.name)}</td>
                 <td class="col-type"><span class="type-badge type-${sensor.iotype}">${sensor.iotype || '?'}</span></td>
-                <td class="col-value" id="uwsgate-value-${this.objectName}-${escapeHtml(sensor.name)}">${sensor.value}</td>
-                <td class="col-supplier" id="uwsgate-supplier-${this.objectName}-${escapeHtml(sensor.name)}" title="${escapeHtml(sensor.supplier || '')}">${escapeHtml(sensor.supplier || '-')}</td>
+                <td class="col-value" id="uwsgate-value-${this.objectName}-${escapeAttr(sensor.name)}">${sensor.value}</td>
+                <td class="col-supplier" id="uwsgate-supplier-${this.objectName}-${escapeAttr(sensor.name)}" title="${escapeAttr(sensor.supplier || '')}">${escapeHtml(sensor.supplier || '-')}</td>
                 <td class="col-status">${sensor.error ? `<span class="error-flag">Error: ${sensor.error}</span>` : '-'}</td>
                 <td class="col-actions">
-                    <button class="uwsgate-btn-remove" data-name="${escapeHtml(sensor.name)}" title="Remove sensor">✕</button>
+                    <button class="uwsgate-btn-remove" data-name="${escapeAttr(sensor.name)}" title="Remove sensor">✕</button>
                 </td>
             </tr>
         `;
@@ -9039,7 +9081,7 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
     renderStatusError(message) {
         const container = this.getEl(`unet-status-${this.objectName}`);
         if (container) {
-            container.innerHTML = `<div class="status-error">Error: ${message}</div>`;
+            container.innerHTML = `<div class="status-error">Error: ${escapeHtml(message)}</div>`;
         }
     }
 
@@ -9480,7 +9522,7 @@ class LauncherRenderer {
                     </div>
                     <div class="launcher-header-right">
                         <span class="launcher-control-info" id="launcher-control-${this.nodeId}">${takeBtn}</span>
-                        ${this.launcherUrl ? `<a class="launcher-link" href="${escapeHtml(this.launcherUrl)}" target="_blank" rel="noopener noreferrer">Open Launcher UI</a>` : ''}
+                        ${this.launcherUrl ? `<a class="launcher-link" href="${escapeAttr(this.launcherUrl)}" target="_blank" rel="noopener noreferrer">Open Launcher UI</a>` : ''}
                     </div>
                 </div>
                 <div class="launcher-filter">
@@ -12054,6 +12096,13 @@ async function loadSensorsConfig() {
             const data = await fetchSensors(serverId);
             if (data.sensors && data.sensors.length > 0) {
                 data.sensors.forEach(sensor => {
+                    // sensor.supplier — owning object (типично "SharedMemory");
+                    // если backend не вернул — fallback. Это не идеально для
+                    // cross-object одинаковых имён, но лучшее, что есть из
+                    // /api/sensors response сейчас.
+                    const objectName = sensor.supplier || 'SharedMemory';
+                    const key = makeSensorKey(serverId, objectName, sensor.name);
+                    state.sensorsByKey.set(key, sensor);
                     if (!state.sensorsByName.has(sensor.name)) {
                         state.sensors.set(sensor.id, sensor);
                         state.sensorsByName.set(sensor.name, sensor);
@@ -12071,6 +12120,9 @@ async function loadSensorsConfig() {
                 data.sensors.forEach(sensor => {
                     state.sensors.set(sensor.id, sensor);
                     state.sensorsByName.set(sensor.name, sensor);
+                    // SM events идут с serverId='sm' (см. SM_SERVER_ID).
+                    const key = makeSensorKey(SM_SERVER_ID, 'SharedMemory', sensor.name);
+                    state.sensorsByKey.set(key, sensor);
                 });
             }
         }
@@ -12081,12 +12133,35 @@ async function loadSensorsConfig() {
     }
 }
 
-// Получить информацию о сенсоре по ID или имени
+// Получить информацию о сенсоре по ID или имени.
+// На multi-server панели возвращает первый встретившийся sensor с этим именем
+// (см. комментарий к state.sensorsByName). Для multi-server-точного lookup
+// используй getSensorInfoByKey(serverId, objectName, sensorName).
 function getSensorInfo(idOrName) {
     if (typeof idOrName === 'number') {
         return state.sensors.get(idOrName);
     }
     return state.sensorsByName.get(idOrName);
+}
+
+// Multi-server-aware lookup. Принимает либо готовый sensorKey, либо
+// (serverId, objectName, sensorName). Если такого ключа нет — fallback на
+// short-name lookup, чтобы данные старых одно-серверных setup'ов не
+// «терялись» (не критично, потому что там single-server и конфликта нет).
+function getSensorInfoByKey(serverIdOrKey, objectName, sensorName) {
+    const key = sensorName === undefined
+        ? serverIdOrKey
+        : makeSensorKey(serverIdOrKey, objectName, sensorName);
+    const found = state.sensorsByKey.get(key);
+    if (found) return found;
+    // Fallback by short name. parseSensorKey работает только если key — наш
+    // строковый формат; если caller передал что-то другое, просто skip.
+    const parsed = typeof key === 'string' ? parseSensorKey(key) : null;
+    return parsed ? state.sensorsByName.get(parsed.sensorName) : undefined;
+}
+
+if (typeof globalThis !== 'undefined') {
+    globalThis.getSensorInfoByKey = getSensorInfoByKey;
 }
 
 // Проверить, является ли сигнал дискретным
@@ -12321,8 +12396,8 @@ function renderSensorTable() {
             <tr>
                 <td>
                     <button class="sensor-add-btn" ${btnDisabled} title="${btnTitle}"
-                            data-object="${escapeHtml(sensorDialogState.objectName)}"
-                            data-sensor="${escapeHtml(sensor.name)}">${btnText}</button>
+                            data-object="${escapeAttr(sensorDialogState.objectName)}"
+                            data-sensor="${escapeAttr(sensor.name)}">${btnText}</button>
                 </td>
                 <td>${sensor.id}</td>
                 <td class="sensor-name">${escapeHtml(sensor.name)}</td>
@@ -12947,6 +13022,15 @@ function restoreExternalSensors(tabKey, displayName) {
                     state.sensorsByName.set(sensorName, sensor);
                     state.sensors.set(sensor.id, sensor);
                 }
+                // Multi-server-aware: scoped запись по (tabKey serverId, objectName).
+                // tabKey формата `${serverId}:${objectName}` — split по первому ':'.
+                const _idx = tabKey.indexOf(':');
+                const _serverId = _idx >= 0 ? tabKey.slice(0, _idx) : '';
+                const _objectName = _idx >= 0 ? tabKey.slice(_idx + 1) : tabKey;
+                state.sensorsByKey.set(
+                    makeSensorKey(_serverId, _objectName, sensorName),
+                    sensor
+                );
             } else {
                 // Старый формат: только имя - пробуем найти в state или renderer
                 let sensor = state.sensorsByName.get(sensorName);
@@ -13031,6 +13115,10 @@ async function fetchSensorsForServer(serverId) {
 
 const SENSOR_AUTOCOMPLETE_DEBOUNCE_MS = 150;
 const SENSOR_AUTOCOMPLETE_LIMIT = 20;
+// На focus показываем top-N из IONC объекта (без search фильтра), чтобы юзер
+// сразу видел ассортимент, а не результат поиска по уже введённому тексту
+// (typically — имя сохранённого sensor'а из existing config). Spec требует 10.
+const SENSOR_AUTOCOMPLETE_FOCUS_LIMIT = 10;
 
 function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId) {
     if (!inputEl) return null;
@@ -13074,7 +13162,7 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
             <div class="sensor-autocomplete-item ${idx === activeIndex ? 'active' : ''}"
                  data-idx="${idx}"
                  data-id="${s.id}"
-                 data-name="${escapeHtml(s.name)}">
+                 data-name="${escapeAttr(s.name)}">
                 <div class="sensor-autocomplete-name">${escapeHtml(s.name)}</div>
                 <div class="sensor-autocomplete-meta">id=${s.id} · type=${escapeHtml(s.type || '?')} · value=${s.value ?? '—'}</div>
             </div>
@@ -13095,7 +13183,8 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
         destroyDropdown();
     }
 
-    async function fetchAndShow(searchText) {
+    async function fetchAndShow(searchText, options = {}) {
+        const limit = options.limit ?? SENSOR_AUTOCOMPLETE_LIMIT;
         const objectName = (getObjectName && getObjectName()) || 'SharedMemory';
         const serverId = (getServerId && getServerId()) || '';
         if (!serverId) {
@@ -13107,7 +13196,7 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
             const url = `/api/objects/${encodeURIComponent(objectName)}/ionc/sensors`
                 + `?server=${encodeURIComponent(serverId)}`
                 + (searchText ? `&search=${encodeURIComponent(searchText)}` : '')
-                + `&limit=${SENSOR_AUTOCOMPLETE_LIMIT}`;
+                + `&limit=${limit}`;
             const resp = await fetch(url);
             if (!resp.ok) {
                 buildDropdown();
@@ -13125,7 +13214,10 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
     }
 
     inputEl.addEventListener('focus', () => {
-        fetchAndShow(inputEl.value.trim());
+        // Focus всегда показывает top-N (limit=10) без search-фильтра — иначе при
+        // editing existing config dropdown забит результатами по уже выбранному
+        // имени, что бесполезно для просмотра «что ещё есть на этом объекте».
+        fetchAndShow('', { limit: SENSOR_AUTOCOMPLETE_FOCUS_LIMIT });
     });
 
     inputEl.addEventListener('input', () => {
@@ -13393,7 +13485,7 @@ function renderServersSection() {
 
         li.innerHTML = `
             <span class="server-status-dot${statusClass}"></span>
-            <span class="server-name" title="${escapeHtml(server.url)}">${escapeHtml(displayName)}</span>
+            <span class="server-name" title="${escapeAttr(server.url)}">${escapeHtml(displayName)}</span>
             <span class="server-stats ${statsClass}">${statsText}</span>
         `;
 
@@ -15996,12 +16088,12 @@ class DashboardWidget {
             <div class="widget-config-field">
                 <label>Sensor</label>
                 <input type="text" class="widget-input" name="sensor"
-                       value="${config.sensor || ''}" placeholder="Type to search..." autocomplete="off">
+                       value="${escapeAttr(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
             </div>
             <div class="widget-config-field">
                 <label>Label</label>
                 <input type="text" class="widget-input" name="label"
-                       value="${config.label || ''}" placeholder="Display label">
+                       value="${escapeAttr(config.label || '')}" placeholder="Display label">
             </div>
         `;
     }
@@ -16293,7 +16385,7 @@ class ActiveDashboardWidget extends DashboardWidget {
             <div class="widget-config-field">
                 <label>Style</label>
                 <select class="widget-input" name="style" data-test="cfg-style">
-                    ${this.styles.map(s => `<option value="${escapeHtml(s)}" ${(config.style || this.defaultStyle) === s ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
+                    ${this.styles.map(s => `<option value="${escapeAttr(s)}" ${(config.style || this.defaultStyle) === s ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
                 </select>
             </div>
             `
@@ -16307,7 +16399,7 @@ class ActiveDashboardWidget extends DashboardWidget {
         for (const [id, srv] of state.servers) {
             if (srv.connected || id === currentServerId) {
                 const sel = id === currentServerId ? 'selected' : '';
-                serverOptions += `<option value="${escapeHtml(id)}" ${sel}>${escapeHtml(srv.name || id)}</option>`;
+                serverOptions += `<option value="${escapeAttr(id)}" ${sel}>${escapeHtml(srv.name || id)}</option>`;
             }
         }
         // Edge: state.servers пустой при cold load (SSE ещё не приехал) — показать
@@ -16326,7 +16418,7 @@ class ActiveDashboardWidget extends DashboardWidget {
             <div class="widget-config-field">
                 <label>IONC Object</label>
                 <select class="widget-input" name="objectName" data-test="cfg-objectName">
-                    <option value="${escapeHtml(config.objectName || 'SharedMemory')}" selected>${escapeHtml(config.objectName || 'SharedMemory')}</option>
+                    <option value="${escapeAttr(config.objectName || 'SharedMemory')}" selected>${escapeHtml(config.objectName || 'SharedMemory')}</option>
                 </select>
                 <small style="color:#6b7280">список загружается из /api/objects?type=IONotifyController</small>
             </div>
@@ -16335,15 +16427,15 @@ class ActiveDashboardWidget extends DashboardWidget {
                 <div class="sensor-select-wrap">
                     <input type="text" class="widget-input sensor-select-input" name="sensor" autocomplete="off"
                            placeholder="Click to select or type to search..."
-                           value="${escapeHtml(config.sensor || '')}" data-test="cfg-sensor">
-                    <input type="hidden" name="sensorId" value="${config.sensorId ?? ''}" data-test="cfg-sensorId">
+                           value="${escapeAttr(config.sensor || '')}" data-test="cfg-sensor">
+                    <input type="hidden" name="sensorId" value="${escapeAttr(config.sensorId ?? '')}" data-test="cfg-sensorId">
                 </div>
             </div>
             ${styleSelect}
             <div class="widget-config-field">
-                <label>Label</label>
+                <label>Label (optional)</label>
                 <input type="text" class="widget-input" name="label"
-                       value="${escapeHtml(config.label || '')}" placeholder="Display label">
+                       value="${escapeAttr(config.label || '')}" placeholder="Leave empty to hide header">
             </div>
             <div class="widget-config-field">
                 <label class="widget-checkbox-label">
@@ -16416,7 +16508,7 @@ class ActiveDashboardWidget extends DashboardWidget {
                     const currentValue = objectSelect.value || config.objectName || 'SharedMemory';
                     objectSelect.innerHTML = objs.map(o => {
                         const name = typeof o === 'string' ? o : o.name;
-                        return `<option value="${escapeHtml(name)}" ${name === currentValue ? 'selected' : ''}>${escapeHtml(name)}</option>`;
+                        return `<option value="${escapeAttr(name)}" ${name === currentValue ? 'selected' : ''}>${escapeHtml(name)}</option>`;
                     }).join('');
                     if (!objs.some(o => (typeof o === 'string' ? o : o.name) === currentValue)) {
                         const opt = document.createElement('option');
@@ -16557,16 +16649,37 @@ class PushButtonWidget extends ActiveDashboardWidget {
         const pulseWidth = this.config?.pulseWidth ?? 500;
 
         // Visual flash (300ms независимо от pulseWidth — это UI feedback).
+        // Timer хранится на instance чтобы destroy() мог его отменить и не
+        // снимать класс с уже удалённого DOM-узла.
         const btn = this.element?.querySelector('[data-test="btn"]');
         if (btn) {
             btn.classList.add('pulsing');
-            setTimeout(() => btn?.classList.remove('pulsing'), 300);
+            clearTimeout(this._pulseFlashTimer);
+            this._pulseFlashTimer = setTimeout(() => {
+                this._pulseFlashTimer = null;
+                btn?.classList.remove('pulsing');
+            }, 300);
         }
 
         // POST valueOn → wait pulseWidth → POST valueOff.
         // Второй POST через _writeValueRaw чтобы не дублировать confirm dialog.
+        // Trailing timer тоже на instance — destroy() отменяет его, чтобы не
+        // дёргать _writeValueRaw на удалённом widget'е (safety OFF при destroy
+        // оставляем ответственностью владельца, не побочным эффектом).
         this.writeValue(valueOn);
-        setTimeout(() => this._writeValueRaw(valueOff), pulseWidth);
+        clearTimeout(this._pulseTrailTimer);
+        this._pulseTrailTimer = setTimeout(() => {
+            this._pulseTrailTimer = null;
+            this._writeValueRaw(valueOff);
+        }, pulseWidth);
+    }
+
+    destroy() {
+        clearTimeout(this._pulseFlashTimer);
+        clearTimeout(this._pulseTrailTimer);
+        this._pulseFlashTimer = null;
+        this._pulseTrailTimer = null;
+        super.destroy();
     }
 
     // === Momentary mode handler ===
@@ -16726,11 +16839,16 @@ class GeneratorWidget extends ActiveDashboardWidget {
 
     // === Render ===
     render() {
-        const label = this.config?.label || this.config?.sensor || 'Generator';
+        // Label опционален: пустой → header не рисуется. Fallback на sensor name
+        // удалён намеренно (см. комментарий в ToggleWidget.renderSlider).
+        const label = this.config?.label || '';
+        const labelHtml = label
+            ? `<div class="gen-label" data-test="label">${escapeHtml(label)}</div>`
+            : '';
         this.element = document.createElement('div');
         this.element.className = 'widget-content generator-widget';
         this.element.innerHTML = `
-            <div class="gen-label" data-test="label">${escapeHtml(label)}</div>
+            ${labelHtml}
             <div class="gen-value" data-test="value">--</div>
             <div class="gen-toggle" data-test="toggle" role="switch" aria-checked="false">
                 <div class="gen-handle"></div>
@@ -17115,7 +17233,7 @@ class SetpointWidget extends ActiveDashboardWidget {
                        autocomplete="off" autocorrect="off" autocapitalize="off"
                        spellcheck="false" data-form-type="other" data-lpignore="true"
                        inputmode="decimal"
-                       data-min="${escapeHtml(String(min))}" data-max="${escapeHtml(String(max))}" data-step="${escapeHtml(String(step))}">
+                       data-min="${escapeAttr(String(min))}" data-max="${escapeAttr(String(max))}" data-step="${escapeAttr(String(step))}">
                 ${unit ? '<span class="setpoint-unit">' + unit + '</span>' : ''}
                 <button class="setpoint-apply-btn" data-test="apply-btn" tabindex="-1">Apply</button>
                 <button class="setpoint-cancel-btn" data-test="cancel-btn" title="Cancel" tabindex="-1">×</button>
@@ -17432,7 +17550,7 @@ class SetpointWidget extends ActiveDashboardWidget {
                 <div class="widget-config-field">
                     <label>Unit</label>
                     <input type="text" class="widget-input" name="unit"
-                           value="${escapeHtml(config.unit || '')}" placeholder="°C, %, Pa..." data-test="cfg-unit">
+                           value="${escapeAttr(config.unit || '')}" placeholder="°C, %, Pa..." data-test="cfg-unit">
                 </div>
                 <div class="widget-config-field">
                     <label>Apply mode</label>
@@ -17515,11 +17633,18 @@ class ToggleWidget extends ActiveDashboardWidget {
     }
 
     renderSlider() {
-        const label = this.config?.label || this.config?.sensor || 'Toggle';
+        // Label опционален: если пустой — НЕ показываем header строку, экономим
+        // вертикальный pixel'аж. Fallback на sensor name удалён намеренно
+        // (старое поведение «не задал label → имя датчика» путало юзеров,
+        // которые специально хотели чистый виджет).
+        const label = this.config?.label || '';
+        const labelHtml = label
+            ? `<div class="toggle-name" data-test="name">${escapeHtml(label)}</div>`
+            : '';
         this.element = document.createElement('div');
         this.element.className = 'widget-content toggle-widget toggle-style-slider';
         this.element.innerHTML = `
-            <div class="toggle-name" data-test="name">${escapeHtml(label)}</div>
+            ${labelHtml}
             <div class="toggle-track" data-test="track" data-handle-pos="left">
                 <div class="toggle-handle"></div>
             </div>
@@ -17534,12 +17659,16 @@ class ToggleWidget extends ActiveDashboardWidget {
     }
 
     renderCheckbox() {
-        const label = this.config?.label || this.config?.sensor || 'Toggle';
+        // Label опционален. См. комментарий в renderSlider().
+        const label = this.config?.label || '';
+        const labelHtml = label
+            ? `<div class="toggle-name" data-test="name">${escapeHtml(label)}</div>`
+            : '';
         this.element = document.createElement('div');
         this.element.className = 'widget-content toggle-widget toggle-style-checkbox';
         this.element.innerHTML = `
             <div class="toggle-cb" data-test="cb"></div>
-            <div class="toggle-name" data-test="name">${escapeHtml(label)}</div>
+            ${labelHtml}
         `;
         this.container.appendChild(this.element);
         // Click anywhere on widget triggers writeValue (standard checkbox UX).
@@ -17668,12 +17797,12 @@ class ToggleWidget extends ActiveDashboardWidget {
                 <div class="widget-config-field">
                     <label>labelOff</label>
                     <input type="text" class="widget-input" name="labelOff"
-                           value="${escapeHtml(config.labelOff || '')}" placeholder="OFF" data-test="cfg-labelOff">
+                           value="${escapeAttr(config.labelOff || '')}" placeholder="OFF" data-test="cfg-labelOff">
                 </div>
                 <div class="widget-config-field">
                     <label>labelOn</label>
                     <input type="text" class="widget-input" name="labelOn"
-                           value="${escapeHtml(config.labelOn || '')}" placeholder="ON" data-test="cfg-labelOn">
+                           value="${escapeAttr(config.labelOn || '')}" placeholder="ON" data-test="cfg-labelOn">
                 </div>
             </div>
         `;
@@ -18727,19 +18856,19 @@ class GaugeWidget extends DashboardWidget {
             <div class="widget-config-field">
                 <label>Sensor</label>
                 <input type="text" class="widget-input" name="sensor"
-                       value="${escapeHtml(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
+                       value="${escapeAttr(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
             </div>
             <div class="dual-scale-fields" style="display: ${config.style === 'dual' ? 'block' : 'none'};">
                 <div class="widget-config-field">
                     <label>Target Sensor</label>
                     <input type="text" class="widget-input" name="sensor2"
-                           value="${escapeHtml(config.sensor2 || '')}" placeholder="Target/setpoint sensor..." autocomplete="off">
+                           value="${escapeAttr(config.sensor2 || '')}" placeholder="Target/setpoint sensor..." autocomplete="off">
                 </div>
             </div>
             <div class="widget-config-field">
                 <label>Label</label>
                 <input type="text" class="widget-input" name="label"
-                       value="${escapeHtml(config.label || '')}" placeholder="Display label">
+                       value="${escapeAttr(config.label || '')}" placeholder="Display label">
             </div>
             <div class="widget-config-field">
                 <label>Style</label>
@@ -18767,7 +18896,7 @@ class GaugeWidget extends DashboardWidget {
                 <div class="widget-config-field">
                     <label>Unit</label>
                     <input type="text" class="widget-input" name="unit"
-                           value="${escapeHtml(config.unit || '')}" placeholder="°C, %, etc.">
+                           value="${escapeAttr(config.unit || '')}" placeholder="°C, %, etc.">
                 </div>
                 <div class="widget-config-field">
                     <label>Decimals</label>
@@ -18922,12 +19051,12 @@ class LevelWidget extends DashboardWidget {
             <div class="widget-config-field">
                 <label>Sensor</label>
                 <input type="text" class="widget-input" name="sensor"
-                       value="${escapeHtml(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
+                       value="${escapeAttr(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
             </div>
             <div class="widget-config-field">
                 <label>Label</label>
                 <input type="text" class="widget-input" name="label"
-                       value="${escapeHtml(config.label || '')}" placeholder="Display label">
+                       value="${escapeAttr(config.label || '')}" placeholder="Display label">
             </div>
             <div class="widget-config-row">
                 <div class="widget-config-field">
@@ -18952,7 +19081,7 @@ class LevelWidget extends DashboardWidget {
                 <div class="widget-config-field">
                     <label>Unit</label>
                     <input type="text" class="widget-input" name="unit"
-                           value="${escapeHtml(config.unit || '%')}" placeholder="%">
+                           value="${escapeAttr(config.unit || '%')}" placeholder="%">
                 </div>
             </div>
             <div class="widget-config-field">
@@ -19066,12 +19195,12 @@ class LedWidget extends DashboardWidget {
             <div class="widget-config-field">
                 <label>Sensor</label>
                 <input type="text" class="widget-input" name="sensor"
-                       value="${escapeHtml(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
+                       value="${escapeAttr(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
             </div>
             <div class="widget-config-field">
                 <label>Label</label>
                 <input type="text" class="widget-input" name="label"
-                       value="${escapeHtml(config.label || '')}" placeholder="Display label">
+                       value="${escapeAttr(config.label || '')}" placeholder="Display label">
             </div>
             <div class="widget-config-field">
                 <label>Threshold (value > threshold = ON)</label>
@@ -19200,7 +19329,7 @@ class LabelWidget {
             <div class="widget-config-field">
                 <label>Text</label>
                 <input type="text" class="widget-input" name="text"
-                       value="${escapeHtml(config.text || '')}" placeholder="Label text">
+                       value="${escapeAttr(config.text || '')}" placeholder="Label text">
             </div>
             <div class="widget-config-row">
                 <div class="widget-config-field">
@@ -19518,12 +19647,12 @@ class StatusBarWidget {
                     <div class="widget-config-field" style="flex: 1;">
                         <label>Label</label>
                         <input type="text" class="widget-input" name="item-label-${idx}"
-                               value="${escapeHtml(item.label || '')}" placeholder="Status name">
+                               value="${escapeAttr(item.label || '')}" placeholder="Status name">
                     </div>
                     <div class="widget-config-field" style="flex: 2;">
                         <label>Sensor</label>
                         <input type="text" class="widget-input sensor-autocomplete" name="item-sensor-${idx}"
-                               value="${escapeHtml(item.sensor || '')}" placeholder="Sensor name">
+                               value="${escapeAttr(item.sensor || '')}" placeholder="Sensor name">
                     </div>
                 </div>
                 <div class="widget-config-row">
@@ -19839,12 +19968,12 @@ class BarGraphWidget {
                     <div class="widget-config-field" style="flex: 1;">
                         <label>Label</label>
                         <input type="text" class="widget-input" name="bar-label-${idx}"
-                               value="${escapeHtml(item.label || '')}" placeholder="Bar name">
+                               value="${escapeAttr(item.label || '')}" placeholder="Bar name">
                     </div>
                     <div class="widget-config-field" style="flex: 2;">
                         <label>Sensor</label>
                         <input type="text" class="widget-input sensor-autocomplete" name="bar-sensor-${idx}"
-                               value="${escapeHtml(item.sensor || '')}" placeholder="Sensor name">
+                               value="${escapeAttr(item.sensor || '')}" placeholder="Sensor name">
                     </div>
                 </div>
                 <div class="widget-config-row">
@@ -19861,7 +19990,7 @@ class BarGraphWidget {
                     <div class="widget-config-field">
                         <label>Unit</label>
                         <input type="text" class="widget-input" name="bar-unit-${idx}"
-                               value="${escapeHtml(item.unit || '')}" placeholder="kW">
+                               value="${escapeAttr(item.unit || '')}" placeholder="kW">
                     </div>
                     <div class="widget-config-field">
                         <label>Color</label>
@@ -20261,12 +20390,12 @@ class DigitalWidget extends DashboardWidget {
             <div class="widget-config-field">
                 <label>Sensor</label>
                 <input type="text" class="widget-input" name="sensor"
-                       value="${escapeHtml(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
+                       value="${escapeAttr(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
             </div>
             <div class="widget-config-field">
                 <label>Label</label>
                 <input type="text" class="widget-input" name="label"
-                       value="${escapeHtml(config.label || '')}" placeholder="Display label">
+                       value="${escapeAttr(config.label || '')}" placeholder="Display label">
             </div>
             <div class="widget-config-field">
                 <label>Style</label>
@@ -20297,7 +20426,7 @@ class DigitalWidget extends DashboardWidget {
                 <div class="widget-config-field">
                     <label>Unit</label>
                     <input type="text" class="widget-input" name="unit"
-                           value="${escapeHtml(config.unit || '')}" placeholder="Optional">
+                           value="${escapeAttr(config.unit || '')}" placeholder="Optional">
                 </div>
             </div>
         `;
@@ -20564,12 +20693,12 @@ class ChartWidget extends DashboardWidget {
             // Use textname if enabled and available
             const displayName = (useTextname && sensor.textname) ? sensor.textname : sensor.name;
             return `
-            <tr data-sensor="${escapeHtml(sensor.name)}" data-zone="${sensor.zoneIdx}" data-idx="${sensor.sensorIdx}">
+            <tr data-sensor="${escapeAttr(sensor.name)}" data-zone="${sensor.zoneIdx}" data-idx="${sensor.sensorIdx}">
                 <td class="col-color">
                     <span class="color-indicator" style="background: ${sensor.color}"></span>
                 </td>
                 <td class="col-id">${escapeHtml(String(sensorId))}</td>
-                <td class="col-name" title="${escapeHtml(sensor.name)}">${escapeHtml(displayName)}</td>
+                <td class="col-name" title="${escapeAttr(sensor.name)}">${escapeHtml(displayName)}</td>
                 <td class="col-type">
                     ${sensor.iotype ? `<span class="type-badge type-${sensor.iotype}">${sensor.iotype}</span>` : ''}
                 </td>
@@ -20808,7 +20937,7 @@ class ChartWidget extends DashboardWidget {
             <div class="widget-config-field">
                 <label>Label</label>
                 <input type="text" class="widget-input" name="label"
-                       value="${escapeHtml(config.label || '')}" placeholder="Chart title">
+                       value="${escapeAttr(config.label || '')}" placeholder="Chart title">
             </div>
             <div class="widget-config-field">
                 <label>Time Range</label>
@@ -20887,7 +21016,7 @@ class ChartWidget extends DashboardWidget {
                     </label>
                 </div>
                 <button type="button" class="chart-sensor-remove" onclick="removeChartSensor(${zoneIdx}, ${sensorIdx})">×</button>
-                <input type="hidden" name="sensor-${zoneIdx}-${sensorIdx}-name" value="${escapeHtml(sensor.name)}">
+                <input type="hidden" name="sensor-${zoneIdx}-${sensorIdx}-name" value="${escapeAttr(sensor.name)}">
                 <input type="hidden" name="sensor-${zoneIdx}-${sensorIdx}-color" value="${color}">
             </div>
         `;
@@ -21129,7 +21258,7 @@ class DashboardManager {
         if (serverDashboards.length > 0) {
             html += '<optgroup label="Server Dashboards">';
             serverDashboards.forEach(([name]) => {
-                html += `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
+                html += `<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`;
             });
             html += '</optgroup>';
         }
@@ -21140,7 +21269,7 @@ class DashboardManager {
         if (userDashboards.length > 0) {
             html += '<optgroup label="My Dashboards">';
             userDashboards.forEach(([name]) => {
-                html += `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
+                html += `<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`;
             });
             html += '</optgroup>';
         }
@@ -21178,7 +21307,7 @@ class DashboardManager {
         serverDashboards.forEach(([name]) => {
             const isActive = dashboardState.currentDashboard === name;
             html += `
-                <li class="dashboard-item server${isActive ? ' active' : ''}" data-name="${escapeHtml(name)}">
+                <li class="dashboard-item server${isActive ? ' active' : ''}" data-name="${escapeAttr(name)}">
                     <svg class="dashboard-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="3" width="7" height="7"/>
                         <rect x="14" y="3" width="7" height="7"/>
@@ -21195,7 +21324,7 @@ class DashboardManager {
         userDashboards.forEach(([name]) => {
             const isActive = dashboardState.currentDashboard === name;
             html += `
-                <li class="dashboard-item${isActive ? ' active' : ''}" data-name="${escapeHtml(name)}">
+                <li class="dashboard-item${isActive ? ' active' : ''}" data-name="${escapeAttr(name)}">
                     <svg class="dashboard-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="3" width="7" height="7"/>
                         <rect x="14" y="3" width="7" height="7"/>
@@ -21289,6 +21418,18 @@ class DashboardManager {
         if (!config) {
             console.warn('Dashboard not found:', name);
             this.clearDashboard();
+            return;
+        }
+
+        // Если уже на этом dashboard и виджеты живы — НЕ пересоздаём их с нуля.
+        // sidebar-click + view-toggle теперь не «сбрасывают» layout/values/edit-mode,
+        // а лишь освежают подписки и значения (на случай новых SSE-событий или
+        // подключившихся серверов). Force-reload — через clearDashboard() либо
+        // переключение dashboard'ов.
+        if (dashboardState.currentDashboard === name && dashboardState.widgets.size > 0) {
+            this._migrateLegacyServerIds();
+            this.updateSensorSubscriptions();
+            this.initializeWidgetValues();
             return;
         }
 
@@ -21766,6 +21907,13 @@ class DashboardManager {
 
         if (!content) return;
 
+        // widget-config-content — persistent <div> (live между открытиями
+        // диалога). Сбрасываем все idempotency-флаги, которые initConfigHandlers
+        // конкретных виджетов выставляют на этом узле, иначе для второго
+        // открытия handler'ы рано-return'ят и autocomplete не работает.
+        delete content.dataset.activeHandlersWired;
+        delete content.dataset.genHandlersWired;
+
         let config = {};
         let position = {};
         let WidgetClass;
@@ -21811,7 +21959,7 @@ class DashboardManager {
             <div class="widget-config-row">
                 <div class="widget-config-field">
                     <label>Title (optional)</label>
-                    <input type="text" class="widget-input" name="title" value="${escapeHtml(config.title || '')}" placeholder="e.g. Engine RPM">
+                    <input type="text" class="widget-input" name="title" value="${escapeAttr(config.title || '')}" placeholder="e.g. Engine RPM">
                 </div>
                 <div class="widget-config-field">
                     <label class="widget-toggle">
@@ -21933,7 +22081,7 @@ class DashboardManager {
             selectedIndex = 0;
 
             autocompleteContainer.innerHTML = matches.map((s, i) => `
-                <div class="widget-autocomplete-item${i === 0 ? ' selected' : ''}" data-name="${escapeHtml(s.name)}">
+                <div class="widget-autocomplete-item${i === 0 ? ' selected' : ''}" data-name="${escapeAttr(s.name)}">
                     <span class="sensor-name">${escapeHtml(s.name)}</span>
                     <span class="type-badge type-${s.iotype}">${s.iotype}</span>
                     ${s.textname ? `<span class="sensor-textname">${escapeHtml(s.textname)}</span>` : ''}
@@ -23243,7 +23391,7 @@ function setupChartSensorAutocomplete(zoneIdx) {
 
         selectedIndex = 0;
         autocompleteContainer.innerHTML = autocompleteResults.map((s, i) => `
-            <div class="widget-autocomplete-item${i === 0 ? ' selected' : ''}" data-name="${escapeHtml(s.name)}">
+            <div class="widget-autocomplete-item${i === 0 ? ' selected' : ''}" data-name="${escapeAttr(s.name)}">
                 <span class="autocomplete-name">${escapeHtml(s.name)}</span>
                 ${s.textname ? `<span class="autocomplete-desc">${escapeHtml(s.textname)}</span>` : ''}
             </div>
@@ -23344,7 +23492,7 @@ function showAddToDashboardDialog(sensorName, sensorLabel = null) {
     for (const [name, dashboard] of dashboardState.dashboards) {
         // Skip server dashboards (they're read-only)
         if (!dashboardState.serverDashboards.some(sd => sd.meta?.name === name)) {
-            selectEl.innerHTML += `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
+            selectEl.innerHTML += `<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`;
         }
     }
 

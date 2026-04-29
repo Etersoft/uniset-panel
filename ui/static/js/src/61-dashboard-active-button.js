@@ -81,16 +81,37 @@ class PushButtonWidget extends ActiveDashboardWidget {
         const pulseWidth = this.config?.pulseWidth ?? 500;
 
         // Visual flash (300ms независимо от pulseWidth — это UI feedback).
+        // Timer хранится на instance чтобы destroy() мог его отменить и не
+        // снимать класс с уже удалённого DOM-узла.
         const btn = this.element?.querySelector('[data-test="btn"]');
         if (btn) {
             btn.classList.add('pulsing');
-            setTimeout(() => btn?.classList.remove('pulsing'), 300);
+            clearTimeout(this._pulseFlashTimer);
+            this._pulseFlashTimer = setTimeout(() => {
+                this._pulseFlashTimer = null;
+                btn?.classList.remove('pulsing');
+            }, 300);
         }
 
         // POST valueOn → wait pulseWidth → POST valueOff.
         // Второй POST через _writeValueRaw чтобы не дублировать confirm dialog.
+        // Trailing timer тоже на instance — destroy() отменяет его, чтобы не
+        // дёргать _writeValueRaw на удалённом widget'е (safety OFF при destroy
+        // оставляем ответственностью владельца, не побочным эффектом).
         this.writeValue(valueOn);
-        setTimeout(() => this._writeValueRaw(valueOff), pulseWidth);
+        clearTimeout(this._pulseTrailTimer);
+        this._pulseTrailTimer = setTimeout(() => {
+            this._pulseTrailTimer = null;
+            this._writeValueRaw(valueOff);
+        }, pulseWidth);
+    }
+
+    destroy() {
+        clearTimeout(this._pulseFlashTimer);
+        clearTimeout(this._pulseTrailTimer);
+        this._pulseFlashTimer = null;
+        this._pulseTrailTimer = null;
+        super.destroy();
     }
 
     // === Momentary mode handler ===

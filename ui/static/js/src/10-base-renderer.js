@@ -1430,6 +1430,15 @@ class BaseObjectRenderer {
                 state.sensorsByName.set(sensor.name, sensorForChart);
                 state.sensors.set(sensor.id, sensorForChart);
             }
+            // Multi-server-aware: всегда обновляем scoped запись по
+            // (serverId, this.objectName, sensor.name) — позволяет render'у
+            // подтянуть правильный textname/comment без коллизии с одноимёнными
+            // sensor'ами на других серверах.
+            const _serverId = state.tabs.get(this.tabKey)?.serverId || '';
+            state.sensorsByKey.set(
+                makeSensorKey(_serverId, this.objectName, sensor.name),
+                sensorForChart
+            );
 
             // Создаём график с опциями, специфичными для типа рендерера
             createExternalSensorChart(this.tabKey, sensorForChart, this.getChartOptions());
@@ -1465,7 +1474,7 @@ class BaseObjectRenderer {
                            class="chart-checkbox chart-toggle-input"
                            id="${checkboxId}"
                            data-sensor-id="${sensorId}"
-                           data-sensor-name="${escapeHtml(sensorName)}"
+                           data-sensor-name="${escapeAttr(sensorName)}"
                            ${isOnChart ? 'checked' : ''}>
                     <label class="chart-toggle-label" for="${checkboxId}" title="Add to Chart">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1475,8 +1484,8 @@ class BaseObjectRenderer {
                     </label>
                 </span>
                 <button class="dashboard-add-btn"
-                        data-sensor-name="${escapeHtml(sensorName)}"
-                        data-sensor-label="${escapeHtml(label)}"
+                        data-sensor-name="${escapeAttr(sensorName)}"
+                        data-sensor-label="${escapeAttr(label)}"
                         title="Add to Dashboard">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="3" width="7" height="7" rx="1"/>

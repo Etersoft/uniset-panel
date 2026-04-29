@@ -303,7 +303,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         this.selectedAutocompleteIndex = 0;
 
         container.innerHTML = matches.map((s, i) => `
-            <div class="uwsgate-autocomplete-item${i === 0 ? ' selected' : ''}" data-name="${escapeHtml(s.name)}">
+            <div class="uwsgate-autocomplete-item${i === 0 ? ' selected' : ''}" data-name="${escapeAttr(s.name)}">
                 <span class="sensor-name">${escapeHtml(s.name)}</span>
                 <span class="type-badge type-${s.iotype}">${s.iotype || '?'}</span>
                 ${s.textname ? `<span class="sensor-textname">${escapeHtml(s.textname)}</span>` : ''}
@@ -489,28 +489,28 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         const pinIcon = isPinned ? '📌' : '○';
         const pinTitle = isPinned ? 'Unpin' : 'Pin';
         return `
-            <tr class="uwsgate-sensor-row ${errorClass} ${pinnedClass}" data-sensor-name="${escapeHtml(sensor.name)}">
+            <tr class="uwsgate-sensor-row ${errorClass} ${pinnedClass}" data-sensor-name="${escapeAttr(sensor.name)}">
                 <td class="col-pin">
-                    <span class="${pinToggleClass}" data-name="${escapeHtml(sensor.name)}" title="${pinTitle}">
+                    <span class="${pinToggleClass}" data-name="${escapeAttr(sensor.name)}" title="${pinTitle}">
                         ${pinIcon}
                     </span>
                 </td>
                 <td class="col-add-buttons add-buttons-col">
                     <span class="chart-toggle">
                         <input type="checkbox"
-                               id="${escapeHtml(checkboxId)}"
+                               id="${escapeAttr(checkboxId)}"
                                class="uwsgate-chart-checkbox chart-toggle-input"
-                               data-name="${escapeHtml(sensor.name)}"
+                               data-name="${escapeAttr(sensor.name)}"
                                ${isOnChart ? 'checked' : ''}>
-                        <label class="chart-toggle-label" for="${escapeHtml(checkboxId)}" title="Add to Chart">
+                        <label class="chart-toggle-label" for="${escapeAttr(checkboxId)}" title="Add to Chart">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-3 3"/>
                             </svg>
                         </label>
                     </span>
                     <button class="dashboard-add-btn"
-                            data-sensor-name="${escapeHtml(sensor.name)}"
-                            data-sensor-label="${escapeHtml(sensor.textname || sensor.name)}"
+                            data-sensor-name="${escapeAttr(sensor.name)}"
+                            data-sensor-label="${escapeAttr(sensor.textname || sensor.name)}"
                             title="Add to Dashboard">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <rect x="3" y="3" width="7" height="7" rx="1"/>
@@ -521,13 +521,13 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
                     </button>
                 </td>
                 <td class="col-id">${sensor.id}</td>
-                <td class="col-name" title="${escapeHtml(sensor.textname || sensor.name)}">${escapeHtml(sensor.name)}</td>
+                <td class="col-name" title="${escapeAttr(sensor.textname || sensor.name)}">${escapeHtml(sensor.name)}</td>
                 <td class="col-type"><span class="type-badge type-${sensor.iotype}">${sensor.iotype || '?'}</span></td>
-                <td class="col-value" id="uwsgate-value-${this.objectName}-${escapeHtml(sensor.name)}">${sensor.value}</td>
-                <td class="col-supplier" id="uwsgate-supplier-${this.objectName}-${escapeHtml(sensor.name)}" title="${escapeHtml(sensor.supplier || '')}">${escapeHtml(sensor.supplier || '-')}</td>
+                <td class="col-value" id="uwsgate-value-${this.objectName}-${escapeAttr(sensor.name)}">${sensor.value}</td>
+                <td class="col-supplier" id="uwsgate-supplier-${this.objectName}-${escapeAttr(sensor.name)}" title="${escapeAttr(sensor.supplier || '')}">${escapeHtml(sensor.supplier || '-')}</td>
                 <td class="col-status">${sensor.error ? `<span class="error-flag">Error: ${sensor.error}</span>` : '-'}</td>
                 <td class="col-actions">
-                    <button class="uwsgate-btn-remove" data-name="${escapeHtml(sensor.name)}" title="Remove sensor">✕</button>
+                    <button class="uwsgate-btn-remove" data-name="${escapeAttr(sensor.name)}" title="Remove sensor">✕</button>
                 </td>
             </tr>
         `;

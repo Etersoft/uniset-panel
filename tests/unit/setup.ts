@@ -10,4 +10,5 @@ function loadSource(filename: string) {
     new Function(src)();
 }
 
+loadSource('06-utils.js');
 loadSource('09-sensor-key.js');

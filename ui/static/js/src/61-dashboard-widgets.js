@@ -1024,19 +1024,19 @@ class GaugeWidget extends DashboardWidget {
             <div class="widget-config-field">
                 <label>Sensor</label>
                 <input type="text" class="widget-input" name="sensor"
-                       value="${escapeHtml(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
+                       value="${escapeAttr(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
             </div>
             <div class="dual-scale-fields" style="display: ${config.style === 'dual' ? 'block' : 'none'};">
                 <div class="widget-config-field">
                     <label>Target Sensor</label>
                     <input type="text" class="widget-input" name="sensor2"
-                           value="${escapeHtml(config.sensor2 || '')}" placeholder="Target/setpoint sensor..." autocomplete="off">
+                           value="${escapeAttr(config.sensor2 || '')}" placeholder="Target/setpoint sensor..." autocomplete="off">
                 </div>
             </div>
             <div class="widget-config-field">
                 <label>Label</label>
                 <input type="text" class="widget-input" name="label"
-                       value="${escapeHtml(config.label || '')}" placeholder="Display label">
+                       value="${escapeAttr(config.label || '')}" placeholder="Display label">
             </div>
             <div class="widget-config-field">
                 <label>Style</label>
@@ -1064,7 +1064,7 @@ class GaugeWidget extends DashboardWidget {
                 <div class="widget-config-field">
                     <label>Unit</label>
                     <input type="text" class="widget-input" name="unit"
-                           value="${escapeHtml(config.unit || '')}" placeholder="°C, %, etc.">
+                           value="${escapeAttr(config.unit || '')}" placeholder="°C, %, etc.">
                 </div>
                 <div class="widget-config-field">
                     <label>Decimals</label>
@@ -1219,12 +1219,12 @@ class LevelWidget extends DashboardWidget {
             <div class="widget-config-field">
                 <label>Sensor</label>
                 <input type="text" class="widget-input" name="sensor"
-                       value="${escapeHtml(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
+                       value="${escapeAttr(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
             </div>
             <div class="widget-config-field">
                 <label>Label</label>
                 <input type="text" class="widget-input" name="label"
-                       value="${escapeHtml(config.label || '')}" placeholder="Display label">
+                       value="${escapeAttr(config.label || '')}" placeholder="Display label">
             </div>
             <div class="widget-config-row">
                 <div class="widget-config-field">
@@ -1249,7 +1249,7 @@ class LevelWidget extends DashboardWidget {
                 <div class="widget-config-field">
                     <label>Unit</label>
                     <input type="text" class="widget-input" name="unit"
-                           value="${escapeHtml(config.unit || '%')}" placeholder="%">
+                           value="${escapeAttr(config.unit || '%')}" placeholder="%">
                 </div>
             </div>
             <div class="widget-config-field">
@@ -1363,12 +1363,12 @@ class LedWidget extends DashboardWidget {
             <div class="widget-config-field">
                 <label>Sensor</label>
                 <input type="text" class="widget-input" name="sensor"
-                       value="${escapeHtml(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
+                       value="${escapeAttr(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
             </div>
             <div class="widget-config-field">
                 <label>Label</label>
                 <input type="text" class="widget-input" name="label"
-                       value="${escapeHtml(config.label || '')}" placeholder="Display label">
+                       value="${escapeAttr(config.label || '')}" placeholder="Display label">
             </div>
             <div class="widget-config-field">
                 <label>Threshold (value > threshold = ON)</label>
@@ -1497,7 +1497,7 @@ class LabelWidget {
             <div class="widget-config-field">
                 <label>Text</label>
                 <input type="text" class="widget-input" name="text"
-                       value="${escapeHtml(config.text || '')}" placeholder="Label text">
+                       value="${escapeAttr(config.text || '')}" placeholder="Label text">
             </div>
             <div class="widget-config-row">
                 <div class="widget-config-field">
@@ -1815,12 +1815,12 @@ class StatusBarWidget {
                     <div class="widget-config-field" style="flex: 1;">
                         <label>Label</label>
                         <input type="text" class="widget-input" name="item-label-${idx}"
-                               value="${escapeHtml(item.label || '')}" placeholder="Status name">
+                               value="${escapeAttr(item.label || '')}" placeholder="Status name">
                     </div>
                     <div class="widget-config-field" style="flex: 2;">
                         <label>Sensor</label>
                         <input type="text" class="widget-input sensor-autocomplete" name="item-sensor-${idx}"
-                               value="${escapeHtml(item.sensor || '')}" placeholder="Sensor name">
+                               value="${escapeAttr(item.sensor || '')}" placeholder="Sensor name">
                     </div>
                 </div>
                 <div class="widget-config-row">
@@ -2136,12 +2136,12 @@ class BarGraphWidget {
                     <div class="widget-config-field" style="flex: 1;">
                         <label>Label</label>
                         <input type="text" class="widget-input" name="bar-label-${idx}"
-                               value="${escapeHtml(item.label || '')}" placeholder="Bar name">
+                               value="${escapeAttr(item.label || '')}" placeholder="Bar name">
                     </div>
                     <div class="widget-config-field" style="flex: 2;">
                         <label>Sensor</label>
                         <input type="text" class="widget-input sensor-autocomplete" name="bar-sensor-${idx}"
-                               value="${escapeHtml(item.sensor || '')}" placeholder="Sensor name">
+                               value="${escapeAttr(item.sensor || '')}" placeholder="Sensor name">
                     </div>
                 </div>
                 <div class="widget-config-row">
@@ -2158,7 +2158,7 @@ class BarGraphWidget {
                     <div class="widget-config-field">
                         <label>Unit</label>
                         <input type="text" class="widget-input" name="bar-unit-${idx}"
-                               value="${escapeHtml(item.unit || '')}" placeholder="kW">
+                               value="${escapeAttr(item.unit || '')}" placeholder="kW">
                     </div>
                     <div class="widget-config-field">
                         <label>Color</label>
@@ -2558,12 +2558,12 @@ class DigitalWidget extends DashboardWidget {
             <div class="widget-config-field">
                 <label>Sensor</label>
                 <input type="text" class="widget-input" name="sensor"
-                       value="${escapeHtml(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
+                       value="${escapeAttr(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
             </div>
             <div class="widget-config-field">
                 <label>Label</label>
                 <input type="text" class="widget-input" name="label"
-                       value="${escapeHtml(config.label || '')}" placeholder="Display label">
+                       value="${escapeAttr(config.label || '')}" placeholder="Display label">
             </div>
             <div class="widget-config-field">
                 <label>Style</label>
@@ -2594,7 +2594,7 @@ class DigitalWidget extends DashboardWidget {
                 <div class="widget-config-field">
                     <label>Unit</label>
                     <input type="text" class="widget-input" name="unit"
-                           value="${escapeHtml(config.unit || '')}" placeholder="Optional">
+                           value="${escapeAttr(config.unit || '')}" placeholder="Optional">
                 </div>
             </div>
         `;
@@ -2861,12 +2861,12 @@ class ChartWidget extends DashboardWidget {
             // Use textname if enabled and available
             const displayName = (useTextname && sensor.textname) ? sensor.textname : sensor.name;
             return `
-            <tr data-sensor="${escapeHtml(sensor.name)}" data-zone="${sensor.zoneIdx}" data-idx="${sensor.sensorIdx}">
+            <tr data-sensor="${escapeAttr(sensor.name)}" data-zone="${sensor.zoneIdx}" data-idx="${sensor.sensorIdx}">
                 <td class="col-color">
                     <span class="color-indicator" style="background: ${sensor.color}"></span>
                 </td>
                 <td class="col-id">${escapeHtml(String(sensorId))}</td>
-                <td class="col-name" title="${escapeHtml(sensor.name)}">${escapeHtml(displayName)}</td>
+                <td class="col-name" title="${escapeAttr(sensor.name)}">${escapeHtml(displayName)}</td>
                 <td class="col-type">
                     ${sensor.iotype ? `<span class="type-badge type-${sensor.iotype}">${sensor.iotype}</span>` : ''}
                 </td>
@@ -3105,7 +3105,7 @@ class ChartWidget extends DashboardWidget {
             <div class="widget-config-field">
                 <label>Label</label>
                 <input type="text" class="widget-input" name="label"
-                       value="${escapeHtml(config.label || '')}" placeholder="Chart title">
+                       value="${escapeAttr(config.label || '')}" placeholder="Chart title">
             </div>
             <div class="widget-config-field">
                 <label>Time Range</label>
@@ -3184,7 +3184,7 @@ class ChartWidget extends DashboardWidget {
                     </label>
                 </div>
                 <button type="button" class="chart-sensor-remove" onclick="removeChartSensor(${zoneIdx}, ${sensorIdx})">×</button>
-                <input type="hidden" name="sensor-${zoneIdx}-${sensorIdx}-name" value="${escapeHtml(sensor.name)}">
+                <input type="hidden" name="sensor-${zoneIdx}-${sensorIdx}-name" value="${escapeAttr(sensor.name)}">
                 <input type="hidden" name="sensor-${zoneIdx}-${sensorIdx}-color" value="${color}">
             </div>
         `;

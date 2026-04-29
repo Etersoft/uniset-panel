@@ -251,7 +251,7 @@ test.describe('ToggleWidget — first active widget', () => {
         expect(requestSent).toBe(false);
     });
 
-    test('read-pathway: writes use widget objectName, not hardcoded', async ({ page }) => {
+    test('write-pathway: POST URL uses widget objectName + serverId, not hardcoded', async ({ page }) => {
         await createToggleDashboard(page, { objectName: 'SharedMemory2', sensorId: 200 });
         await page.evaluate(() => {
             const w = window as any;
@@ -273,6 +273,126 @@ test.describe('ToggleWidget — first active widget', () => {
         expect(serverParam).toBe('mock-srv');
         const body = JSON.parse(req.postData() || '{}');
         expect(body.sensor_id).toBe(200);
+    });
+
+    test('read-pathway: initial fetchSensorValues GET uses configured objectName + serverId', async ({ page }) => {
+        // Mock initial GET — request должен идти на /api/objects/SharedMemory2/ionc/sensors
+        // с server=mock-srv и search=TEST_PUMP. Если поломается persist serverId/objectName
+        // или routing уйдёт на fallback — этот URL не сработает, тест упадёт по timeout.
+        let getRequestUrl: string | null = null;
+        await page.route('**/api/objects/*/ionc/sensors**', async (route, req) => {
+            if (req.method() !== 'GET') {
+                await route.continue();
+                return;
+            }
+            getRequestUrl = req.url();
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({
+                    sensors: [{ id: 200, name: 'TEST_PUMP', value: 1, type: 'DI' }]
+                })
+            });
+        });
+
+        await createToggleDashboard(page, {
+            objectName: 'SharedMemory2',
+            sensor: 'TEST_PUMP',
+            sensorId: 200,
+        });
+
+        // Дождаться initial fetch — fetchSensorValues отрабатывает после renderDashboard.
+        await page.waitForFunction(
+            () => (window as any).__capturedFetchUrl !== undefined || true,
+            { timeout: 3000 }
+        ).catch(() => {});
+        await page.waitForTimeout(500);
+
+        expect(getRequestUrl).not.toBeNull();
+        const url = new URL(getRequestUrl!);
+        expect(url.pathname).toBe('/api/objects/SharedMemory2/ionc/sensors');
+        expect(url.searchParams.get('server')).toBe('mock-srv');
+        expect(url.searchParams.get('search')).toBe('TEST_PUMP');
+    });
+
+    test('UI-flow: widget picker → Toggle → server/object/sensor select → save persists serverId+sensorId', async ({ page }) => {
+        // IONC objects list — для cfg-objectName dropdown.
+        await page.route('**/api/objects?server=mock-srv&type=IONotifyController', async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({ objects: [{ name: 'SharedMemory' }, { name: 'SharedMemory2' }] })
+            });
+        });
+        // IONC sensors search — для cfg-sensor autocomplete (focus + select).
+        await page.route('**/api/objects/SharedMemory/ionc/sensors**', async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({
+                    sensors: [
+                        { id: 555, name: 'PUMP_RUN', type: 'DO', value: 0 },
+                        { id: 556, name: 'PUMP_FAULT', type: 'DI', value: 0 },
+                    ]
+                })
+            });
+        });
+
+        // Создаём пустой пользовательский dashboard, переключаемся в edit-mode.
+        await page.evaluate(() => {
+            const w = window as any;
+            const dashCfg = { meta: { name: 'UIFLOW_TEST' }, widgets: [] };
+            w.dashboardState.dashboards.set('UIFLOW_TEST', dashCfg);
+            w.dashboardManager.loadDashboard('UIFLOW_TEST');
+            if (typeof w.switchView === 'function') w.switchView('dashboard');
+            w.dashboardState.editMode = true;
+            document.dispatchEvent(new CustomEvent('dashboardEditModeChanged', { detail: { editMode: true } }));
+        });
+
+        // Открыть widget picker → выбрать toggle.
+        await page.locator('#dashboard-add-widget-btn').click();
+        await page.locator('#widget-picker-overlay').waitFor({ state: 'visible' });
+        await page.locator('.widget-picker-item[data-type="toggle"]').click();
+
+        const cfg = page.locator('#widget-config-overlay');
+        await cfg.waitFor({ state: 'visible' });
+
+        // Server dropdown — должен быть пред-выбран mock-srv (единственный connected).
+        await expect(cfg.locator('[data-test="cfg-serverId"]')).toHaveValue('mock-srv');
+
+        // Дождаться загрузки IONC objects dropdown.
+        await page.waitForFunction(() => {
+            const sel = document.querySelector('[data-test="cfg-objectName"]') as HTMLSelectElement;
+            return sel && sel.options.length >= 2;
+        }, { timeout: 3000 });
+        await cfg.locator('[data-test="cfg-objectName"]').selectOption('SharedMemory');
+
+        // Сфокусировать sensor input — fetchAndShow('', limit:10) должен дёрнуть autocomplete.
+        await cfg.locator('[data-test="cfg-sensor"]').click();
+        // Дождаться dropdown'а.
+        const dropdownItem = page.locator('.sensor-autocomplete-item').first();
+        await dropdownItem.waitFor({ state: 'visible', timeout: 3000 });
+
+        // Кликнуть по первому варианту → имя + hidden sensorId должны заполниться.
+        await dropdownItem.dispatchEvent('mousedown');
+
+        await expect(cfg.locator('[data-test="cfg-sensor"]')).toHaveValue('PUMP_RUN');
+        await expect(cfg.locator('[data-test="cfg-sensorId"]')).toHaveValue('555');
+
+        // Save — Apply button в footer.
+        await page.locator('#widget-config-apply').click();
+        await cfg.waitFor({ state: 'hidden', timeout: 3000 });
+
+        // Проверяем persisted config: serverId, sensorId, sensor name, objectName.
+        const saved = await page.evaluate(() => {
+            const w = window as any;
+            const dash = w.dashboardState.dashboards.get('UIFLOW_TEST');
+            return dash.widgets[0]?.config;
+        });
+        expect(saved.serverId).toBe('mock-srv');
+        expect(saved.objectName).toBe('SharedMemory');
+        expect(saved.sensor).toBe('PUMP_RUN');
+        expect(saved.sensorId).toBe(555);
     });
 });
 

@@ -259,7 +259,7 @@ class ActiveDashboardWidget extends DashboardWidget {
             <div class="widget-config-field">
                 <label>Style</label>
                 <select class="widget-input" name="style" data-test="cfg-style">
-                    ${this.styles.map(s => `<option value="${escapeHtml(s)}" ${(config.style || this.defaultStyle) === s ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
+                    ${this.styles.map(s => `<option value="${escapeAttr(s)}" ${(config.style || this.defaultStyle) === s ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
                 </select>
             </div>
             `
@@ -273,7 +273,7 @@ class ActiveDashboardWidget extends DashboardWidget {
         for (const [id, srv] of state.servers) {
             if (srv.connected || id === currentServerId) {
                 const sel = id === currentServerId ? 'selected' : '';
-                serverOptions += `<option value="${escapeHtml(id)}" ${sel}>${escapeHtml(srv.name || id)}</option>`;
+                serverOptions += `<option value="${escapeAttr(id)}" ${sel}>${escapeHtml(srv.name || id)}</option>`;
             }
         }
         // Edge: state.servers пустой при cold load (SSE ещё не приехал) — показать
@@ -292,7 +292,7 @@ class ActiveDashboardWidget extends DashboardWidget {
             <div class="widget-config-field">
                 <label>IONC Object</label>
                 <select class="widget-input" name="objectName" data-test="cfg-objectName">
-                    <option value="${escapeHtml(config.objectName || 'SharedMemory')}" selected>${escapeHtml(config.objectName || 'SharedMemory')}</option>
+                    <option value="${escapeAttr(config.objectName || 'SharedMemory')}" selected>${escapeHtml(config.objectName || 'SharedMemory')}</option>
                 </select>
                 <small style="color:#6b7280">список загружается из /api/objects?type=IONotifyController</small>
             </div>
@@ -301,15 +301,15 @@ class ActiveDashboardWidget extends DashboardWidget {
                 <div class="sensor-select-wrap">
                     <input type="text" class="widget-input sensor-select-input" name="sensor" autocomplete="off"
                            placeholder="Click to select or type to search..."
-                           value="${escapeHtml(config.sensor || '')}" data-test="cfg-sensor">
-                    <input type="hidden" name="sensorId" value="${config.sensorId ?? ''}" data-test="cfg-sensorId">
+                           value="${escapeAttr(config.sensor || '')}" data-test="cfg-sensor">
+                    <input type="hidden" name="sensorId" value="${escapeAttr(config.sensorId ?? '')}" data-test="cfg-sensorId">
                 </div>
             </div>
             ${styleSelect}
             <div class="widget-config-field">
-                <label>Label</label>
+                <label>Label (optional)</label>
                 <input type="text" class="widget-input" name="label"
-                       value="${escapeHtml(config.label || '')}" placeholder="Display label">
+                       value="${escapeAttr(config.label || '')}" placeholder="Leave empty to hide header">
             </div>
             <div class="widget-config-field">
                 <label class="widget-checkbox-label">
@@ -382,7 +382,7 @@ class ActiveDashboardWidget extends DashboardWidget {
                     const currentValue = objectSelect.value || config.objectName || 'SharedMemory';
                     objectSelect.innerHTML = objs.map(o => {
                         const name = typeof o === 'string' ? o : o.name;
-                        return `<option value="${escapeHtml(name)}" ${name === currentValue ? 'selected' : ''}>${escapeHtml(name)}</option>`;
+                        return `<option value="${escapeAttr(name)}" ${name === currentValue ? 'selected' : ''}>${escapeHtml(name)}</option>`;
                     }).join('');
                     if (!objs.some(o => (typeof o === 'string' ? o : o.name) === currentValue)) {
                         const opt = document.createElement('option');

@@ -10,6 +10,10 @@
 
 const SENSOR_AUTOCOMPLETE_DEBOUNCE_MS = 150;
 const SENSOR_AUTOCOMPLETE_LIMIT = 20;
+// На focus показываем top-N из IONC объекта (без search фильтра), чтобы юзер
+// сразу видел ассортимент, а не результат поиска по уже введённому тексту
+// (typically — имя сохранённого sensor'а из existing config). Spec требует 10.
+const SENSOR_AUTOCOMPLETE_FOCUS_LIMIT = 10;
 
 function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId) {
     if (!inputEl) return null;
@@ -53,7 +57,7 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
             <div class="sensor-autocomplete-item ${idx === activeIndex ? 'active' : ''}"
                  data-idx="${idx}"
                  data-id="${s.id}"
-                 data-name="${escapeHtml(s.name)}">
+                 data-name="${escapeAttr(s.name)}">
                 <div class="sensor-autocomplete-name">${escapeHtml(s.name)}</div>
                 <div class="sensor-autocomplete-meta">id=${s.id} · type=${escapeHtml(s.type || '?')} · value=${s.value ?? '—'}</div>
             </div>
@@ -74,7 +78,8 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
         destroyDropdown();
     }
 
-    async function fetchAndShow(searchText) {
+    async function fetchAndShow(searchText, options = {}) {
+        const limit = options.limit ?? SENSOR_AUTOCOMPLETE_LIMIT;
         const objectName = (getObjectName && getObjectName()) || 'SharedMemory';
         const serverId = (getServerId && getServerId()) || '';
         if (!serverId) {
@@ -86,7 +91,7 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
             const url = `/api/objects/${encodeURIComponent(objectName)}/ionc/sensors`
                 + `?server=${encodeURIComponent(serverId)}`
                 + (searchText ? `&search=${encodeURIComponent(searchText)}` : '')
-                + `&limit=${SENSOR_AUTOCOMPLETE_LIMIT}`;
+                + `&limit=${limit}`;
             const resp = await fetch(url);
             if (!resp.ok) {
                 buildDropdown();
@@ -104,7 +109,10 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
     }
 
     inputEl.addEventListener('focus', () => {
-        fetchAndShow(inputEl.value.trim());
+        // Focus всегда показывает top-N (limit=10) без search-фильтра — иначе при
+        // editing existing config dropdown забит результатами по уже выбранному
+        // имени, что бесполезно для просмотра «что ещё есть на этом объекте».
+        fetchAndShow('', { limit: SENSOR_AUTOCOMPLETE_FOCUS_LIMIT });
     });
 
     inputEl.addEventListener('input', () => {

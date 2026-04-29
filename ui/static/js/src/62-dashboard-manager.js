@@ -191,7 +191,7 @@ class DashboardManager {
         if (serverDashboards.length > 0) {
             html += '<optgroup label="Server Dashboards">';
             serverDashboards.forEach(([name]) => {
-                html += `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
+                html += `<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`;
             });
             html += '</optgroup>';
         }
@@ -202,7 +202,7 @@ class DashboardManager {
         if (userDashboards.length > 0) {
             html += '<optgroup label="My Dashboards">';
             userDashboards.forEach(([name]) => {
-                html += `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
+                html += `<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`;
             });
             html += '</optgroup>';
         }
@@ -240,7 +240,7 @@ class DashboardManager {
         serverDashboards.forEach(([name]) => {
             const isActive = dashboardState.currentDashboard === name;
             html += `
-                <li class="dashboard-item server${isActive ? ' active' : ''}" data-name="${escapeHtml(name)}">
+                <li class="dashboard-item server${isActive ? ' active' : ''}" data-name="${escapeAttr(name)}">
                     <svg class="dashboard-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="3" width="7" height="7"/>
                         <rect x="14" y="3" width="7" height="7"/>
@@ -257,7 +257,7 @@ class DashboardManager {
         userDashboards.forEach(([name]) => {
             const isActive = dashboardState.currentDashboard === name;
             html += `
-                <li class="dashboard-item${isActive ? ' active' : ''}" data-name="${escapeHtml(name)}">
+                <li class="dashboard-item${isActive ? ' active' : ''}" data-name="${escapeAttr(name)}">
                     <svg class="dashboard-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="3" width="7" height="7"/>
                         <rect x="14" y="3" width="7" height="7"/>
@@ -351,6 +351,18 @@ class DashboardManager {
         if (!config) {
             console.warn('Dashboard not found:', name);
             this.clearDashboard();
+            return;
+        }
+
+        // Если уже на этом dashboard и виджеты живы — НЕ пересоздаём их с нуля.
+        // sidebar-click + view-toggle теперь не «сбрасывают» layout/values/edit-mode,
+        // а лишь освежают подписки и значения (на случай новых SSE-событий или
+        // подключившихся серверов). Force-reload — через clearDashboard() либо
+        // переключение dashboard'ов.
+        if (dashboardState.currentDashboard === name && dashboardState.widgets.size > 0) {
+            this._migrateLegacyServerIds();
+            this.updateSensorSubscriptions();
+            this.initializeWidgetValues();
             return;
         }
 
@@ -828,6 +840,13 @@ class DashboardManager {
 
         if (!content) return;
 
+        // widget-config-content — persistent <div> (live между открытиями
+        // диалога). Сбрасываем все idempotency-флаги, которые initConfigHandlers
+        // конкретных виджетов выставляют на этом узле, иначе для второго
+        // открытия handler'ы рано-return'ят и autocomplete не работает.
+        delete content.dataset.activeHandlersWired;
+        delete content.dataset.genHandlersWired;
+
         let config = {};
         let position = {};
         let WidgetClass;
@@ -873,7 +892,7 @@ class DashboardManager {
             <div class="widget-config-row">
                 <div class="widget-config-field">
                     <label>Title (optional)</label>
-                    <input type="text" class="widget-input" name="title" value="${escapeHtml(config.title || '')}" placeholder="e.g. Engine RPM">
+                    <input type="text" class="widget-input" name="title" value="${escapeAttr(config.title || '')}" placeholder="e.g. Engine RPM">
                 </div>
                 <div class="widget-config-field">
                     <label class="widget-toggle">
@@ -995,7 +1014,7 @@ class DashboardManager {
             selectedIndex = 0;
 
             autocompleteContainer.innerHTML = matches.map((s, i) => `
-                <div class="widget-autocomplete-item${i === 0 ? ' selected' : ''}" data-name="${escapeHtml(s.name)}">
+                <div class="widget-autocomplete-item${i === 0 ? ' selected' : ''}" data-name="${escapeAttr(s.name)}">
                     <span class="sensor-name">${escapeHtml(s.name)}</span>
                     <span class="type-badge type-${s.iotype}">${s.iotype}</span>
                     ${s.textname ? `<span class="sensor-textname">${escapeHtml(s.textname)}</span>` : ''}

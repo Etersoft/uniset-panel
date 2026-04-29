@@ -45,11 +45,16 @@ class GeneratorWidget extends ActiveDashboardWidget {
 
     // === Render ===
     render() {
-        const label = this.config?.label || this.config?.sensor || 'Generator';
+        // Label опционален: пустой → header не рисуется. Fallback на sensor name
+        // удалён намеренно (см. комментарий в ToggleWidget.renderSlider).
+        const label = this.config?.label || '';
+        const labelHtml = label
+            ? `<div class="gen-label" data-test="label">${escapeHtml(label)}</div>`
+            : '';
         this.element = document.createElement('div');
         this.element.className = 'widget-content generator-widget';
         this.element.innerHTML = `
-            <div class="gen-label" data-test="label">${escapeHtml(label)}</div>
+            ${labelHtml}
             <div class="gen-value" data-test="value">--</div>
             <div class="gen-toggle" data-test="toggle" role="switch" aria-checked="false">
                 <div class="gen-handle"></div>

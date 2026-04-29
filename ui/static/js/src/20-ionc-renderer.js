@@ -249,7 +249,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         } catch (err) {
             console.error('Error loading IONC sensors:', err);
             if (tbody) {
-                tbody.innerHTML = `<tr><td colspan="9" class="ionc-error">Error загрузки: ${err.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" class="ionc-error">Error загрузки: ${escapeHtml(err.message)}</td></tr>`;
             }
         } finally {
             this.loading = false;
@@ -483,8 +483,11 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     sortRenderVisible() { this.renderVisibleSensors(); }
 
     renderSensorRow(sensor, isPinned) {
-        // Получаем textname из справочника сенсоров (конфигурации)
-        const sensorInfo = state.sensorsByName.get(sensor.name);
+        // Multi-server-aware lookup: те же sensor.name могут существовать на
+        // разных серверах с разными textname. Берём scoped запись по
+        // (serverId, objectName, name); fallback на legacy by-name внутри helper.
+        const serverId = state.tabs.get(this.tabKey)?.serverId || '';
+        const sensorInfo = getSensorInfoByKey(serverId, this.objectName, sensor.name);
         const textname = sensorInfo?.textname || sensor.textname || '';
 
         const frozenClass = sensor.frozen ? 'ionc-sensor-frozen' : '';
@@ -542,7 +545,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                                class="ionc-chart-checkbox chart-toggle-input"
                                id="ionc-chart-${this.objectName}-${varName}"
                                data-id="${sensor.id}"
-                               data-name="${escapeHtml(sensor.name)}"
+                               data-name="${escapeAttr(sensor.name)}"
                                ${isOnChart ? 'checked' : ''}>
                         <label class="chart-toggle-label" for="ionc-chart-${this.objectName}-${varName}" title="Add to Chart">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -552,8 +555,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                         </label>
                     </span>
                     <button class="dashboard-add-btn"
-                            data-sensor-name="${escapeHtml(sensor.name)}"
-                            data-sensor-label="${escapeHtml(textname || sensor.name)}"
+                            data-sensor-name="${escapeAttr(sensor.name)}"
+                            data-sensor-label="${escapeAttr(textname || sensor.name)}"
                             title="Add to Dashboard">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <rect x="3" y="3" width="7" height="7" rx="1"/>
@@ -564,7 +567,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                     </button>
                 </td>
                 <td class="ionc-col-id">${sensor.id}</td>
-                <td class="ionc-col-name" title="${escapeHtml(textname)}">${escapeHtml(sensor.name)}</td>
+                <td class="ionc-col-name" title="${escapeAttr(textname)}">${escapeHtml(sensor.name)}</td>
                 <td class="ionc-col-type"><span class="type-badge type-${sensor.type}">${sensor.type}</span></td>
                 <td class="ionc-col-value">
                     ${sensor.frozen && sensor.real_value !== undefined && sensor.real_value !== sensor.value
@@ -577,7 +580,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                     }
                 </td>
                 <td class="ionc-col-flags">${flags.join(' ') || '—'}</td>
-                <td class="ionc-col-supplier" id="ionc-supplier-${this.objectName}-${sensor.id}" title="${escapeHtml(supplierValue)}">${escapeHtml(supplierValue)}</td>
+                <td class="ionc-col-supplier" id="ionc-supplier-${this.objectName}-${sensor.id}" title="${escapeAttr(supplierValue)}">${escapeHtml(supplierValue)}</td>
                 <td class="ionc-col-consumers">
                     <button class="ionc-btn ionc-btn-consumers" data-id="${sensor.id}" title="Show consumers">👥</button>
                 </td>

@@ -11,7 +11,15 @@ const state = window.state = {
     tabs: new Map(), // tabKey -> { charts, updateInterval, chartStartTime, objectType, renderer, serverId, serverName, displayName }
     activeTab: null,
     sensors: new Map(), // sensorId -> sensorInfo
+    // Legacy global registry — keyed by short sensorName. На multi-server панели
+    // первый встретившийся sensor wins, остальные с тем же именем игнорируются.
+    // Безопасен только для search/autocomplete (UI dedupe). Per-row metadata
+    // (textname в renderer'ах) должна ходить через sensorsByKey, иначе при
+    // одинаковых именах на разных серверах юзер видит metadata от чужого объекта.
     sensorsByName: new Map(), // sensorName -> sensorInfo
+    // Multi-server-aware registry: key = sensorKey (`${serverId}|${objectName}|${sensorName}`).
+    // Используется в renderer'ах и точечных lookup'ах, где известен полный context.
+    sensorsByKey: new Map(), // sensorKey -> sensorInfo (см. 09-sensor-key.js)
     sensorValuesCache: new Map(), // sensorKey -> { value, error, timestamp } — cache for dashboard init. sensorKey = `${serverId}|${objectName}|${sensorName}` (см. 09-sensor-key.js)
     timeRange: DEFAULT_CHART_TIME_RANGE, // секунды (по умолчанию 15 минут)
     sidebarCollapsed: false, // свёрнутая боковая панель

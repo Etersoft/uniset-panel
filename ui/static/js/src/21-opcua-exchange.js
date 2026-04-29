@@ -786,13 +786,13 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
                 </td>
                 ${this.renderAddButtonsCell(sensor.id, sensor.name, 'opcua', sensor.textname || sensor.name)}
                 <td class="col-id">${sensor.id ?? '—'}</td>
-                <td class="col-name" title="${escapeHtml(sensor.textname || sensor.comment || '')}">${escapeHtml(sensor.name || '')}</td>
+                <td class="col-name" title="${escapeAttr(sensor.textname || sensor.comment || '')}">${escapeHtml(sensor.name || '')}</td>
                 <td class="col-type"><span class="${typeBadgeClass}">${iotype || '—'}</span></td>
                 <td class="col-value">${sensor.value ?? '—'}</td>
                 <td class="col-tick">${sensor.tick ?? '—'}</td>
                 <td class="col-vtype">${sensor.vtype || '—'}</td>
                 <td class="col-precision">${sensor.precision ?? '—'}</td>
-                <td class="col-status ${sensor.status && sensor.status.toLowerCase() !== 'ok' ? 'status-bad' : ''}" title="${escapeHtml(sensor.status || '')}">${escapeHtml(sensor.status || '—')}</td>
+                <td class="col-status ${sensor.status && sensor.status.toLowerCase() !== 'ok' ? 'status-bad' : ''}" title="${escapeAttr(sensor.status || '')}">${escapeHtml(sensor.status || '—')}</td>
             </tr>
         `}).join('');
 

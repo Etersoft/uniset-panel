@@ -61,12 +61,12 @@ class DashboardWidget {
             <div class="widget-config-field">
                 <label>Sensor</label>
                 <input type="text" class="widget-input" name="sensor"
-                       value="${config.sensor || ''}" placeholder="Type to search..." autocomplete="off">
+                       value="${escapeAttr(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
             </div>
             <div class="widget-config-field">
                 <label>Label</label>
                 <input type="text" class="widget-input" name="label"
-                       value="${config.label || ''}" placeholder="Display label">
+                       value="${escapeAttr(config.label || '')}" placeholder="Display label">
             </div>
         `;
     }

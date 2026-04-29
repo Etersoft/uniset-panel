@@ -307,7 +307,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
             tr.innerHTML = `
                 <td class="variable-name">${name}</td>
                 <td class="variable-value">${current !== undefined ? formatValue(current) : '—'}</td>
-                <td><input class="opcua-param-input" data-name="${name}" value="${current !== undefined ? current : ''}"></td>
+                <td><input class="opcua-param-input" data-name="${escapeAttr(name)}" value="${escapeAttr(current !== undefined ? current : '')}"></td>
             `;
             tbody.appendChild(tr);
         });
@@ -501,7 +501,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
                 </td>
                 ${this.renderAddButtonsCell(sensor.id, sensor.name, 'opcuasrv', sensor.textname || sensor.name)}
                 <td>${sensor.id || ''}</td>
-                <td class="sensor-name" title="${escapeHtml(sensor.textname || sensor.comment || '')}">${sensor.name || ''}</td>
+                <td class="sensor-name" title="${escapeAttr(sensor.textname || sensor.comment || '')}">${escapeHtml(sensor.name || '')}</td>
                 <td><span class="${typeBadgeClass}">${iotype}</span></td>
                 <td class="sensor-value">${sensor.value !== undefined ? formatValue(sensor.value) : '—'}</td>
                 <td>${sensor.vtype || ''}</td>

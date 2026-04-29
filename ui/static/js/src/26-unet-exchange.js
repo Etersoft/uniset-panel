@@ -219,7 +219,7 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
     renderStatusError(message) {
         const container = this.getEl(`unet-status-${this.objectName}`);
         if (container) {
-            container.innerHTML = `<div class="status-error">Error: ${message}</div>`;
+            container.innerHTML = `<div class="status-error">Error: ${escapeHtml(message)}</div>`;
         }
     }
 

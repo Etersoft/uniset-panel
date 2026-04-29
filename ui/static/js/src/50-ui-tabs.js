@@ -215,7 +215,7 @@ function renderServersSection() {
 
         li.innerHTML = `
             <span class="server-status-dot${statusClass}"></span>
-            <span class="server-name" title="${escapeHtml(server.url)}">${escapeHtml(displayName)}</span>
+            <span class="server-name" title="${escapeAttr(server.url)}">${escapeHtml(displayName)}</span>
             <span class="server-stats ${statsClass}">${statsText}</span>
         `;
 

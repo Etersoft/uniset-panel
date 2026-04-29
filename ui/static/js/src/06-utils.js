@@ -10,6 +10,28 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Экранирование строки для вставки внутрь HTML-атрибута (`attr="..."`).
+// escapeHtml() не покрывает кавычки/апострофы (textContent → innerHTML
+// сериализует только <, >, &), поэтому в attribute context кавычка в
+// значении ломает разметку. Используй здесь, когда подставляешь dynamic
+// данные внутрь quoted attribute.
+function escapeAttr(text) {
+    if (text === null || text === undefined) return '';
+    const s = String(text);
+    if (s === '') return '';
+    return s
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+if (typeof globalThis !== 'undefined') {
+    globalThis.escapeHtml = escapeHtml;
+    globalThis.escapeAttr = escapeAttr;
+}
+
 // Универсальный resize-handle: mousedown → mousemove → mouseup паттерн
 function setupResizeHandle(handle, container, minHeight, onSave) {
     if (!handle || !container) return;

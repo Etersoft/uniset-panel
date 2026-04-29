@@ -110,7 +110,7 @@ class SetpointWidget extends ActiveDashboardWidget {
                        autocomplete="off" autocorrect="off" autocapitalize="off"
                        spellcheck="false" data-form-type="other" data-lpignore="true"
                        inputmode="decimal"
-                       data-min="${escapeHtml(String(min))}" data-max="${escapeHtml(String(max))}" data-step="${escapeHtml(String(step))}">
+                       data-min="${escapeAttr(String(min))}" data-max="${escapeAttr(String(max))}" data-step="${escapeAttr(String(step))}">
                 ${unit ? '<span class="setpoint-unit">' + unit + '</span>' : ''}
                 <button class="setpoint-apply-btn" data-test="apply-btn" tabindex="-1">Apply</button>
                 <button class="setpoint-cancel-btn" data-test="cancel-btn" title="Cancel" tabindex="-1">×</button>
@@ -427,7 +427,7 @@ class SetpointWidget extends ActiveDashboardWidget {
                 <div class="widget-config-field">
                     <label>Unit</label>
                     <input type="text" class="widget-input" name="unit"
-                           value="${escapeHtml(config.unit || '')}" placeholder="°C, %, Pa..." data-test="cfg-unit">
+                           value="${escapeAttr(config.unit || '')}" placeholder="°C, %, Pa..." data-test="cfg-unit">
                 </div>
                 <div class="widget-config-field">
                     <label>Apply mode</label>

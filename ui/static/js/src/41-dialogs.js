@@ -221,8 +221,8 @@ function renderSensorTable() {
             <tr>
                 <td>
                     <button class="sensor-add-btn" ${btnDisabled} title="${btnTitle}"
-                            data-object="${escapeHtml(sensorDialogState.objectName)}"
-                            data-sensor="${escapeHtml(sensor.name)}">${btnText}</button>
+                            data-object="${escapeAttr(sensorDialogState.objectName)}"
+                            data-sensor="${escapeAttr(sensor.name)}">${btnText}</button>
                 </td>
                 <td>${sensor.id}</td>
                 <td class="sensor-name">${escapeHtml(sensor.name)}</td>
@@ -847,6 +847,15 @@ function restoreExternalSensors(tabKey, displayName) {
                     state.sensorsByName.set(sensorName, sensor);
                     state.sensors.set(sensor.id, sensor);
                 }
+                // Multi-server-aware: scoped запись по (tabKey serverId, objectName).
+                // tabKey формата `${serverId}:${objectName}` — split по первому ':'.
+                const _idx = tabKey.indexOf(':');
+                const _serverId = _idx >= 0 ? tabKey.slice(0, _idx) : '';
+                const _objectName = _idx >= 0 ? tabKey.slice(_idx + 1) : tabKey;
+                state.sensorsByKey.set(
+                    makeSensorKey(_serverId, _objectName, sensorName),
+                    sensor
+                );
             } else {
                 // Старый формат: только имя - пробуем найти в state или renderer
                 let sensor = state.sensorsByName.get(sensorName);

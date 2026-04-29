@@ -279,7 +279,7 @@ function setupChartSensorAutocomplete(zoneIdx) {
 
         selectedIndex = 0;
         autocompleteContainer.innerHTML = autocompleteResults.map((s, i) => `
-            <div class="widget-autocomplete-item${i === 0 ? ' selected' : ''}" data-name="${escapeHtml(s.name)}">
+            <div class="widget-autocomplete-item${i === 0 ? ' selected' : ''}" data-name="${escapeAttr(s.name)}">
                 <span class="autocomplete-name">${escapeHtml(s.name)}</span>
                 ${s.textname ? `<span class="autocomplete-desc">${escapeHtml(s.textname)}</span>` : ''}
             </div>
@@ -380,7 +380,7 @@ function showAddToDashboardDialog(sensorName, sensorLabel = null) {
     for (const [name, dashboard] of dashboardState.dashboards) {
         // Skip server dashboards (they're read-only)
         if (!dashboardState.serverDashboards.some(sd => sd.meta?.name === name)) {
-            selectEl.innerHTML += `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
+            selectEl.innerHTML += `<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`;
         }
     }
 

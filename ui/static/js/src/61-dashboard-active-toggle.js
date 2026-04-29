@@ -43,11 +43,18 @@ class ToggleWidget extends ActiveDashboardWidget {
     }
 
     renderSlider() {
-        const label = this.config?.label || this.config?.sensor || 'Toggle';
+        // Label опционален: если пустой — НЕ показываем header строку, экономим
+        // вертикальный pixel'аж. Fallback на sensor name удалён намеренно
+        // (старое поведение «не задал label → имя датчика» путало юзеров,
+        // которые специально хотели чистый виджет).
+        const label = this.config?.label || '';
+        const labelHtml = label
+            ? `<div class="toggle-name" data-test="name">${escapeHtml(label)}</div>`
+            : '';
         this.element = document.createElement('div');
         this.element.className = 'widget-content toggle-widget toggle-style-slider';
         this.element.innerHTML = `
-            <div class="toggle-name" data-test="name">${escapeHtml(label)}</div>
+            ${labelHtml}
             <div class="toggle-track" data-test="track" data-handle-pos="left">
                 <div class="toggle-handle"></div>
             </div>
@@ -62,12 +69,16 @@ class ToggleWidget extends ActiveDashboardWidget {
     }
 
     renderCheckbox() {
-        const label = this.config?.label || this.config?.sensor || 'Toggle';
+        // Label опционален. См. комментарий в renderSlider().
+        const label = this.config?.label || '';
+        const labelHtml = label
+            ? `<div class="toggle-name" data-test="name">${escapeHtml(label)}</div>`
+            : '';
         this.element = document.createElement('div');
         this.element.className = 'widget-content toggle-widget toggle-style-checkbox';
         this.element.innerHTML = `
             <div class="toggle-cb" data-test="cb"></div>
-            <div class="toggle-name" data-test="name">${escapeHtml(label)}</div>
+            ${labelHtml}
         `;
         this.container.appendChild(this.element);
         // Click anywhere on widget triggers writeValue (standard checkbox UX).
@@ -196,12 +207,12 @@ class ToggleWidget extends ActiveDashboardWidget {
                 <div class="widget-config-field">
                     <label>labelOff</label>
                     <input type="text" class="widget-input" name="labelOff"
-                           value="${escapeHtml(config.labelOff || '')}" placeholder="OFF" data-test="cfg-labelOff">
+                           value="${escapeAttr(config.labelOff || '')}" placeholder="OFF" data-test="cfg-labelOff">
                 </div>
                 <div class="widget-config-field">
                     <label>labelOn</label>
                     <input type="text" class="widget-input" name="labelOn"
-                           value="${escapeHtml(config.labelOn || '')}" placeholder="ON" data-test="cfg-labelOn">
+                           value="${escapeAttr(config.labelOn || '')}" placeholder="ON" data-test="cfg-labelOn">
                 </div>
             </div>
         `;
