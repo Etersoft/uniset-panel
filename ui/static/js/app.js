@@ -17975,6 +17975,7 @@ window.ToggleWidget = ToggleWidget;
 // === 61-dashboard-widgets.js ===
 class GaugeWidget extends DashboardWidget {
     static type = 'gauge';
+    static usesNewSensorAutocomplete = true;
     static displayName = 'Gauge';
     static description = 'Circular gauge with needle';
     static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>';
@@ -18995,18 +18996,16 @@ class GaugeWidget extends DashboardWidget {
 
     static getConfigForm(config = {}) {
         const zones = config.zones || [];
+        const isDual = config.style === 'dual';
         return `
-            <div class="widget-config-field">
-                <label>Sensor</label>
-                <input type="text" class="widget-input" name="sensor"
-                       value="${escapeAttr(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
-            </div>
-            <div class="dual-scale-fields" style="display: ${config.style === 'dual' ? 'block' : 'none'};">
-                <div class="widget-config-field">
-                    <label>Target Sensor</label>
-                    <input type="text" class="widget-input" name="sensor2"
-                           value="${escapeAttr(config.sensor2 || '')}" placeholder="Target/setpoint sensor..." autocomplete="off">
-                </div>
+            ${renderSensorBindingFields(config, { fieldPrefix: '' })}
+            <div class="dual-scale-fields" style="display: ${isDual ? 'block' : 'none'};">
+                ${renderSensorBindingFields({
+                    serverId:   config.serverId2   ?? config.serverId,
+                    objectName: config.objectName2 ?? config.objectName,
+                    sensor:     config.sensor2 || '',
+                    sensorId:   config.sensorId2 ?? null,
+                }, { fieldPrefix: 'sensor2-', sensorLabel: 'Target/Setpoint Sensor' })}
             </div>
             <div class="widget-config-field">
                 <label>Label</label>
@@ -19026,13 +19025,11 @@ class GaugeWidget extends DashboardWidget {
             <div class="widget-config-row">
                 <div class="widget-config-field">
                     <label>Min</label>
-                    <input type="number" class="widget-input" name="min"
-                           value="${config.min ?? 0}">
+                    <input type="number" class="widget-input" name="min" value="${config.min ?? 0}">
                 </div>
                 <div class="widget-config-field">
                     <label>Max</label>
-                    <input type="number" class="widget-input" name="max"
-                           value="${config.max ?? 100}">
+                    <input type="number" class="widget-input" name="max" value="${config.max ?? 100}">
                 </div>
             </div>
             <div class="widget-config-row">
@@ -19084,19 +19081,17 @@ class GaugeWidget extends DashboardWidget {
         const zones = [];
         const zoneItems = form.querySelectorAll('.zone-item');
         zoneItems.forEach((item) => {
-            // Find elements by class/type inside item (index-independent)
             const color = item.querySelector('.zone-color')?.value;
             const inputs = item.querySelectorAll('.zone-input');
             const from = parseFloat(inputs[0]?.value);
             const to = parseFloat(inputs[1]?.value);
-            if (color && !isNaN(from) && !isNaN(to)) {
-                zones.push({ from, to, color });
-            }
+            if (color && !isNaN(from) && !isNaN(to)) zones.push({ from, to, color });
         });
 
+        const binding = parseSensorBindingFields(form, { fieldPrefix: '' });
         const style = form.querySelector('[name="style"]')?.value || 'default';
         const result = {
-            sensor: form.querySelector('[name="sensor"]')?.value || '',
+            ...binding,
             label: form.querySelector('[name="label"]')?.value || '',
             style,
             min: parseFloat(form.querySelector('[name="min"]')?.value) || 0,
@@ -19106,13 +19101,26 @@ class GaugeWidget extends DashboardWidget {
             fillSector: form.querySelector('[name="fillSector"]')?.checked || false,
             zones
         };
-
-        // Dual scale fields (target sensor uses same min/max as main)
         if (style === 'dual') {
-            result.sensor2 = form.querySelector('[name="sensor2"]')?.value || '';
+            const b2 = parseSensorBindingFields(form, { fieldPrefix: 'sensor2-' });
+            result.serverId2   = b2.serverId;
+            result.objectName2 = b2.objectName;
+            result.sensor2     = b2.sensor;
+            result.sensorId2   = b2.sensorId;
         }
-
         return result;
+    }
+
+    static initConfigHandlers(form, config = {}) {
+        initSensorBindingHandlers(form, config, { fieldPrefix: '' });
+        if (config.style === 'dual') {
+            initSensorBindingHandlers(form, {
+                serverId:   config.serverId2   ?? config.serverId,
+                objectName: config.objectName2 ?? config.objectName,
+                sensor:     config.sensor2,
+                sensorId:   config.sensorId2,
+            }, { fieldPrefix: 'sensor2-' });
+        }
     }
 }
 
