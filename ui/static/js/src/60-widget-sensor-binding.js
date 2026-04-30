@@ -193,7 +193,9 @@ function initSensorItemListHandlers(form, config = {}, opts = {}) {
         parseExtraFields,
     } = opts;
 
-    const flagKey = `sensorItemList_${rowClass}_wired`;
+    // dataset.* нормализует hyphens в camelCase, но прямой [key]= с hyphen
+    // выкидывает 'is not a valid property name' — sanitize до alnum/underscore.
+    const flagKey = `sensorItemList_${rowClass.replace(/[^a-z0-9]/gi, '_')}_wired`;
     if (form.dataset[flagKey] === 'true') return;
     form.dataset[flagKey] = 'true';
 
@@ -207,7 +209,14 @@ function initSensorItemListHandlers(form, config = {}, opts = {}) {
         initSensorBindingHandlers(form, config?.items?.[idx] || {}, { fieldPrefix: `item-${idx}-` });
     });
 
-    let nextIdx = (config?.items?.length || 0);
+    // nextIdx — max(existing data-idx) + 1. Берём из DOM, а не из config.items.length:
+    // для новых widget'ов (showWidgetConfig(null, type)) config = {}, но getConfigForm
+    // дефолтит первую row → counted from DOM iff config.items пуст.
+    let nextIdx = 0;
+    container?.querySelectorAll(`.${rowClass}`).forEach(el => {
+        const i = parseInt(el.dataset.idx, 10);
+        if (Number.isFinite(i) && i + 1 > nextIdx) nextIdx = i + 1;
+    });
 
     addBtn?.addEventListener('click', () => {
         const idx = nextIdx++;
