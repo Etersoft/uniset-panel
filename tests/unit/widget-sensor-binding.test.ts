@@ -97,6 +97,27 @@ describe('parseSensorItemList', () => {
         form.innerHTML = `<div></div>`;
         expect(parseSensorItemList(form, { rowClass: 'sensor-item', parseExtraFields: () => ({}) })).toEqual([]);
     });
+
+    it('skips rows with malformed data-idx', () => {
+        const form = document.createElement('form');
+        form.innerHTML = `
+            <div class="sensor-item" data-idx="0">
+                <select name="item-0-serverId"><option value="srv-A" selected></option></select>
+                <select name="item-0-objectName"><option value="SM" selected></option></select>
+                <input name="item-0-sensor" value="OK">
+                <input type="hidden" name="item-0-sensorId" value="1">
+            </div>
+            <div class="sensor-item" data-idx="abc">
+                <input name="bogus" value="ignore">
+            </div>
+        `;
+        const items = parseSensorItemList(form, {
+            rowClass: 'sensor-item',
+            parseExtraFields: () => ({}),
+        });
+        expect(items).toHaveLength(1);
+        expect(items[0].sensor).toBe('OK');
+    });
 });
 
 describe('renderSensorItemRow', () => {

@@ -16218,11 +16218,12 @@ function renderSensorItemRow(opts) {
 
 // Парсит items[] из form.
 // opts: { rowClass='sensor-item', parseExtraFields(itemEl, idx) }
-function parseSensorItemList(form, opts) {
+function parseSensorItemList(form, opts = {}) {
     const { rowClass = 'sensor-item', parseExtraFields } = opts;
     const items = [];
     form.querySelectorAll(`.${rowClass}`).forEach(el => {
         const idx = parseInt(el.dataset.idx, 10);
+        if (!Number.isFinite(idx)) return; // skip malformed rows
         const binding = parseSensorBindingFields(form, { fieldPrefix: `item-${idx}-` });
         const extra = parseExtraFields ? parseExtraFields(el, idx) : {};
         items.push({ ...binding, ...extra });
