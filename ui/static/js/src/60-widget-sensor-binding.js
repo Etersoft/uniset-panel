@@ -237,6 +237,82 @@ function initSensorItemListHandlers(form, config = {}, opts = {}) {
     });
 }
 
+// Pure-функция миграции legacy binding'а.
+//
+// cfg может содержать:
+//   - main sensor: { sensor, serverId?, objectName?, sensorId? }
+//   - sensor2 (feedback / dual): { sensor2, serverId2?, objectName2?, sensorId2? }
+//   - items: [{ sensor, ... }] (StatusBar/BarGraph)
+//   - zones: [{ sensors: [{ sensor, ... }] }] (Chart)
+//
+// sensorRegistry — Map<sensorKey, { id, name, ... }> где sensorKey = "${serverId}|${objectName}|${sensorName}".
+//
+// Возвращает количество заполненных полей (0 — ничего не нужно).
+function _migrateBindingPure(cfg, sensorRegistry) {
+    if (!cfg || !sensorRegistry) return 0;
+    let filled = 0;
+
+    // Найти первый match в registry по sensorName.
+    // Возвращает { serverId, objectName, sensorId } или null.
+    const lookup = (sensorName) => {
+        if (!sensorName) return null;
+        for (const [key, val] of sensorRegistry) {
+            const sepA = key.indexOf('|');
+            const sepB = key.lastIndexOf('|');
+            if (sepA < 0 || sepB <= sepA) continue;
+            const name = key.slice(sepB + 1);
+            if (name === sensorName) {
+                return {
+                    serverId:   key.slice(0, sepA),
+                    objectName: key.slice(sepA + 1, sepB),
+                    sensorId:   val?.id,
+                };
+            }
+        }
+        return null;
+    };
+
+    // Резолвит binding-блок. b — объект с потенциально неполным {serverId, objectName, sensor, sensorId}.
+    const resolve = (b, idField = 'sensorId') => {
+        if (!b?.sensor) return false;
+        if (b.serverId && b.objectName && Number.isFinite(b[idField])) return false; // already full
+        const info = lookup(b.sensor);
+        if (!info) return false;
+        let touched = false;
+        if (!b.serverId)   { b.serverId = info.serverId;   touched = true; }
+        if (!b.objectName) { b.objectName = info.objectName; touched = true; }
+        if (!Number.isFinite(b[idField]) && Number.isFinite(info.sensorId)) {
+            b[idField] = info.sensorId; touched = true;
+        }
+        return touched;
+    };
+
+    if (resolve(cfg)) filled++;
+
+    // sensor2: создаём «виртуальный binding» из serverId2/objectName2/sensor2/sensorId2.
+    if (cfg.sensor2) {
+        const b2 = {
+            serverId:   cfg.serverId2,
+            objectName: cfg.objectName2,
+            sensor:     cfg.sensor2,
+            sensorId:   cfg.sensorId2,
+        };
+        if (resolve(b2)) {
+            if (b2.serverId   && !cfg.serverId2)   cfg.serverId2   = b2.serverId;
+            if (b2.objectName && !cfg.objectName2) cfg.objectName2 = b2.objectName;
+            if (Number.isFinite(b2.sensorId)) cfg.sensorId2 = b2.sensorId;
+            filled++;
+        }
+    }
+
+    if (Array.isArray(cfg.items)) cfg.items.forEach(it => { if (resolve(it)) filled++; });
+    if (Array.isArray(cfg.zones)) {
+        cfg.zones.forEach(z => (z.sensors || []).forEach(s => { if (resolve(s)) filled++; }));
+    }
+
+    return filled;
+}
+
 if (typeof globalThis !== 'undefined') {
     globalThis.renderSensorBindingFields = renderSensorBindingFields;
     globalThis.parseSensorBindingFields  = parseSensorBindingFields;
@@ -244,4 +320,5 @@ if (typeof globalThis !== 'undefined') {
     globalThis.parseSensorItemList       = parseSensorItemList;
     globalThis.initSensorBindingHandlers = initSensorBindingHandlers;
     globalThis.initSensorItemListHandlers = initSensorItemListHandlers;
+    globalThis._migrateBindingPure       = _migrateBindingPure;
 }

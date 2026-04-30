@@ -558,11 +558,16 @@ test.describe('Dashboard multi-server isolation', () => {
         expect(sm[0].sensorIds.sort()).toEqual([100, 200]);
     });
 
-    test('auto-migration: legacy config без serverId → migrated to first connected', async ({ page }) => {
+    test('auto-migration: legacy config без serverId → resolved через sensorsByKey', async ({ page }) => {
         await page.evaluate(async () => {
             const w = window as any;
-            // Legacy config: widget без serverId — _migrateLegacyServerIds должен
-            // подставить первый connected (mock1, по итерации Map).
+            // Зарегистрируем 'Temp' в sensorsByKey на mock1 — _migrateLegacyBinding
+            // должен подобрать serverId по lookup'у sensorName.
+            if (!w.state.sensorsByKey) w.state.sensorsByKey = new Map();
+            w.state.sensorsByKey.set('mock1|SharedMemory|Temp', { id: 1, name: 'Temp' });
+
+            // Legacy config: widget без serverId — _migrateLegacyBinding должен
+            // подставить mock1 через sensorsByKey lookup.
             w.dashboardState.dashboards.set('legacy-test', {
                 meta: { name: 'legacy-test', description: '' },
                 widgets: [{

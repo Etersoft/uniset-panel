@@ -293,52 +293,42 @@ class DashboardManager {
         return null;
     }
 
-    // Auto-migrate legacy widget configs без serverId / objectName.
-    // Single-shot: на первом load после deploy заполняет serverId первым connected
-    // и objectName='SharedMemory' (дефолт IONC), сохраняет dashboard config обратно.
-    // На следующих load'ах no-op (уже есть оба поля).
-    //
-    // Покрытие — все widget типы которым нужны sensor подписки:
-    //   - active widgets (toggle/button/setpoint/generator) — cfg.sensor
-    //   - StatusBar — cfg.items[*].sensor
-    //   - Chart — cfg.zones[*].sensors[*]
-    //   - BarGraph — cfg.sensors[*] (если есть)
-    // Pure-display widgets (label/divider) без sensor контракта — пропускаются.
-    //
-    // Atomic: если serverId не резолвится (cold init, state.servers ещё пустой),
-    // НЕ пишем objectName в одиночку. Иначе сохранили бы half-migrated config
-    // с objectName но без serverId, и `updateSensorSubscriptions` всё равно skip'нет
-    // widget. На следующем load после установки соединения миграция отработает целиком.
-    _migrateLegacyServerIds() {
-        const needsServer = (cfg) =>
-            cfg.sensor || cfg.sensorId ||
-            (Array.isArray(cfg.items) && cfg.items.some(it => it?.sensor)) ||
-            (Array.isArray(cfg.zones) && cfg.zones.some(z => Array.isArray(z?.sensors) && z.sensors.length > 0)) ||
-            (Array.isArray(cfg.sensors) && cfg.sensors.length > 0);
-
-        let dirty = false;
+    // Lazy resolve binding'а из state.sensorsByKey (берёт первый match по sensorName).
+    // НЕ сохраняет dashboard на сервер — миграция в памяти; полный triplet
+    // персистится только когда юзер сам нажмёт Apply в config dialog или Export.
+    _migrateLegacyBinding() {
+        if (!state?.sensorsByKey) return 0;
+        let total = 0;
         for (const widget of dashboardState.widgets.values()) {
             const cfg = widget?.config;
             if (!cfg) continue;
-            if (!needsServer(cfg)) continue;
+            const n = _migrateBindingPure(cfg, state.sensorsByKey);
+            if (n > 0) total += n;
+        }
+        if (total > 0) {
+            console.info(`dashboard "${dashboardState.currentDashboard}": migrated ${total} legacy widget bindings; re-save to persist`);
+        }
+        return total;
+    }
 
-            // Atomic check: для half-state (есть один — нет другого) нужно резолвить serverId.
-            // Если не получилось — пропускаем widget, миграция повторится на следующем load.
-            if (cfg.serverId && cfg.objectName) continue;
-            const resolvedServerId = cfg.serverId || this._resolveFirstConnectedServerId();
-            if (!resolvedServerId) continue;
-
-            const filled = {};
-            if (!cfg.serverId)   { cfg.serverId = resolvedServerId; filled.serverId = resolvedServerId; }
-            if (!cfg.objectName) { cfg.objectName = 'SharedMemory'; filled.objectName = 'SharedMemory'; }
-            if (Object.keys(filled).length > 0) {
-                dirty = true;
-                console.info('dashboard: migrated legacy widget', widget.id, filled);
+    // Возвращает true, если хоть один widget имеет неполный binding (sensor без триплета).
+    _anyLegacyBinding() {
+        const isUnresolved = (b) => b?.sensor && (!b.serverId || !b.objectName || !Number.isFinite(b.sensorId));
+        for (const w of dashboardState.widgets.values()) {
+            const cfg = w?.config;
+            if (!cfg) continue;
+            if (isUnresolved(cfg)) return true;
+            if (cfg.sensor2 && isUnresolved({
+                serverId: cfg.serverId2 ?? cfg.serverId,
+                objectName: cfg.objectName2 ?? cfg.objectName,
+                sensor: cfg.sensor2, sensorId: cfg.sensorId2,
+            })) return true;
+            if (Array.isArray(cfg.items) && cfg.items.some(isUnresolved)) return true;
+            if (Array.isArray(cfg.zones)) {
+                for (const z of cfg.zones) if ((z.sensors || []).some(isUnresolved)) return true;
             }
         }
-        if (dirty && typeof dashboardState.currentDashboard === 'string') {
-            this.saveDashboard(dashboardState.currentDashboard);
-        }
+        return false;
     }
 
     async loadDashboard(name) {
@@ -360,7 +350,7 @@ class DashboardManager {
         // подключившихся серверов). Force-reload — через clearDashboard() либо
         // переключение dashboard'ов.
         if (dashboardState.currentDashboard === name && dashboardState.widgets.size > 0) {
-            this._migrateLegacyServerIds();
+            this._migrateLegacyBinding();
             this.updateSensorSubscriptions();
             this.initializeWidgetValues();
             return;
@@ -437,7 +427,7 @@ class DashboardManager {
         });
 
         // Subscribe to sensor updates
-        this._migrateLegacyServerIds();
+        this._migrateLegacyBinding();
         this.updateSensorSubscriptions();
 
         // Initialize widgets with cached/fetched values
