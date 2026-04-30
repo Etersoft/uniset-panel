@@ -1166,6 +1166,7 @@ class GaugeWidget extends DashboardWidget {
 
 class LevelWidget extends DashboardWidget {
     static type = 'level';
+    static usesNewSensorAutocomplete = true;
     static displayName = 'Level';
     static description = 'Tank level indicator';
     static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2"/><rect x="8" y="10" width="8" height="10" fill="currentColor" opacity="0.3"/></svg>';
@@ -1235,11 +1236,7 @@ class LevelWidget extends DashboardWidget {
     static getConfigForm(config = {}) {
         const zones = config.zones || [];
         return `
-            <div class="widget-config-field">
-                <label>Sensor</label>
-                <input type="text" class="widget-input" name="sensor"
-                       value="${escapeAttr(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
-            </div>
+            ${renderSensorBindingFields(config, { fieldPrefix: '' })}
             <div class="widget-config-field">
                 <label>Label</label>
                 <input type="text" class="widget-input" name="label"
@@ -1248,13 +1245,11 @@ class LevelWidget extends DashboardWidget {
             <div class="widget-config-row">
                 <div class="widget-config-field">
                     <label>Min</label>
-                    <input type="number" class="widget-input" name="min"
-                           value="${config.min ?? 0}">
+                    <input type="number" class="widget-input" name="min" value="${config.min ?? 0}">
                 </div>
                 <div class="widget-config-field">
                     <label>Max</label>
-                    <input type="number" class="widget-input" name="max"
-                           value="${config.max ?? 100}">
+                    <input type="number" class="widget-input" name="max" value="${config.max ?? 100}">
                 </div>
             </div>
             <div class="widget-config-row">
@@ -1297,20 +1292,15 @@ class LevelWidget extends DashboardWidget {
 
     static parseConfigForm(form) {
         const zones = [];
-        const zoneItems = form.querySelectorAll('.zone-item');
-        zoneItems.forEach((item) => {
-            // Find elements by class/type inside item (index-independent)
+        form.querySelectorAll('.zone-item').forEach((item) => {
             const color = item.querySelector('.zone-color')?.value;
             const inputs = item.querySelectorAll('.zone-input');
             const from = parseFloat(inputs[0]?.value);
             const to = parseFloat(inputs[1]?.value);
-            if (color && !isNaN(from) && !isNaN(to)) {
-                zones.push({ from, to, color });
-            }
+            if (color && !isNaN(from) && !isNaN(to)) zones.push({ from, to, color });
         });
-
         return {
-            sensor: form.querySelector('[name="sensor"]')?.value || '',
+            ...parseSensorBindingFields(form, { fieldPrefix: '' }),
             label: form.querySelector('[name="label"]')?.value || '',
             min: parseFloat(form.querySelector('[name="min"]')?.value) || 0,
             max: parseFloat(form.querySelector('[name="max"]')?.value) || 100,
@@ -1318,6 +1308,10 @@ class LevelWidget extends DashboardWidget {
             unit: form.querySelector('[name="unit"]')?.value || '%',
             zones
         };
+    }
+
+    static initConfigHandlers(form, config = {}) {
+        initSensorBindingHandlers(form, config, { fieldPrefix: '' });
     }
 }
 
@@ -1327,6 +1321,7 @@ class LevelWidget extends DashboardWidget {
 
 class LedWidget extends DashboardWidget {
     static type = 'led';
+    static usesNewSensorAutocomplete = true;
     static displayName = 'LED';
     static description = 'On/Off indicator';
     static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>';
@@ -1379,11 +1374,7 @@ class LedWidget extends DashboardWidget {
 
     static getConfigForm(config = {}) {
         return `
-            <div class="widget-config-field">
-                <label>Sensor</label>
-                <input type="text" class="widget-input" name="sensor"
-                       value="${escapeAttr(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
-            </div>
+            ${renderSensorBindingFields(config, { fieldPrefix: '' })}
             <div class="widget-config-field">
                 <label>Label</label>
                 <input type="text" class="widget-input" name="label"
@@ -1424,7 +1415,7 @@ class LedWidget extends DashboardWidget {
 
     static parseConfigForm(form) {
         return {
-            sensor: form.querySelector('[name="sensor"]')?.value || '',
+            ...parseSensorBindingFields(form, { fieldPrefix: '' }),
             label: form.querySelector('[name="label"]')?.value || '',
             threshold: parseFloat(form.querySelector('[name="threshold"]')?.value) || 0,
             onColor: form.querySelector('[name="onColor"]')?.value || '#22c55e',
@@ -1432,6 +1423,10 @@ class LedWidget extends DashboardWidget {
             errorColor: form.querySelector('[name="errorColor"]')?.value || '#ef4444',
             blinkOnError: form.querySelector('[name="blinkOnError"]')?.checked !== false
         };
+    }
+
+    static initConfigHandlers(form, config = {}) {
+        initSensorBindingHandlers(form, config, { fieldPrefix: '' });
     }
 }
 
@@ -2333,6 +2328,7 @@ class BarGraphWidget {
 
 class DigitalWidget extends DashboardWidget {
     static type = 'digital';
+    static usesNewSensorAutocomplete = true;
     static displayName = 'Digital';
     static description = 'Digital numeric display';
     static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><text x="12" y="15" text-anchor="middle" font-size="8" fill="currentColor">123</text></svg>';
@@ -2574,11 +2570,7 @@ class DigitalWidget extends DashboardWidget {
 
     static getConfigForm(config = {}) {
         return `
-            <div class="widget-config-field">
-                <label>Sensor</label>
-                <input type="text" class="widget-input" name="sensor"
-                       value="${escapeAttr(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
-            </div>
+            ${renderSensorBindingFields(config, { fieldPrefix: '' })}
             <div class="widget-config-field">
                 <label>Label</label>
                 <input type="text" class="widget-input" name="label"
@@ -2621,7 +2613,7 @@ class DigitalWidget extends DashboardWidget {
 
     static parseConfigForm(form) {
         return {
-            sensor: form.querySelector('[name="sensor"]')?.value || '',
+            ...parseSensorBindingFields(form, { fieldPrefix: '' }),
             label: form.querySelector('[name="label"]')?.value || '',
             style: form.querySelector('[name="style"]')?.value || 'default',
             digits: parseInt(form.querySelector('[name="digits"]')?.value) || 6,
@@ -2629,6 +2621,10 @@ class DigitalWidget extends DashboardWidget {
             color: form.querySelector('[name="color"]')?.value || '#22c55e',
             unit: form.querySelector('[name="unit"]')?.value || ''
         };
+    }
+
+    static initConfigHandlers(form, config = {}) {
+        initSensorBindingHandlers(form, config, { fieldPrefix: '' });
     }
 }
 
