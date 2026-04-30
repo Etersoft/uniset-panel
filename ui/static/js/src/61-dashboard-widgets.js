@@ -1138,14 +1138,25 @@ class GaugeWidget extends DashboardWidget {
 
     static initConfigHandlers(form, config = {}) {
         initSensorBindingHandlers(form, config, { fieldPrefix: '' });
-        if (config.style === 'dual') {
+
+        const wireDual = () => {
             initSensorBindingHandlers(form, {
                 serverId:   config.serverId2   ?? config.serverId,
                 objectName: config.objectName2 ?? config.objectName,
                 sensor:     config.sensor2,
                 sensorId:   config.sensorId2,
             }, { fieldPrefix: 'sensor2-' });
-        }
+        };
+
+        if (config.style === 'dual') wireDual();
+
+        // Если юзер переключит style → dual после открытия диалога, sensor2 поля
+        // станут видны (toggleDualScaleFields), но без wiring останутся пустыми.
+        // Listener wire'ит их при первом переходе в dual; helper idempotent.
+        const styleSel = form.querySelector('[name="style"]');
+        styleSel?.addEventListener('change', () => {
+            if (styleSel.value === 'dual') wireDual();
+        });
     }
 }
 
