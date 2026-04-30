@@ -351,6 +351,11 @@ function updateDashboardWidgets(sensors, ctx) {
         return;
     }
 
+    // Cold-start migration retry: если SSE прилетел ДО первого _migrateLegacyBinding
+    // (state.sensorsByKey ещё не прогрет), это была no-op миграция. Сейчас sensors[]
+    // приходит с полными triplet'ами — пробуем снова.
+    dashboardManager.tryResolvePendingMigration?.();
+
     for (const sensor of sensors) {
         const name = sensor.name;
         const value = sensor.value;

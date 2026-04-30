@@ -331,6 +331,19 @@ class DashboardManager {
         return false;
     }
 
+    // Вызывается из updateDashboardWidgets() в 63-dashboard-dialogs.js на каждый
+    // ionc_sensor_batch / modbus_register_batch / opcua_sensor_batch / sensor_data
+    // событие SSE. Дешёвый no-op если pending не выставлен.
+    tryResolvePendingMigration() {
+        if (!this._pendingMigration) return;
+        const filled = this._migrateLegacyBinding();
+        if (filled > 0) {
+            this.updateSensorSubscriptions();
+            this.initializeWidgetValues();
+        }
+        if (!this._anyLegacyBinding()) this._pendingMigration = false;
+    }
+
     async loadDashboard(name) {
         if (!name) {
             this.clearDashboard();
@@ -353,6 +366,7 @@ class DashboardManager {
             this._migrateLegacyBinding();
             this.updateSensorSubscriptions();
             this.initializeWidgetValues();
+            this._pendingMigration = this._anyLegacyBinding();
             return;
         }
 
@@ -432,6 +446,9 @@ class DashboardManager {
 
         // Initialize widgets with cached/fetched values
         this.initializeWidgetValues();
+
+        // Track pending migration for cold-start hook (см. tryResolvePendingMigration)
+        this._pendingMigration = this._anyLegacyBinding();
     }
 
     // Initialize widgets with current sensor values (from cache or API)
