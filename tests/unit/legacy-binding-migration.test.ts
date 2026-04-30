@@ -17,7 +17,7 @@ describe('_migrateBindingPure', () => {
         const r = reg([['srv-A', 'SharedMemory', 'AI_Temp_S', 1042]]);
         const filled = _migrateBindingPure(cfg, r);
         expect(filled).toBeGreaterThan(0);
-        expect(cfg).toEqual({ sensor: 'AI_Temp_S', serverId: 'srv-A', objectName: 'SharedMemory', sensorId: 1042 });
+        expect(cfg).toMatchObject({ sensor: 'AI_Temp_S', serverId: 'srv-A', objectName: 'SharedMemory', sensorId: 1042 });
     });
 
     it('no-op when full triplet already present', () => {
@@ -25,6 +25,25 @@ describe('_migrateBindingPure', () => {
         const r = reg([['z', 'q', 'X', 99]]);
         expect(_migrateBindingPure(cfg, r)).toBe(0);
         expect(cfg).toEqual({ sensor: 'X', serverId: 'a', objectName: 'b', sensorId: 7 });
+    });
+
+    it('migrates chart legacy `name` field (P1.2)', () => {
+        // Legacy chart sensors хранят имя в .name, не .sensor —
+        // см. config/dashboards/system-overview.json.
+        const cfg: any = { zones: [{ sensors: [{ name: 'AI70_S' }, { name: 'Sensor99_S' }] }] };
+        const r = reg([
+            ['srv-1', 'SharedMemory', 'AI70_S', 70],
+            ['srv-1', 'SharedMemory', 'Sensor99_S', 99],
+        ]);
+        const n = _migrateBindingPure(cfg, r);
+        expect(n).toBeGreaterThan(0);
+        expect(cfg.zones[0].sensors[0]).toMatchObject({
+            name: 'AI70_S', sensor: 'AI70_S',
+            serverId: 'srv-1', objectName: 'SharedMemory', sensorId: 70,
+        });
+        expect(cfg.zones[0].sensors[1]).toMatchObject({
+            name: 'Sensor99_S', sensor: 'Sensor99_S', sensorId: 99,
+        });
     });
 
     it('empty registry → no mutation', () => {
@@ -42,7 +61,7 @@ describe('_migrateBindingPure', () => {
         ]);
         const n = _migrateBindingPure(cfg, r);
         expect(n).toBeGreaterThan(0);
-        expect(cfg.items[0]).toEqual({ sensor: 'A', serverId: 'srv-1', objectName: 'SM', sensorId: 10 });
+        expect(cfg.items[0]).toMatchObject({ sensor: 'A', serverId: 'srv-1', objectName: 'SM', sensorId: 10 });
         // Pre-set serverId сохраняется даже если registry даёт другой.
         expect(cfg.items[1].serverId).toBe('pre-set');
     });
@@ -54,7 +73,7 @@ describe('_migrateBindingPure', () => {
             ['srv-b', 'SM', 'Y', 2],
         ]);
         _migrateBindingPure(cfg, r);
-        expect(cfg.zones[0].sensors[0]).toEqual({ sensor: 'X', serverId: 'srv-a', objectName: 'SM', sensorId: 1 });
+        expect(cfg.zones[0].sensors[0]).toMatchObject({ sensor: 'X', serverId: 'srv-a', objectName: 'SM', sensorId: 1 });
         expect(cfg.zones[0].sensors[1].sensorId).toBe(2);
     });
 

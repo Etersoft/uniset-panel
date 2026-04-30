@@ -116,6 +116,11 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
     });
 
     inputEl.addEventListener('input', () => {
+        // Любая ручная правка инвалидирует ранее выбранный sensorId — иначе юзер
+        // может оставить старый числовой ID при имени, не выбранном из dropdown,
+        // и backend subscribe/write пойдёт в неправильный sensor. Перевыбор из
+        // dropdown (mousedown в pickItem) перезапишет hidden обратно.
+        if (hiddenIdEl) hiddenIdEl.value = '';
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => fetchAndShow(inputEl.value.trim()),
             SENSOR_AUTOCOMPLETE_DEBOUNCE_MS);

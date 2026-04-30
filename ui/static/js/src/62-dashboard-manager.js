@@ -312,8 +312,10 @@ class DashboardManager {
     }
 
     // Возвращает true, если хоть один widget имеет неполный binding (sensor без триплета).
+    // Chart legacy sensors хранят имя в b.name — учитываем обе формы.
     _anyLegacyBinding() {
-        const isUnresolved = (b) => b?.sensor && (!b.serverId || !b.objectName || !Number.isFinite(b.sensorId));
+        const isUnresolved = (b) => (b?.sensor || b?.name)
+            && (!b.serverId || !b.objectName || !Number.isFinite(b.sensorId));
         for (const w of dashboardState.widgets.values()) {
             const cfg = w?.config;
             if (!cfg) continue;
@@ -1734,8 +1736,9 @@ class DashboardManager {
             map.get(key).add(id);
         };
         const addBinding = (map, b, id) => {
-            if (!b?.serverId || !b?.objectName || !b?.sensor) return;
-            addSub(map, makeSensorKey(b.serverId, b.objectName, b.sensor), id);
+            const sensorName = b?.sensor || b?.name;
+            if (!b?.serverId || !b?.objectName || !sensorName) return;
+            addSub(map, makeSensorKey(b.serverId, b.objectName, sensorName), id);
         };
 
         dashboardState.widgets.forEach((widget, id) => {
@@ -1811,10 +1814,13 @@ class DashboardManager {
 
     handleSensorUpdate(sensorKey, value, error = null, timestamp = null) {
         // sensorKey = ${serverId}|${objectName}|${sensorName} — canonical identity.
-        // Извлекаем sensorName для legacy callbacks (updateBySensor / updateSensor),
-        // которые внутри widget'ов всё ещё работают с короткими именами.
+        // ctx передаётся в updateBySensor/updateSensor чтобы multi-sensor widget'ы
+        // могли отбраковать совпадающие по имени, но пришедшие с другого (server, object).
         const parsed = (typeof parseSensorKey === 'function') ? parseSensorKey(sensorKey) : null;
         const sensorName = parsed?.sensorName ?? sensorKey;
+        const ctx = parsed
+            ? { serverId: parsed.serverId, objectName: parsed.objectName, sensorName }
+            : null;
 
         // Main sensor updates
         const widgetIds = dashboardState.sensorSubscriptions.get(sensorKey);
@@ -1824,7 +1830,7 @@ class DashboardManager {
                 if (widget) {
                     // StatusBar widget uses updateBySensor for items
                     if (typeof widget.updateBySensor === 'function') {
-                        widget.updateBySensor(sensorName, value, error);
+                        widget.updateBySensor(sensorName, value, error, ctx);
                     } else {
                         widget.update(value, error);
                     }
@@ -1849,7 +1855,7 @@ class DashboardManager {
             chartWidgetIds.forEach(id => {
                 const widget = dashboardState.widgets.get(id);
                 if (widget && typeof widget.updateSensor === 'function') {
-                    widget.updateSensor(sensorName, value, timestamp);
+                    widget.updateSensor(sensorName, value, timestamp, ctx);
                 }
             });
         }

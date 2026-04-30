@@ -282,10 +282,14 @@ function _migrateBindingPure(cfg, sensorRegistry) {
     };
 
     // Резолвит binding-блок. b — объект с потенциально неполным {serverId, objectName, sensor, sensorId}.
+    // Legacy chart configs хранят имя в b.name (см. config/dashboards/system-overview.json),
+    // современные — в b.sensor. Читаем из любого поля; пишем в b.sensor (canonical) и
+    // зеркалим в b.name (back-compat: ChartWidget runtime читает sensor.name).
     const resolve = (b, idField = 'sensorId') => {
-        if (!b?.sensor) return false;
+        const sensorName = b?.sensor || b?.name;
+        if (!sensorName) return false;
         if (b.serverId && b.objectName && Number.isFinite(b[idField])) return false; // already full
-        const info = lookup(b.sensor);
+        const info = lookup(sensorName);
         if (!info) return false;
         let touched = false;
         if (!b.serverId)   { b.serverId = info.serverId;   touched = true; }
@@ -293,6 +297,9 @@ function _migrateBindingPure(cfg, sensorRegistry) {
         if (!Number.isFinite(b[idField]) && Number.isFinite(info.sensorId)) {
             b[idField] = info.sensorId; touched = true;
         }
+        // Normalize: гарантируем оба поля для downstream consumers.
+        if (!b.sensor) { b.sensor = sensorName; touched = true; }
+        if (!b.name)   { b.name   = sensorName; touched = true; }
         return touched;
     };
 

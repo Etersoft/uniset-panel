@@ -1811,13 +1811,17 @@ class StatusBarWidget {
         }
     }
 
-    // Update by sensor name (called from SSE handler)
-    updateBySensor(sensorName, value, error = null) {
+    // Update by sensor name (called from SSE handler).
+    // ctx — { serverId, objectName, sensorName } для отбраковки коллизий имён
+    // на разных (server, object) парах. Если у item полный triplet — match
+    // строгий; если у item только sensor — соответствие по имени (legacy).
+    updateBySensor(sensorName, value, error = null, ctx = null) {
         const { items = [] } = this.config;
         items.forEach((item, idx) => {
-            if (item.sensor === sensorName) {
-                this.updateIndicator(idx, value, error);
-            }
+            if (item.sensor !== sensorName) return;
+            if (ctx?.serverId && item.serverId && ctx.serverId !== item.serverId) return;
+            if (ctx?.objectName && item.objectName && ctx.objectName !== item.objectName) return;
+            this.updateIndicator(idx, value, error);
         });
     }
 
@@ -2067,13 +2071,15 @@ class BarGraphWidget {
         }
     }
 
-    // Update by sensor name (called from SSE handler)
-    updateBySensor(sensorName, value, error = null) {
+    // Update by sensor name (called from SSE handler).
+    // См. StatusBarWidget.updateBySensor — тот же контракт ctx для multi-server.
+    updateBySensor(sensorName, value, error = null, ctx = null) {
         const { items = [] } = this.config;
         items.forEach((item, idx) => {
-            if (item.sensor === sensorName) {
-                this.updateBar(idx, value);
-            }
+            if (item.sensor !== sensorName) return;
+            if (ctx?.serverId && item.serverId && ctx.serverId !== item.serverId) return;
+            if (ctx?.objectName && item.objectName && ctx.objectName !== item.objectName) return;
+            this.updateBar(idx, value);
         });
     }
 
@@ -2890,8 +2896,10 @@ class ChartWidget extends DashboardWidget {
         // Chart widget uses updateSensor instead
     }
 
-    // Called from SSE handler for each sensor update
-    updateSensor(sensorName, value, timestamp = null) {
+    // Called from SSE handler for each sensor update.
+    // ctx — { serverId, objectName, sensorName }; используется чтобы не апдейтить
+    // sensor в zone, когда у этого имени совпадение пришло с другого (server, object).
+    updateSensor(sensorName, value, timestamp = null, ctx = null) {
         // Use timestamp as number for decimation to work with parsing: false
         const ts = timestamp ? new Date(timestamp).getTime() : Date.now();
 
@@ -2911,7 +2919,12 @@ class ChartWidget extends DashboardWidget {
             const chartData = this.charts.get(zone.id);
             if (!chartData) continue;
 
-            const sensorIdx = (zone.sensors || []).findIndex(s => s.name === sensorName);
+            const sensorIdx = (zone.sensors || []).findIndex(s => {
+                if ((s.name || s.sensor) !== sensorName) return false;
+                if (ctx?.serverId && s.serverId && ctx.serverId !== s.serverId) return false;
+                if (ctx?.objectName && s.objectName && ctx.objectName !== s.objectName) return false;
+                return true;
+            });
             if (sensorIdx === -1) continue;
 
             const dataset = chartData.chart.data.datasets[sensorIdx];
