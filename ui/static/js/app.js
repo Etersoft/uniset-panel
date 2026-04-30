@@ -19891,6 +19891,7 @@ class StatusBarWidget {
 
 class BarGraphWidget {
     static type = 'bargraph';
+    static usesNewSensorAutocomplete = true;
     static displayName = 'Bar Graph';
     static description = 'Compare multiple sensor values';
     static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="14" width="4" height="6" fill="currentColor" opacity="0.7"/><rect x="10" y="8" width="4" height="12" fill="currentColor" opacity="0.5"/><rect x="16" y="4" width="4" height="16" fill="currentColor" opacity="0.3"/></svg>';
@@ -20051,49 +20052,40 @@ class BarGraphWidget {
         });
     }
 
-    static getConfigForm(config = {}) {
-        const items = config.items || [{ label: 'Bar 1', sensor: '', min: 0, max: 100, color: '#3b82f6' }];
-
-        const itemsHtml = items.map((item, idx) => `
-            <div class="bargraph-item-config" data-idx="${idx}">
-                <div class="widget-config-row">
-                    <div class="widget-config-field" style="flex: 1;">
-                        <label>Label</label>
-                        <input type="text" class="widget-input" name="bar-label-${idx}"
-                               value="${escapeAttr(item.label || '')}" placeholder="Bar name">
-                    </div>
-                    <div class="widget-config-field" style="flex: 2;">
-                        <label>Sensor</label>
-                        <input type="text" class="widget-input sensor-autocomplete" name="bar-sensor-${idx}"
-                               value="${escapeAttr(item.sensor || '')}" placeholder="Sensor name">
-                    </div>
+    static _renderItemRow({ idx, item }) {
+        const extraHtml = `
+            <div class="widget-config-row">
+                <div class="widget-config-field" style="flex: 1;">
+                    <label>Label</label>
+                    <input type="text" class="widget-input" name="item-${idx}-label"
+                           value="${escapeAttr(item.label || '')}" placeholder="Bar name">
                 </div>
-                <div class="widget-config-row">
-                    <div class="widget-config-field">
-                        <label>Min</label>
-                        <input type="number" class="widget-input" name="bar-min-${idx}"
-                               value="${item.min ?? 0}">
-                    </div>
-                    <div class="widget-config-field">
-                        <label>Max</label>
-                        <input type="number" class="widget-input" name="bar-max-${idx}"
-                               value="${item.max ?? 100}">
-                    </div>
-                    <div class="widget-config-field">
-                        <label>Unit</label>
-                        <input type="text" class="widget-input" name="bar-unit-${idx}"
-                               value="${escapeAttr(item.unit || '')}" placeholder="kW">
-                    </div>
-                    <div class="widget-config-field">
-                        <label>Color</label>
-                        <input type="color" class="widget-input" name="bar-color-${idx}"
-                               value="${item.color || '#3b82f6'}">
-                    </div>
-                    <button type="button" class="widget-btn-small remove-bargraph-item" data-idx="${idx}" style="align-self: flex-end;">×</button>
+                <div class="widget-config-field">
+                    <label>Min</label>
+                    <input type="number" class="widget-input" name="item-${idx}-min" value="${item.min ?? 0}">
+                </div>
+                <div class="widget-config-field">
+                    <label>Max</label>
+                    <input type="number" class="widget-input" name="item-${idx}-max" value="${item.max ?? 100}">
+                </div>
+                <div class="widget-config-field">
+                    <label>Unit</label>
+                    <input type="text" class="widget-input" name="item-${idx}-unit"
+                           value="${escapeAttr(item.unit || '')}" placeholder="kW">
+                </div>
+                <div class="widget-config-field">
+                    <label>Color</label>
+                    <input type="color" class="widget-input" name="item-${idx}-color"
+                           value="${item.color || '#3b82f6'}">
                 </div>
             </div>
-        `).join('');
+        `;
+        return renderSensorItemRow({ idx, item, extraFieldsHtml: extraHtml, rowClass: 'bargraph-item' });
+    }
 
+    static getConfigForm(config = {}) {
+        const items = config.items || [{ label: 'Bar 1', min: 0, max: 100, color: '#3b82f6' }];
+        const itemsHtml = items.map((item, idx) => BarGraphWidget._renderItemRow({ idx, item })).join('');
         return `
             <div class="widget-config-row">
                 <div class="widget-config-field">
@@ -20118,9 +20110,7 @@ class BarGraphWidget {
             </div>
             <div class="widget-config-field">
                 <label>Bars</label>
-                <div id="bargraph-items-container">
-                    ${itemsHtml}
-                </div>
+                <div id="bargraph-items-container">${itemsHtml}</div>
                 <button type="button" class="widget-btn" id="add-bargraph-item" style="margin-top: 8px;">
                     + Add Bar
                 </button>
@@ -20129,94 +20119,38 @@ class BarGraphWidget {
     }
 
     static initConfigHandlers(form, config = {}) {
-        const container = form.querySelector('#bargraph-items-container');
-        const addBtn = form.querySelector('#add-bargraph-item');
-        let itemCount = (config.items || []).length || 1;
-
-        // Add new bar
-        addBtn?.addEventListener('click', () => {
-            const idx = itemCount++;
-            const colors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6'];
-            const color = colors[idx % colors.length];
-
-            const itemHtml = `
-                <div class="bargraph-item-config" data-idx="${idx}">
-                    <div class="widget-config-row">
-                        <div class="widget-config-field" style="flex: 1;">
-                            <label>Label</label>
-                            <input type="text" class="widget-input" name="bar-label-${idx}"
-                                   value="" placeholder="Bar name">
-                        </div>
-                        <div class="widget-config-field" style="flex: 2;">
-                            <label>Sensor</label>
-                            <input type="text" class="widget-input sensor-autocomplete" name="bar-sensor-${idx}"
-                                   value="" placeholder="Sensor name">
-                        </div>
-                    </div>
-                    <div class="widget-config-row">
-                        <div class="widget-config-field">
-                            <label>Min</label>
-                            <input type="number" class="widget-input" name="bar-min-${idx}" value="0">
-                        </div>
-                        <div class="widget-config-field">
-                            <label>Max</label>
-                            <input type="number" class="widget-input" name="bar-max-${idx}" value="100">
-                        </div>
-                        <div class="widget-config-field">
-                            <label>Unit</label>
-                            <input type="text" class="widget-input" name="bar-unit-${idx}" placeholder="kW">
-                        </div>
-                        <div class="widget-config-field">
-                            <label>Color</label>
-                            <input type="color" class="widget-input" name="bar-color-${idx}" value="${color}">
-                        </div>
-                        <button type="button" class="widget-btn-small remove-bargraph-item" data-idx="${idx}" style="align-self: flex-end;">×</button>
-                    </div>
-                </div>
-            `;
-            container.insertAdjacentHTML('beforeend', itemHtml);
-
-            // Setup autocomplete for new sensor input
-            const newInput = container.querySelector(`[name="bar-sensor-${idx}"]`);
-            if (newInput && typeof setupSensorAutocomplete === 'function') {
-                setupSensorAutocomplete(newInput);
-            }
-        });
-
-        // Remove bar
-        container?.addEventListener('click', (e) => {
-            if (e.target.classList.contains('remove-bargraph-item')) {
-                const item = e.target.closest('.bargraph-item-config');
-                if (item && container.querySelectorAll('.bargraph-item-config').length > 1) {
-                    item.remove();
-                }
-            }
-        });
-
-        // Setup autocomplete for existing sensor inputs
-        form.querySelectorAll('.sensor-autocomplete').forEach(input => {
-            if (typeof setupSensorAutocomplete === 'function') {
-                setupSensorAutocomplete(input);
-            }
+        const colors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6'];
+        let colorIdx = (config.items || []).length;
+        initSensorItemListHandlers(form, config, {
+            addBtnSelector: '#add-bargraph-item',
+            containerSelector: '#bargraph-items-container',
+            rowClass: 'bargraph-item',
+            defaultExtras: () => ({
+                label: '', min: 0, max: 100, unit: '',
+                color: colors[(colorIdx++) % colors.length],
+            }),
+            renderRow: BarGraphWidget._renderItemRow,
+            parseExtraFields: (el, idx) => ({
+                label: form.querySelector(`[name="item-${idx}-label"]`)?.value || '',
+                min:   parseFloat(form.querySelector(`[name="item-${idx}-min"]`)?.value) || 0,
+                max:   parseFloat(form.querySelector(`[name="item-${idx}-max"]`)?.value) || 100,
+                unit:  form.querySelector(`[name="item-${idx}-unit"]`)?.value || '',
+                color: form.querySelector(`[name="item-${idx}-color"]`)?.value || '#3b82f6',
+            }),
         });
     }
 
     static parseConfigForm(form) {
-        const items = [];
-        const itemElements = form.querySelectorAll('.bargraph-item-config');
-
-        itemElements.forEach(el => {
-            const idx = el.dataset.idx;
-            items.push({
-                label: form.querySelector(`[name="bar-label-${idx}"]`)?.value || '',
-                sensor: form.querySelector(`[name="bar-sensor-${idx}"]`)?.value || '',
-                min: parseFloat(form.querySelector(`[name="bar-min-${idx}"]`)?.value) || 0,
-                max: parseFloat(form.querySelector(`[name="bar-max-${idx}"]`)?.value) || 100,
-                unit: form.querySelector(`[name="bar-unit-${idx}"]`)?.value || '',
-                color: form.querySelector(`[name="bar-color-${idx}"]`)?.value || '#3b82f6'
-            });
+        const items = parseSensorItemList(form, {
+            rowClass: 'bargraph-item',
+            parseExtraFields: (el, idx) => ({
+                label: form.querySelector(`[name="item-${idx}-label"]`)?.value || '',
+                min:   parseFloat(form.querySelector(`[name="item-${idx}-min"]`)?.value) || 0,
+                max:   parseFloat(form.querySelector(`[name="item-${idx}-max"]`)?.value) || 100,
+                unit:  form.querySelector(`[name="item-${idx}-unit"]`)?.value || '',
+                color: form.querySelector(`[name="item-${idx}-color"]`)?.value || '#3b82f6',
+            }),
         });
-
         return {
             orientation: form.querySelector('[name="orientation"]')?.value || 'vertical',
             showValues: form.querySelector('[name="showValues"]')?.checked !== false,
@@ -20225,10 +20159,8 @@ class BarGraphWidget {
         };
     }
 
-    // Get list of sensors this widget uses (for SSE subscription)
     getSensors() {
-        const { items = [] } = this.config;
-        return items.map(item => item.sensor).filter(s => s);
+        return (this.config.items || []).map(item => item.sensor).filter(s => s);
     }
 }
 
