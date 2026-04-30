@@ -265,46 +265,8 @@ class ActiveDashboardWidget extends DashboardWidget {
             `
             : '';
 
-        // Server dropdown — первое поле, определяет список IONC objects ниже.
-        // Показываем connected серверы + текущий config.serverId (даже если disconnected),
-        // чтобы юзер видел свой выбор.
-        const currentServerId = config.serverId || '';
-        let serverOptions = '';
-        for (const [id, srv] of state.servers) {
-            if (srv.connected || id === currentServerId) {
-                const sel = id === currentServerId ? 'selected' : '';
-                serverOptions += `<option value="${escapeAttr(id)}" ${sel}>${escapeHtml(srv.name || id)}</option>`;
-            }
-        }
-        // Edge: state.servers пустой при cold load (SSE ещё не приехал) — показать
-        // placeholder чтобы юзер не видел пустой select без объяснения.
-        if (!serverOptions) {
-            serverOptions = '<option value="" disabled selected>(нет доступных серверов)</option>';
-        }
-
-        const baseFields = `
-            <div class="widget-config-field">
-                <label>Server</label>
-                <select class="widget-input" name="serverId" data-test="cfg-serverId">
-                    ${serverOptions}
-                </select>
-            </div>
-            <div class="widget-config-field">
-                <label>IONC Object</label>
-                <select class="widget-input" name="objectName" data-test="cfg-objectName">
-                    <option value="${escapeAttr(config.objectName || 'SharedMemory')}" selected>${escapeHtml(config.objectName || 'SharedMemory')}</option>
-                </select>
-                <small style="color:#6b7280">список загружается из /api/objects?type=IONotifyController</small>
-            </div>
-            <div class="widget-config-field">
-                <label>Sensor</label>
-                <div class="sensor-select-wrap">
-                    <input type="text" class="widget-input sensor-select-input" name="sensor" autocomplete="off"
-                           placeholder="Click to select or type to search..."
-                           value="${escapeAttr(config.sensor || '')}" data-test="cfg-sensor">
-                    <input type="hidden" name="sensorId" value="${escapeAttr(config.sensorId ?? '')}" data-test="cfg-sensorId">
-                </div>
-            </div>
+        return `
+            ${renderSensorBindingFields(config, { fieldPrefix: '' })}
             ${styleSelect}
             <div class="widget-config-field">
                 <label>Label (optional)</label>
@@ -318,8 +280,7 @@ class ActiveDashboardWidget extends DashboardWidget {
                     <span>Require confirmation before write</span>
                 </label>
             </div>
-        `;
-        return baseFields + (this.getActiveConfigFields ? this.getActiveConfigFields(config) : '');
+        ` + (this.getActiveConfigFields ? this.getActiveConfigFields(config) : '');
     }
 
     static getActiveConfigFields(config = {}) {
@@ -328,17 +289,9 @@ class ActiveDashboardWidget extends DashboardWidget {
     }
 
     static parseConfigForm(form) {
+        const binding = parseSensorBindingFields(form, { fieldPrefix: '' });
         const base = {
-            serverId:   form.querySelector('[name="serverId"]')?.value || null,
-            sensor:     form.querySelector('[name="sensor"]')?.value || '',
-            sensorId:   (() => {
-                const raw = form.querySelector('[name="sensorId"]')?.value;
-                if (raw === '' || raw === undefined || raw === null) return null;
-                const n = parseInt(raw, 10);
-                // sensorId=0 валиден (раньше `parseInt('0',10) || null === null` теряло его).
-                return Number.isFinite(n) ? n : null;
-            })(),
-            objectName: form.querySelector('[name="objectName"]')?.value || 'SharedMemory',
+            ...binding,
             label:      form.querySelector('[name="label"]')?.value || '',
             requireConfirmation: form.querySelector('[name="requireConfirmation"]')?.checked || false,
         };
@@ -355,71 +308,7 @@ class ActiveDashboardWidget extends DashboardWidget {
     static initConfigHandlers(form, config = {}) {
         if (form.dataset.activeHandlersWired === 'true') return;
         form.dataset.activeHandlersWired = 'true';
-
-        const serverSelect = form.querySelector('[name="serverId"]');
-        const objectSelect = form.querySelector('[name="objectName"]');
-        const sensorInput = form.querySelector('[name="sensor"]');
-        const hiddenIdInput = form.querySelector('[name="sensorId"]');
-        if (!serverSelect || !objectSelect || !sensorInput || !hiddenIdInput) return;
-
-        // Helper: загрузить IONC objects для текущего serverId.
-        // Token guard: при быстром переключении Server'а (A→B→A...) ответ A может
-        // прийти ПОСЛЕ B и затереть UI. loadToken растёт на каждом вызове, в .then
-        // сравнивается — устаревший response игнорируется.
-        let loadToken = 0;
-        const loadIONCObjects = (serverId) => {
-            const myToken = ++loadToken;
-            if (!serverId) {
-                objectSelect.innerHTML = '<option value="" disabled selected>(выберите Server)</option>';
-                return;
-            }
-            fetch(`/api/objects?server=${encodeURIComponent(serverId)}&type=IONotifyController`)
-                .then(r => r.ok ? r.json() : { objects: [] })
-                .then(data => {
-                    if (myToken !== loadToken) return; // stale response, skip
-                    const objs = data.objects || [];
-                    // При смене сервера preferred = config.objectName, иначе первый из списка.
-                    const currentValue = objectSelect.value || config.objectName || 'SharedMemory';
-                    objectSelect.innerHTML = objs.map(o => {
-                        const name = typeof o === 'string' ? o : o.name;
-                        return `<option value="${escapeAttr(name)}" ${name === currentValue ? 'selected' : ''}>${escapeHtml(name)}</option>`;
-                    }).join('');
-                    if (!objs.some(o => (typeof o === 'string' ? o : o.name) === currentValue)) {
-                        const opt = document.createElement('option');
-                        opt.value = currentValue;
-                        opt.textContent = `${currentValue} (текущий, не найден)`;
-                        opt.selected = true;
-                        objectSelect.prepend(opt);
-                    }
-                })
-                .catch(e => console.warn('Failed to load IONC objects:', e));
-        };
-
-        // Initial load для текущего serverId.
-        loadIONCObjects(serverSelect.value);
-
-        // Setup sensor autocomplete (читает текущий serverId из form, не cached).
-        const ac = setupSensorAutocomplete(
-            sensorInput,
-            hiddenIdInput,
-            () => objectSelect.value,
-            () => serverSelect.value
-        );
-
-        // Server change → reload objects + reset sensor.
-        serverSelect.addEventListener('change', () => {
-            loadIONCObjects(serverSelect.value);
-            if (ac && typeof ac.resetOnObjectChange === 'function') {
-                ac.resetOnObjectChange();
-            }
-        });
-
-        // Object change → reset sensor.
-        objectSelect.addEventListener('change', () => {
-            if (ac && typeof ac.resetOnObjectChange === 'function') {
-                ac.resetOnObjectChange();
-            }
-        });
+        initSensorBindingHandlers(form, config, { fieldPrefix: '' });
     }
 
     static parseActiveConfigFields(form) {

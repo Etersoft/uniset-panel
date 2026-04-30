@@ -846,6 +846,16 @@ class DashboardManager {
         // открытия handler'ы рано-return'ят и autocomplete не работает.
         delete content.dataset.activeHandlersWired;
         delete content.dataset.genHandlersWired;
+        // Helper из 60-widget-sensor-binding.js использует свой dataset-флаг
+        // вида sensorBinding_{prefix}_wired. Для single-sensor binding (prefix='')
+        // ключ — sensorBinding__wired (двойное подчёркивание после нормализации).
+        // Item-row форм (prefix='item-N-') живут на свежесозданных <div>'ах
+        // внутри form, не на content — их флаги уходят вместе с DOM.
+        for (const key of Object.keys(content.dataset)) {
+            if (key.startsWith('sensorBinding')) {
+                delete content.dataset[key];
+            }
+        }
 
         let config = {};
         let position = {};
