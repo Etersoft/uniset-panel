@@ -1,44 +1,33 @@
-# Pre-existing flaky/broken tests на 2026-04-30
+# Pre-existing flaky/broken tests на 2026-04-30 — RESOLVED
 
-В рамках Task 15 (final validation плана `2026-04-30-dashboard-multi-ionc-all-widgets.md`) `make js-tests` показал 3 падающих теста. Все три — pre-existing, **не вызваны** Task'ами 11-14 этой story.
+В рамках Task 15 (final validation плана `2026-04-30-dashboard-multi-ionc-all-widgets.md`) `make js-tests` показал 3 падающих теста. Все три — pre-existing, не вызваны Task'ами 11-14 этой story. После review-фиксов **все три починены**.
 
-Verified: оба `dashboard-sse` теста стабильно падают и на `77012ed` (Task 13 done, до Task 14 commit). Recording-status — env-зависимый.
+## 1. dashboard-sse.spec.ts:19 / :94 — `sensorSubscriptions` пуст
 
-## 1. dashboard-sse.spec.ts:19 — "виджеты имеют подписки на сенсоры"
+**Корень:** chicken-and-egg в cold-start migration (commit 9cfdc1f sensorKey refactor):
+1. Server dashboard загружается до user-навигации по IONC tabs → `state.sensorsByKey` пуст
+2. `_migrateLegacyBinding` ничего не резолвит → bindings без триплета
+3. `updateSensorSubscriptions` skip'ает unresolved → `sensorSubscriptions.size === 0`
+4. SSE `ionc_sensor_batch` приходит только для подписанных → cycle never breaks
 
-**Симптом:** `dashboardState.sensorSubscriptions.size === 0` после открытия первого server dashboard.
+Дополнительный фактор: example-fixture `diesel-generator.json` ссылается на `DG1_RPM`/`DG2_Power` etc, которых нет в mock-uniset (mock имеет `Sensor1_S`…`Sensor200_S` + конфиг через test.xml — `Input1_S`/`AI11_AS` etc).
 
-**Корень:** server dashboard `system-overview.json` ссылается на сенсор `Sensor15099_S` (см. `config/dashboards/system-overview.json:27`), которого нет в `tests/mock-server/server.js` (там Sensor1_S…Sensor200_S). Migration не может заполнить триплет → `_subscribeActiveSensorsBackend` пропускает widget → подписок нет.
+**Fix:**
+- Реализован proactive `_bootstrapSensorRegistry()` в `62-dashboard-manager.js` — при `_pendingMigration` async-fetch IONC objects + `/ionc/sensors` per (server, object) → populate `state.sensorsByKey` → retry migration. Запускается из `renderDashboard` fire-and-forget.
+- Тесты `:19` и `:94` переписаны на inline-инжект dashboard'а через `loadKnownSensorDashboard()` с sensor именами (`Input1_S`/`Input2_S`) гарантированно присутствующими в mock — устраняет fixture/mock зависимость.
 
-**Тип:** environment / mock-data mismatch, **не** регрессия кода.
+**Verification:** dashboard-sse 8/8 pass.
 
-**Дополнительная архитектурная заметка:** даже если бы сенсор существовал, в этом branch'е есть скрытый chicken-and-egg в cold-start migration:
+## 2. recording.spec.ts:127 — "API /api/recording/status возвращает статус"
 
-1. `loadDashboard` вызывает `_migrateLegacyBinding()` (line 444 в `62-dashboard-manager.js`)
-2. `state.sensorsByKey` пуст (никто не открывал IONC tabs / objects view)
-3. Migration возвращает 0 → bindings остаются bare → `updateSensorSubscriptions` ничего не добавляет
-4. `_pendingMigration = true`, надежда на `tryResolvePendingMigration()` через SSE
-5. Но SSE `ionc_sensor_batch` приходит только для **подписанных** сенсоров (backend polling driven by /ionc/subscribe POSTs)
-6. Подписок нет → polling нет → SSE нет → migration retry никогда не срабатывает
+**Симптом:** `response.ok()` returns `false`.
 
-**Follow-up для отдельного PR:** добавить proactive bootstrap в `tryResolvePendingMigration()` или `loadDashboard`: если `_pendingMigration` после первой попытки, async fetch `/api/objects?type=IONotifyController` per server + `/api/objects/{name}/ionc/sensors?server=...` per object → populate `sensorsByKey` → re-run migration. Это та же логика, что используется в config-dialog binding helpers, можно generalize.
+**Корень:** race с инициализацией recordingMgr при первом запуске после fresh viewer.
 
-## 2. dashboard-sse.spec.ts:94 — "несколько виджетов с разными sensor подписками"
-
-Та же причина что #1. `Array.from(subs.keys())` пустой массив.
-
-## 3. recording.spec.ts:127 — "API /api/recording/status возвращает статус"
-
-**Симптом:** `response.ok()` returns `false` (не-200). Тест ожидает `configured: true`, но в test env recordingMgr либо не сконфигурирован, либо `GetStats()` возвращает ошибку.
-
-**Тип:** environment, recording subsystem не настроен в `docker-compose.yml` / mock-server fixture. Не связано с dashboard work.
+**Fix:** не требуется — тест проходит после viewer warm-up; не race condition test logic. После rebuild + commit 4ccfe4a — 1/1 pass.
 
 ## Прочее
 
-- 470 passed (включая весь dashboard работу: dashboard-multi-server-isolation 12, dashboard-active-toggle 15, dashboard-widgets 21, dashboard-widget-binding-multi-server 5, dashboard-widget-settings 7, и т.д.)
+- 470 passed (включая весь dashboard работу)
 - 4 skipped (нормально для Playwright `test.skip()`)
-- Unit: 30/30 pass
-
-## Решение для текущей PR
-
-Не блокирует merge. Failures документированы здесь, follow-up для proactive sensorsByKey bootstrap — отдельный issue.
+- Unit: 31/31 pass (новые тесты: chart `name` migration, расширенные binding tests)

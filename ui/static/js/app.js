@@ -21588,6 +21588,59 @@ class DashboardManager {
         if (!this._anyLegacyBinding()) this._pendingMigration = false;
     }
 
+    // Cold-start bootstrap: для legacy dashboard'ов (только sensor name без триплета),
+    // загруженных ДО прогрева state.sensorsByKey через user navigation, прогреваем
+    // registry явно — иначе SSE не приходит (нет подписок) → migration retry никогда
+    // не срабатывает (chicken-and-egg, см. docs/review/2026-04-30-pre-existing-flaky-tests.md).
+    //
+    // Стратегия: для каждого connected server'а — fetch IONC objects, для каждого
+    // (server, object) — fetch sensors list. Один раз на дашборд.
+    async _bootstrapSensorRegistry() {
+        if (this._bootstrapStarted) return;
+        if (typeof state === 'undefined' || !state?.servers || !state.sensorsByKey) return;
+        this._bootstrapStarted = true;
+
+        const tasks = [];
+        for (const [serverId, srv] of state.servers) {
+            if (srv?.connected) tasks.push(this._bootstrapServerSensors(serverId));
+        }
+        await Promise.allSettled(tasks);
+        // Re-attempt migration с прогретым registry.
+        this.tryResolvePendingMigration();
+    }
+
+    async _bootstrapServerSensors(serverId) {
+        try {
+            const objResp = await fetch(`/api/objects?server=${encodeURIComponent(serverId)}&type=IONotifyController`);
+            if (!objResp.ok) return;
+            const objData = await objResp.json();
+            const objects = (objData?.objects || [])
+                .map(o => typeof o === 'string' ? o : o?.name)
+                .filter(Boolean);
+
+            // Параллельно fetch'аем sensors per object — server'ам обычно ОК с десятком
+            // одновременных запросов (limit=10000 покрывает типичные IONC объекты).
+            await Promise.allSettled(objects.map(async (objectName) => {
+                const sensorsResp = await fetch(
+                    `/api/objects/${encodeURIComponent(objectName)}/ionc/sensors`
+                    + `?server=${encodeURIComponent(serverId)}&limit=10000`
+                );
+                if (!sensorsResp.ok) return;
+                const data = await sensorsResp.json();
+                for (const s of (data?.sensors || [])) {
+                    if (s?.name && Number.isFinite(s?.id)) {
+                        state.sensorsByKey.set(
+                            makeSensorKey(serverId, objectName, s.name),
+                            { id: s.id, name: s.name, serverId, objectName, type: s.type }
+                        );
+                    }
+                }
+            }));
+        } catch (e) {
+            console.warn(`bootstrap server ${serverId} failed:`, e);
+        }
+    }
+
     async loadDashboard(name) {
         if (!name) {
             this.clearDashboard();
@@ -21693,6 +21746,13 @@ class DashboardManager {
 
         // Track pending migration for cold-start hook (см. tryResolvePendingMigration)
         this._pendingMigration = this._anyLegacyBinding();
+
+        // Если binding'и не резолвятся из-за пустого sensorsByKey — async-прогреваем
+        // его через `/api/objects/...` + `/ionc/sensors`. Не ждём (fire-and-forget):
+        // dashboard рендерится сразу, виджеты заполнятся после повторной миграции.
+        if (this._pendingMigration) {
+            this._bootstrapSensorRegistry().catch(e => console.warn('sensor registry bootstrap:', e));
+        }
     }
 
     // Initialize widgets with current sensor values (from cache or API)
@@ -21961,6 +22021,8 @@ class DashboardManager {
         dashboardState.currentDashboard = null;
         this.clearWidgets();
         this.actionsEl?.classList.add('hidden');
+        this._pendingMigration = false;
+        this._bootstrapStarted = false;
 
         // Reset selector to empty value
         if (this.selectEl) {

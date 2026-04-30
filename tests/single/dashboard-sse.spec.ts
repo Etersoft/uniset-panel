@@ -14,13 +14,48 @@ async function openServerDashboard(page) {
   await page.waitForTimeout(1000);
 }
 
+// Создаёт inline dashboard с sensor именами, гарантированно присутствующими
+// в mock-uniset (`Input1_S`/`Input2_S` есть в test.xml, через который mock
+// отдаёт IONC sensors). Это нужно потому что example-fixture'ы (diesel-generator
+// и т.д.) ссылаются на DG1_RPM/DG2_Power которых в mock нет — после sensorKey
+// refactor (commit 9cfdc1f) такие unresolved binding'и не дают subscriptions.
+async function loadKnownSensorDashboard(page) {
+  await page.evaluate(async () => {
+    const w = window as any;
+    // Найти первый connected серверid из state.servers (mock-uniset).
+    let serverId = '';
+    for (const [id, srv] of w.state.servers) {
+      if (srv.connected) { serverId = id; break; }
+    }
+    const cfg = {
+      meta: { name: 'TEST_SUB', description: '' },
+      widgets: [
+        { id: 'w-1', type: 'gauge',
+          config: { sensor: 'Input1_S', serverId, objectName: 'SharedMemory', sensorId: 1 },
+          position: { col: 0, row: 0, width: 4, height: 4 } },
+        { id: 'w-2', type: 'gauge',
+          config: { sensor: 'Input2_S', serverId, objectName: 'SharedMemory', sensorId: 2 },
+          position: { col: 4, row: 0, width: 4, height: 4 } },
+      ]
+    };
+    w.dashboardState.dashboards.set('TEST_SUB', cfg);
+    await w.dashboardManager.loadDashboard('TEST_SUB');
+    if (typeof w.switchView === 'function') w.switchView('dashboard');
+  });
+}
+
 test.describe('Dashboard SSE подписки', () => {
 
   test('виджеты имеют подписки на сенсоры', async ({ page }) => {
-    await openServerDashboard(page);
+    await page.goto('/');
+    await page.waitForFunction(() => {
+      const w = window as any;
+      return w.dashboardState && w.dashboardManager && w.state?.servers?.size > 0;
+    }, { timeout: 10000 });
+    await loadKnownSensorDashboard(page);
 
     // Ждём инициализации подписок
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(1000);
 
     // Проверяем что sensorSubscriptions не пусты
     const hasSubscriptions = await page.evaluate(() => {
@@ -92,8 +127,13 @@ test.describe('Dashboard SSE подписки', () => {
   });
 
   test('несколько виджетов с разными sensor подписками', async ({ page }) => {
-    await openServerDashboard(page);
-    await page.waitForTimeout(3000);
+    await page.goto('/');
+    await page.waitForFunction(() => {
+      const w = window as any;
+      return w.dashboardState && w.dashboardManager && w.state?.servers?.size > 0;
+    }, { timeout: 10000 });
+    await loadKnownSensorDashboard(page);
+    await page.waitForTimeout(1000);
 
     // Получаем все уникальные sensor имена из подписок
     const sensorNames = await page.evaluate(() => {
@@ -102,8 +142,8 @@ test.describe('Dashboard SSE подписки', () => {
       return Array.from(subs.keys());
     });
 
-    // Для overview дашборда должно быть несколько разных сенсоров
-    expect(sensorNames.length).toBeGreaterThanOrEqual(1);
+    // 2 widget'а на разных sensor'ах → ≥ 2 уникальных sensorKey'а в подписках.
+    expect(sensorNames.length).toBeGreaterThanOrEqual(2);
   });
 
   test('cache значений сенсоров заполняется', async ({ page }) => {
