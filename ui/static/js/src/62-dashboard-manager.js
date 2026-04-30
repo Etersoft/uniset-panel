@@ -1722,93 +1722,71 @@ class DashboardManager {
         dashboardState.setpointSubscriptions.clear();
         dashboardState.chartSubscriptions.clear();
 
-        // Helper: добавить (key, id) в Map<key, Set<id>>
         const addSub = (map, key, id) => {
             if (!map.has(key)) map.set(key, new Set());
             map.get(key).add(id);
+        };
+        const addBinding = (map, b, id) => {
+            if (!b?.serverId || !b?.objectName || !b?.sensor) return;
+            addSub(map, makeSensorKey(b.serverId, b.objectName, b.sensor), id);
         };
 
         dashboardState.widgets.forEach((widget, id) => {
             const cfg = widget.config;
             if (!cfg) return;
-            const serverId = cfg.serverId;
-            const objectName = cfg.objectName;
 
-            // Main sensor subscription. Без serverId+objectName ключ не строим
-            // (legacy widget — миграция заполнит на следующем load).
-            if (cfg.sensor && serverId && objectName) {
-                addSub(dashboardState.sensorSubscriptions,
-                    makeSensorKey(serverId, objectName, cfg.sensor), id);
+            // 1. Main sensor
+            addBinding(dashboardState.sensorSubscriptions, cfg, id);
+
+            // 2. Setpoint sensor2 (используется в SetpointWidget feedback и Gauge style=dual)
+            if (cfg.sensor2) {
+                addBinding(dashboardState.setpointSubscriptions, {
+                    serverId:   cfg.serverId2   || cfg.serverId,
+                    objectName: cfg.objectName2 || cfg.objectName,
+                    sensor:     cfg.sensor2,
+                }, id);
             }
 
-            // Setpoint sensor subscription (sensor2 — может иметь свой objectName2).
-            if (cfg.sensor2 && serverId) {
-                const obj2 = cfg.objectName2 || objectName;
-                if (obj2) {
-                    addSub(dashboardState.setpointSubscriptions,
-                        makeSensorKey(serverId, obj2, cfg.sensor2), id);
-                }
+            // 3. Multi-sensor items (StatusBar, BarGraph)
+            if (Array.isArray(cfg.items)) {
+                cfg.items.forEach(it => addBinding(dashboardState.sensorSubscriptions, it, id));
             }
 
-            // StatusBar items (multiple sensors).
-            if (Array.isArray(cfg.items) && serverId && objectName) {
-                cfg.items.forEach(item => {
-                    if (item?.sensor) {
-                        addSub(dashboardState.sensorSubscriptions,
-                            makeSensorKey(serverId, objectName, item.sensor), id);
-                    }
-                });
-            }
-
-            // Chart widget subscriptions (multiple sensors from zones).
-            if (widget instanceof ChartWidget && typeof widget.getSensorNames === 'function'
-                    && serverId && objectName) {
-                const sensorNames = widget.getSensorNames();
-                for (const sensorName of sensorNames) {
-                    addSub(dashboardState.chartSubscriptions,
-                        makeSensorKey(serverId, objectName, sensorName), id);
-                }
+            // 4. Chart zones
+            if (Array.isArray(cfg.zones)) {
+                cfg.zones.forEach(z => (z.sensors || []).forEach(s =>
+                    addBinding(dashboardState.chartSubscriptions, s, id)));
             }
         });
 
-        // Backend-side IONC subscribe для active widget'ов. Без этого
-        // BasePoller.poll() видит пустой subscriptions snapshot и не делает
-        // poll объекта → SSE не приходит → widget вечно показывает '--'.
-        // Chart-renderers подписываются через subscribeToIONCSensor(); active
-        // dashboard widgets раньше полагались на side-effect от других
-        // подписчиков (object открыт во вкладке Objects). Если ни один tab
-        // объект не открыт — active widget оставался без данных. Этот call
-        // решает проблему явно.
         this._subscribeActiveSensorsBackend();
     }
 
-    // Группирует sensorId'ы по (serverId, objectName) и шлёт POST
-    // /api/objects/{name}/ionc/subscribe?server={id} { sensor_ids: [...] }.
-    // Subscribe идёмpotent на backend (Subscribe просто добавляет в Map),
-    // поэтому повторные вызовы при редактировании безопасны.
-    // Unsubscribe не делаем сознательно: backend подписки shared между
-    // viewer'ами, и dashboard'у нельзя «отписать чужие».
     _subscribeActiveSensorsBackend() {
         // grpKey = `${serverId}|${objectName}` → Set<sensorId>.
         const groups = new Map();
 
-        const collect = (cfg) => {
-            if (!cfg?.serverId || !cfg?.objectName) return;
-            const ids = [];
-            if (Number.isFinite(cfg.sensorId))  ids.push(cfg.sensorId);
-            if (Number.isFinite(cfg.sensorId2)) ids.push(cfg.sensorId2);
-            if (Array.isArray(cfg.items)) {
-                cfg.items.forEach(it => {
-                    if (Number.isFinite(it?.sensorId)) ids.push(it.sensorId);
-                });
-            }
-            if (ids.length === 0) return;
-            const k = `${cfg.serverId}|${cfg.objectName}`;
+        const addId = (b) => {
+            if (!b?.serverId || !b?.objectName) return;
+            if (!Number.isFinite(b.sensorId)) return;
+            const k = `${b.serverId}|${b.objectName}`;
             if (!groups.has(k)) groups.set(k, new Set());
-            ids.forEach(id => groups.get(k).add(id));
+            groups.get(k).add(b.sensorId);
         };
 
-        dashboardState.widgets.forEach(widget => collect(widget?.config));
+        dashboardState.widgets.forEach(widget => {
+            const cfg = widget?.config;
+            if (!cfg) return;
+            // Main + sensor2 + items + zones
+            addId(cfg);
+            if (cfg.sensor2) addId({
+                serverId:   cfg.serverId2   || cfg.serverId,
+                objectName: cfg.objectName2 || cfg.objectName,
+                sensorId:   cfg.sensorId2,
+            });
+            if (Array.isArray(cfg.items)) cfg.items.forEach(addId);
+            if (Array.isArray(cfg.zones)) cfg.zones.forEach(z => (z.sensors || []).forEach(addId));
+        });
 
         for (const [grpKey, idSet] of groups) {
             const sepIdx = grpKey.indexOf('|');
