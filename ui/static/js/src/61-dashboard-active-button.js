@@ -32,6 +32,11 @@ class PushButtonWidget extends ActiveDashboardWidget {
     static minSize = { width: 2, height: 1 };
     static maxSize = { width: 6, height: 3 };
 
+    constructor(id, config, container) {
+        super(id, config, container);
+        this._destroyed = false;
+    }
+
     // Style-aware default size — dashboard-manager.createWidget использует
     // этот helper при размещении нового виджета (если style уже выбран
     // в config), иначе fallback на static defaultSize.
@@ -78,7 +83,7 @@ class PushButtonWidget extends ActiveDashboardWidget {
     }
 
     // === Pulse mode handler ===
-    _onPulseClick() {
+    async _onPulseClick() {
         if (!this.isInteractive()) return;
         const valueOn = this.config?.valueOn ?? 1;
         const valueOff = this.config?.valueOff ?? 0;
@@ -97,12 +102,15 @@ class PushButtonWidget extends ActiveDashboardWidget {
             }, 300);
         }
 
-        // POST valueOn → wait pulseWidth → POST valueOff.
+        // POST valueOn → wait pulseWidth → POST valueOff. Таймер стартует
+        // после успешной ON-записи, иначе медленный backend/confirm съедает
+        // всю ширину импульса и OFF уходит сразу после ON.
         // Второй POST через _writeValueRaw чтобы не дублировать confirm dialog.
         // Trailing timer тоже на instance — destroy() отменяет его, чтобы не
         // дёргать _writeValueRaw на удалённом widget'е (safety OFF при destroy
         // оставляем ответственностью владельца, не побочным эффектом).
-        this.writeValue(valueOn);
+        const wroteOn = await this.writeValue(valueOn);
+        if (!wroteOn || this._destroyed) return;
         clearTimeout(this._pulseTrailTimer);
         this._pulseTrailTimer = setTimeout(() => {
             this._pulseTrailTimer = null;
@@ -111,6 +119,7 @@ class PushButtonWidget extends ActiveDashboardWidget {
     }
 
     destroy() {
+        this._destroyed = true;
         clearTimeout(this._pulseFlashTimer);
         clearTimeout(this._pulseTrailTimer);
         this._pulseFlashTimer = null;
@@ -149,7 +158,7 @@ class PushButtonWidget extends ActiveDashboardWidget {
     // writeValue() с её guard'ами, OFF не отправился бы → actuator завис в ON.
     // Server validation (sensorId/serverId/objectName) сохраняется внутри _doWrite.
     async _writeValueRaw(value) {
-        await this._doWrite(value);
+        return await this._doWrite(value);
     }
 
     // Push-button doesn't visualize commandValue or feedbackValue — overrides пустые.

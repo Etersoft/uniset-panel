@@ -79,9 +79,9 @@ class ActiveDashboardWidget extends DashboardWidget {
     // Orchestrator: проверяет UI guards (interactive + confirmation), затем
     // делегирует actual fetch в _doWrite().
     async writeValue(value) {
-        if (!this.isInteractive()) return;
-        if (this.needsConfirmation() && !await this._confirm(value)) return;
-        await this._doWrite(value);
+        if (!this.isInteractive()) return false;
+        if (this.needsConfirmation() && !await this._confirm(value)) return false;
+        return await this._doWrite(value);
     }
 
     // Actual fetch + writeState handling. БЕЗ interactive/confirm guards.
@@ -98,13 +98,13 @@ class ActiveDashboardWidget extends DashboardWidget {
         const sensorId = this.config?.sensorId ?? this.config?.sensor;
         if (sensorId === undefined || sensorId === null || sensorId === '') {
             this._setWriteState('error', 'Sensor not configured');
-            return;
+            return false;
         }
 
         const serverId = this.config?.serverId ?? this._resolveServerId();
         if (!serverId) {
             this._setWriteState('error', 'No server configured');
-            return;
+            return false;
         }
         // Warn один раз на widget lifetime — legacy widget'ы могут писать N раз/сек
         // (generator) или сериями (push-button pulse), spam в console не нужен.
@@ -124,11 +124,13 @@ class ActiveDashboardWidget extends DashboardWidget {
             if (!resp.ok) {
                 const data = await resp.json().catch(() => ({}));
                 this._setWriteState('error', data.error || `HTTP ${resp.status}`);
-                return;
+                return false;
             }
             this._setWriteState('success');
+            return true;
         } catch (e) {
             this._setWriteState('error', e.message);
+            return false;
         }
     }
 

@@ -16532,9 +16532,9 @@ class ActiveDashboardWidget extends DashboardWidget {
     // Orchestrator: проверяет UI guards (interactive + confirmation), затем
     // делегирует actual fetch в _doWrite().
     async writeValue(value) {
-        if (!this.isInteractive()) return;
-        if (this.needsConfirmation() && !await this._confirm(value)) return;
-        await this._doWrite(value);
+        if (!this.isInteractive()) return false;
+        if (this.needsConfirmation() && !await this._confirm(value)) return false;
+        return await this._doWrite(value);
     }
 
     // Actual fetch + writeState handling. БЕЗ interactive/confirm guards.
@@ -16551,13 +16551,13 @@ class ActiveDashboardWidget extends DashboardWidget {
         const sensorId = this.config?.sensorId ?? this.config?.sensor;
         if (sensorId === undefined || sensorId === null || sensorId === '') {
             this._setWriteState('error', 'Sensor not configured');
-            return;
+            return false;
         }
 
         const serverId = this.config?.serverId ?? this._resolveServerId();
         if (!serverId) {
             this._setWriteState('error', 'No server configured');
-            return;
+            return false;
         }
         // Warn один раз на widget lifetime — legacy widget'ы могут писать N раз/сек
         // (generator) или сериями (push-button pulse), spam в console не нужен.
@@ -16577,11 +16577,13 @@ class ActiveDashboardWidget extends DashboardWidget {
             if (!resp.ok) {
                 const data = await resp.json().catch(() => ({}));
                 this._setWriteState('error', data.error || `HTTP ${resp.status}`);
-                return;
+                return false;
             }
             this._setWriteState('success');
+            return true;
         } catch (e) {
             this._setWriteState('error', e.message);
+            return false;
         }
     }
 
@@ -16816,6 +16818,11 @@ class PushButtonWidget extends ActiveDashboardWidget {
     static minSize = { width: 2, height: 1 };
     static maxSize = { width: 6, height: 3 };
 
+    constructor(id, config, container) {
+        super(id, config, container);
+        this._destroyed = false;
+    }
+
     // Style-aware default size — dashboard-manager.createWidget использует
     // этот helper при размещении нового виджета (если style уже выбран
     // в config), иначе fallback на static defaultSize.
@@ -16862,7 +16869,7 @@ class PushButtonWidget extends ActiveDashboardWidget {
     }
 
     // === Pulse mode handler ===
-    _onPulseClick() {
+    async _onPulseClick() {
         if (!this.isInteractive()) return;
         const valueOn = this.config?.valueOn ?? 1;
         const valueOff = this.config?.valueOff ?? 0;
@@ -16881,12 +16888,15 @@ class PushButtonWidget extends ActiveDashboardWidget {
             }, 300);
         }
 
-        // POST valueOn → wait pulseWidth → POST valueOff.
+        // POST valueOn → wait pulseWidth → POST valueOff. Таймер стартует
+        // после успешной ON-записи, иначе медленный backend/confirm съедает
+        // всю ширину импульса и OFF уходит сразу после ON.
         // Второй POST через _writeValueRaw чтобы не дублировать confirm dialog.
         // Trailing timer тоже на instance — destroy() отменяет его, чтобы не
         // дёргать _writeValueRaw на удалённом widget'е (safety OFF при destroy
         // оставляем ответственностью владельца, не побочным эффектом).
-        this.writeValue(valueOn);
+        const wroteOn = await this.writeValue(valueOn);
+        if (!wroteOn || this._destroyed) return;
         clearTimeout(this._pulseTrailTimer);
         this._pulseTrailTimer = setTimeout(() => {
             this._pulseTrailTimer = null;
@@ -16895,6 +16905,7 @@ class PushButtonWidget extends ActiveDashboardWidget {
     }
 
     destroy() {
+        this._destroyed = true;
         clearTimeout(this._pulseFlashTimer);
         clearTimeout(this._pulseTrailTimer);
         this._pulseFlashTimer = null;
@@ -16933,7 +16944,7 @@ class PushButtonWidget extends ActiveDashboardWidget {
     // writeValue() с её guard'ами, OFF не отправился бы → actuator завис в ON.
     // Server validation (sensorId/serverId/objectName) сохраняется внутри _doWrite.
     async _writeValueRaw(value) {
-        await this._doWrite(value);
+        return await this._doWrite(value);
     }
 
     // Push-button doesn't visualize commandValue or feedbackValue — overrides пустые.
