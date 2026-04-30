@@ -3079,6 +3079,7 @@ class ChartWidget extends DashboardWidget {
                     serverId:   last?.serverId   || (typeof state !== 'undefined' && state?.servers ? [...state.servers.entries()].find(([,s]) => s.connected)?.[0] : ''),
                     objectName: last?.objectName || 'SharedMemory',
                     sensor: '', sensorId: null,
+                    name: '', // back-compat: runtime читает sensor.name
                     color: ChartWidget.COLORS[colorIdx % ChartWidget.COLORS.length],
                     smooth: true, fill: true, stepped: false,
                 };
@@ -3119,6 +3120,7 @@ class ChartWidget extends DashboardWidget {
                 if (!binding.sensor) return;
                 sensors.push({
                     ...binding,
+                    name:    binding.sensor, // back-compat: runtime читает sensor.name
                     color:   form.querySelector(`[name="chart-${zoneIdx}-${sensorIdx}-color"]`)?.value || ChartWidget.COLORS[sensorIdx % ChartWidget.COLORS.length],
                     smooth:  form.querySelector(`[name="chart-${zoneIdx}-${sensorIdx}-smooth"]`)?.checked !== false,
                     fill:    form.querySelector(`[name="chart-${zoneIdx}-${sensorIdx}-fill"]`)?.checked !== false,
