@@ -367,4 +367,129 @@ test.describe('Dashboard widget binding — multi-IONC server', () => {
         expect(migrated.sensorId).toBe(1);
         expect(migrated.sensor).toBe('AI70_S');
     });
+
+    test('Chart: sensors из двух разных серверов рендерятся независимо (design req #3)', async ({ page }) => {
+        await setupCommon(page);
+        await page.evaluate(async () => {
+            const w = window as any;
+            const cfg = {
+                meta: { name: 'CHART_TWO_SRV' },
+                widgets: [{
+                    id: 'chart-1',
+                    type: 'chart',
+                    config: {
+                        zones: [{
+                            id: 'z1',
+                            sensors: [
+                                { sensor: 'Temp', name: 'Temp', serverId: 'mock1', objectName: 'SharedMemory', sensorId: 1, color: '#22c55e' },
+                                { sensor: 'Temp', name: 'Temp', serverId: 'mock2', objectName: 'SharedMemory', sensorId: 1, color: '#ef4444' },
+                            ]
+                        }],
+                    },
+                    position: { col: 0, row: 0, width: 12, height: 6 }
+                }]
+            };
+            w.dashboardState.dashboards.set('CHART_TWO_SRV', cfg);
+            await w.dashboardManager.loadDashboard('CHART_TWO_SRV');
+            if (typeof w.switchView === 'function') w.switchView('dashboard');
+        });
+        await page.waitForTimeout(500);
+
+        // Subscriptions содержат оба sensorKey — chart routes по triplet.
+        const subs = await page.evaluate(() => {
+            const w = window as any;
+            return Array.from(w.dashboardState.chartSubscriptions.keys());
+        });
+        expect(subs).toContain('mock1|SharedMemory|Temp');
+        expect(subs).toContain('mock2|SharedMemory|Temp');
+
+        // SSE на mock1 не должен apply'ить значение к mock2-серии (P1.1 regression).
+        await page.evaluate(() => {
+            const w = window as any;
+            w.updateDashboardWidgets(
+                [{ name: 'Temp', value: 100 }],
+                { serverId: 'mock1', objectName: 'SharedMemory', timestamp: Date.now() }
+            );
+        });
+        await page.waitForTimeout(200);
+
+        const datasets = await page.evaluate(() => {
+            const w = window as any;
+            const widget = w.dashboardState.widgets.get('chart-1');
+            const cd = widget?.charts?.get('z1');
+            return cd?.chart?.data?.datasets?.map((d: any) => d.data.length) || [];
+        });
+        // Только первый dataset (mock1|Temp) получил точку.
+        expect(datasets[0]).toBeGreaterThanOrEqual(1);
+        expect(datasets[1]).toBe(0);
+
+        // Теперь SSE на mock2 — обновляет только второй dataset.
+        await page.evaluate(() => {
+            const w = window as any;
+            w.updateDashboardWidgets(
+                [{ name: 'Temp', value: 200 }],
+                { serverId: 'mock2', objectName: 'SharedMemory', timestamp: Date.now() }
+            );
+        });
+        await page.waitForTimeout(200);
+
+        const datasets2 = await page.evaluate(() => {
+            const w = window as any;
+            const widget = w.dashboardState.widgets.get('chart-1');
+            const cd = widget?.charts?.get('z1');
+            return cd?.chart?.data?.datasets?.map((d: any) => d.data.length) || [];
+        });
+        expect(datasets2[0]).toBe(datasets[0]); // не изменился
+        expect(datasets2[1]).toBeGreaterThanOrEqual(1);
+    });
+
+    test('StatusBar: одинаковые имена на разных серверах — SSE per-item routing (P1.1)', async ({ page }) => {
+        await setupCommon(page);
+        await page.evaluate(async () => {
+            const w = window as any;
+            const cfg = {
+                meta: { name: 'SB_TWO_SRV_SAME_NAME' },
+                widgets: [{
+                    id: 'sb-1',
+                    type: 'statusbar',
+                    config: {
+                        layout: 'horizontal',
+                        items: [
+                            { label: 'A', sensor: 'Alarm', serverId: 'mock1', objectName: 'SharedMemory', sensorId: 1, threshold: 0.5 },
+                            { label: 'B', sensor: 'Alarm', serverId: 'mock2', objectName: 'SharedMemory', sensorId: 1, threshold: 0.5 },
+                        ]
+                    },
+                    position: { col: 0, row: 0, width: 8, height: 2 }
+                }]
+            };
+            w.dashboardState.dashboards.set('SB_TWO_SRV_SAME_NAME', cfg);
+            await w.dashboardManager.loadDashboard('SB_TWO_SRV_SAME_NAME');
+            if (typeof w.switchView === 'function') w.switchView('dashboard');
+        });
+        await page.waitForTimeout(500);
+
+        // Подаём SSE 'Alarm'=1 ТОЛЬКО на mock1 — item A должен загореться, B остаться off.
+        await page.evaluate(() => {
+            const w = window as any;
+            w.updateDashboardWidgets(
+                [{ name: 'Alarm', value: 1 }],
+                { serverId: 'mock1', objectName: 'SharedMemory', timestamp: Date.now() }
+            );
+        });
+        await page.waitForTimeout(200);
+
+        // Цвет берём с .statusbar-led (renderer пишет inline style.background).
+        const states = await page.evaluate(() => {
+            const widget = document.querySelector('[data-widget-id="sb-1"]');
+            return Array.from(widget?.querySelectorAll('.statusbar-indicator') || []).map(el => ({
+                label: el.querySelector('.statusbar-label')?.textContent,
+                ledBg: (el.querySelector('.statusbar-led') as HTMLElement)?.style.background || '',
+            }));
+        });
+        // A (mock1) получил value=1 → onColor; B (mock2) ещё на offColor.
+        expect(states[0].label).toBe('A');
+        expect(states[1].label).toBe('B');
+        expect(states[0].ledBg).toContain('rgb(34, 197, 94)');   // #22c55e — onColor
+        expect(states[1].ledBg).toContain('rgb(107, 114, 128)'); // #6b7280 — offColor
+    });
 });
