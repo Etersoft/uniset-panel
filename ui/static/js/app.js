@@ -19678,6 +19678,7 @@ class DividerWidget {
 
 class StatusBarWidget {
     static type = 'statusbar';
+    static usesNewSensorAutocomplete = true;
     static displayName = 'Status Bar';
     static description = 'Multiple status indicators in a row';
     static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="3" fill="#22c55e"/><circle cx="12" cy="12" r="3" fill="#ef4444"/><circle cx="19" cy="12" r="3" fill="#6b7280"/></svg>';
@@ -19795,44 +19796,37 @@ class StatusBarWidget {
         });
     }
 
-    static getConfigForm(config = {}) {
-        const items = config.items || [{ label: 'Status 1', sensor: '', threshold: 0.5, onColor: '#22c55e', offColor: '#6b7280' }];
-
-        const itemsHtml = items.map((item, idx) => `
-            <div class="statusbar-item-config" data-idx="${idx}">
-                <div class="widget-config-row">
-                    <div class="widget-config-field" style="flex: 1;">
-                        <label>Label</label>
-                        <input type="text" class="widget-input" name="item-label-${idx}"
-                               value="${escapeAttr(item.label || '')}" placeholder="Status name">
-                    </div>
-                    <div class="widget-config-field" style="flex: 2;">
-                        <label>Sensor</label>
-                        <input type="text" class="widget-input sensor-autocomplete" name="item-sensor-${idx}"
-                               value="${escapeAttr(item.sensor || '')}" placeholder="Sensor name">
-                    </div>
+    static _renderItemRow({ idx, item }) {
+        const extraHtml = `
+            <div class="widget-config-row">
+                <div class="widget-config-field" style="flex: 1;">
+                    <label>Label</label>
+                    <input type="text" class="widget-input" name="item-${idx}-label"
+                           value="${escapeAttr(item.label || '')}" placeholder="Status name">
                 </div>
-                <div class="widget-config-row">
-                    <div class="widget-config-field">
-                        <label>Threshold</label>
-                        <input type="number" class="widget-input" name="item-threshold-${idx}"
-                               value="${item.threshold ?? 0.5}" step="0.1">
-                    </div>
-                    <div class="widget-config-field">
-                        <label>On Color</label>
-                        <input type="color" class="widget-input" name="item-onColor-${idx}"
-                               value="${item.onColor || '#22c55e'}">
-                    </div>
-                    <div class="widget-config-field">
-                        <label>Off Color</label>
-                        <input type="color" class="widget-input" name="item-offColor-${idx}"
-                               value="${item.offColor || '#6b7280'}">
-                    </div>
-                    <button type="button" class="widget-btn-small remove-statusbar-item" data-idx="${idx}" style="align-self: flex-end;">×</button>
+                <div class="widget-config-field">
+                    <label>Threshold</label>
+                    <input type="number" class="widget-input" name="item-${idx}-threshold"
+                           value="${item.threshold ?? 0.5}" step="0.1">
+                </div>
+                <div class="widget-config-field">
+                    <label>On</label>
+                    <input type="color" class="widget-input" name="item-${idx}-onColor"
+                           value="${item.onColor || '#22c55e'}">
+                </div>
+                <div class="widget-config-field">
+                    <label>Off</label>
+                    <input type="color" class="widget-input" name="item-${idx}-offColor"
+                           value="${item.offColor || '#6b7280'}">
                 </div>
             </div>
-        `).join('');
+        `;
+        return renderSensorItemRow({ idx, item, extraFieldsHtml: extraHtml, rowClass: 'statusbar-item' });
+    }
 
+    static getConfigForm(config = {}) {
+        const items = config.items || [{ label: 'Status 1' }];
+        const itemsHtml = items.map((item, idx) => StatusBarWidget._renderItemRow({ idx, item })).join('');
         return `
             <div class="widget-config-field">
                 <label>Layout</label>
@@ -19854,89 +19848,31 @@ class StatusBarWidget {
     }
 
     static initConfigHandlers(form, config = {}) {
-        const container = form.querySelector('#statusbar-items-container');
-        const addBtn = form.querySelector('#add-statusbar-item');
-        let itemCount = (config.items || []).length || 1;
-
-        // Add new indicator
-        addBtn?.addEventListener('click', () => {
-            const idx = itemCount++;
-            const itemHtml = `
-                <div class="statusbar-item-config" data-idx="${idx}">
-                    <div class="widget-config-row">
-                        <div class="widget-config-field" style="flex: 1;">
-                            <label>Label</label>
-                            <input type="text" class="widget-input" name="item-label-${idx}"
-                                   value="" placeholder="Status name">
-                        </div>
-                        <div class="widget-config-field" style="flex: 2;">
-                            <label>Sensor</label>
-                            <input type="text" class="widget-input sensor-autocomplete" name="item-sensor-${idx}"
-                                   value="" placeholder="Sensor name">
-                        </div>
-                    </div>
-                    <div class="widget-config-row">
-                        <div class="widget-config-field">
-                            <label>Threshold</label>
-                            <input type="number" class="widget-input" name="item-threshold-${idx}"
-                                   value="0.5" step="0.1">
-                        </div>
-                        <div class="widget-config-field">
-                            <label>On Color</label>
-                            <input type="color" class="widget-input" name="item-onColor-${idx}"
-                                   value="#22c55e">
-                        </div>
-                        <div class="widget-config-field">
-                            <label>Off Color</label>
-                            <input type="color" class="widget-input" name="item-offColor-${idx}"
-                                   value="#6b7280">
-                        </div>
-                        <button type="button" class="widget-btn-small remove-statusbar-item" data-idx="${idx}" style="align-self: flex-end;">×</button>
-                    </div>
-                </div>
-            `;
-            container.insertAdjacentHTML('beforeend', itemHtml);
-
-            // Setup autocomplete for new sensor input
-            const newInput = container.querySelector(`[name="item-sensor-${idx}"]`);
-            if (newInput && typeof setupSensorAutocomplete === 'function') {
-                setupSensorAutocomplete(newInput);
-            }
-        });
-
-        // Remove indicator
-        container?.addEventListener('click', (e) => {
-            if (e.target.classList.contains('remove-statusbar-item')) {
-                const item = e.target.closest('.statusbar-item-config');
-                if (item && container.querySelectorAll('.statusbar-item-config').length > 1) {
-                    item.remove();
-                }
-            }
-        });
-
-        // Setup autocomplete for existing sensor inputs
-        form.querySelectorAll('.sensor-autocomplete').forEach(input => {
-            if (typeof setupSensorAutocomplete === 'function') {
-                setupSensorAutocomplete(input);
-            }
+        initSensorItemListHandlers(form, config, {
+            addBtnSelector: '#add-statusbar-item',
+            containerSelector: '#statusbar-items-container',
+            rowClass: 'statusbar-item',
+            defaultExtras: () => ({ label: '', threshold: 0.5, onColor: '#22c55e', offColor: '#6b7280' }),
+            renderRow: StatusBarWidget._renderItemRow,
+            parseExtraFields: (el, idx) => ({
+                label:    form.querySelector(`[name="item-${idx}-label"]`)?.value || '',
+                threshold: parseFloat(form.querySelector(`[name="item-${idx}-threshold"]`)?.value) || 0.5,
+                onColor:  form.querySelector(`[name="item-${idx}-onColor"]`)?.value || '#22c55e',
+                offColor: form.querySelector(`[name="item-${idx}-offColor"]`)?.value || '#6b7280',
+            }),
         });
     }
 
     static parseConfigForm(form) {
-        const items = [];
-        const itemElements = form.querySelectorAll('.statusbar-item-config');
-
-        itemElements.forEach(el => {
-            const idx = el.dataset.idx;
-            items.push({
-                label: form.querySelector(`[name="item-label-${idx}"]`)?.value || '',
-                sensor: form.querySelector(`[name="item-sensor-${idx}"]`)?.value || '',
-                threshold: parseFloat(form.querySelector(`[name="item-threshold-${idx}"]`)?.value) || 0.5,
-                onColor: form.querySelector(`[name="item-onColor-${idx}"]`)?.value || '#22c55e',
-                offColor: form.querySelector(`[name="item-offColor-${idx}"]`)?.value || '#6b7280'
-            });
+        const items = parseSensorItemList(form, {
+            rowClass: 'statusbar-item',
+            parseExtraFields: (el, idx) => ({
+                label:    form.querySelector(`[name="item-${idx}-label"]`)?.value || '',
+                threshold: parseFloat(form.querySelector(`[name="item-${idx}-threshold"]`)?.value) || 0.5,
+                onColor:  form.querySelector(`[name="item-${idx}-onColor"]`)?.value || '#22c55e',
+                offColor: form.querySelector(`[name="item-${idx}-offColor"]`)?.value || '#6b7280',
+            }),
         });
-
         return {
             layout: form.querySelector('[name="layout"]')?.value || 'horizontal',
             items
@@ -19945,8 +19881,7 @@ class StatusBarWidget {
 
     // Get list of sensors this widget uses (for SSE subscription)
     getSensors() {
-        const { items = [] } = this.config;
-        return items.map(item => item.sensor).filter(s => s);
+        return (this.config.items || []).map(item => item.sensor).filter(s => s);
     }
 }
 
