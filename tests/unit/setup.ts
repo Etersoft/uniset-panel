@@ -12,3 +12,4 @@ function loadSource(filename: string) {
 
 loadSource('06-utils.js');
 loadSource('09-sensor-key.js');
+loadSource('60-widget-sensor-binding.js');
