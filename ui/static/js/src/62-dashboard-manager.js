@@ -954,11 +954,6 @@ class DashboardManager {
             this.setupSensorAutocomplete(content, 'sensor2');
         }
 
-        // Setup chart widget autocomplete for zone sensor inputs
-        if (type === 'chart') {
-            setupChartWidgetAutocomplete();
-        }
-
         // Setup custom number inputs
         setupNumberInputs(content);
 

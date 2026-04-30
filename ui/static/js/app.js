@@ -20476,6 +20476,7 @@ class DigitalWidget extends DashboardWidget {
 
 class ChartWidget extends DashboardWidget {
     static type = 'chart';
+    static usesNewSensorAutocomplete = true;
     static displayName = 'Chart';
     static description = 'Real-time line chart with multiple sensors';
     static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>';
@@ -20911,18 +20912,6 @@ class ChartWidget extends DashboardWidget {
         });
     }
 
-    // Get all sensor names for SSE subscription
-    getSensorNames() {
-        const { zones = [] } = this.config;
-        const names = new Set();
-        zones.forEach(zone => {
-            (zone.sensors || []).forEach(sensor => {
-                names.add(sensor.name);
-            });
-        });
-        return Array.from(names);
-    }
-
     destroy() {
         // Clear update interval
         if (this.updateInterval) {
@@ -20954,10 +20943,45 @@ class ChartWidget extends DashboardWidget {
         { value: 10800000, label: '3h' }
     ];
 
+    // === Single sensor row (renders inside chart-zone-sensors-{zoneIdx}) ===
+    static _renderChartSensorRow({ zoneIdx, sensorIdx, sensor }) {
+        const color = sensor.color || ChartWidget.COLORS[sensorIdx % ChartWidget.COLORS.length];
+        const idx = `${zoneIdx}-${sensorIdx}`; // composite — для unique field names
+        const bindingHtml = renderSensorBindingFields(sensor, { fieldPrefix: `chart-${idx}-` });
+        return `
+            <div class="chart-sensor-row" data-zone-idx="${zoneIdx}" data-sensor-idx="${sensorIdx}">
+                ${bindingHtml}
+                <div class="chart-sensor-options" style="display: flex; gap: 6px; align-items: center;">
+                    <input type="color" class="chart-sensor-color" name="chart-${idx}-color" value="${color}">
+                    <label class="chart-sensor-option" title="Smooth"><input type="checkbox" name="chart-${idx}-smooth" ${sensor.smooth !== false ? 'checked' : ''}><span>smooth</span></label>
+                    <label class="chart-sensor-option" title="Fill"><input type="checkbox" name="chart-${idx}-fill" ${sensor.fill !== false ? 'checked' : ''}><span>fill</span></label>
+                    <label class="chart-sensor-option" title="Stepped"><input type="checkbox" name="chart-${idx}-stepped" ${sensor.stepped ? 'checked' : ''}><span>stepped</span></label>
+                </div>
+                <button type="button" class="widget-btn-small chart-sensor-remove">×</button>
+            </div>
+        `;
+    }
+
+    static renderZoneEditor(zone, zoneIdx) {
+        const sensors = zone.sensors || [];
+        const sensorsHtml = sensors.map((s, i) => ChartWidget._renderChartSensorRow({
+            zoneIdx, sensorIdx: i, sensor: s
+        })).join('');
+        return `
+            <div class="chart-zone-editor" data-zone-idx="${zoneIdx}">
+                <div class="chart-zone-header">
+                    <span class="chart-zone-title">Zone ${zoneIdx + 1}</span>
+                    ${zoneIdx > 0 ? `<button type="button" class="zone-remove-btn chart-zone-remove">×</button>` : ''}
+                </div>
+                <div class="chart-zone-sensors" data-zone-container="${zoneIdx}">${sensorsHtml}</div>
+                <button type="button" class="widget-btn chart-zone-add-sensor" data-zone-idx="${zoneIdx}" style="margin-top: 6px;">+ Add Sensor</button>
+            </div>
+        `;
+    }
+
     static getConfigForm(config = {}) {
         const zones = config.zones || [{ id: 'zone-0', sensors: [] }];
-        const timeRange = config.timeRange || 900000; // default 15m
-
+        const timeRange = config.timeRange || 900000;
         return `
             <div class="widget-config-field">
                 <label>Label</label>
@@ -20990,96 +21014,98 @@ class ChartWidget extends DashboardWidget {
                 </label>
             </div>
             <div class="chart-zones-editor" id="chart-zones-editor">
-                ${zones.map((zone, zoneIdx) => ChartWidget.renderZoneEditor(zone, zoneIdx)).join('')}
+                ${zones.map((z, zi) => ChartWidget.renderZoneEditor(z, zi)).join('')}
             </div>
             <div class="widget-config-field">
-                <button type="button" class="zones-add-btn" onclick="addChartZone()">+ Add Chart Zone</button>
+                <button type="button" class="zones-add-btn" id="chart-add-zone">+ Add Chart Zone</button>
             </div>
         `;
     }
 
-    static renderZoneEditor(zone, zoneIdx) {
-        const sensors = zone.sensors || [];
-        return `
-            <div class="chart-zone-editor" data-zone-idx="${zoneIdx}">
-                <div class="chart-zone-header">
-                    <span class="chart-zone-title">Zone ${zoneIdx + 1}</span>
-                    ${zoneIdx > 0 ? `<button type="button" class="zone-remove-btn" onclick="removeChartZone(${zoneIdx})">×</button>` : ''}
-                </div>
-                <div class="chart-zone-sensors" id="chart-zone-sensors-${zoneIdx}">
-                    ${sensors.map((sensor, sensorIdx) => ChartWidget.renderSensorRow(sensor, zoneIdx, sensorIdx)).join('')}
-                </div>
-                <div class="chart-zone-add">
-                    <input type="text" class="widget-input chart-sensor-input"
-                           placeholder="Add sensor..."
-                           data-zone-idx="${zoneIdx}"
-                           autocomplete="off">
-                </div>
-            </div>
-        `;
-    }
+    static initConfigHandlers(form, config = {}) {
+        if (form.dataset.chartHandlersWired === 'true') return;
+        form.dataset.chartHandlersWired = 'true';
 
-    static renderSensorRow(sensor, zoneIdx, sensorIdx) {
-        const color = sensor.color || ChartWidget.COLORS[sensorIdx % ChartWidget.COLORS.length];
-        return `
-            <div class="chart-sensor-row" data-zone-idx="${zoneIdx}" data-sensor-idx="${sensorIdx}">
-                <input type="color" class="chart-sensor-color" value="${color}"
-                       onchange="updateChartSensorColor(${zoneIdx}, ${sensorIdx}, this.value)">
-                <span class="chart-sensor-name">${escapeHtml(sensor.name)}</span>
-                <div class="chart-sensor-options">
-                    <label class="chart-sensor-option" title="Smooth line (bezier)">
-                        <input type="checkbox" name="sensor-${zoneIdx}-${sensorIdx}-smooth" ${sensor.smooth !== false ? 'checked' : ''}>
-                        <span>smooth</span>
-                    </label>
-                    <label class="chart-sensor-option" title="Fill area under line">
-                        <input type="checkbox" name="sensor-${zoneIdx}-${sensorIdx}-fill" ${sensor.fill !== false ? 'checked' : ''}>
-                        <span>fill</span>
-                    </label>
-                    <label class="chart-sensor-option" title="Stepped line (discrete)">
-                        <input type="checkbox" name="sensor-${zoneIdx}-${sensorIdx}-stepped" ${sensor.stepped ? 'checked' : ''}>
-                        <span>stepped</span>
-                    </label>
-                </div>
-                <button type="button" class="chart-sensor-remove" onclick="removeChartSensor(${zoneIdx}, ${sensorIdx})">×</button>
-                <input type="hidden" name="sensor-${zoneIdx}-${sensorIdx}-name" value="${escapeAttr(sensor.name)}">
-                <input type="hidden" name="sensor-${zoneIdx}-${sensorIdx}-color" value="${color}">
-            </div>
-        `;
+        // Wire all existing sensor rows.
+        const wireRow = (zoneIdx, sensorIdx, sensor = {}) => {
+            initSensorBindingHandlers(form, sensor, { fieldPrefix: `chart-${zoneIdx}-${sensorIdx}-` });
+        };
+        (config.zones || []).forEach((z, zi) => (z.sensors || []).forEach((s, si) => wireRow(zi, si, s)));
+
+        // Helper: получить last sensor (для pre-fill).
+        const getLastSensor = () => {
+            const rows = form.querySelectorAll('.chart-sensor-row');
+            const last = rows[rows.length - 1];
+            if (!last) return null;
+            const zi = last.dataset.zoneIdx, si = last.dataset.sensorIdx;
+            return parseSensorBindingFields(form, { fieldPrefix: `chart-${zi}-${si}-` });
+        };
+
+        // + Add Sensor (per zone), Remove sensor, Remove zone, + Add Zone — все через delegation.
+        form.addEventListener('click', (e) => {
+            const addSensorBtn = e.target.closest('.chart-zone-add-sensor');
+            if (addSensorBtn) {
+                const zoneIdx = parseInt(addSensorBtn.dataset.zoneIdx, 10);
+                const container = form.querySelector(`[data-zone-container="${zoneIdx}"]`);
+                const sensorIdx = container.querySelectorAll('.chart-sensor-row').length;
+                const last = getLastSensor();
+                const colorIdx = sensorIdx;
+                const sensor = {
+                    serverId:   last?.serverId   || (typeof state !== 'undefined' && state?.servers ? [...state.servers.entries()].find(([,s]) => s.connected)?.[0] : ''),
+                    objectName: last?.objectName || 'SharedMemory',
+                    sensor: '', sensorId: null,
+                    color: ChartWidget.COLORS[colorIdx % ChartWidget.COLORS.length],
+                    smooth: true, fill: true, stepped: false,
+                };
+                container.insertAdjacentHTML('beforeend',
+                    ChartWidget._renderChartSensorRow({ zoneIdx, sensorIdx, sensor }));
+                wireRow(zoneIdx, sensorIdx, sensor);
+                return;
+            }
+            const removeBtn = e.target.closest('.chart-sensor-remove');
+            if (removeBtn) {
+                removeBtn.closest('.chart-sensor-row')?.remove();
+                return;
+            }
+            const removeZoneBtn = e.target.closest('.chart-zone-remove');
+            if (removeZoneBtn) {
+                removeZoneBtn.closest('.chart-zone-editor')?.remove();
+                return;
+            }
+            const addZoneBtn = e.target.closest('#chart-add-zone');
+            if (addZoneBtn) {
+                const zonesEditor = form.querySelector('#chart-zones-editor');
+                const zoneIdx = zonesEditor.querySelectorAll('.chart-zone-editor').length;
+                zonesEditor.insertAdjacentHTML('beforeend',
+                    ChartWidget.renderZoneEditor({ id: `zone-${zoneIdx}`, sensors: [] }, zoneIdx));
+                return;
+            }
+        });
     }
 
     static parseConfigForm(form) {
         const zones = [];
-        const zoneEditors = form.querySelectorAll('.chart-zone-editor');
-
-        zoneEditors.forEach((editor, zoneIdx) => {
+        form.querySelectorAll('.chart-zone-editor').forEach((zoneEl) => {
+            const zoneIdx = parseInt(zoneEl.dataset.zoneIdx, 10);
             const sensors = [];
-            const sensorRows = editor.querySelectorAll('.chart-sensor-row');
-
-            sensorRows.forEach((row, sensorIdx) => {
-                const name = row.querySelector('input[type="hidden"][name$="-name"]')?.value;
-                const color = row.querySelector('input[type="hidden"][name$="-color"]')?.value;
-                const smooth = form.querySelector(`[name="sensor-${zoneIdx}-${sensorIdx}-smooth"]`)?.checked !== false;
-                const fill = form.querySelector(`[name="sensor-${zoneIdx}-${sensorIdx}-fill"]`)?.checked !== false;
-                const stepped = form.querySelector(`[name="sensor-${zoneIdx}-${sensorIdx}-stepped"]`)?.checked || false;
-
-                if (name) {
-                    sensors.push({ name, color, smooth, fill, stepped });
-                }
+            zoneEl.querySelectorAll('.chart-sensor-row').forEach((row) => {
+                const sensorIdx = parseInt(row.dataset.sensorIdx, 10);
+                const binding = parseSensorBindingFields(form, { fieldPrefix: `chart-${zoneIdx}-${sensorIdx}-` });
+                if (!binding.sensor) return;
+                sensors.push({
+                    ...binding,
+                    color:   form.querySelector(`[name="chart-${zoneIdx}-${sensorIdx}-color"]`)?.value || ChartWidget.COLORS[sensorIdx % ChartWidget.COLORS.length],
+                    smooth:  form.querySelector(`[name="chart-${zoneIdx}-${sensorIdx}-smooth"]`)?.checked !== false,
+                    fill:    form.querySelector(`[name="chart-${zoneIdx}-${sensorIdx}-fill"]`)?.checked !== false,
+                    stepped: form.querySelector(`[name="chart-${zoneIdx}-${sensorIdx}-stepped"]`)?.checked || false,
+                });
             });
-
-            zones.push({
-                id: `zone-${zoneIdx}`,
-                sensors
-            });
+            zones.push({ id: `zone-${zoneIdx}`, sensors });
         });
-
-        // Get timeRange from radio button
         const timeRangeInput = form.querySelector('[name="timeRange"]:checked');
-        const timeRange = timeRangeInput ? parseInt(timeRangeInput.value) : 900000;
-
         return {
             label: form.querySelector('[name="label"]')?.value || '',
-            timeRange,
+            timeRange: timeRangeInput ? parseInt(timeRangeInput.value) : 900000,
             showTable: form.querySelector('[name="showTable"]')?.checked !== false,
             useTextname: form.querySelector('[name="useTextname"]')?.checked || false,
             tableHeight: 100,
@@ -22044,11 +22070,6 @@ class DashboardManager {
         if (!WidgetClass.usesNewSensorAutocomplete) {
             this.setupSensorAutocomplete(content, 'sensor');
             this.setupSensorAutocomplete(content, 'sensor2');
-        }
-
-        // Setup chart widget autocomplete for zone sensor inputs
-        if (type === 'chart') {
-            setupChartWidgetAutocomplete();
         }
 
         // Setup custom number inputs
@@ -23359,187 +23380,6 @@ function addZoneField(btn) {
 
 function removeZoneField(btn) {
     btn.closest('.zone-item')?.remove();
-}
-
-// ============================================================================
-// Chart Widget Zone Helpers
-// ============================================================================
-
-function addChartZone() {
-    const editor = document.getElementById('chart-zones-editor');
-    if (!editor) return;
-
-    const zoneIdx = editor.querySelectorAll('.chart-zone-editor').length;
-    const zoneHtml = ChartWidget.renderZoneEditor({ id: `zone-${zoneIdx}`, sensors: [] }, zoneIdx);
-    editor.insertAdjacentHTML('beforeend', zoneHtml);
-
-    // Setup autocomplete for new zone
-    setupChartSensorAutocomplete(zoneIdx);
-}
-
-function removeChartZone(zoneIdx) {
-    const editor = document.querySelector(`.chart-zone-editor[data-zone-idx="${zoneIdx}"]`);
-    editor?.remove();
-
-    // Re-index remaining zones
-    document.querySelectorAll('.chart-zone-editor').forEach((zone, idx) => {
-        zone.dataset.zoneIdx = idx;
-        zone.querySelector('.chart-zone-title').textContent = `Zone ${idx + 1}`;
-        // Update remove button
-        const removeBtn = zone.querySelector('.zone-remove-btn');
-        if (removeBtn) {
-            removeBtn.onclick = () => removeChartZone(idx);
-        }
-    });
-}
-
-function removeChartSensor(zoneIdx, sensorIdx) {
-    const row = document.querySelector(`.chart-sensor-row[data-zone-idx="${zoneIdx}"][data-sensor-idx="${sensorIdx}"]`);
-    row?.remove();
-
-    // Re-index remaining sensors in this zone
-    const sensorsContainer = document.getElementById(`chart-zone-sensors-${zoneIdx}`);
-    if (sensorsContainer) {
-        sensorsContainer.querySelectorAll('.chart-sensor-row').forEach((row, idx) => {
-            row.dataset.sensorIdx = idx;
-            // Update hidden inputs names
-            row.querySelectorAll('input[type="hidden"]').forEach(input => {
-                const nameParts = input.name.split('-');
-                nameParts[2] = idx;
-                input.name = nameParts.join('-');
-            });
-        });
-    }
-}
-
-function updateChartSensorColor(zoneIdx, sensorIdx, color) {
-    const row = document.querySelector(`.chart-sensor-row[data-zone-idx="${zoneIdx}"][data-sensor-idx="${sensorIdx}"]`);
-    const colorInput = row?.querySelector('input[name$="-color"]');
-    if (colorInput) {
-        colorInput.value = color;
-    }
-}
-
-function setupChartSensorAutocomplete(zoneIdx) {
-    const input = document.querySelector(`.chart-sensor-input[data-zone-idx="${zoneIdx}"]`);
-    if (!input) return;
-
-    let autocompleteContainer = null;
-    let autocompleteResults = [];
-    let selectedIndex = 0;
-
-    input.addEventListener('input', async (e) => {
-        const query = e.target.value.trim();
-        if (query.length < 2) {
-            closeAutocomplete();
-            return;
-        }
-
-        // Search sensors (use sensorsByName to avoid duplicates from multiple servers)
-        const allSensors = Array.from(state.sensorsByName.values());
-        autocompleteResults = allSensors
-            .filter(s => s.name.toLowerCase().includes(query.toLowerCase()))
-            .slice(0, 10);
-
-        if (autocompleteResults.length === 0) {
-            closeAutocomplete();
-            return;
-        }
-
-        showAutocomplete();
-    });
-
-    input.addEventListener('keydown', (e) => {
-        if (!autocompleteContainer) return;
-
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            selectedIndex = Math.min(selectedIndex + 1, autocompleteResults.length - 1);
-            updateSelection();
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            selectedIndex = Math.max(selectedIndex - 1, 0);
-            updateSelection();
-        } else if (e.key === 'Enter') {
-            e.preventDefault();
-            if (autocompleteResults[selectedIndex]) {
-                selectSensor(autocompleteResults[selectedIndex]);
-            }
-        } else if (e.key === 'Escape') {
-            closeAutocomplete();
-        }
-    });
-
-    input.addEventListener('blur', () => {
-        setTimeout(closeAutocomplete, 200);
-    });
-
-    function showAutocomplete() {
-        if (!autocompleteContainer) {
-            autocompleteContainer = document.createElement('div');
-            autocompleteContainer.className = 'widget-autocomplete';
-            input.parentNode.style.position = 'relative';
-            input.parentNode.appendChild(autocompleteContainer);
-        }
-
-        selectedIndex = 0;
-        autocompleteContainer.innerHTML = autocompleteResults.map((s, i) => `
-            <div class="widget-autocomplete-item${i === 0 ? ' selected' : ''}" data-name="${escapeAttr(s.name)}">
-                <span class="autocomplete-name">${escapeHtml(s.name)}</span>
-                ${s.textname ? `<span class="autocomplete-desc">${escapeHtml(s.textname)}</span>` : ''}
-            </div>
-        `).join('');
-
-        autocompleteContainer.querySelectorAll('.widget-autocomplete-item').forEach((item, i) => {
-            item.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                selectSensor(autocompleteResults[i]);
-            });
-        });
-    }
-
-    function updateSelection() {
-        autocompleteContainer?.querySelectorAll('.widget-autocomplete-item').forEach((item, i) => {
-            item.classList.toggle('selected', i === selectedIndex);
-        });
-    }
-
-    function closeAutocomplete() {
-        autocompleteContainer?.remove();
-        autocompleteContainer = null;
-    }
-
-    function selectSensor(sensor) {
-        // Add sensor to zone
-        const sensorsContainer = document.getElementById(`chart-zone-sensors-${zoneIdx}`);
-        if (!sensorsContainer) return;
-
-        // Check if sensor is discrete (DI/DO) - set stepped=true, smooth=false
-        const isDiscrete = sensor.iotype === 'DI' || sensor.iotype === 'DO';
-        const sensorConfig = {
-            name: sensor.name,
-            fill: true,
-            smooth: !isDiscrete,  // smooth off for discrete
-            stepped: isDiscrete   // stepped on for discrete
-        };
-
-        const sensorIdx = sensorsContainer.querySelectorAll('.chart-sensor-row').length;
-        const sensorHtml = ChartWidget.renderSensorRow(sensorConfig, zoneIdx, sensorIdx);
-        sensorsContainer.insertAdjacentHTML('beforeend', sensorHtml);
-
-        // Clear input
-        input.value = '';
-        closeAutocomplete();
-    }
-}
-
-// Setup autocomplete when widget config dialog opens for chart widget
-function setupChartWidgetAutocomplete() {
-    const zoneEditors = document.querySelectorAll('.chart-zone-editor');
-    zoneEditors.forEach((editor) => {
-        const zoneIdx = parseInt(editor.dataset.zoneIdx);
-        setupChartSensorAutocomplete(zoneIdx);
-    });
 }
 
 // ============================================================================
