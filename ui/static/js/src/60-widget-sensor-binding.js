@@ -73,7 +73,40 @@ function parseSensorBindingFields(form, opts = {}) {
     };
 }
 
+// Render одной row для multi-sensor item.
+// opts: { idx, item, extraFieldsHtml, rowClass='sensor-item', removable=true }
+function renderSensorItemRow(opts) {
+    const { idx, item = {}, extraFieldsHtml = '', rowClass = 'sensor-item', removable = true } = opts;
+    const bindingHtml = renderSensorBindingFields(item, { fieldPrefix: `item-${idx}-` });
+    const removeBtn = removable
+        ? `<button type="button" class="widget-btn-small remove-sensor-item" data-idx="${idx}">×</button>`
+        : '';
+    return `
+        <div class="${rowClass}" data-idx="${idx}">
+            ${bindingHtml}
+            ${extraFieldsHtml}
+            ${removeBtn}
+        </div>
+    `;
+}
+
+// Парсит items[] из form.
+// opts: { rowClass='sensor-item', parseExtraFields(itemEl, idx) }
+function parseSensorItemList(form, opts) {
+    const { rowClass = 'sensor-item', parseExtraFields } = opts;
+    const items = [];
+    form.querySelectorAll(`.${rowClass}`).forEach(el => {
+        const idx = parseInt(el.dataset.idx, 10);
+        const binding = parseSensorBindingFields(form, { fieldPrefix: `item-${idx}-` });
+        const extra = parseExtraFields ? parseExtraFields(el, idx) : {};
+        items.push({ ...binding, ...extra });
+    });
+    return items;
+}
+
 if (typeof globalThis !== 'undefined') {
     globalThis.renderSensorBindingFields = renderSensorBindingFields;
     globalThis.parseSensorBindingFields  = parseSensorBindingFields;
+    globalThis.renderSensorItemRow       = renderSensorItemRow;
+    globalThis.parseSensorItemList       = parseSensorItemList;
 }
