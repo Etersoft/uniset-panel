@@ -105,9 +105,143 @@ function parseSensorItemList(form, opts = {}) {
     return items;
 }
 
+// Wire'ит для одного binding-блока: token-guarded loadIONCObjects при смене
+// server, setupSensorAutocomplete с реактивным objectName/serverId.
+// Idempotent через form.dataset[`sensorBinding_${prefix}_wired`].
+//
+// Returns: { resetSensor() }.
+function initSensorBindingHandlers(form, config = {}, opts = {}) {
+    const prefix = opts.fieldPrefix || '';
+    const flagKey = `sensorBinding_${prefix.replace(/[^a-z0-9]/gi, '_')}_wired`;
+    if (form.dataset[flagKey] === 'true') return null;
+    form.dataset[flagKey] = 'true';
+
+    const serverSelect = form.querySelector(`[name="${prefix}serverId"]`);
+    const objectSelect = form.querySelector(`[name="${prefix}objectName"]`);
+    const sensorInput  = form.querySelector(`[name="${prefix}sensor"]`);
+    const hiddenIdInput = form.querySelector(`[name="${prefix}sensorId"]`);
+    if (!serverSelect || !objectSelect || !sensorInput || !hiddenIdInput) return null;
+
+    let loadToken = 0;
+    const loadIONCObjects = (serverId) => {
+        const myToken = ++loadToken;
+        if (!serverId) {
+            objectSelect.innerHTML = '<option value="" disabled selected>(выберите Server)</option>';
+            return;
+        }
+        fetch(`/api/objects?server=${encodeURIComponent(serverId)}&type=IONotifyController`)
+            .then(r => r.ok ? r.json() : { objects: [] })
+            .then(data => {
+                if (myToken !== loadToken) return;
+                const objs = data.objects || [];
+                const currentValue = objectSelect.value || config.objectName || (opts.objectNameDefault || 'SharedMemory');
+                objectSelect.innerHTML = objs.map(o => {
+                    const name = typeof o === 'string' ? o : o.name;
+                    return `<option value="${escapeAttr(name)}" ${name === currentValue ? 'selected' : ''}>${escapeHtml(name)}</option>`;
+                }).join('');
+                if (!objs.some(o => (typeof o === 'string' ? o : o.name) === currentValue)) {
+                    const opt = document.createElement('option');
+                    opt.value = currentValue;
+                    opt.textContent = `${currentValue} (текущий, не найден)`;
+                    opt.selected = true;
+                    objectSelect.prepend(opt);
+                }
+            })
+            .catch(e => console.warn('Failed to load IONC objects:', e));
+    };
+
+    loadIONCObjects(serverSelect.value);
+
+    const ac = setupSensorAutocomplete(
+        sensorInput,
+        hiddenIdInput,
+        () => objectSelect.value,
+        () => serverSelect.value
+    );
+
+    serverSelect.addEventListener('change', () => {
+        loadIONCObjects(serverSelect.value);
+        if (ac && typeof ac.resetOnObjectChange === 'function') ac.resetOnObjectChange();
+    });
+    objectSelect.addEventListener('change', () => {
+        if (ac && typeof ac.resetOnObjectChange === 'function') ac.resetOnObjectChange();
+    });
+
+    return {
+        resetSensor() {
+            if (ac && typeof ac.resetOnObjectChange === 'function') ac.resetOnObjectChange();
+        },
+    };
+}
+
+// Wire'ит add/remove кнопки + per-item handlers + pre-fill server/object из last item.
+//
+// opts:
+//   addBtnSelector       — CSS селектор кнопки "+ Add"
+//   containerSelector    — CSS селектор контейнера, куда добавляются rows
+//   rowClass             — CSS класс одной row (default 'sensor-item')
+//   defaultExtras        — function(): дефолты для extra-полей нового item
+//   renderRow            — function({ idx, item }): HTML новой row (типично — re-export из widget'а)
+//   parseExtraFields     — function(itemEl, idx): обязательная функция parsing'а extra-полей
+function initSensorItemListHandlers(form, config = {}, opts = {}) {
+    const {
+        addBtnSelector,
+        containerSelector,
+        rowClass = 'sensor-item',
+        defaultExtras = () => ({}),
+        renderRow,
+        parseExtraFields,
+    } = opts;
+
+    const flagKey = `sensorItemList_${rowClass}_wired`;
+    if (form.dataset[flagKey] === 'true') return;
+    form.dataset[flagKey] = 'true';
+
+    const container = form.querySelector(containerSelector);
+    const addBtn = form.querySelector(addBtnSelector);
+
+    // Wire each existing row
+    form.querySelectorAll(`.${rowClass}`).forEach(el => {
+        const idx = parseInt(el.dataset.idx, 10);
+        if (!Number.isFinite(idx)) return;
+        initSensorBindingHandlers(form, config?.items?.[idx] || {}, { fieldPrefix: `item-${idx}-` });
+    });
+
+    let nextIdx = (config?.items?.length || 0);
+
+    addBtn?.addEventListener('click', () => {
+        const idx = nextIdx++;
+        // Pre-fill server+object из last visible row.
+        const existing = parseSensorItemList(form, { rowClass, parseExtraFields });
+        const last = existing[existing.length - 1];
+        let prefilled = { serverId: last?.serverId || '', objectName: last?.objectName || 'SharedMemory' };
+        if (!prefilled.serverId && typeof state !== 'undefined' && state?.servers) {
+            for (const [id, srv] of state.servers) {
+                if (srv.connected) { prefilled.serverId = id; break; }
+            }
+        }
+        const item = { ...prefilled, sensor: '', sensorId: null, ...defaultExtras() };
+        const html = renderRow({ idx, item });
+        container.insertAdjacentHTML('beforeend', html);
+        // Wire новой row (свежий fieldPrefix `item-${idx}-` — idempotency-flag не сработает).
+        initSensorBindingHandlers(form, item, { fieldPrefix: `item-${idx}-` });
+    });
+
+    container?.addEventListener('click', (e) => {
+        const btn = e.target.closest('.remove-sensor-item');
+        if (!btn) return;
+        const row = btn.closest(`.${rowClass}`);
+        if (row && container.querySelectorAll(`.${rowClass}`).length > 1) {
+            row.remove();
+        }
+    });
+}
+
 if (typeof globalThis !== 'undefined') {
     globalThis.renderSensorBindingFields = renderSensorBindingFields;
     globalThis.parseSensorBindingFields  = parseSensorBindingFields;
     globalThis.renderSensorItemRow       = renderSensorItemRow;
     globalThis.parseSensorItemList       = parseSensorItemList;
+    globalThis.initSensorBindingHandlers = initSensorBindingHandlers;
+    globalThis.initSensorItemListHandlers = initSensorItemListHandlers;
 }
