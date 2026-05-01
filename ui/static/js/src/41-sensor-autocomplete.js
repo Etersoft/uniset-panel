@@ -8,13 +8,6 @@
 // При смене objectName (через resetOnObjectChange()) — очищает выбор.
 // ============================================================================
 
-const SENSOR_AUTOCOMPLETE_DEBOUNCE_MS = 150;
-const SENSOR_AUTOCOMPLETE_LIMIT = 20;
-// На focus показываем top-N из IONC объекта (без search фильтра), чтобы юзер
-// сразу видел ассортимент, а не результат поиска по уже введённому тексту
-// (typically — имя сохранённого sensor'а из existing config). Spec требует 10.
-const SENSOR_AUTOCOMPLETE_FOCUS_LIMIT = 10;
-
 function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId) {
     if (!inputEl) return null;
 
@@ -42,7 +35,7 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
         dropdown.style.left = `${rect.left}px`;
         dropdown.style.top = `${rect.bottom + 2}px`;
         dropdown.style.width = `${rect.width}px`;
-        dropdown.style.zIndex = '10000';
+        dropdown.style.zIndex = String(SENSOR_AUTOCOMPLETE_DROPDOWN_Z_INDEX);
         document.body.appendChild(dropdown);
     }
 
@@ -56,10 +49,10 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
         dropdown.innerHTML = items.map((s, idx) => `
             <div class="sensor-autocomplete-item ${idx === activeIndex ? 'active' : ''}"
                  data-idx="${idx}"
-                 data-id="${s.id}"
+                 data-id="${escapeAttr(s.id)}"
                  data-name="${escapeAttr(s.name)}">
                 <div class="sensor-autocomplete-name">${escapeHtml(s.name)}</div>
-                <div class="sensor-autocomplete-meta">id=${s.id} · type=${escapeHtml(s.type || '?')} · value=${s.value ?? '—'}</div>
+                <div class="sensor-autocomplete-meta">id=${escapeHtml(String(s.id))} · type=${escapeHtml(s.type || '?')} · value=${escapeHtml(String(s.value ?? '—'))}</div>
             </div>
         `).join('');
         dropdown.querySelectorAll('.sensor-autocomplete-item').forEach(el => {
@@ -123,7 +116,7 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
         if (hiddenIdEl) hiddenIdEl.value = '';
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => fetchAndShow(inputEl.value.trim()),
-            SENSOR_AUTOCOMPLETE_DEBOUNCE_MS);
+            AUTOCOMPLETE_DEBOUNCE_DELAY);
     });
 
     inputEl.addEventListener('keydown', (e) => {
@@ -148,7 +141,7 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
 
     inputEl.addEventListener('blur', () => {
         // Delay so click on dropdown item fires first (mousedown handler runs).
-        setTimeout(destroyDropdown, 150);
+        setTimeout(destroyDropdown, SENSOR_AUTOCOMPLETE_BLUR_DELAY_MS);
     });
 
     return {

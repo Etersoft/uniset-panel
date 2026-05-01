@@ -13,7 +13,7 @@
 //   valueOn     — числовое значение «нажато» (default 1)
 //   valueOff    — числовое значение «отпущено» (default 0)
 //   mode        — 'pulse' (default) | 'momentary'
-//   pulseWidth  — ms, длительность импульса для pulse режима (default 500)
+//   pulseWidth  — ms, длительность импульса для pulse режима (default PUSHBUTTON_DEFAULT_PULSE_WIDTH_MS)
 //   style       — 'flat' (default) | 'mushroom' | 'pill'
 //   requireConfirmation — bool (от base; в momentary НЕ работает, warning в форме)
 // ============================================================================
@@ -87,9 +87,9 @@ class PushButtonWidget extends ActiveDashboardWidget {
         if (!this.isInteractive()) return;
         const valueOn = this.config?.valueOn ?? 1;
         const valueOff = this.config?.valueOff ?? 0;
-        const pulseWidth = this.config?.pulseWidth ?? 500;
+        const pulseWidth = this.config?.pulseWidth ?? PUSHBUTTON_DEFAULT_PULSE_WIDTH_MS;
 
-        // Visual flash (300ms независимо от pulseWidth — это UI feedback).
+        // Visual flash независимо от pulseWidth — это UI feedback.
         // Timer хранится на instance чтобы destroy() мог его отменить и не
         // снимать класс с уже удалённого DOM-узла.
         const btn = this.element?.querySelector('[data-test="btn"]');
@@ -99,7 +99,7 @@ class PushButtonWidget extends ActiveDashboardWidget {
             this._pulseFlashTimer = setTimeout(() => {
                 this._pulseFlashTimer = null;
                 btn?.classList.remove('pulsing');
-            }, 300);
+            }, PUSHBUTTON_FLASH_MS);
         }
 
         // POST valueOn → wait pulseWidth → POST valueOff. Таймер стартует
@@ -180,7 +180,7 @@ class PushButtonWidget extends ActiveDashboardWidget {
                 <div class="widget-config-field" data-pulse-only style="display:${mode === 'pulse' ? '' : 'none'}">
                     <label>Pulse width (ms)</label>
                     <input type="number" class="widget-input" name="pulseWidth"
-                           value="${config.pulseWidth ?? 500}" min="50" data-test="cfg-pulseWidth">
+                           value="${config.pulseWidth ?? PUSHBUTTON_DEFAULT_PULSE_WIDTH_MS}" min="${PUSHBUTTON_MIN_PULSE_WIDTH_MS}" data-test="cfg-pulseWidth">
                 </div>
             </div>
             <div class="widget-config-row">
@@ -196,7 +196,7 @@ class PushButtonWidget extends ActiveDashboardWidget {
                 </div>
             </div>
             <div class="widget-config-field" data-momentary-warning style="display:${mode === 'momentary' ? '' : 'none'}">
-                <small style="color:#f59e0b">⚠ В momentary режиме requireConfirmation не работает (POST уйдёт без диалога).</small>
+                <small style="color:#f59e0b">⚠ В momentary режиме confirm применяется только к ON; release/OFF уйдёт без повторного диалога.</small>
             </div>
         `;
     }
@@ -220,10 +220,12 @@ class PushButtonWidget extends ActiveDashboardWidget {
 
     static parseActiveConfigFields(form) {
         const pulseRaw = parseInt(form.querySelector('[name="pulseWidth"]')?.value, 10);
-        // pulseWidth: clamp к [50, ∞) — html min=50 это hint, не enforcement.
-        // Number.isFinite check вместо `|| 500` — иначе pulseWidth=0 неправильно
-        // парсится как 500 (falsy-zero).
-        const pulseWidth = Number.isFinite(pulseRaw) ? Math.max(50, pulseRaw) : 500;
+        // pulseWidth: clamp к [PUSHBUTTON_MIN_PULSE_WIDTH_MS, ∞) — html min это hint, не enforcement.
+        // Number.isFinite check вместо `|| default` — иначе pulseWidth=0 неправильно
+        // парсится как default (falsy-zero).
+        const pulseWidth = Number.isFinite(pulseRaw)
+            ? Math.max(PUSHBUTTON_MIN_PULSE_WIDTH_MS, pulseRaw)
+            : PUSHBUTTON_DEFAULT_PULSE_WIDTH_MS;
         return {
             mode:       form.querySelector('[name="mode"]')?.value || 'pulse',
             pulseWidth,

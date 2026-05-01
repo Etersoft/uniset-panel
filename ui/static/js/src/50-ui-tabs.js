@@ -281,12 +281,6 @@ async function openObjectTab(name, serverId, serverName) {
 }
 
 function createTab(tabKey, displayName, rendererInfo, initialData, serverId, serverName) {
-    const tabsHeader = document.getElementById('tabs-header');
-    const tabsContent = document.getElementById('tabs-content');
-
-    const placeholder = tabsContent.querySelector('.placeholder');
-    if (placeholder) placeholder.remove();
-
     // Получаем класс рендерера для данного типа объекта/расширения
     const RendererClass = rendererInfo.RendererClass || DefaultObjectRenderer;
     const renderer = new RendererClass(displayName, tabKey);
@@ -297,40 +291,24 @@ function createTab(tabKey, displayName, rendererInfo, initialData, serverId, ser
     const serverData = state.servers.get(serverId);
     const serverConnected = serverData?.connected !== false;
 
-    const tabBtn = document.createElement('button');
-    tabBtn.className = 'tab-btn' + (serverConnected ? '' : ' server-disconnected');
-    tabBtn.dataset.name = tabKey;
-    tabBtn.dataset.objectType = rendererInfo.rendererType;
-    tabBtn.dataset.serverId = serverId;
-
     const badgeType = rendererInfo.badgeType || rendererInfo.rendererType || 'Default';
 
     // Формируем HTML вкладки
-    const tabHTML = `
+    const buttonHtml = `
         <span class="tab-type-badge">${badgeType}</span>
-        <span class="tab-server-badge${serverConnected ? '' : ' disconnected'}" data-server-id="${serverId}">${serverName}</span>
-        ${displayName}
+        <span class="tab-server-badge${serverConnected ? '' : ' disconnected'}" data-server-id="${escapeAttr(serverId)}">${escapeHtml(serverName)}</span>
+        ${escapeHtml(displayName)}
         <span class="close">&times;</span>
     `;
-    tabBtn.innerHTML = tabHTML;
 
-    tabBtn.addEventListener('click', (e) => {
-        if (e.target.classList.contains('close')) {
-            closeTab(tabKey);
-        } else {
-            activateTab(tabKey);
-        }
+    createTabShell({
+        tabKey,
+        objectType: rendererInfo.rendererType,
+        connected: serverConnected,
+        serverId,
+        buttonHtml,
+        panelHtml: renderer.createPanelHTML()
     });
-    tabsHeader.appendChild(tabBtn);
-
-    // Панель содержимого - создаётся рендерером
-    const panel = document.createElement('div');
-    panel.className = 'tab-panel' + (serverConnected ? '' : ' server-disconnected');
-    panel.dataset.name = tabKey;
-    panel.dataset.objectType = rendererInfo.rendererType;
-    panel.dataset.serverId = serverId;
-    panel.innerHTML = renderer.createPanelHTML();
-    tabsContent.appendChild(panel);
 
     // Восстановить состояние спойлеров
     restoreCollapsedSections(displayName);
@@ -359,6 +337,12 @@ function createTab(tabKey, displayName, rendererInfo, initialData, serverId, ser
     // Инициализация рендерера (настройка обработчиков и т.д.)
     renderer.initialize();
 
+    // Делегированные click-handlers для всех secций tab-панели
+    // (toggleSection, moveSectionUp/Down, addSensor, time-range, IO sequential).
+    // Раньше эти handler'ы шли inline onclick="..." из шаблонов 10-base-renderer
+    // и 20-ionc-renderer; теперь — единый bind после initialize().
+    renderer._setupSectionDelegation?.();
+
     // Восстанавливаем внешние датчики из localStorage
     restoreExternalSensors(tabKey, displayName);
 
@@ -375,6 +359,57 @@ function createTab(tabKey, displayName, rendererInfo, initialData, serverId, ser
     updateAllControlButtons();
 }
 
+function createTabShell({ tabKey, objectType, connected, serverId = null, buttonHtml, panelHtml }) {
+    const tabsHeader = document.getElementById('tabs-header');
+    const tabsContent = document.getElementById('tabs-content');
+
+    const placeholder = tabsContent.querySelector('.placeholder');
+    if (placeholder) placeholder.remove();
+
+    const tabBtn = document.createElement('button');
+    tabBtn.className = 'tab-btn' + (connected ? '' : ' server-disconnected');
+    tabBtn.dataset.name = tabKey;
+    tabBtn.dataset.objectType = objectType;
+    if (serverId) {
+        tabBtn.dataset.serverId = serverId;
+    }
+    tabBtn.innerHTML = buttonHtml;
+    tabBtn.addEventListener('click', (e) => {
+        if (e.target.classList.contains('close')) {
+            closeTab(tabKey);
+        } else {
+            activateTab(tabKey);
+        }
+    });
+    tabsHeader.appendChild(tabBtn);
+
+    const panel = document.createElement('div');
+    panel.className = 'tab-panel' + (connected ? '' : ' server-disconnected');
+    panel.dataset.name = tabKey;
+    panel.dataset.objectType = objectType;
+    if (serverId) {
+        panel.dataset.serverId = serverId;
+    }
+    panel.innerHTML = panelHtml;
+    tabsContent.appendChild(panel);
+
+    return { tabBtn, panel };
+}
+
+function getTabButton(name) {
+    return Array.from(document.querySelectorAll('.tab-btn'))
+        .find(btn => btn.dataset.name === name) || null;
+}
+
+function getObjectListItem(tabKey) {
+    const tabState = state.tabs.get(tabKey);
+    const displayName = tabState?.displayName || tabKey;
+    const serverId = tabState?.serverId || null;
+
+    return Array.from(document.querySelectorAll('.objects-list li'))
+        .find(li => li.dataset.name === displayName && (!serverId || li.dataset.serverId === serverId)) || null;
+}
+
 function activateTab(name) {
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
@@ -382,9 +417,9 @@ function activateTab(name) {
     // Снимаем выделение с dashboard items в sidebar
     document.querySelectorAll('.dashboard-item').forEach(item => item.classList.remove('active'));
 
-    document.querySelector(`.tab-btn[data-name="${name}"]`)?.classList.add('active');
-    document.querySelector(`.tab-panel[data-name="${name}"]`)?.classList.add('active');
-    document.querySelector(`.objects-list li[data-name="${name}"]`)?.classList.add('active');
+    getTabButton(name)?.classList.add('active');
+    getTabPanel(name)?.classList.add('active');
+    getObjectListItem(name)?.classList.add('active');
 
     state.activeTab = name;
 }
@@ -409,8 +444,8 @@ function closeTab(name) {
 
     state.tabs.delete(name);
 
-    document.querySelector(`.tab-btn[data-name="${name}"]`)?.remove();
-    document.querySelector(`.tab-panel[data-name="${name}"]`)?.remove();
+    getTabButton(name)?.remove();
+    getTabPanel(name)?.remove();
 
     if (state.tabs.size === 0) {
         const tabsContent = document.getElementById('tabs-content');
@@ -444,44 +479,24 @@ function openLauncherTab(nodeId, nodeName, launcherUrl, hasControl) {
 }
 
 function createLauncherTab(tabKey, nodeId, nodeName, launcherUrl, hasControl) {
-    const tabsHeader = document.getElementById('tabs-header');
-    const tabsContent = document.getElementById('tabs-content');
-
-    const placeholder = tabsContent.querySelector('.placeholder');
-    if (placeholder) placeholder.remove();
-
     const renderer = new LauncherRenderer(nodeName, tabKey, nodeId, launcherUrl, hasControl);
 
     // Проверяем начальный статус подключения
     const nodeState = state.nodes.get(nodeId);
     const nodeConnected = nodeState?.connected !== false;
 
-    // Кнопка вкладки
-    const tabBtn = document.createElement('button');
-    tabBtn.className = 'tab-btn' + (nodeConnected ? '' : ' server-disconnected');
-    tabBtn.dataset.name = tabKey;
-    tabBtn.dataset.objectType = 'Launcher';
-    tabBtn.innerHTML = `
+    createTabShell({
+        tabKey,
+        objectType: 'Launcher',
+        connected: nodeConnected,
+        serverId: nodeId,
+        buttonHtml: `
         <span class="tab-type-badge tab-badge-launcher">Launcher</span>
         ${escapeHtml(nodeName)}
         <span class="close">&times;</span>
-    `;
-    tabBtn.addEventListener('click', (e) => {
-        if (e.target.classList.contains('close')) {
-            closeTab(tabKey);
-        } else {
-            activateTab(tabKey);
-        }
+    `,
+        panelHtml: renderer.createPanelHTML()
     });
-    tabsHeader.appendChild(tabBtn);
-
-    // Панель содержимого
-    const panel = document.createElement('div');
-    panel.className = 'tab-panel' + (nodeConnected ? '' : ' server-disconnected');
-    panel.dataset.name = tabKey;
-    panel.dataset.objectType = 'Launcher';
-    panel.innerHTML = renderer.createPanelHTML();
-    tabsContent.appendChild(panel);
 
     // Сохраняем состояние
     state.tabs.set(tabKey, {
@@ -601,11 +616,11 @@ function updateLauncherNodeStatus(nodeId, connected) {
 
     // Обновляем CSS-класс tab-кнопки и панели (аналогично updateServerStatus)
     const tabKey = `launcher:${nodeId}`;
-    const tabBtn = document.querySelector(`.tab-btn[data-name="${CSS.escape(tabKey)}"]`);
+    const tabBtn = getTabButton(tabKey);
     if (tabBtn) {
         tabBtn.classList.toggle('server-disconnected', !connected);
     }
-    const tabPanel = document.querySelector(`.tab-panel[data-name="${CSS.escape(tabKey)}"]`);
+    const tabPanel = getTabPanel(tabKey);
     if (tabPanel) {
         tabPanel.classList.toggle('server-disconnected', !connected);
     }
@@ -650,4 +665,3 @@ async function loadObjectData(tabKey) {
         console.error(`Error загрузки ${tabKey}:`, err);
     }
 }
-

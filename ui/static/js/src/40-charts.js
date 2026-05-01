@@ -74,7 +74,7 @@ async function refreshObjectsList() {
     try {
         const data = await fetchObjects();
         renderObjectsList(data);
-        console.log('Список объектов обновлён');
+        debugLog('Список объектов обновлён');
     } catch (err) {
         console.error('Error обновления списка объектов:', err);
     } finally {
@@ -87,40 +87,37 @@ async function refreshObjectsList() {
 }
 
 async function fetchObjectData(name, serverId = null) {
-    let url = `/api/objects/${encodeURIComponent(name)}`;
-    if (serverId) {
-        url += `?server=${encodeURIComponent(serverId)}`;
-    }
+    const url = buildObjectUrl(name, '', serverId);
     const response = await fetch(url);
     if (!response.ok) throw new Error('Failed to load object data');
     return response.json();
 }
 
 async function watchObject(name, serverId = null) {
-    let url = `/api/objects/${encodeURIComponent(name)}/watch`;
-    if (serverId) {
-        url += `?server=${encodeURIComponent(serverId)}`;
-    }
+    const url = buildObjectUrl(name, '/watch', serverId);
     const response = await fetch(url, { method: 'POST' });
     if (!response.ok) throw new Error('Failed to start watching');
     return response.json();
 }
 
 async function unwatchObject(name, serverId = null) {
-    let url = `/api/objects/${encodeURIComponent(name)}/watch`;
-    if (serverId) {
-        url += `?server=${encodeURIComponent(serverId)}`;
-    }
+    const url = buildObjectUrl(name, '/watch', serverId);
     const response = await fetch(url, { method: 'DELETE' });
     if (!response.ok) throw new Error('Failed to stop watching');
     return response.json();
 }
 
+function buildVariableHistoryUrl(objectName, variableName, count = 100, serverId = null) {
+    return buildObjectUrl(
+        objectName,
+        `/variables/${encodeURIComponent(variableName)}/history`,
+        serverId,
+        { count }
+    );
+}
+
 async function fetchVariableHistory(objectName, variableName, count = 100, serverId = null) {
-    let url = `/api/objects/${encodeURIComponent(objectName)}/variables/${encodeURIComponent(variableName)}/history?count=${count}`;
-    if (serverId) {
-        url += `&server=${encodeURIComponent(serverId)}`;
-    }
+    const url = buildVariableHistoryUrl(objectName, variableName, count, serverId);
     const response = await fetch(url);
     if (!response.ok) throw new Error('Failed to load history');
     return response.json();
@@ -167,7 +164,7 @@ async function loadSensorsConfig() {
 
         // Если ничего не загрузилось, пробуем SharedMemory как fallback
         if (totalLoaded === 0) {
-            console.log('Конфиг датчиков пуст, загружаю из SharedMemory...');
+            debugLog('Конфиг датчиков пуст, загружаю из SharedMemory...');
             const data = await fetchSMSensors();
             if (data.sensors) {
                 data.sensors.forEach(sensor => {
@@ -180,7 +177,7 @@ async function loadSensorsConfig() {
             }
         }
 
-        console.log(`Загружено ${state.sensors.size} сенсоров`);
+        debugLog(`Загружено ${state.sensors.size} сенсоров`);
     } catch (err) {
         console.error('Error загрузки конфигурации сенсоров:', err);
     }
@@ -222,4 +219,3 @@ function isDiscreteSignal(sensor) {
     if (!sensor) return false;
     return sensor.isDiscrete === true || sensor.iotype === 'DI' || sensor.iotype === 'DO';
 }
-

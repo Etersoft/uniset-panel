@@ -60,11 +60,7 @@ function renderSensorBindingFields(config = {}, opts = {}) {
 function parseSensorBindingFields(form, opts = {}) {
     const prefix = opts.fieldPrefix || '';
     const rawId = form.querySelector(`[name="${prefix}sensorId"]`)?.value;
-    let sensorId = null;
-    if (rawId !== '' && rawId !== undefined && rawId !== null) {
-        const n = parseInt(rawId, 10);
-        sensorId = Number.isFinite(n) ? n : null;
-    }
+    const sensorId = parseIntegerOrDefault(rawId, null);
     return {
         serverId:   form.querySelector(`[name="${prefix}serverId"]`)?.value || null,
         objectName: form.querySelector(`[name="${prefix}objectName"]`)?.value || (opts.objectNameDefault || 'SharedMemory'),
@@ -96,13 +92,36 @@ function parseSensorItemList(form, opts = {}) {
     const { rowClass = 'sensor-item', parseExtraFields } = opts;
     const items = [];
     form.querySelectorAll(`.${rowClass}`).forEach(el => {
-        const idx = parseInt(el.dataset.idx, 10);
+        const idx = parseIntegerOrDefault(el.dataset.idx, NaN);
         if (!Number.isFinite(idx)) return; // skip malformed rows
         const binding = parseSensorBindingFields(form, { fieldPrefix: `item-${idx}-` });
         const extra = parseExtraFields ? parseExtraFields(el, idx) : {};
         items.push({ ...binding, ...extra });
     });
     return items;
+}
+
+function getSensorNameFromBinding(binding = {}) {
+    return binding.sensor || binding.name || '';
+}
+
+function sensorItemMatchesUpdate(item = {}, sensorName, ctx = null) {
+    if (getSensorNameFromBinding(item) !== sensorName) return false;
+    if (ctx?.serverId && item.serverId && ctx.serverId !== item.serverId) return false;
+    if (ctx?.objectName && item.objectName && ctx.objectName !== item.objectName) return false;
+    return true;
+}
+
+function updateSensorItemsByName(items = [], sensorName, ctx = null, updateItem) {
+    items.forEach((item, idx) => {
+        if (sensorItemMatchesUpdate(item, sensorName, ctx)) {
+            updateItem(item, idx);
+        }
+    });
+}
+
+function getSensorNamesFromItems(items = []) {
+    return items.map(getSensorNameFromBinding).filter(Boolean);
 }
 
 // Wire'ит для одного binding-блока: token-guarded loadIONCObjects при смене
@@ -204,7 +223,7 @@ function initSensorItemListHandlers(form, config = {}, opts = {}) {
 
     // Wire each existing row
     form.querySelectorAll(`.${rowClass}`).forEach(el => {
-        const idx = parseInt(el.dataset.idx, 10);
+        const idx = parseIntegerOrDefault(el.dataset.idx, NaN);
         if (!Number.isFinite(idx)) return;
         initSensorBindingHandlers(form, config?.items?.[idx] || {}, { fieldPrefix: `item-${idx}-` });
     });
@@ -214,7 +233,7 @@ function initSensorItemListHandlers(form, config = {}, opts = {}) {
     // дефолтит первую row → counted from DOM iff config.items пуст.
     let nextIdx = 0;
     container?.querySelectorAll(`.${rowClass}`).forEach(el => {
-        const i = parseInt(el.dataset.idx, 10);
+        const i = parseIntegerOrDefault(el.dataset.idx, NaN);
         if (Number.isFinite(i) && i + 1 > nextIdx) nextIdx = i + 1;
     });
 
@@ -224,10 +243,8 @@ function initSensorItemListHandlers(form, config = {}, opts = {}) {
         const existing = parseSensorItemList(form, { rowClass, parseExtraFields });
         const last = existing[existing.length - 1];
         let prefilled = { serverId: last?.serverId || '', objectName: last?.objectName || 'SharedMemory' };
-        if (!prefilled.serverId && typeof state !== 'undefined' && state?.servers) {
-            for (const [id, srv] of state.servers) {
-                if (srv.connected) { prefilled.serverId = id; break; }
-            }
+        if (!prefilled.serverId) {
+            prefilled.serverId = getFirstConnectedServerId() || '';
         }
         const item = { ...prefilled, sensor: '', sensorId: null, ...defaultExtras() };
         const html = renderRow({ idx, item });
@@ -334,6 +351,10 @@ if (typeof globalThis !== 'undefined') {
     globalThis.parseSensorBindingFields  = parseSensorBindingFields;
     globalThis.renderSensorItemRow       = renderSensorItemRow;
     globalThis.parseSensorItemList       = parseSensorItemList;
+    globalThis.sensorItemMatchesUpdate   = sensorItemMatchesUpdate;
+    globalThis.updateSensorItemsByName   = updateSensorItemsByName;
+    globalThis.getSensorNameFromBinding  = getSensorNameFromBinding;
+    globalThis.getSensorNamesFromItems   = getSensorNamesFromItems;
     globalThis.initSensorBindingHandlers = initSensorBindingHandlers;
     globalThis.initSensorItemListHandlers = initSensorItemListHandlers;
     globalThis._migrateBindingPure       = _migrateBindingPure;

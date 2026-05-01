@@ -124,13 +124,13 @@ function initPollIntervalSelector() {
         setActive(savedInterval);
     } else {
         // По умолчанию 1s
-        setActive(1000);
+        setActive(POLL_INTERVAL_SELECTOR_DEFAULT_MS);
     }
 
     // Обработчики кликов
     buttons.forEach(btn => {
         btn.addEventListener('click', async () => {
-            const interval = parseInt(btn.dataset.interval);
+            const interval = parseIntegerOrDefault(btn.dataset.interval, state.sse.pollInterval);
             setActive(interval);
             localStorage.setItem('pollInterval', interval);
 
@@ -150,7 +150,7 @@ function initPollIntervalSelector() {
                     body: JSON.stringify({ interval })
                 });
                 if (response.ok) {
-                    console.log(`Poll interval изменён на ${interval}ms`);
+                    debugLog(`Poll interval изменён на ${interval}ms`);
                 } else {
                     console.warn('Не удалось изменить poll interval');
                 }

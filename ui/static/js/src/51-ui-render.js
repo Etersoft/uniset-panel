@@ -3,6 +3,11 @@
 // Решает проблему конфликта ID при multi-server с одинаковыми displayName
 // ============================================================================
 
+function getTabPanel(tabKey) {
+    return Array.from(document.querySelectorAll('.tab-panel'))
+        .find(panel => panel.dataset.name === tabKey) || null;
+}
+
 /**
  * Находит элемент внутри панели конкретной вкладки
  * @param {string} tabKey - Ключ вкладки (serverId:objectName или objectName для single-server)
@@ -10,7 +15,7 @@
  * @returns {HTMLElement|null} - Найденный элемент или null
  */
 function getElementInTab(tabKey, elementId) {
-    const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+    const panel = getTabPanel(tabKey);
     if (!panel) return null;
     // Escape special CSS characters in elementId (e.g., colon in "ws:SensorName")
     const escapedId = CSS.escape(elementId);
@@ -24,7 +29,7 @@ function getElementInTab(tabKey, elementId) {
  * @returns {NodeList} - Список найденных элементов
  */
 function getElementsInTab(tabKey, selector) {
-    const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+    const panel = getTabPanel(tabKey);
     if (!panel) return [];
     return panel.querySelectorAll(selector);
 }
@@ -55,8 +60,8 @@ function renderVariables(tabKey, variables, filterText = '') {
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td class="variable-name">${varName}</td>
-            <td class="variable-value">${formatValue(value)}</td>
+            <td class="variable-name">${escapeHtml(varName)}</td>
+            <td class="variable-value">${formatValueHtml(value)}</td>
             <td></td>
         `;
 
@@ -138,8 +143,8 @@ function renderIO(tabKey, type, ioData) {
             <td class="io-spacer-col"></td>
             <td><span class="variable-iotype iotype-${iotype.toLowerCase()}">${iotype}</span></td>
             <td>${io.id}</td>
-            <td class="variable-name" title="${textname}">${io.name || key}</td>
-            <td class="variable-value" data-var="${varName}">${formatValue(io.value)}</td>
+            <td class="variable-name" title="${escapeAttr(textname)}">${escapeHtml(io.name || key)}</td>
+            <td class="variable-value" data-var="${varName}">${formatValueHtml(io.value)}</td>
         `;
 
         // Pin toggle handler
@@ -168,6 +173,10 @@ function formatValue(value) {
         return Number.isInteger(value) ? value : value.toFixed(2);
     }
     return String(value);
+}
+
+function formatValueHtml(value) {
+    return escapeHtml(String(formatValue(value)));
 }
 
 // Находит tabKey по displayName (для обратной совместимости с кодом использующим objectName)
@@ -245,7 +254,7 @@ async function addChart(tabKey, varName, sensorId, passedTextname) {
                     <input type="checkbox" id="fill-${displayName}-${varName}" checked>
                     <span class="fill-toggle-label">fill</span>
                 </label>
-                <button class="btn-icon" title="Close" onclick="removeChartByButton('${tabKey}', '${varName}')">
+                <button class="btn-icon chart-close-btn" title="Close">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M18 6L6 18M6 6l12 12"/>
                     </svg>
@@ -257,6 +266,13 @@ async function addChart(tabKey, varName, sensorId, passedTextname) {
         </div>
     `;
     chartsContainer.appendChild(chartDiv);
+
+    // Вместо inline onclick — addEventListener со ссылками на tabKey/varName
+    // из closure'а. Inline-вариант ломался бы на varName со спецсимволами
+    // (одинарные кавычки в имени датчика и т.п.) и был XSS-вектором.
+    chartDiv.querySelector('.chart-close-btn')?.addEventListener('click', () => {
+        removeChart(tabKey, varName);
+    });
 
     // Обработчик для чекбокса заливки
     const fillCheckbox = getElementInTab(tabKey, `fill-${displayName}-${varName}`);
@@ -277,7 +293,7 @@ async function addChart(tabKey, varName, sensorId, passedTextname) {
     // Загружаем историю
     try {
         const serverId = tabState?.serverId;
-        const history = await fetchVariableHistory(displayName, varName, 200, serverId);
+        const history = await fetchVariableHistory(displayName, varName, OBJECT_CHART_HISTORY_LIMIT, serverId);
         const ctx = getElementInTab(tabKey, `canvas-${displayName}-${varName}`).getContext('2d');
 
         // Преобразуем данные для временной шкалы
@@ -289,86 +305,15 @@ async function addChart(tabKey, varName, sensorId, passedTextname) {
         // Получаем диапазон времени (при первом графике устанавливается начало)
         const timeRange = getTimeRangeForObject(tabKey);
 
-        // Заливка по умолчанию только для аналоговых
-        const fillEnabled = true;
-
-        // Конфигурация графика в зависимости от типа сигнала
-        const chartConfig = {
-            type: 'line',
-            data: {
-                datasets: [{
-                    label: sensorDisplayName,
-                    data: historyData,
-                    borderColor: color,
-                    backgroundColor: `${color}20`,
-                    fill: fillEnabled,
-                    tension: isDiscrete ? 0 : 0.3,
-                    stepped: isDiscrete ? 'before' : false,
-                    pointRadius: 0,
-                    borderWidth: isDiscrete ? 2 : 1.5
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: false,
-                interaction: {
-                    intersect: false,
-                    mode: 'index'
-                },
-                scales: {
-                    x: {
-                        type: 'time',
-                        display: true,
-                        grid: {
-                            color: '#333840',
-                            drawBorder: false
-                        },
-                        ticks: {
-                            color: '#8a9099',
-                            maxTicksLimit: 10,
-                            display: true
-                        },
-                        time: {
-                            displayFormats: {
-                                second: 'HH:mm:ss',
-                                minute: 'HH:mm',
-                                hour: 'HH:mm'
-                            }
-                        },
-                        min: timeRange.min,
-                        max: timeRange.max
-                    },
-                    y: {
-                        display: true,
-                        position: 'left',
-                        beginAtZero: isDiscrete,
-                        suggestedMin: isDiscrete ? 0 : undefined,
-                        suggestedMax: isDiscrete ? 1.1 : undefined,
-                        grid: {
-                            color: '#333840',
-                            drawBorder: false
-                        },
-                        ticks: {
-                            color: '#8a9099',
-                            stepSize: isDiscrete ? 1 : undefined
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: false
-                    },
-                    tooltip: {
-                        backgroundColor: '#22252a',
-                        titleColor: '#d8dce2',
-                        bodyColor: '#d8dce2',
-                        borderColor: '#333840',
-                        borderWidth: 1
-                    }
-                }
-            }
-        };
+        const chartConfig = createLineChartConfig({
+            datasets: [{
+                label: sensorDisplayName,
+                data: historyData,
+                color,
+                isDiscrete
+            }],
+            timeRange
+        });
 
         const chart = new Chart(ctx, chartConfig);
 
@@ -417,7 +362,7 @@ async function updateChart(objectName, varName, chart) {
     try {
         const serverId = tabState?.serverId;
         const displayName = tabState?.displayName || objectName;
-        const history = await fetchVariableHistory(displayName, varName, 200, serverId);
+        const history = await fetchVariableHistory(displayName, varName, OBJECT_CHART_HISTORY_LIMIT, serverId);
 
         // Преобразуем данные для временной шкалы
         const chartData = history.points?.map(p => ({
@@ -434,10 +379,13 @@ async function updateChart(objectName, varName, chart) {
 
         chart.update('none');
 
-        // Обновить значение в легенде
+        // Обновить значение в легенде. ID элемента создаётся в addChart с
+        // displayName, а не objectName: при polling-вызове из setInterval
+        // objectName == tabKey, и при multi-server (tabKey != displayName)
+        // запрос мимо.
         if (history.points && history.points.length > 0) {
             const lastValue = history.points[history.points.length - 1].value;
-            const legendEl = getElementInTab(tabKey, `legend-value-${objectName}-${varName}`);
+            const legendEl = getElementInTab(tabKey, `legend-value-${displayName}-${varName}`);
             if (legendEl) {
                 legendEl.textContent = formatValue(lastValue);
             }
@@ -507,7 +455,7 @@ function updateXAxisVisibility(tabKey) {
 
     // ВАЖНО: Ограничиваем поиск панелью конкретной вкладки
     // для избежания конфликтов ID при multi-server (когда displayName одинаковый)
-    const tabPanel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+    const tabPanel = getTabPanel(tabKey);
     if (!tabPanel) return;
 
     const chartPanels = tabPanel.querySelectorAll(`#charts-${displayName} .chart-panel`);

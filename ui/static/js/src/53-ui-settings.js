@@ -86,7 +86,7 @@ function moveSectionDown(tabKey, sectionId) {
 
 function getSectionElement(tabKey, sectionId) {
     // Ищем секцию по data-section-id внутри панели вкладки
-    const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+    const panel = getTabPanel(tabKey);
     if (!panel) return null;
     return panel.querySelector(`.reorderable-section[data-section-id="${sectionId}"]`);
 }
@@ -116,7 +116,7 @@ function getNextReorderableSection(element) {
 // tabKey - ключ вкладки (serverId:objectName)
 function saveSectionOrder(tabKey) {
     try {
-        const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+        const panel = getTabPanel(tabKey);
         if (!panel) return;
 
         const sections = panel.querySelectorAll('.reorderable-section[data-section-id]');
@@ -137,7 +137,7 @@ function loadSectionOrder(tabKey) {
         const order = saved[tabKey];
         if (!order || !Array.isArray(order)) return;
 
-        const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+        const panel = getTabPanel(tabKey);
         if (!panel) return;
 
         // Собираем все reorderable секции в Map
@@ -177,7 +177,7 @@ function loadSectionOrder(tabKey) {
 
 // tabKey - ключ вкладки (serverId:objectName)
 function updateReorderButtons(tabKey) {
-    const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+    const panel = getTabPanel(tabKey);
     if (!panel) return;
 
     const sections = Array.from(panel.querySelectorAll('.reorderable-section[data-section-id]'))
@@ -214,7 +214,7 @@ function setupIOSections(tabKey) {
 }
 
 function setupIOCollapse(tabKey, objectName, type) {
-    const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+    const panel = getTabPanel(tabKey);
     if (!panel) return;
 
     const toggleEl = panel.querySelector(`.io-section-toggle[data-section="${type}-${objectName}"]`);
@@ -397,7 +397,7 @@ function clearIOPinnedRows(tabKey, type) {
 function setTimeRange(range) {
     // Обновляем active класс на всех кнопках
     document.querySelectorAll('.time-range-btn').forEach(btn => {
-        const btnRange = parseInt(btn.getAttribute('onclick')?.match(/setTimeRange\((\d+)\)/)?.[1], 10);
+        const btnRange = parseInt(btn.dataset.range, 10);
         btn.classList.toggle('active', btnRange === range);
     });
 
@@ -476,10 +476,9 @@ async function loadAppConfig() {
         if (response.ok) {
             const config = await response.json();
             state.config = { ...state.config, ...config };
-            console.log('App config loaded:', state.config);
+            debugLog('App config loaded:', state.config);
         }
     } catch (err) {
         console.warn('Failed to load app config:', err);
     }
 }
-

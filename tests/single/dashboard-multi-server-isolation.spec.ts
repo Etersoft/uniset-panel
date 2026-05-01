@@ -196,6 +196,33 @@ test.describe('Dashboard multi-server isolation', () => {
         expect(req.url()).not.toContain('server=mock1');
     });
 
+    test('add-to-dashboard preserves server/object/sensorId binding', async ({ page }) => {
+        await page.evaluate(() => {
+            const w = window as any;
+            w.dashboardState.dashboards.set('TEST_ADD_CTX', {
+                meta: { name: 'TEST_ADD_CTX', description: '' },
+                widgets: [],
+            });
+            w.addSensorToDashboard('Temp', 'Temperature', 'TEST_ADD_CTX', 'gauge', false, {
+                serverId: 'mock2',
+                objectName: 'SM_B',
+                sensorId: 42,
+            });
+        });
+
+        const saved = await page.evaluate(() => {
+            const w = window as any;
+            return w.dashboardState.dashboards.get('TEST_ADD_CTX')?.widgets?.[0]?.config;
+        });
+        expect(saved).toMatchObject({
+            sensor: 'Temp',
+            label: 'Temperature',
+            serverId: 'mock2',
+            objectName: 'SM_B',
+            sensorId: 42,
+        });
+    });
+
     test('two IONC objects same server: SSE routing по objectName', async ({ page }) => {
         // Сценарий: один сервер, два IONC объекта 'SM_A' и 'SM_B', оба с
         // одинаковым sensor name 'Temp'. Widget1 подписан на SM_A.Temp,

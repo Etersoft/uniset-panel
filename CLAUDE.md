@@ -242,6 +242,7 @@ make build
 | `08-signal-generator.js` | `SignalGenerator` — общий движок генерации сигналов (square/sin/cos/linear/random). Используется IONC renderer'ом и активным generator-виджетом dashboard'а |
 | `61-dashboard-active-base.js` | `ActiveDashboardWidget extends DashboardWidget` — базовый класс для write-capable виджетов dashboard'а |
 | `61-dashboard-active-toggle.js` | `ToggleWidget` — активный двух-состояный переключатель (DI/DO/AI/AO) |
+| `60-widget-sensor-binding.js` | Общие helpers для config-полей `serverId` + `objectName` + `sensor` + `sensorId`; используются active и read-only dashboard widgets |
 | `41-sensor-autocomplete.js` | `setupSensorAutocomplete(...)` — переиспользуемый IONC sensor selector с debounced search |
 
 ### Active dashboard widgets
@@ -265,9 +266,9 @@ make build
 - `_recomputeTitle()` — единая точка владения tooltip'ом: приоритет `error message > 'Take control to interact' > пусто`
 - `requireConfirmation` — опция в config, по умолчанию выкл.
 - `usesNewSensorAutocomplete = true` — дефолт; dashboard-manager пропускает legacy in-memory autocomplete для всех ActiveDashboardWidget'ов
-- `static getConfigForm` базового класса рендерит objectName select + sensor input + hidden sensorId + style select (когда `static styles.length > 1`) + label + requireConfirmation
-- `static parseConfigForm` базового класса парсит base поля (sensor/sensorId/objectName/label/requireConfirmation/style) + spread `parseActiveConfigFields()`
-- `static initConfigHandlers` базового класса загружает IONC objects dropdown и подключает `setupSensorAutocomplete` с `resetOnObjectChange`. Idempotent через `form.dataset.activeHandlersWired`
+- `static getConfigForm` базового класса рендерит binding-поля через `renderSensorBindingFields()`: server select + objectName select + sensor input + hidden sensorId; затем style select (когда `static styles.length > 1`) + label + requireConfirmation
+- `static parseConfigForm` базового класса парсит base поля через `parseSensorBindingFields()`: `serverId`/`objectName`/`sensor`/`sensorId` + label/requireConfirmation/style + spread `parseActiveConfigFields()`
+- `static initConfigHandlers` базового класса вызывает `initSensorBindingHandlers()`: загружает IONC objects dropdown по выбранному server, подключает `setupSensorAutocomplete` и сбрасывает sensor при смене server/object. Idempotent через `form.dataset.activeHandlersWired` + binding-level dataset flags
 
 **Subclass contract — переопределяй:**
 - `render()`, `renderCommand()`, `renderFeedback()` — DOM/обновления
@@ -276,16 +277,18 @@ make build
 - `static styles = [...]` + `static defaultStyle` — несколько визуальных стилей; base рендерит style select автоматически
 - `_confirm(value)` — заменить `window.confirm` на красивый dialog
 
-**Subclass contract — НЕ трогай:**
-- `getConfigForm`, `parseConfigForm`, `initConfigHandlers`, `writeValue`, `_doWrite`, `usesNewSensorAutocomplete`,
-  `_setWriteState`, `_recomputeTitle`, `_updateInteractivityClass` — наследуется и достаточно
+**Subclass contract — обычно НЕ трогай:**
+- `getConfigForm`, `parseConfigForm`, `writeValue`, `_doWrite`, `usesNewSensorAutocomplete`,
+  `_setWriteState`, `_recomputeTitle` — наследуется и достаточно
+- `initConfigHandlers` можно переопределять только для дополнительных form handlers; обязательно вызвать `super.initConfigHandlers(form, config)` ровно один раз
+- `_updateInteractivityClass` можно переопределять только для дополнительной реакции на блокировку; обязательно вызвать `super._updateInteractivityClass()`
 
 **CSS-маркер:** dashboard-manager в `createWidget` выставляет `container.dataset.activeWidget = 'true'`
 для всех `widget instanceof ActiveDashboardWidget`. CSS правила (edit-mode grayscale, active-disabled)
 используют селектор `[data-active-widget="true"]` — развязаны от конкретных имён типов.
 
 **ToggleWidget (`61-dashboard-active-toggle.js`):** двух-состояный переключатель для DI/DO/AI/AO датчиков.
-Конфиг: `objectName` (IONC объект), `sensorId` (числовой ID), `valueOff`/`valueOn` (любые числа),
+Конфиг: `serverId`/`objectName`/`sensor`/`sensorId` (от base), `valueOff`/`valueOn` (любые числа),
 `labelOff`/`labelOn` (текстовые подписи), `style` (default `'slider'` — список из `static styles`).
 
 **Поддерживаемые стили** через `static styles = ['slider', 'checkbox']`:
@@ -307,10 +310,10 @@ make build
 toggle: нет двух-состоянного латча, feedback от своего sensor'а игнорируется
 (fire-and-forget команда).
 
-Конфиг: `objectName` (от base), `sensorId` (от base), `valueOn`/`valueOff` (числа),
+Конфиг: `serverId`/`objectName`/`sensor`/`sensorId` (от base), `valueOn`/`valueOff` (числа),
 `mode` (`'pulse'` default | `'momentary'`), `pulseWidth` (ms, default 500), `style`,
-`label`, `requireConfirmation` (от base; в `momentary` режиме НЕ работает —
-warning в форме).
+`label`, `requireConfirmation` (от base; в `momentary` режиме confirm применяется к ON-записи,
+а release/OFF path уходит через raw write без повторного диалога — warning в форме).
 
 **Поддерживаемые стили** через `static styles = ['flat', 'mushroom', 'pill']`.
 Размер при размещении: dashboard-manager в createWidget берёт
@@ -338,7 +341,7 @@ no-op (push-button показывает только команду + общий
 **SetpointWidget (`61-dashboard-active-setpoint.js`):** числовой задатчик
 для AI/AO датчиков. Произвольное значение в `[min, max]` с шагом `step`.
 
-Конфиг: `objectName` (от base), `sensorId` (от base), `min`/`max`/`step`
+Конфиг: `serverId`/`objectName`/`sensor`/`sensorId` (от base), `min`/`max`/`step`
 (числа), `unit` (текст: '°C', '%', 'Pa'), `applyMode` (`'manual'` default |
 `'auto'`), `style`, `label` (от base), `requireConfirmation` (от base).
 
@@ -371,7 +374,7 @@ command (с tolerance step/2 — для AI/AO float) → dirty снимаетс�
 SignalGenerator engine (`08-signal-generator.js`) для запуска тестовых
 сигналов в датчик с dashboard'а.
 
-Конфиг: `objectName` (от base), `sensorId` (от base), `label` (от base),
+Конфиг: `serverId`/`objectName`/`sensor`/`sensorId` (от base), `label` (от base),
 `requireConfirmation` (от base), `type` (`square` default | `sin` | `cos`
 | `linear` | `random`), `min`/`max`, и conditional поля по типу:
 - `linear`/`sin`/`cos`: `step`, `pause` (ms)
@@ -387,7 +390,8 @@ base.getConfigForm не рендерит style select.
 - Toggle on → создаёт `SignalGenerator` instance, `start()`, onTick →
   `_writeRaw(value)` (custom helper, fire-and-forget POST без per-tick
   confirm/state). serverId/sensorId/url cached в `_start` — не walk
-  state.servers Map каждый тик.
+  state.servers Map каждый тик. `serverId` берётся из config; legacy fallback
+  на первый connected server допустим только для старых dashboard-конфигов.
 - Toggle off → `signalGen.stop()`, instance = null, value → '--', cache cleared.
 - Double-start guard: `if (this._signalGen) return;` — защита от race.
 - POST error → автостоп + `active-error` (purple border + tooltip).
@@ -414,14 +418,13 @@ dropdown с keyboard navigation (↑↓/Enter/Esc), сохраняет (name, id
 плоский список имён.
 
 **Generator engine:** общий движок `SignalGenerator` (`08-signal-generator.js`) переиспользуется
-IONC renderer'ом (`20-ionc-renderer.js`) и активным generator-виджетом (когда будет реализован).
+IONC renderer'ом (`20-ionc-renderer.js`) и активным generator-виджетом dashboard'а.
 
 **E2E:** smoke-тест базового класса в `tests/single/dashboard-active-base.spec.ts`
-(использует `window.__DEBUG_REGISTER_TEST_WIDGET()` debug-хук). E2E ToggleWidget'а
-в `tests/single/dashboard-active-toggle.spec.ts` (13 сценариев: 8 для slider —
-write-flow, состояния fb-on/off/unknown/diverge, custom labels, edit-mode block,
-control-token block, custom objectName routing; 5 для checkbox style — render
-.toggle-cb, click anywhere triggers write, fb-on/unknown, diverge на root).
+(использует `window.__DEBUG_REGISTER_TEST_WIDGET()` debug-хук). Active widgets покрыты
+отдельными spec'ами: `dashboard-active-toggle.spec.ts`, `dashboard-active-button.spec.ts`,
+`dashboard-active-setpoint.spec.ts`, `dashboard-active-generator.spec.ts`; config persistence —
+`dashboard-widget-settings.spec.ts`.
 
 ### Правила размещения кода
 

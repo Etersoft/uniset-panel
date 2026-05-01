@@ -22,7 +22,8 @@ async function setControlState(page) {
         w.state.control.isController = true;
         w.state.control.hasController = true;
         w.state.control.enabled = true;
-        if (w.renderControlStatus) w.renderControlStatus();
+        if (w.updateControlUI) w.updateControlUI();
+        if (w.updateAllControlButtons) w.updateAllControlButtons();
     });
 }
 

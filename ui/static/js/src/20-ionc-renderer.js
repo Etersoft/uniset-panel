@@ -40,6 +40,10 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             type: { field: 'type', type: 'string' },
             value: { field: 'value', type: 'number' }
         };
+
+        // Pin management
+        this.pinStorageKey = 'uniset-panel-ionc-pinned';
+        this.renderAfterPinChange = this.renderSensorsTable;
     }
 
     // IONotifyController датчики - показываем badge "IO" и prefix "io"
@@ -78,13 +82,13 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     createSensorsSection() {
         return `
             <div class="collapsible-section reorderable-section ionc-sensors-section" data-section="ionc-sensors-${this.objectName}" data-section-id="ionc-sensors">
-                <div class="collapsible-header" onclick="toggleSection('ionc-sensors-${this.objectName}')">
+                <div class="collapsible-header">
                     <svg class="collapsible-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M6 9l6 6 6-6"/>
                     </svg>
                     <span class="collapsible-title">Sensors</span>
                     <span class="sensor-count" id="ionc-sensor-count-${this.objectName}">0</span>
-                    <div class="filter-bar" onclick="event.stopPropagation()">
+                    <div class="filter-bar">
                         <input type="text" class="filter-input" id="ionc-filter-${this.objectName}" placeholder="Filter...">
                         <select class="type-filter" id="ionc-type-filter-${this.objectName}">
                             <option value="all">All</option>
@@ -94,9 +98,9 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                             <option value="DO">DO</option>
                         </select>
                     </div>
-                    <div class="section-reorder-buttons" onclick="event.stopPropagation()">
-                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.tabKey}', 'ionc-sensors')" title="Move up">↑</button>
-                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.tabKey}', 'ionc-sensors')" title="Move down">↓</button>
+                    <div class="section-reorder-buttons">
+                        <button class="section-move-btn section-move-up" data-move-section="ionc-sensors" title="Move up">↑</button>
+                        <button class="section-move-btn section-move-down" data-move-section="ionc-sensors" title="Move down">↓</button>
                     </div>
                 </div>
                 <div class="collapsible-content" id="section-ionc-sensors-${this.objectName}">
@@ -157,6 +161,13 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             () => this.loadSensors()
         );
 
+        // Unpin all (persistent header element — wire'им один раз; в
+        // renderVisibleSensors больше не трогаем).
+        const unpinBtn = this.getEl(`ionc-unpin-${this.objectName}`);
+        if (unpinBtn) {
+            unpinBtn.addEventListener('click', () => this.unpinAll());
+        }
+
         // Делегирование событий для кнопки добавления на dashboard
         // устанавливается в setupDashboardClickHandler после загрузки данных
     }
@@ -169,7 +180,11 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                 const btn = e.target.closest('.dashboard-add-btn');
                 if (btn) {
                     e.stopPropagation();
-                    showAddToDashboardDialog(btn.dataset.sensorName, btn.dataset.sensorLabel);
+                    showAddToDashboardDialog(
+                        btn.dataset.sensorName,
+                        btn.dataset.sensorLabel,
+                        getDashboardBindingFromButton(btn)
+                    );
                 }
             });
             tbody._dashboardClickHandlerAttached = true;
@@ -229,7 +244,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             sensors.forEach(s => this.sensorMap.set(s.id, s));
 
             // Если нет фильтра и есть закреплённые датчики - загрузить их отдельно
-            if (!this.filter) {
+            if (!this.hasActiveFilters()) {
                 await this.loadPinnedSensors();
             }
 
@@ -257,41 +272,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     // Загружает закреплённые датчики, если они не в текущем списке
-    async loadPinnedSensors() {
-        const pinnedIds = this.getPinnedSensors();
-        if (pinnedIds.size === 0) return;
-
-        // Найти ID, которых нет в загруженных датчиках
-        const missingIds = [];
-        for (const idStr of pinnedIds) {
-            const id = parseInt(idStr);
-            if (!this.sensorMap.has(id)) {
-                missingIds.push(id);
-            }
-        }
-
-        if (missingIds.length === 0) return;
-
-        // Загрузить отсутствующие датчики по ID (используем /ionc/get с filter)
-        try {
-            const idsParam = missingIds.join(',');
-            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/get?filter=${idsParam}`);
-            const response = await fetch(url);
-            if (!response.ok) return;
-
-            const data = await response.json();
-            const pinnedSensors = data.sensors || [];
-
-            // Добавить закреплённые датчики в начало списка
-            for (const sensor of pinnedSensors) {
-                if (!this.sensorMap.has(sensor.id)) {
-                    this.allSensors.unshift(sensor);
-                    this.sensorMap.set(sensor.id, sensor);
-                }
-            }
-        } catch (err) {
-            console.warn('Failed to load pinned sensors:', err);
-        }
+    loadPinnedSensors() {
+        return this.loadMissingPinnedSensors('/ionc/get');
     }
 
     applyLocalFilters(sensors) {
@@ -377,7 +359,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         spacer.style.height = `${this.startIndex * this.rowHeight}px`;
 
         // Получаем закреплённые датчики
-        const pinnedSensors = this.getPinnedSensors();
+        const pinnedSensors = this.getPinned();
         const hasPinned = pinnedSensors.size > 0;
 
         // Показываем/скрываем кнопку "снять все"
@@ -390,9 +372,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         // - если есть текстовый фильтр — показываем все (для поиска новых датчиков)
         // - иначе если есть закреплённые — показываем только их
         let sensorsToShow = this.allSensors;
-        if (!this.filter && hasPinned) {
-            sensorsToShow = this.allSensors.filter(s => pinnedSensors.has(String(s.id)));
-        }
+        sensorsToShow = this.filterPinnedOnly(sensorsToShow, pinnedSensors);
 
         // Сортировка: pinned всегда вверху, остальные по выбранной колонке
         sensorsToShow = this.sortItems(sensorsToShow, pinnedSensors, this.sortColumnDefs);
@@ -410,66 +390,32 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         // Привязать события к строкам
         this.bindRowEvents(tbody);
 
-        // Обработчик кнопки "снять все"
-        if (unpinBtn) {
-            unpinBtn.onclick = () => this.unpinAll();
-        }
+        // unpinBtn handler — в setupEventListeners() (persistent элемент,
+        // не пересоздаётся; раньше тут было .onclick — переехало для consistency
+        // с modbus-master/slave).
     }
 
     bindRowEvents(tbody) {
         // Добавляем обработчики событий
         tbody.querySelectorAll('.ionc-btn-set').forEach(btn => {
-            btn.addEventListener('click', () => this.showSetDialog(parseInt(btn.dataset.id)));
+            btn.addEventListener('click', () => this.showSetDialog(parseInt(btn.dataset.id, 10)));
         });
-        // Кнопка заморозки: одинарный клик = диалог, двойной клик = быстрая заморозка
-        tbody.querySelectorAll('.ionc-btn-freeze').forEach(btn => {
-            let clickTimer = null;
-            const sensorId = parseInt(btn.dataset.id);
-            btn.addEventListener('click', () => {
-                if (clickTimer) {
-                    clearTimeout(clickTimer);
-                    clickTimer = null;
-                    this.quickFreeze(sensorId);
-                } else {
-                    clickTimer = setTimeout(() => {
-                        clickTimer = null;
-                        this.showFreezeDialog(sensorId);
-                    }, DOUBLE_CLICK_THRESHOLD);
-                }
-            });
-        });
-        // Кнопка разморозки: одинарный клик = диалог, двойной клик = быстрая разморозка
-        tbody.querySelectorAll('.ionc-btn-unfreeze').forEach(btn => {
-            let clickTimer = null;
-            const sensorId = parseInt(btn.dataset.id);
-            btn.addEventListener('click', () => {
-                if (clickTimer) {
-                    clearTimeout(clickTimer);
-                    clickTimer = null;
-                    this.quickUnfreeze(sensorId);
-                } else {
-                    clickTimer = setTimeout(() => {
-                        clickTimer = null;
-                        this.showUnfreezeDialog(sensorId);
-                    }, DOUBLE_CLICK_THRESHOLD);
-                }
-            });
-        });
+        this.bindFreezeToggleButtons(tbody);
         tbody.querySelectorAll('.ionc-btn-consumers').forEach(btn => {
-            btn.addEventListener('click', () => this.showConsumersDialog(parseInt(btn.dataset.id)));
+            btn.addEventListener('click', () => this.showConsumersDialog(parseInt(btn.dataset.id, 10)));
         });
         // Кнопки генератора
         tbody.querySelectorAll('.ionc-btn-gen').forEach(btn => {
-            btn.addEventListener('click', () => this.showGeneratorDialog(parseInt(btn.dataset.id)));
+            btn.addEventListener('click', () => this.showGeneratorDialog(parseInt(btn.dataset.id, 10)));
         });
         tbody.querySelectorAll('.ionc-btn-gen-stop').forEach(btn => {
-            btn.addEventListener('click', () => this.stopGenerator(parseInt(btn.dataset.id)));
+            btn.addEventListener('click', () => this.stopGenerator(parseInt(btn.dataset.id, 10)));
         });
         tbody.querySelectorAll('.pin-toggle').forEach(btn => {
-            btn.addEventListener('click', () => this.togglePin(parseInt(btn.dataset.id)));
+            btn.addEventListener('click', () => this.togglePin(parseInt(btn.dataset.id, 10)));
         });
         tbody.querySelectorAll('.ionc-chart-checkbox').forEach(cb => {
-            cb.addEventListener('change', () => this.toggleSensorChartById(parseInt(cb.dataset.id)));
+            cb.addEventListener('change', () => this.toggleSensorChartById(parseIntegerOrDefault(cb.dataset.id, null)));
         });
         // Кнопки добавления на dashboard обрабатываются через делегирование в setupDashboardClickHandler
     }
@@ -557,6 +503,9 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                     <button class="dashboard-add-btn"
                             data-sensor-name="${escapeAttr(sensor.name)}"
                             data-sensor-label="${escapeAttr(textname || sensor.name)}"
+                            data-sensor-id="${escapeAttr(sensor.id)}"
+                            data-server-id="${escapeAttr(serverId)}"
+                            data-object-name="${escapeAttr(this.objectName)}"
                             title="Add to Dashboard">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <rect x="3" y="3" width="7" height="7" rx="1"/>
@@ -566,17 +515,17 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                         </svg>
                     </button>
                 </td>
-                <td class="ionc-col-id">${sensor.id}</td>
+                <td class="ionc-col-id">${escapeHtml(sensor.id ?? '')}</td>
                 <td class="ionc-col-name" title="${escapeAttr(textname)}">${escapeHtml(sensor.name)}</td>
-                <td class="ionc-col-type"><span class="type-badge type-${sensor.type}">${sensor.type}</span></td>
+                <td class="ionc-col-type"><span class="type-badge type-${escapeAttr(sensor.type || '')}">${escapeHtml(sensor.type || '')}</span></td>
                 <td class="ionc-col-value">
                     ${sensor.frozen && sensor.real_value !== undefined && sensor.real_value !== sensor.value
-                        ? `<span class="ionc-value ionc-value-frozen" id="ionc-value-${this.objectName}-${sensor.id}">
-                               <span class="ionc-real-value">${sensor.real_value}</span>
+                        ? `<span class="ionc-value ionc-value-frozen" id="ionc-value-${escapeAttr(this.objectName)}-${escapeAttr(sensor.id)}">
+                               <span class="ionc-real-value">${formatValueHtml(sensor.real_value)}</span>
                                <span class="ionc-frozen-arrow">→</span>
-                               <span class="ionc-frozen-value">${sensor.value}❄</span>
+                               <span class="ionc-frozen-value">${formatValueHtml(sensor.value)}❄</span>
                            </span>`
-                        : `<span class="ionc-value" id="ionc-value-${this.objectName}-${sensor.id}">${sensor.value}</span>`
+                        : `<span class="ionc-value" id="ionc-value-${escapeAttr(this.objectName)}-${escapeAttr(sensor.id)}">${formatValueHtml(sensor.value)}</span>`
                     }
                 </td>
                 <td class="ionc-col-flags">${flags.join(' ') || '—'}</td>
@@ -591,45 +540,6 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                 </td>
             </tr>
         `;
-    }
-
-    // Управление закреплёнными датчиками
-    getPinnedSensors() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-ionc-pinned') || '{}');
-            return new Set(saved[this.tabKey] || saved[this.objectName] || []);
-        } catch (err) {
-            return new Set();
-        }
-    }
-
-    savePinnedSensors(pinnedSet) {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-ionc-pinned') || '{}');
-            saved[this.tabKey] = Array.from(pinnedSet);
-            localStorage.setItem('uniset-panel-ionc-pinned', JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save pinned sensors:', err);
-        }
-    }
-
-    togglePin(sensorId) {
-        const pinned = this.getPinnedSensors();
-        const idStr = String(sensorId);
-
-        if (pinned.has(idStr)) {
-            pinned.delete(idStr);
-        } else {
-            pinned.add(idStr);
-        }
-
-        this.savePinnedSensors(pinned);
-        this.renderSensorsTable();
-    }
-
-    unpinAll() {
-        this.savePinnedSensors(new Set());
-        this.renderSensorsTable();
     }
 
     // Используем метод toggleSensorChart из базового класса
@@ -797,31 +707,40 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         document.getElementById('ionc-freeze-confirm').addEventListener('click', doFreeze);
     }
 
-    // Быстрая заморозка на текущем значении (двойной клик на ❄)
-    async quickFreeze(sensorId) {
+    // Internal: общий POST к ionc-эндпоинту с локальным sensor mutate + перерисовкой.
+    // endpoint: 'freeze' | 'unfreeze'
+    // body: payload для POST (sensor_id обязателен)
+    // mutateSensor(sensor): функция локального обновления sensor для мгновенной FB
+    // onError (optional): дефолтный msg если err.error пустой
+    async _ioncSensorAction(sensorId, endpoint, body, mutateSensor, onError) {
         const sensor = this.sensorMap.get(sensorId);
         if (!sensor) return;
-
         try {
-            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/freeze`);
+            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/${endpoint}`);
             const response = await controlledFetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sensor_id: sensorId, value: sensor.value })
+                body: JSON.stringify({ sensor_id: sensorId, ...body })
             });
-
             if (!response.ok) {
                 const err = await response.json();
-                throw new Error(err.error || 'Failed to freeze');
+                throw new Error(err.error || onError || `Failed to ${endpoint}`);
             }
-
-            // Локальное обновление для мгновенной обратной связи
-            sensor.real_value = sensor.value;
-            sensor.frozen = true;
+            mutateSensor(sensor);
             this.reRenderSensorRow(sensorId);
         } catch (err) {
             showIoncDialogError(`Error: ${err.message}`);
         }
+    }
+
+    // Быстрая заморозка на текущем значении (двойной клик на ❄)
+    async quickFreeze(sensorId) {
+        const sensor = this.sensorMap.get(sensorId);
+        if (!sensor) return;
+        await this._ioncSensorAction(sensorId, 'freeze',
+            { value: sensor.value },
+            (s) => { s.real_value = s.value; s.frozen = true; },
+            'Failed to freeze');
     }
 
     // Показать диалог разморозки (клик на 🔥)
@@ -896,31 +815,13 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
     // Быстрая разморозка (двойной клик на 🔥)
     async quickUnfreeze(sensorId) {
-        const sensor = this.sensorMap.get(sensorId);
-        if (!sensor) return;
-
-        try {
-            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/unfreeze`);
-            const response = await controlledFetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sensor_id: sensorId })
-            });
-
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.error || 'Failed to unfreeze');
-            }
-
-            // Локальное обновление для мгновенной обратной связи
-            sensor.frozen = false;
-            if (sensor.real_value !== undefined) {
-                sensor.value = sensor.real_value;
-            }
-            this.reRenderSensorRow(sensorId);
-        } catch (err) {
-            showIoncDialogError(`Error: ${err.message}`);
-        }
+        await this._ioncSensorAction(sensorId, 'unfreeze',
+            {},
+            (s) => {
+                s.frozen = false;
+                if (s.real_value !== undefined) s.value = s.real_value;
+            },
+            'Failed to unfreeze');
     }
 
     // ===== Генератор значений =====
@@ -928,11 +829,35 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     // Значения по умолчанию для параметров генератора
     getDefaultGeneratorParams() {
         return {
-            sin: { min: -50, max: 50, pause: 100, step: 100 },
-            cos: { min: -50, max: 50, pause: 100, step: 100 },
-            linear: { min: 0, max: 100, pause: 100, step: 1 },
-            random: { min: 0, max: 100, period: 5000 },
-            square: { min: 0, max: 100, pulseWidth: 2000, pause: 2000 }
+            sin: {
+                min: GENERATOR_DEFAULT_WAVE_MIN,
+                max: GENERATOR_DEFAULT_WAVE_MAX,
+                pause: GENERATOR_DEFAULT_WAVE_PAUSE_MS,
+                step: GENERATOR_DEFAULT_WAVE_POINTS
+            },
+            cos: {
+                min: GENERATOR_DEFAULT_WAVE_MIN,
+                max: GENERATOR_DEFAULT_WAVE_MAX,
+                pause: GENERATOR_DEFAULT_WAVE_PAUSE_MS,
+                step: GENERATOR_DEFAULT_WAVE_POINTS
+            },
+            linear: {
+                min: GENERATOR_DEFAULT_MIN,
+                max: GENERATOR_DEFAULT_MAX,
+                pause: GENERATOR_DEFAULT_WAVE_PAUSE_MS,
+                step: GENERATOR_DEFAULT_LINEAR_STEP
+            },
+            random: {
+                min: GENERATOR_DEFAULT_MIN,
+                max: GENERATOR_DEFAULT_MAX,
+                period: GENERATOR_DEFAULT_RANDOM_PERIOD_MS
+            },
+            square: {
+                min: GENERATOR_DEFAULT_MIN,
+                max: GENERATOR_DEFAULT_MAX,
+                pulseWidth: GENERATOR_DEFAULT_IONC_SQUARE_PULSE_WIDTH_MS,
+                pause: GENERATOR_DEFAULT_IONC_SQUARE_PAUSE_MS
+            }
         };
     }
 
@@ -983,8 +908,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         if (!calcPeriodValue || !pauseInput || !pointsInput) return;
 
-        const pause = parseInt(pauseInput.value, 10) || 0;
-        const points = parseInt(pointsInput.value, 10) || 0;
+        const pause = parseIntegerOrDefault(pauseInput.value, 0);
+        const points = parseIntegerOrDefault(pointsInput.value, 0);
         const totalPeriod = pause * points;
 
         if (totalPeriod > 0) {
@@ -1020,7 +945,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             periodField.style.display = 'block';
             stepField.style.display = 'block';
             if (periodLabel) periodLabel.textContent = 'Пауза между шагами (мс)';
-            if (periodHint) periodHint.textContent = 'Задержка перед следующим шагом. Мин: 10мс';
+            if (periodHint) periodHint.textContent = `Задержка перед следующим шагом. Мин: ${GENERATOR_MIN_WAVE_PAUSE_MS}мс`;
             if (stepLabel) stepLabel.textContent = 'Шаг';
             if (stepHint) stepHint.textContent = 'Размер одного шага изменения значения';
         } else if (type === 'sin' || type === 'cos') {
@@ -1029,7 +954,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             stepField.style.display = 'block';
             if (calcPeriodField) calcPeriodField.style.display = 'block';
             if (periodLabel) periodLabel.textContent = 'Шаг обновления (мс)';
-            if (periodHint) periodHint.textContent = 'Время между обновлениями значения. Мин: 10мс';
+            if (periodHint) periodHint.textContent = `Время между обновлениями значения. Мин: ${GENERATOR_MIN_WAVE_PAUSE_MS}мс`;
             if (stepLabel) stepLabel.textContent = 'Количество точек на период';
             if (stepHint) stepHint.textContent = 'Сколько точек отрисует синусоида за один полный период';
             // Обновляем расчётный период
@@ -1111,12 +1036,12 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                 </div>
                 <div class="ionc-dialog-field" id="ionc-gen-period-field">
                     <label for="ionc-gen-period"><span id="ionc-gen-period-label">Период (мс)</span>:</label>
-                    <input type="number" id="ionc-gen-period" value="${params.period || params.pause || 5000}" step="100">
-                    <div class="ionc-dialog-hint" id="ionc-gen-period-hint">Длительность полного цикла. Мин: 100мс</div>
+                    <input type="number" id="ionc-gen-period" value="${params.period || params.pause || GENERATOR_DEFAULT_RANDOM_PERIOD_MS}" step="100">
+                    <div class="ionc-dialog-hint" id="ionc-gen-period-hint">Длительность полного цикла. Мин: ${GENERATOR_MIN_PERIOD_MS}мс</div>
                 </div>
                 <div class="ionc-dialog-field" id="ionc-gen-step-field" style="display: none;">
                     <label for="ionc-gen-step"><span id="ionc-gen-step-label">Шаг</span>:</label>
-                    <input type="number" id="ionc-gen-step" value="${params.step || 20}" step="1">
+                    <input type="number" id="ionc-gen-step" value="${params.step || GENERATOR_DEFAULT_WAVE_POINTS}" step="1">
                     <div class="ionc-dialog-hint" id="ionc-gen-step-hint">Размер одного шага изменения значения</div>
                 </div>
                 <div class="ionc-dialog-field" id="ionc-gen-calc-period" style="display: none;">
@@ -1128,11 +1053,11 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                     <div class="ionc-dialog-field-row">
                         <div class="ionc-dialog-field ionc-dialog-field-half">
                             <label for="ionc-gen-pulse-width">Ширина импульса (мс):</label>
-                            <input type="number" id="ionc-gen-pulse-width" value="${params.pulseWidth || 2500}" step="100" min="1">
+                            <input type="number" id="ionc-gen-pulse-width" value="${params.pulseWidth || GENERATOR_DEFAULT_IONC_SQUARE_PULSE_WIDTH_MS}" step="100" min="${GENERATOR_MIN_PULSE_WIDTH_MS}">
                         </div>
                         <div class="ionc-dialog-field ionc-dialog-field-half">
                             <label for="ionc-gen-pause">Пауза (мс):</label>
-                            <input type="number" id="ionc-gen-pause" value="${params.pause || 2500}" step="100" min="1">
+                            <input type="number" id="ionc-gen-pause" value="${params.pause || GENERATOR_DEFAULT_IONC_SQUARE_PAUSE_MS}" step="100" min="${GENERATOR_MIN_PAUSE_MS}">
                         </div>
                     </div>
                     <div class="ionc-dialog-hint">Период = Ширина импульса + Пауза</div>
@@ -1193,95 +1118,32 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         const sensor = this.sensorMap.get(sensorId);
         if (!sensor) return;
 
-        // Парсим значения формы
-        const type = document.getElementById('ionc-gen-type').value;
-        const min = parseInt(document.getElementById('ionc-gen-min').value, 10);
-        const max = parseInt(document.getElementById('ionc-gen-max').value, 10);
-
-        // Парсим специфичные для типа параметры
-        let period, step, pulseWidth, pause;
-        if (type === 'linear' || type === 'sin' || type === 'cos') {
-            pause = parseInt(document.getElementById('ionc-gen-period').value, 10);
-            step = parseInt(document.getElementById('ionc-gen-step').value, 10);
-        } else if (type === 'square') {
-            pulseWidth = parseInt(document.getElementById('ionc-gen-pulse-width').value, 10);
-            pause = parseInt(document.getElementById('ionc-gen-pause').value, 10);
-        } else {
-            // random
-            period = parseInt(document.getElementById('ionc-gen-period').value, 10);
-        }
-
-        // Валидация общих параметров
-        if (isNaN(min) || isNaN(max)) {
-            showIoncDialogError('Min и Max должны быть числами');
-            return;
-        }
-        if (min >= max) {
-            showIoncDialogError('Min должен быть меньше Max');
+        const selectedType = document.getElementById('ionc-gen-type').value;
+        const rawConfig = {
+            type: selectedType,
+            min: document.getElementById('ionc-gen-min').value,
+            max: document.getElementById('ionc-gen-max').value,
+            step: document.getElementById('ionc-gen-step')?.value,
+            pause: selectedType === 'square'
+                ? document.getElementById('ionc-gen-pause')?.value
+                : document.getElementById('ionc-gen-period')?.value,
+            pulseWidth: document.getElementById('ionc-gen-pulse-width')?.value,
+            period: document.getElementById('ionc-gen-period')?.value,
+        };
+        const validationError = validateSignalGeneratorConfig(rawConfig);
+        if (validationError) {
+            showIoncDialogError(validationError);
             return;
         }
 
-        // Валидация специфичных для типа параметров
-        if (type === 'linear') {
-            if (isNaN(pause) || isNaN(step)) {
-                showIoncDialogError('Пауза и Шаг должны быть числами');
-                return;
-            }
-            if (pause < 10) {
-                showIoncDialogError('Пауза должна быть не менее 10мс');
-                return;
-            }
-            if (step === 0) {
-                showIoncDialogError('Шаг не может быть равен 0');
-                return;
-            }
-            if (Math.abs(step) > (max - min)) {
-                showIoncDialogError('Шаг должен быть меньше или равен разности Max - Min');
-                return;
-            }
-        } else if (type === 'sin' || type === 'cos') {
-            if (isNaN(pause) || isNaN(step)) {
-                showIoncDialogError('Шаг обновления и Количество точек должны быть числами');
-                return;
-            }
-            if (pause < 10) {
-                showIoncDialogError('Шаг обновления должен быть не менее 10мс');
-                return;
-            }
-            if (step < 4) {
-                showIoncDialogError('Количество точек должно быть не менее 4');
-                return;
-            }
-        } else if (type === 'square') {
-            if (isNaN(pulseWidth) || isNaN(pause)) {
-                showIoncDialogError('Ширина импульса и Пауза должны быть числами');
-                return;
-            }
-            if (pulseWidth <= 0) {
-                showIoncDialogError('Ширина импульса должна быть больше 0');
-                return;
-            }
-            if (pause <= 0) {
-                showIoncDialogError('Пауза должна быть больше 0');
-                return;
-            }
-        } else {
-            // sin, cos, random
-            if (isNaN(period)) {
-                showIoncDialogError('Период должен быть числом');
-                return;
-            }
-            if (period < 100) {
-                showIoncDialogError('Период должен быть не менее 100мс');
-                return;
-            }
-        }
+        const genConfig = normalizeSignalGeneratorConfig(rawConfig);
+        const { type, min, max, step, pause, pulseWidth, period } = genConfig;
 
         // Останавливаем существующий генератор если есть
         this.stopGenerator(sensorId);
 
         const generator = new SignalGenerator({
-            type, min, max, step, pause, pulseWidth, period,
+            ...genConfig,
             onTick: (value) => {
                 this.setValueForGenerator(sensorId, value);
             }
@@ -1403,7 +1265,10 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         const sensor = this.sensorMap.get(sensorId);
         if (!sensor) return;
 
-        const row = document.querySelector(`tr[data-sensor-id="${sensorId}"]`);
+        // getEls (внутри панели this.tabKey) — а не document.querySelector,
+        // иначе при multi-server одинаковый sensorId на разных серверах
+        // указывал бы на чужую вкладку.
+        const row = this.getEls(`tr[data-sensor-id="${sensorId}"]`)[0];
         if (row) {
             row.outerHTML = this.renderSensorRow(sensor);
             this.attachRowEventListeners(sensorId);
@@ -1411,52 +1276,34 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     // Подключение обработчиков к строке датчика
+    bindFreezeToggleButtons(root) {
+        root.querySelectorAll('.ionc-btn-freeze').forEach(btn => {
+            const sensorId = parseInt(btn.dataset.id, 10);
+            bindSingleDoubleClick(
+                btn,
+                () => this.showFreezeDialog(sensorId),
+                () => this.quickFreeze(sensorId)
+            );
+        });
+
+        root.querySelectorAll('.ionc-btn-unfreeze').forEach(btn => {
+            const sensorId = parseInt(btn.dataset.id, 10);
+            bindSingleDoubleClick(
+                btn,
+                () => this.showUnfreezeDialog(sensorId),
+                () => this.quickUnfreeze(sensorId)
+            );
+        });
+    }
+
     attachRowEventListeners(sensorId) {
-        const row = document.querySelector(`tr[data-sensor-id="${sensorId}"]`);
+        // getEls внутри панели вкладки — см. reRenderSensorRow.
+        const row = this.getEls(`tr[data-sensor-id="${sensorId}"]`)[0];
         if (!row) return;
 
         row.querySelector('.ionc-btn-set')?.addEventListener('click', () => this.showSetDialog(sensorId));
         row.querySelector('.ionc-btn-consumers')?.addEventListener('click', () => this.showConsumersDialog(sensorId));
-
-        // Кнопка заморозки — одинарный/двойной клик
-        const freezeBtn = row.querySelector('.ionc-btn-freeze');
-        if (freezeBtn) {
-            let clickTimer = null;
-            freezeBtn.addEventListener('click', (e) => {
-                if (clickTimer) {
-                    // Двойной клик — быстрая заморозка
-                    clearTimeout(clickTimer);
-                    clickTimer = null;
-                    this.quickFreeze(sensorId);
-                } else {
-                    // Одинарный клик — ждём второй клик или открываем диалог
-                    clickTimer = setTimeout(() => {
-                        clickTimer = null;
-                        this.showFreezeDialog(sensorId);
-                    }, DOUBLE_CLICK_THRESHOLD);
-                }
-            });
-        }
-
-        // Кнопка разморозки — одинарный/двойной клик
-        const unfreezeBtn = row.querySelector('.ionc-btn-unfreeze');
-        if (unfreezeBtn) {
-            let clickTimer = null;
-            unfreezeBtn.addEventListener('click', (e) => {
-                if (clickTimer) {
-                    // Двойной клик — быстрая разморозка
-                    clearTimeout(clickTimer);
-                    clickTimer = null;
-                    this.quickUnfreeze(sensorId);
-                } else {
-                    // Одинарный клик — ждём второй клик или открываем диалог
-                    clickTimer = setTimeout(() => {
-                        clickTimer = null;
-                        this.showUnfreezeDialog(sensorId);
-                    }, DOUBLE_CLICK_THRESHOLD);
-                }
-            });
-        }
+        this.bindFreezeToggleButtons(row);
 
         // Кнопки генератора
         row.querySelector('.ionc-btn-gen')?.addEventListener('click', () => this.showGeneratorDialog(sensorId));
@@ -1471,7 +1318,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             const btn = e.currentTarget;
             const sensorName = btn.dataset.sensorName;
             const sensorLabel = btn.dataset.sensorLabel;
-            showAddToDashboardDialog(sensorName, sensorLabel);
+            showAddToDashboardDialog(sensorName, sensorLabel, getDashboardBindingFromButton(btn));
         });
     }
 
@@ -1625,9 +1472,9 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                     // Формат: real_value → frozen_value❄
                     valueEl.className = 'ionc-value ionc-value-frozen ionc-value-updated';
                     valueEl.innerHTML = `
-                        <span class="ionc-real-value">${sensor.real_value}</span>
+                        <span class="ionc-real-value">${formatValueHtml(sensor.real_value)}</span>
                         <span class="ionc-frozen-arrow">→</span>
-                        <span class="ionc-frozen-value">${sensor.value}❄</span>
+                        <span class="ionc-frozen-value">${formatValueHtml(sensor.value)}❄</span>
                     `;
                 } else {
                     // Обычный формат
@@ -1658,7 +1505,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         // Убираем анимацию через ANIMATION_REMOVAL_DELAY
         setTimeout(() => {
-            const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
+            const panel = getTabPanel(this.tabKey);
             if (panel) {
                 panel.querySelectorAll('.ionc-value-updated').forEach(el => el.classList.remove('ionc-value-updated'));
             }
@@ -1692,5 +1539,5 @@ applyMixin(IONotifyControllerRenderer, SSESubscriptionMixin);
 applyMixin(IONotifyControllerRenderer, ResizableSectionMixin);
 applyMixin(IONotifyControllerRenderer, FilterMixin);
 applyMixin(IONotifyControllerRenderer, ItemCounterMixin);
+applyMixin(IONotifyControllerRenderer, PinManagementMixin);
 applyMixin(IONotifyControllerRenderer, TableSortMixin);
-

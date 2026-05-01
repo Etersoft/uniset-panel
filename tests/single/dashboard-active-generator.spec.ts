@@ -97,6 +97,34 @@ test.describe('GeneratorWidget — fifth active widget', () => {
         expect(posts[0].value).toBeLessThanOrEqual(100);
     });
 
+    test('write-pathway: POST URL uses widget objectName + serverId', async ({ page }) => {
+        let postUrl: string | null = null;
+        page.on('request', req => {
+            if (req.url().includes('/ionc/set') && req.method() === 'POST') {
+                postUrl = req.url();
+            }
+        });
+
+        await createGeneratorDashboard(page, {
+            serverId: 'configured-srv',
+            objectName: 'SharedMemory2',
+            type: 'random',
+            period: 150,
+        });
+
+        await page.evaluate(() => {
+            const t = document.querySelector('[data-test="toggle"]') as HTMLElement;
+            t.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        });
+
+        await page.waitForTimeout(250);
+
+        expect(postUrl).not.toBeNull();
+        const url = new URL(postUrl!);
+        expect(url.pathname).toBe('/api/objects/SharedMemory2/ionc/set');
+        expect(url.searchParams.get('server')).toBe('configured-srv');
+    });
+
     test('toggle Stop останавливает + value=--', async ({ page }) => {
         await createGeneratorDashboard(page, { type: 'random', period: 150 });
 

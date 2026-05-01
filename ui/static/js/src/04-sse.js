@@ -39,6 +39,10 @@ function updateChartsFromBatch(tabKey, items, prefix, timestamp, options = {}) {
     }
 }
 
+function sanitizeEventSourceUrlForLog(url) {
+    return String(url).replace(/([?&]token=)[^&]*/g, '$1[redacted]');
+}
+
 function initSSE() {
     // Очищаем таймер переподключения (если есть)
     if (state.sse.reconnectTimerId) {
@@ -55,7 +59,7 @@ function initSSE() {
     if (state.control.token) {
         url += `?token=${encodeURIComponent(state.control.token)}`;
     }
-    console.log('SSE: Подключение к', url);
+    debugLog('SSE: Подключение к', sanitizeEventSourceUrlForLog(url));
 
     const eventSource = new EventSource(url);
     state.sse.eventSource = eventSource;
@@ -65,11 +69,11 @@ function initSSE() {
             const data = JSON.parse(e.data);
             state.sse.connected = true;
             state.sse.reconnectAttempts = 0;
-            state.sse.pollInterval = data.data?.pollInterval || 5000;
+            state.sse.pollInterval = data.data?.pollInterval || SSE_DEFAULT_POLL_INTERVAL;
 
             // Сохраняем capabilities сервера
             state.capabilities.smEnabled = data.data?.smEnabled || false;
-            console.log('SSE: Подключено, poll interval:', state.sse.pollInterval, 'ms, smEnabled:', state.capabilities.smEnabled);
+            debugLog('SSE: Подключено, poll interval:', state.sse.pollInterval, 'ms, smEnabled:', state.capabilities.smEnabled);
 
             // Обновляем статус контроля
             if (data.data?.control) {
@@ -339,7 +343,7 @@ function initSSE() {
             const event = JSON.parse(e.data);
             const serverId = event.serverId;
             const connected = event.data?.connected ?? false;
-            console.log(`SSE: Сервер ${serverId} ${connected ? 'подключен' : 'отключен'}`);
+            debugLog(`SSE: Сервер ${serverId} ${connected ? 'подключен' : 'отключен'}`);
             updateServerStatus(serverId, connected);
         } catch (err) {
             console.warn('SSE: Error обработки server_status:', err);
@@ -351,9 +355,8 @@ function initSSE() {
         try {
             const event = JSON.parse(e.data);
             const serverId = event.serverId;
-            const serverName = event.serverName;
             const objects = event.data?.objects ?? [];
-            console.log(`SSE: Сервер ${serverId} восстановил связь, объектов: ${objects.length}`);
+            debugLog(`SSE: Сервер ${serverId} восстановил связь, объектов: ${objects.length}`);
 
             // Обновляем статус сервера
             updateServerStatus(serverId, true);
@@ -371,10 +374,10 @@ function initSSE() {
     });
 
     // Обработка изменения статуса контроля
-    eventSource.addEventListener('control_status', (e) => {
+    eventSource.addEventListener('control_status', async (e) => {
         try {
             const event = JSON.parse(e.data);
-            console.log('SSE: Control status changed:', event.data);
+            debugLog('SSE: Control status changed:', event.data);
             // Обновляем isController на основе нашего токена
             const status = event.data;
             status.isController = state.control.token &&
@@ -382,18 +385,17 @@ function initSSE() {
                 state.control.isController; // сохраняем если мы были контроллером
 
             // Сервер не знает чей это токен, нужно запросить статус
-            fetch('/api/control/status', {
-                headers: { 'X-Control-Token': state.control.token || '' }
-            })
-                .then(r => r.json())
-                .then(data => {
-                    updateControlStatus(data);
-                })
-                .catch(err => {
-                    console.warn('Failed to refresh control status:', err);
-                    // Fallback: используем данные из события
-                    updateControlStatus(status);
+            try {
+                const resp = await fetch('/api/control/status', {
+                    headers: { 'X-Control-Token': state.control.token || '' }
                 });
+                const data = await resp.json();
+                updateControlStatus(data);
+            } catch (err) {
+                console.warn('Failed to refresh control status:', err);
+                // Fallback: используем данные из события
+                updateControlStatus(status);
+            }
         } catch (err) {
             console.warn('SSE: Error обработки control_status:', err);
         }
@@ -475,12 +477,12 @@ function initSSE() {
 
         if (state.sse.reconnectAttempts < state.sse.maxReconnectAttempts) {
             state.sse.reconnectAttempts++;
-            // Exponential backoff: baseDelay * 2^(attempt-1) с jitter ±10%
+            // Exponential backoff: baseDelay * 2^(attempt-1) с jitter ±SSE_RECONNECT_JITTER_RATIO
             const expDelay = state.sse.baseReconnectDelay * Math.pow(2, state.sse.reconnectAttempts - 1);
             const cappedDelay = Math.min(expDelay, state.sse.maxReconnectDelay);
-            const jitter = cappedDelay * 0.1 * (Math.random() * 2 - 1); // ±10%
+            const jitter = cappedDelay * SSE_RECONNECT_JITTER_RATIO * (Math.random() * 2 - 1);
             const delay = Math.round(cappedDelay + jitter);
-            console.log(`SSE: Переподключение через ${delay}ms (попытка ${state.sse.reconnectAttempts}/${state.sse.maxReconnectAttempts})`);
+            debugLog(`SSE: Переподключение через ${delay}ms (попытка ${state.sse.reconnectAttempts}/${state.sse.maxReconnectAttempts})`);
             updateSSEStatus('reconnecting');
             state.sse.reconnectTimerId = setTimeout(initSSE, delay);
         } else {
@@ -491,18 +493,19 @@ function initSSE() {
     };
 
     eventSource.onopen = () => {
-        console.log('SSE: Соединение открыто');
+        debugLog('SSE: Соединение открыто');
     };
 }
 
 // Включить polling как fallback при недоступности SSE
 function enablePollingFallback() {
-    console.log('Polling: Включение fallback режима');
+    debugLog('Polling: Включение fallback режима');
 
-    // Периодически обновляем sidebar (статусы серверов и список объектов)
+    // Периодически обновляем sidebar (статусы серверов и список объектов).
+    // Реже чем данные объектов — это служебная синхронизация sidebar UI.
     state.sse.sidebarPollInterval = setInterval(() => {
         refreshObjectsList();
-    }, state.sse.pollInterval * 6); // Реже чем данные объектов
+    }, state.sse.pollInterval * SSE_SIDEBAR_POLL_MULTIPLIER);
 
     state.tabs.forEach((tabState, tabKey) => {
         // Включаем polling для данных объекта
@@ -511,7 +514,7 @@ function enablePollingFallback() {
                 () => loadObjectData(tabKey),
                 state.sse.pollInterval
             );
-            console.log('Polling: Включен для', tabState.displayName, '(tab:', tabKey, ')');
+            debugLog('Polling: Включен для', tabState.displayName, '(tab:', tabKey, ')');
         }
 
         // Включаем polling для графиков
@@ -531,7 +534,7 @@ function enablePollingFallback() {
 
 // Отключить polling fallback (при восстановлении SSE)
 function disablePollingFallback() {
-    console.log('Polling: Отключение fallback режима');
+    debugLog('Polling: Отключение fallback режима');
 
     // Останавливаем polling sidebar
     if (state.sse.sidebarPollInterval) {
@@ -570,13 +573,13 @@ function disablePollingFallback() {
 function startSSERecoveryProbe() {
     if (state.sse.recoveryProbeInterval) return;
 
-    console.log('SSE: Запуск recovery probe каждые', SSE_RECOVERY_PROBE_INTERVAL, 'ms');
+    debugLog('SSE: Запуск recovery probe каждые', SSE_RECOVERY_PROBE_INTERVAL, 'ms');
 
     state.sse.recoveryProbeInterval = setInterval(async () => {
         try {
             const response = await fetch('/api/version', { method: 'HEAD' });
             if (response.ok) {
-                console.log('SSE: Сервер доступен, восстанавливаем SSE');
+                debugLog('SSE: Сервер доступен, восстанавливаем SSE');
                 disablePollingFallback();
                 state.sse.reconnectAttempts = 0;
                 initSSE();
@@ -591,33 +594,31 @@ function startSSERecoveryProbe() {
 function startServerStatusSync() {
     stopServerStatusSync();
     state.sse.statusSyncInterval = setInterval(async () => {
-        // Серверы
-        try {
-            const resp = await fetchServers();
-            if (resp?.servers) {
-                resp.servers.forEach(s => updateServerStatus(s.id, s.connected));
-            }
-        } catch (err) { /* фоновая синхронизация */ }
-
-        // Launcher'ы
-        try {
-            const lr = await fetch('/api/launchers');
-            if (lr.ok) {
+        // Все три запроса (серверы / launcher'ы / журналы) независимы — гоним
+        // параллельно через Promise.allSettled, фоновая ошибка одного не должна
+        // мешать остальным.
+        await Promise.allSettled([
+            (async () => {
+                const resp = await fetchServers();
+                if (resp?.servers) {
+                    resp.servers.forEach(s => updateServerStatus(s.id, s.connected));
+                }
+            })(),
+            (async () => {
+                const lr = await fetch('/api/launchers');
+                if (!lr.ok) return;
                 const data = await lr.json();
                 (data?.launchers || []).forEach(l => updateLauncherNodeStatus(l.id, l.connected));
-            }
-        } catch (err) { /* фоновая синхронизация */ }
-
-        // Журналы
-        try {
-            const jr = await fetch('/api/journals');
-            if (jr.ok) {
+            })(),
+            (async () => {
+                const jr = await fetch('/api/journals');
+                if (!jr.ok) return;
                 const data = await jr.json();
                 if (typeof updateJournalConnectionStatus === 'function') {
                     (data || []).forEach(j => updateJournalConnectionStatus(j.id, j.connected));
                 }
-            }
-        } catch (err) { /* фоновая синхронизация */ }
+            })(),
+        ]);
     }, SSE_RECOVERY_PROBE_INTERVAL);
 }
 
@@ -630,7 +631,7 @@ function stopServerStatusSync() {
 
 // Переподписка всех открытых вкладок после восстановления SSE
 function resubscribeAll() {
-    console.log('SSE: Переподписка всех вкладок после переподключения');
+    debugLog('SSE: Переподписка всех вкладок после переподключения');
     state.tabs.forEach((tabState, tabKey) => {
         const renderer = tabState.renderer;
         if (renderer?.resubscribeIfNeeded) {
@@ -658,4 +659,3 @@ document.addEventListener('visibilitychange', () => {
         });
     }
 });
-

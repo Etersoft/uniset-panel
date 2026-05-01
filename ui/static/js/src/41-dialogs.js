@@ -130,7 +130,10 @@ function openSensorDialog(tabKey) {
         }
     }
 
-    // Обработчик фильтра
+    // Обработчик фильтра. .oninput (а не addEventListener) — намеренно:
+    // openSensorDialog зовётся повторно (диалог singleton-овый, элемент не
+    // пересоздаётся), .oninput идемпотентно перезаписывает; addEventListener
+    // копил бы дубликаты на каждое открытие.
     filterInput.oninput = () => {
         filterSensors(filterInput.value);
         renderSensorTable();
@@ -259,27 +262,42 @@ function renderSensorTable() {
 // Экранирование HTML
 // escapeHtml() определена в 06-utils.js
 
+function buildObjectApiUrl(tabKey, objectPath) {
+    const tabState = state.tabs.get(tabKey);
+    const serverId = tabState?.serverId;
+    const objectName = tabState?.displayName || tabKey;
+    const url = buildObjectUrl(objectName, objectPath, serverId);
+
+    return { url, tabState, serverId, objectName };
+}
+
+async function fetchObjectApi(tabKey, objectPath, options = {}) {
+    const { url, tabState, serverId, objectName } = buildObjectApiUrl(tabKey, objectPath);
+    const response = await fetch(url, options);
+    return { response, tabState, serverId, objectName };
+}
+
+async function warnObjectApiError(response, message) {
+    let err = {};
+    try {
+        err = await response.json();
+    } catch (parseErr) {
+        err = {};
+    }
+    console.warn(message, err.error || response.statusText);
+}
+
 // Подписаться на внешние датчики через API
 // tabKey - ключ вкладки (serverId:objectName)
 async function subscribeToExternalSensors(tabKey, sensorNames) {
     try {
-        const tabState = state.tabs.get(tabKey);
-        const serverId = tabState?.serverId;
-        const objectName = tabState?.displayName || tabKey;
-
-        let url = `/api/objects/${encodeURIComponent(objectName)}/external-sensors`;
-        if (serverId) {
-            url += `?server=${encodeURIComponent(serverId)}`;
-        }
-
-        const response = await fetch(url, {
+        const { response } = await fetchObjectApi(tabKey, '/external-sensors', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sensors: sensorNames })
         });
         if (!response.ok) {
-            const err = await response.json();
-            console.warn('Error подписки на датчики:', err.error || response.statusText);
+            await warnObjectApiError(response, 'Error подписки на датчики:');
         }
     } catch (err) {
         console.warn('Error подписки на датчики:', err);
@@ -290,19 +308,13 @@ async function subscribeToExternalSensors(tabKey, sensorNames) {
 // tabKey - ключ вкладки (serverId:objectName)
 async function unsubscribeFromExternalSensor(tabKey, sensorName) {
     try {
-        const tabState = state.tabs.get(tabKey);
-        const serverId = tabState?.serverId;
-        const objectName = tabState?.displayName || tabKey;
-
-        let url = `/api/objects/${encodeURIComponent(objectName)}/external-sensors/${encodeURIComponent(sensorName)}`;
-        if (serverId) {
-            url += `?server=${encodeURIComponent(serverId)}`;
-        }
-
-        const response = await fetch(url, { method: 'DELETE' });
+        const { response } = await fetchObjectApi(
+            tabKey,
+            `/external-sensors/${encodeURIComponent(sensorName)}`,
+            { method: 'DELETE' }
+        );
         if (!response.ok) {
-            const err = await response.json();
-            console.warn('Error отписки от датчика:', err.error || response.statusText);
+            await warnObjectApiError(response, 'Error отписки от датчика:');
         }
     } catch (err) {
         console.warn('Error отписки от датчика:', err);
@@ -313,29 +325,19 @@ async function unsubscribeFromExternalSensor(tabKey, sensorName) {
 // tabKey - ключ вкладки (serverId:objectName)
 async function subscribeToIONCSensor(tabKey, sensorId) {
     try {
-        const tabState = state.tabs.get(tabKey);
-        const serverId = tabState?.serverId;
-        const objectName = tabState?.displayName || tabKey;
-
-        let url = `/api/objects/${encodeURIComponent(objectName)}/ionc/subscribe`;
-        if (serverId) {
-            url += `?server=${encodeURIComponent(serverId)}`;
-        }
-
-        const response = await fetch(url, {
+        const { response, tabState, serverId, objectName } = await fetchObjectApi(tabKey, '/ionc/subscribe', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sensor_ids: [sensorId] })
         });
         if (!response.ok) {
-            const err = await response.json();
-            console.warn('Error подписки на IONC датчик:', err.error || response.statusText);
+            await warnObjectApiError(response, 'Error подписки на IONC датчик:');
         } else {
             // Добавляем в список подписок рендерера
             if (tabState && tabState.renderer && tabState.renderer.subscribedSensorIds) {
                 tabState.renderer.subscribedSensorIds.add(sensorId);
             }
-            console.log(`IONC: Подписка на датчик ${sensorId} для ${objectName} (server: ${serverId})`);
+            debugLog(`IONC: Подписка на датчик ${sensorId} для ${objectName} (server: ${serverId})`);
         }
     } catch (err) {
         console.warn('Error подписки на IONC датчик:', err);
@@ -346,29 +348,19 @@ async function subscribeToIONCSensor(tabKey, sensorId) {
 // tabKey - ключ вкладки (serverId:objectName)
 async function unsubscribeFromIONCSensor(tabKey, sensorId) {
     try {
-        const tabState = state.tabs.get(tabKey);
-        const serverId = tabState?.serverId;
-        const objectName = tabState?.displayName || tabKey;
-
-        let url = `/api/objects/${encodeURIComponent(objectName)}/ionc/unsubscribe`;
-        if (serverId) {
-            url += `?server=${encodeURIComponent(serverId)}`;
-        }
-
-        const response = await fetch(url, {
+        const { response, tabState, serverId, objectName } = await fetchObjectApi(tabKey, '/ionc/unsubscribe', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sensor_ids: [sensorId] })
         });
         if (!response.ok) {
-            const err = await response.json();
-            console.warn('Error отписки от IONC датчика:', err.error || response.statusText);
+            await warnObjectApiError(response, 'Error отписки от IONC датчика:');
         } else {
             // Удаляем из списка подписок рендерера
             if (tabState && tabState.renderer && tabState.renderer.subscribedSensorIds) {
                 tabState.renderer.subscribedSensorIds.delete(sensorId);
             }
-            console.log(`IONC: Отписка от датчика ${sensorId} для ${objectName} (server: ${serverId})`);
+            debugLog(`IONC: Отписка от датчика ${sensorId} для ${objectName} (server: ${serverId})`);
         }
     } catch (err) {
         console.warn('Error отписки от IONC датчика:', err);
@@ -415,7 +407,7 @@ function addExternalSensor(tabKey, sensorName) {
     // Обновляем таблицу (чтобы кнопка стала disabled)
     renderSensorTable();
 
-    console.log(`External sensor added ${sensorName} для ${displayName}`);
+    debugLog(`External sensor added ${sensorName} для ${displayName}`);
 
     if (state.capabilities.smEnabled) {
         // SM включен - подписываемся через SM API
@@ -441,7 +433,7 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
 
     // Проверяем, не создан ли уже график
     if (tabState.charts.has(varName)) {
-        console.log(`График для ${varName} уже существует`);
+        debugLog(`График для ${varName} уже существует`);
         return;
     }
 
@@ -506,87 +498,18 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
 
     // Получаем диапазон времени
     const timeRange = getTimeRangeForObject(objectName);
-    const fillEnabled = true;
-    const steppedEnabled = isDiscrete;
 
     // Создаём Chart.js график
     const ctx = getElementInTab(tabKey, `canvas-${objectName}-${safeVarName}`).getContext('2d');
-    const chartConfig = {
-        type: 'line',
-        data: {
-            datasets: [{
-                label: displayName,
-                data: [],
-                borderColor: color,
-                backgroundColor: `${color}20`,
-                fill: fillEnabled,
-                tension: isDiscrete ? 0 : 0.3,
-                stepped: isDiscrete ? 'before' : false,
-                pointRadius: 0,
-                borderWidth: isDiscrete ? 2 : 1.5
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: false,
-            interaction: {
-                intersect: false,
-                mode: 'index'
-            },
-            scales: {
-                x: {
-                    type: 'time',
-                    display: true,
-                    grid: {
-                        color: '#333840',
-                        drawBorder: false
-                    },
-                    ticks: {
-                        color: '#8a9099',
-                        maxTicksLimit: 10,
-                        display: true
-                    },
-                    time: {
-                        displayFormats: {
-                            second: 'HH:mm:ss',
-                            minute: 'HH:mm',
-                            hour: 'HH:mm'
-                        }
-                    },
-                    min: timeRange.min,
-                    max: timeRange.max
-                },
-                y: {
-                    display: true,
-                    position: 'left',
-                    beginAtZero: isDiscrete,
-                    suggestedMin: isDiscrete ? 0 : undefined,
-                    suggestedMax: isDiscrete ? 1.1 : undefined,
-                    grid: {
-                        color: '#333840',
-                        drawBorder: false
-                    },
-                    ticks: {
-                        color: '#8a9099',
-                        stepSize: isDiscrete ? 1 : undefined
-                    }
-                }
-            },
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    backgroundColor: '#22252a',
-                    titleColor: '#d8dce2',
-                    bodyColor: '#d8dce2',
-                    borderColor: '#333840',
-                    borderWidth: 1
-                }
-            }
-        }
-    };
+    const chartConfig = createLineChartConfig({
+        datasets: [{
+            label: displayName,
+            data: [],
+            color,
+            isDiscrete
+        }],
+        timeRange
+    });
 
     const chart = new Chart(ctx, chartConfig);
 
@@ -638,7 +561,7 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
     const smoothCheckbox = getElementInTab(tabKey, `smooth-${objectName}-${safeVarName}`);
     if (smoothCheckbox) {
         smoothCheckbox.addEventListener('change', (e) => {
-            chart.data.datasets[0].tension = e.target.checked ? 0.3 : 0;
+            chart.data.datasets[0].tension = e.target.checked ? CHART_LINE_TENSION : 0;
             chart.update('none');
         });
     }
@@ -657,7 +580,7 @@ function addExternalSensorChart(tabKey, varName, sensorId, textname, options = {
 
     // Проверяем, не создан ли уже график
     if (tabState.charts.has(varName)) {
-        console.log(`График для ${varName} уже существует`);
+        debugLog(`График для ${varName} уже существует`);
         return;
     }
 
@@ -751,7 +674,7 @@ function removeExternalSensor(tabKey, sensorName, options = {}) {
         renderSensorTable();
     }
 
-    console.log(`Удалён внешний датчик ${sensorName} для ${tabKey}`);
+    debugLog(`Удалён внешний датчик ${sensorName} для ${tabKey}`);
 
     // Отписываемся от датчика через API
     if (state.capabilities.smEnabled) {
@@ -819,7 +742,7 @@ function restoreExternalSensors(tabKey, displayName) {
         const tabState = state.tabs.get(tabKey);
         if (!tabState) {
             if (++attempts > RESTORE_SENSORS_MAX_ATTEMPTS) return;
-            setTimeout(restoreSensors, 100);
+            setTimeout(restoreSensors, RESTORE_SENSORS_RETRY_DELAY_MS);
             return;
         }
 
@@ -887,16 +810,11 @@ function restoreExternalSensors(tabKey, displayName) {
                 subscribeToExternalSensors(tabKey, restoredSensorNames);
             } else if (tabState.renderer && tabState.renderer.subscribedSensorIds) {
                 // IONC подписка
-                const serverId = tabState.serverId;
-                let url = `/api/objects/${encodeURIComponent(displayName)}/ionc/subscribe`;
-                if (serverId) {
-                    url += `?server=${encodeURIComponent(serverId)}`;
-                }
-                fetch(url, {
+                fetchObjectApi(tabKey, '/ionc/subscribe', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ sensor_ids: restoredSensorIds })
-                }).then(response => {
+                }).then(({ response }) => {
                     if (response.ok) {
                         restoredSensorIds.forEach(id => {
                             tabState.renderer.subscribedSensorIds.add(id);
@@ -908,11 +826,11 @@ function restoreExternalSensors(tabKey, displayName) {
             }
         }
 
-        console.log(`Восстановлено ${restoredSensorIds.length} датчиков на графике для ${displayName}`);
+        debugLog(`Восстановлено ${restoredSensorIds.length} датчиков на графике для ${displayName}`);
     };
 
     // Даём время на инициализацию вкладки
-    setTimeout(restoreSensors, 200);
+    setTimeout(restoreSensors, RESTORE_SENSORS_INITIAL_DELAY_MS);
 }
 
 // Загрузка сенсоров для конкретного сервера

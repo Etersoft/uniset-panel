@@ -442,7 +442,11 @@ test.describe('ModbusSlave renderer', () => {
     });
 
     test('should update pinned register value via SSE', async ({ page }) => {
-      // Enable console logging to track SSE events
+      await page.addInitScript(() => {
+        (window as any).UNISET_UI_DEBUG = true;
+      });
+
+      // Enable debug logging to track SSE events
       const consoleMessages: string[] = [];
       page.on('console', msg => {
         const text = msg.text();

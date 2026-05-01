@@ -117,27 +117,26 @@ function renderTimersTable(tabKey, timers) {
 function startTimerUpdateInterval() {
     if (timerUpdateInterval) return;
 
-    const UPDATE_INTERVAL = 100; // мс
-
     timerUpdateInterval = setInterval(() => {
         const now = Date.now();
 
-        Object.entries(timerDataCache).forEach(([objectName, cache]) => {
+        Object.entries(timerDataCache).forEach(([tabKey, cache]) => {
+            // Обновляем timeleft для каждого таймера. Decrement = реальный
+            // elapsed (now - cache.lastUpdate), а не TIMER_UPDATE_INTERVAL_MS:
+            // если вкладка была background'ом, setInterval мог пропустить тики,
+            // и интервал между фактическими вызовами callback'а > nominal'а.
             const elapsed = now - cache.lastUpdate;
-
-            // Обновляем timeleft для каждого таймера
             cache.timers.forEach(timer => {
                 if (timer.tick !== -1 && timer.timeleft > 0) {
-                    timer.timeleft = Math.max(0, timer.timeleft - UPDATE_INTERVAL);
+                    timer.timeleft = Math.max(0, timer.timeleft - elapsed);
                 }
             });
 
             cache.lastUpdate = now;
 
-            // Перерисовываем таблицу
-            renderTimersTable(objectName, cache.timers);
+            renderTimersTable(tabKey, cache.timers);
         });
-    }, UPDATE_INTERVAL);
+    }, TIMER_UPDATE_INTERVAL_MS);
 }
 
 // Рендеринг информации об объекте
@@ -360,7 +359,7 @@ function renderStatistics(tabKey, statsData) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td class="info-label">${escapeHtml(key)}</td>
-            <td class="info-value">${escapeHtml(String(formatValue(value)))}</td>
+            <td class="info-value">${formatValueHtml(value)}</td>
         `;
         generalTbody.appendChild(tr);
     });
@@ -417,7 +416,7 @@ function renderStatisticsSensors(tabKey, filterText = '') {
         tr.innerHTML = `
             <td>${escapeHtml(String(sensorId))}</td>
             <td class="variable-name">${escapeHtml(String(sensorName))}</td>
-            <td class="variable-value">${escapeHtml(String(formatValue(sensorCount)))}</td>
+            <td class="variable-value">${formatValueHtml(sensorCount)}</td>
         `;
         tbody.appendChild(tr);
     });
@@ -540,11 +539,13 @@ function changeChartColor(tabKey, varName, newColor) {
     chart.data.datasets[0].backgroundColor = `${newColor}20`;
     chart.update('none');
 
-    // Обновить цвет квадратика в шапке
-    // Используем displayName для ID элемента (objectName)
+    // Обновить цвет квадратика в шапке. Scoped lookup внутри панели вкладки —
+    // при multi-server одинаковый displayName на разных серверах не должен
+    // тащить chart-panel из чужой вкладки.
     const displayName = tabState.displayName || tabKey;
     const safeVarName = varName.replace(/:/g, '-');
-    const colorPicker = document.querySelector(`#chart-panel-${displayName}-${safeVarName} .legend-color-picker`);
+    const tabPanel = getTabPanel(tabKey);
+    const colorPicker = tabPanel?.querySelector(`#chart-panel-${CSS.escape(`${displayName}-${safeVarName}`)} .legend-color-picker`);
     if (colorPicker) {
         colorPicker.style.background = newColor;
     }
@@ -572,7 +573,7 @@ function toggleChartSmooth(tabKey, varName, smoothEnabled) {
     const chartData = tabState.charts.get(varName);
     if (!chartData) return;
 
-    chartData.chart.data.datasets[0].tension = smoothEnabled ? 0.3 : 0;
+    chartData.chart.data.datasets[0].tension = smoothEnabled ? CHART_LINE_TENSION : 0;
     chartData.chart.update('none');
 }
 

@@ -121,11 +121,13 @@ test.describe('Dashboard — базовые операции', () => {
     await page.locator('#dashboard-name-confirm').click();
     await expect(page.locator('#dashboard-actions')).not.toHaveClass(/hidden/, { timeout: 5000 });
 
-    // Автоматически принимаем confirm() dialog
-    page.on('dialog', dialog => dialog.accept());
-
-    // Кликаем Delete
+    // Кликаем Delete — приложение использует кастомный showConfirmDialog
+    // (раньше был нативный confirm()).
     await page.locator('#dashboard-delete-btn').click();
+
+    // Подтверждаем удаление в dialog'е
+    await expect(page.locator('#confirm-dialog-overlay')).not.toHaveClass(/hidden/, { timeout: 2000 });
+    await page.locator('#confirm-dialog-ok').click();
 
     // Дашборд удалён — actions скрыты
     await expect(page.locator('#dashboard-actions')).toHaveClass(/hidden/, { timeout: 5000 });

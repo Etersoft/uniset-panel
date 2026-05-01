@@ -9,38 +9,66 @@
 // === Таймауты и интервалы (мс) ===
 const FILTER_DEBOUNCE_DELAY = 300;
 const DOUBLE_CLICK_THRESHOLD = 250;
-const RESUBSCRIBE_DELAY = 1000;
 const SIDEBAR_STATUS_REAPPLY_DELAY = 3000;
 const ANIMATION_REMOVAL_DELAY = 500;
 const AUTOCOMPLETE_DEBOUNCE_DELAY = 150;
 const JOURNAL_SEARCH_DEBOUNCE_DELAY = 300;
 const JOURNAL_HIGHLIGHT_DURATION = 2000;
+const JOURNAL_SCROLL_LOAD_RATIO = 0.8;
+const TIMER_UPDATE_INTERVAL_MS = 100;
 const LAUNCHER_AUTO_REFRESH_INTERVAL = 5000;
 const LAUNCHER_ACTION_REFRESH_DELAY = 1000;
 const LAUNCHER_BULK_ACTION_REFRESH_DELAY = 1500;
 const STATUS_DISPLAY_UPDATE_INTERVAL = 1000;
 const RECORDING_STATUS_POLL_INTERVAL = 5000;
 const CONTROL_PING_INTERVAL = 30000;
+const CONTROL_DEFAULT_TIMEOUT_SEC = 60;
 const SETTINGS_FILTER_DEBOUNCE_DELAY = 200;
+const SENSOR_AUTOCOMPLETE_BLUR_DELAY_MS = 150;
+const UI_DEBUG_LOG_STORAGE_KEY = 'uniset-ui-debug-log';
 
 // === SSE ===
+const SSE_DEFAULT_POLL_INTERVAL = 5000;
 const SSE_RESUBSCRIBE_DELAY = 1000;
 const SSE_RECOVERY_PROBE_INTERVAL = 30000;
+const SSE_MAX_RECONNECT_ATTEMPTS = 10;
+const SSE_BASE_RECONNECT_DELAY = 1000;
+const SSE_MAX_RECONNECT_DELAY = 30000;
+const SSE_RECONNECT_JITTER_RATIO = 0.1;       // ±10% jitter на reconnect delay
+const SSE_SIDEBAR_POLL_MULTIPLIER = 6;        // sidebar polling реже чем данные
+const POLL_INTERVAL_SELECTOR_DEFAULT_MS = 1000;
+
+// === LogViewer ===
+const LOGVIEWER_MAX_RECONNECT_ATTEMPTS = 5;
+const LOGVIEWER_BASE_RECONNECT_DELAY = 1000;
+const LOGVIEWER_MAX_RECONNECT_DELAY = 30000;
+const LOGVIEWER_FILTER_DEBOUNCE_DELAY = 300;
+const LOGVIEWER_AUTOSCROLL_THRESHOLD_PX = 50;
+const LOGVIEWER_BUFFER_OPTIONS = [500, 1000, 2000, 5000, 10000, 20000, 50000];
 
 // === Retry ===
-const RESTORE_SENSORS_MAX_ATTEMPTS = 30; // × 100ms = 3s max wait for tab init
+const RESTORE_SENSORS_RETRY_DELAY_MS = 100;
+const RESTORE_SENSORS_INITIAL_DELAY_MS = 200;
+const RESTORE_SENSORS_MAX_ATTEMPTS = 30; // × RESTORE_SENSORS_RETRY_DELAY_MS = 3s max wait for tab init
 
 // === Лимиты данных ===
 const MAX_CHART_POINTS = 1000;
 const MAX_LOG_LINES = 10000;
 const VIRTUAL_SCROLL_CHUNK_SIZE = 200;
 const JOURNAL_DEFAULT_LIMIT = 100;
-const AUTOCOMPLETE_MIN_QUERY = 2;
+const SENSOR_AUTOCOMPLETE_LIMIT = 20;
+const SENSOR_AUTOCOMPLETE_FOCUS_LIMIT = 10;
+const DASHBOARD_SENSOR_REGISTRY_FETCH_LIMIT = 10000;
+const DASHBOARD_SENSOR_CACHE_TTL_MS = 60000;
+const BYTES_PER_KIB = 1024;
+const BYTE_UNITS = ['B', 'KB', 'MB', 'GB'];
 
 // === Виртуальный скролл (px) ===
 const DEFAULT_ROW_HEIGHT = 32;
 const DEFAULT_BUFFER_ROWS = 10;
 const VIRTUAL_SCROLL_LOAD_THRESHOLD = 200;
+const VIRTUAL_SCROLL_PERCENT_THRESHOLD = 80;
+const SIMPLE_INFINITE_SCROLL_THRESHOLD = 100;
 
 // === Высоты секций (px) ===
 const DEFAULT_SECTION_HEIGHT = 300;
@@ -50,16 +78,64 @@ const LOGVIEWER_DEFAULT_HEIGHT = 200;
 const LOGVIEWER_MIN_HEIGHT = 100;
 const LOGVIEWER_MAX_HEIGHT = 600;
 const CHARTS_CONTAINER_MIN_HEIGHT = 150;
-const CHARTS_CONTAINER_DEFAULT_HEIGHT = 300;
 const SENSORS_CONTAINER_MIN_HEIGHT = 200;
+const JOURNAL_CONTAINER_MIN_HEIGHT = 150;
+const JOURNAL_CONTAINER_MAX_HEIGHT = 800;
+const DATA_TABLE_DEFAULT_HEIGHT = 320;
+const DATA_TABLE_MAX_HEIGHT = 700;
+const UWSGATE_SENSORS_DEFAULT_HEIGHT = 400;
+const OPCUA_DIAGNOSTICS_DEFAULT_HEIGHT = 260;
+const OPCUA_DIAGNOSTICS_MIN_HEIGHT = 160;
+const OPCUA_DIAGNOSTICS_MAX_HEIGHT = 600;
 
 // === Dashboard сетка ===
 const DASHBOARD_GRID_COLS = 48;
 const DASHBOARD_GRID_ROW_HEIGHT = 30;
 const DASHBOARD_GRID_GAP = 4;
+const DASHBOARD_POSITION_SCAN_ROWS = 100;
+const DASHBOARD_MAX_WIDGET_HEIGHT = 20;
+const DASHBOARD_DEFAULT_WIDGET_WIDTH = 2;
+const DASHBOARD_DEFAULT_WIDGET_HEIGHT = 1;
+const DASHBOARD_DRAG_Z_INDEX = 1000;
+const DASHBOARD_FINE_MOVE_STEP_PX = 1;
+
+// === Sensor autocomplete dropdown ===
+const SENSOR_AUTOCOMPLETE_DROPDOWN_Z_INDEX = 10000;
+
+// === Recording export ===
+const RECORDING_EXPORT_URLS = {
+    sqlite: '/api/export/database',
+    csv:    '/api/export/csv',
+    json:   '/api/export/json',
+};
+
+// === Journal time ranges (мс) ===
+// '1M' = 30 дней (фиксированный «месяц» для real-time журнала, не календарный).
+const JOURNAL_TIME_RANGE_MS = {
+    '15m': 15 * 60 * 1000,
+    '1h':  60 * 60 * 1000,
+    '3h':  3 * 60 * 60 * 1000,
+    '10h': 10 * 60 * 60 * 1000,
+    '1d':  24 * 60 * 60 * 1000,
+    '3d':  3 * 24 * 60 * 60 * 1000,
+    '1w':  7 * 24 * 60 * 60 * 1000,
+    '1M':  30 * 24 * 60 * 60 * 1000,
+};
 
 // === Временные диапазоны (сек) ===
 const DEFAULT_CHART_TIME_RANGE = 900;
+const CHART_TIME_RANGES_SECONDS = [
+    { seconds: 60, label: '1m' },
+    { seconds: 180, label: '3m' },
+    { seconds: 300, label: '5m' },
+    { seconds: 900, label: '15m' },
+    { seconds: 3600, label: '1h' },
+    { seconds: 10800, label: '3h' }
+];
+const CHART_TIME_RANGES_MS = CHART_TIME_RANGES_SECONDS.map(({ seconds, label }) => ({
+    value: seconds * 1000,
+    label
+}));
 
 // === Пороги formatTimeAgo ===
 const TIME_AGO_MIN_SECONDS = 5;
@@ -76,6 +152,83 @@ const WRITE_PENDING_TIMEOUT_MS = 5000;
 // прежде чем вернуться в idle. Сделано короткой вспышкой — раньше 1500ms
 // читалось как «фокусная рамка осталась», теперь 400ms — мгновенный flash.
 const WRITE_SUCCESS_DISPLAY_MS = 400;
+
+// === PushButtonWidget ===
+const PUSHBUTTON_DEFAULT_PULSE_WIDTH_MS = 500;
+const PUSHBUTTON_MIN_PULSE_WIDTH_MS = 50;
+const PUSHBUTTON_FLASH_MS = 300;
+
+// === SetpointWidget ===
+const SETPOINT_AUTO_APPLY_DEBOUNCE_MS = 500;
+const SETPOINT_DEFAULT_MIN = 0;
+const SETPOINT_DEFAULT_MAX = 100;
+const SETPOINT_DEFAULT_STEP = 1;
+
+// === Signal Generator ===
+const GENERATOR_DEFAULT_MIN = 0;
+const GENERATOR_DEFAULT_MAX = 100;
+const GENERATOR_DEFAULT_STEP = 10;
+const GENERATOR_DEFAULT_PAUSE_MS = 200;
+const GENERATOR_DEFAULT_PULSE_WIDTH_MS = 500;
+const GENERATOR_DEFAULT_SQUARE_PAUSE_MS = 500;
+const GENERATOR_DEFAULT_PERIOD_MS = 1000;
+const GENERATOR_DEFAULT_WAVE_MIN = -50;
+const GENERATOR_DEFAULT_WAVE_MAX = 50;
+const GENERATOR_DEFAULT_WAVE_PAUSE_MS = 100;
+const GENERATOR_DEFAULT_WAVE_POINTS = 100;
+const GENERATOR_DEFAULT_LINEAR_STEP = 1;
+const GENERATOR_DEFAULT_RANDOM_PERIOD_MS = 5000;
+const GENERATOR_DEFAULT_IONC_SQUARE_PULSE_WIDTH_MS = 2000;
+const GENERATOR_DEFAULT_IONC_SQUARE_PAUSE_MS = 2000;
+const GENERATOR_MIN_PAUSE_MS = 1;
+const GENERATOR_MIN_PULSE_WIDTH_MS = 1;
+const GENERATOR_MIN_PERIOD_MS = 100;
+const GENERATOR_MIN_WAVE_PAUSE_MS = 10;
+const GENERATOR_MIN_WAVE_POINTS = 4;
+const SIGNAL_GENERATOR_MIN_UPDATE_INTERVAL_MS = 50;
+const SIGNAL_GENERATOR_TICKS_PER_PERIOD = 20;
+
+// === ChartWidget ===
+const CHART_WIDGET_DEFAULT_TABLE_HEIGHT = 100;
+const CHART_WIDGET_TABLE_MIN_HEIGHT = 50;
+const CHART_WIDGET_TABLE_MAX_HEIGHT = 300;
+const CHART_WIDGET_DEFAULT_ZONES_HEIGHT = 150;
+const CHART_WIDGET_ZONES_MIN_HEIGHT = 80;
+const CHART_WIDGET_ZONES_MAX_HEIGHT = 500;
+const CHART_WIDGET_SYNC_INTERVAL_MS = 2000;
+const CHART_WIDGET_DEFAULT_TIME_RANGE_MS = DEFAULT_CHART_TIME_RANGE * 1000;
+const CHART_WIDGET_TIME_WINDOW_SHIFT_RATIO = 0.9;
+const CHART_WIDGET_HISTORY_LIMIT = 200;
+const CHART_WIDGET_X_MAX_TICKS = 6;
+const CHART_WIDGET_Y_MAX_TICKS = 5;
+const OBJECT_CHART_HISTORY_LIMIT = 200;
+const CHART_LINE_TENSION = 0.3;
+const CHART_LINE_BORDER_WIDTH = 1.5;
+const CHART_STEPPED_LINE_BORDER_WIDTH = 2;
+const UNET_CHART_LINE_TENSION = 0.1;
+const UNET_CHART_MAX_POINTS = 300;
+const UNET_CHART_X_MAX_TICKS = 6;
+const CHART_LEGEND_BOX_WIDTH = 12;
+const CHART_LEGEND_PADDING = 8;
+const GAUGE_FALLBACK_MAJOR_STEP = 2000;
+const STATUS_WIDGET_DEFAULT_THRESHOLD = 0.5;
+const DIGITAL_SEGMENT_WIDTH = 16;
+const DIGITAL_SEGMENT_HEIGHT = 32;
+const DIGITAL_SEGMENT_THICKNESS = 3;
+const DIGITAL_DIGIT_SLOT_WIDTH = 24;
+const DIGITAL_SPECIAL_CHAR_ADVANCE = 8;
+const DIGITAL_DIGIT_ADVANCE = 22;
+const DIGITAL_VIEWBOX_PADDING = 10;
+const DIGITAL_VIEWBOX_HEIGHT = 48;
+
+if (typeof globalThis !== 'undefined') {
+    Object.assign(globalThis, {
+        CHART_LINE_TENSION,
+        CHART_LINE_BORDER_WIDTH,
+        CHART_STEPPED_LINE_BORDER_WIDTH,
+        UNET_CHART_LINE_TENSION
+    });
+}
 
 
 // === 00-state.js ===
@@ -121,11 +274,11 @@ const state = window.state = {
     sse: {
         eventSource: null,
         connected: false,
-        pollInterval: 5000, // будет обновлено с сервера
+        pollInterval: SSE_DEFAULT_POLL_INTERVAL, // будет обновлено с сервера
         reconnectAttempts: 0,
-        maxReconnectAttempts: 10,
-        baseReconnectDelay: 1000,   // начальная задержка (1s)
-        maxReconnectDelay: 30000,   // максимальная задержка (30s)
+        maxReconnectAttempts: SSE_MAX_RECONNECT_ATTEMPTS,
+        baseReconnectDelay: SSE_BASE_RECONNECT_DELAY,
+        maxReconnectDelay: SSE_MAX_RECONNECT_DELAY,
         reconnectTimerId: null,     // ID таймера переподключения (для очистки)
         statusSyncInterval: null    // ID интервала периодической синхронизации статуса серверов
     },
@@ -136,7 +289,7 @@ const state = window.state = {
         token: null,          // текущий токен (из localStorage или URL)
         isController: false,  // я контроллер?
         hasController: false, // есть активный контроллер (кто-то другой)
-        timeoutSec: 60,       // таймаут неактивности
+        timeoutSec: CONTROL_DEFAULT_TIMEOUT_SEC,
         pingIntervalId: null  // ID интервала ping
     }
 };
@@ -287,12 +440,12 @@ function initControlToken() {
             ? `${window.location.pathname}?${urlParams.toString()}`
             : window.location.pathname;
         window.history.replaceState({}, '', newUrl);
-        console.log('Control: Token loaded from URL');
+        debugLog('Control: Token loaded from URL');
     } else {
         // 2. Проверяем localStorage
         state.control.token = localStorage.getItem('control-token');
         if (state.control.token) {
-            console.log('Control: Token loaded from localStorage');
+            debugLog('Control: Token loaded from localStorage');
         }
     }
 }
@@ -319,7 +472,7 @@ function updateControlStatus(status) {
     state.control.enabled = status.enabled;
     state.control.hasController = status.hasController;
     state.control.isController = status.isController;
-    state.control.timeoutSec = status.timeoutSec || 60;
+    state.control.timeoutSec = status.timeoutSec || CONTROL_DEFAULT_TIMEOUT_SEC;
 
     if (!changed) return;
 
@@ -527,16 +680,21 @@ async function controlledFetch(url, options = {}) {
 
     const response = await fetch(url, options);
 
-    // Обработка ошибки контроля
+    // Обработка ошибки контроля. throw нельзя оставлять внутри try — он будет
+    // пойман этим же catch (вместе с ошибкой парсинга) и caller обработает 403
+    // как успешный ответ. Поэтому решение «нужно ли бросать» определяем внутри
+    // try, а сам throw делаем после.
     if (response.status === 403) {
+        let isControlRequired = false;
         try {
             const data = await response.clone().json();
-            if (data.code === 'CONTROL_REQUIRED') {
-                showControlRequiredNotification();
-                throw new Error('Control required');
-            }
+            if (data.code === 'CONTROL_REQUIRED') isControlRequired = true;
         } catch (e) {
-            // Игнорируем ошибку парсинга
+            // Игнорируем ошибку парсинга — body может быть не-JSON
+        }
+        if (isControlRequired) {
+            showControlRequiredNotification();
+            throw new Error('Control required');
         }
     }
 
@@ -565,10 +723,8 @@ const recordingState = {
 // Format bytes to human readable
 function formatBytes(bytes) {
     if (bytes === 0) return '0B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + sizes[i];
+    const i = Math.floor(Math.log(bytes) / Math.log(BYTES_PER_KIB));
+    return parseFloat((bytes / Math.pow(BYTES_PER_KIB, i)).toFixed(1)) + BYTE_UNITS[i];
 }
 
 // Format number with abbreviation
@@ -639,19 +795,8 @@ function initRecordingUI() {
         }
 
         if (format) {
-            // Download export file
-            let url;
-            switch (format) {
-                case 'sqlite':
-                    url = '/api/export/database';
-                    break;
-                case 'csv':
-                    url = '/api/export/csv';
-                    break;
-                case 'json':
-                    url = '/api/export/json';
-                    break;
-            }
+            // Download export file (URLs централизованы в 00-constants.js)
+            const url = RECORDING_EXPORT_URLS[format];
             if (url) {
                 window.location.href = url;
             }
@@ -762,6 +907,10 @@ function updateChartsFromBatch(tabKey, items, prefix, timestamp, options = {}) {
     }
 }
 
+function sanitizeEventSourceUrlForLog(url) {
+    return String(url).replace(/([?&]token=)[^&]*/g, '$1[redacted]');
+}
+
 function initSSE() {
     // Очищаем таймер переподключения (если есть)
     if (state.sse.reconnectTimerId) {
@@ -778,7 +927,7 @@ function initSSE() {
     if (state.control.token) {
         url += `?token=${encodeURIComponent(state.control.token)}`;
     }
-    console.log('SSE: Подключение к', url);
+    debugLog('SSE: Подключение к', sanitizeEventSourceUrlForLog(url));
 
     const eventSource = new EventSource(url);
     state.sse.eventSource = eventSource;
@@ -788,11 +937,11 @@ function initSSE() {
             const data = JSON.parse(e.data);
             state.sse.connected = true;
             state.sse.reconnectAttempts = 0;
-            state.sse.pollInterval = data.data?.pollInterval || 5000;
+            state.sse.pollInterval = data.data?.pollInterval || SSE_DEFAULT_POLL_INTERVAL;
 
             // Сохраняем capabilities сервера
             state.capabilities.smEnabled = data.data?.smEnabled || false;
-            console.log('SSE: Подключено, poll interval:', state.sse.pollInterval, 'ms, smEnabled:', state.capabilities.smEnabled);
+            debugLog('SSE: Подключено, poll interval:', state.sse.pollInterval, 'ms, smEnabled:', state.capabilities.smEnabled);
 
             // Обновляем статус контроля
             if (data.data?.control) {
@@ -1062,7 +1211,7 @@ function initSSE() {
             const event = JSON.parse(e.data);
             const serverId = event.serverId;
             const connected = event.data?.connected ?? false;
-            console.log(`SSE: Сервер ${serverId} ${connected ? 'подключен' : 'отключен'}`);
+            debugLog(`SSE: Сервер ${serverId} ${connected ? 'подключен' : 'отключен'}`);
             updateServerStatus(serverId, connected);
         } catch (err) {
             console.warn('SSE: Error обработки server_status:', err);
@@ -1074,9 +1223,8 @@ function initSSE() {
         try {
             const event = JSON.parse(e.data);
             const serverId = event.serverId;
-            const serverName = event.serverName;
             const objects = event.data?.objects ?? [];
-            console.log(`SSE: Сервер ${serverId} восстановил связь, объектов: ${objects.length}`);
+            debugLog(`SSE: Сервер ${serverId} восстановил связь, объектов: ${objects.length}`);
 
             // Обновляем статус сервера
             updateServerStatus(serverId, true);
@@ -1094,10 +1242,10 @@ function initSSE() {
     });
 
     // Обработка изменения статуса контроля
-    eventSource.addEventListener('control_status', (e) => {
+    eventSource.addEventListener('control_status', async (e) => {
         try {
             const event = JSON.parse(e.data);
-            console.log('SSE: Control status changed:', event.data);
+            debugLog('SSE: Control status changed:', event.data);
             // Обновляем isController на основе нашего токена
             const status = event.data;
             status.isController = state.control.token &&
@@ -1105,18 +1253,17 @@ function initSSE() {
                 state.control.isController; // сохраняем если мы были контроллером
 
             // Сервер не знает чей это токен, нужно запросить статус
-            fetch('/api/control/status', {
-                headers: { 'X-Control-Token': state.control.token || '' }
-            })
-                .then(r => r.json())
-                .then(data => {
-                    updateControlStatus(data);
-                })
-                .catch(err => {
-                    console.warn('Failed to refresh control status:', err);
-                    // Fallback: используем данные из события
-                    updateControlStatus(status);
+            try {
+                const resp = await fetch('/api/control/status', {
+                    headers: { 'X-Control-Token': state.control.token || '' }
                 });
+                const data = await resp.json();
+                updateControlStatus(data);
+            } catch (err) {
+                console.warn('Failed to refresh control status:', err);
+                // Fallback: используем данные из события
+                updateControlStatus(status);
+            }
         } catch (err) {
             console.warn('SSE: Error обработки control_status:', err);
         }
@@ -1198,12 +1345,12 @@ function initSSE() {
 
         if (state.sse.reconnectAttempts < state.sse.maxReconnectAttempts) {
             state.sse.reconnectAttempts++;
-            // Exponential backoff: baseDelay * 2^(attempt-1) с jitter ±10%
+            // Exponential backoff: baseDelay * 2^(attempt-1) с jitter ±SSE_RECONNECT_JITTER_RATIO
             const expDelay = state.sse.baseReconnectDelay * Math.pow(2, state.sse.reconnectAttempts - 1);
             const cappedDelay = Math.min(expDelay, state.sse.maxReconnectDelay);
-            const jitter = cappedDelay * 0.1 * (Math.random() * 2 - 1); // ±10%
+            const jitter = cappedDelay * SSE_RECONNECT_JITTER_RATIO * (Math.random() * 2 - 1);
             const delay = Math.round(cappedDelay + jitter);
-            console.log(`SSE: Переподключение через ${delay}ms (попытка ${state.sse.reconnectAttempts}/${state.sse.maxReconnectAttempts})`);
+            debugLog(`SSE: Переподключение через ${delay}ms (попытка ${state.sse.reconnectAttempts}/${state.sse.maxReconnectAttempts})`);
             updateSSEStatus('reconnecting');
             state.sse.reconnectTimerId = setTimeout(initSSE, delay);
         } else {
@@ -1214,18 +1361,19 @@ function initSSE() {
     };
 
     eventSource.onopen = () => {
-        console.log('SSE: Соединение открыто');
+        debugLog('SSE: Соединение открыто');
     };
 }
 
 // Включить polling как fallback при недоступности SSE
 function enablePollingFallback() {
-    console.log('Polling: Включение fallback режима');
+    debugLog('Polling: Включение fallback режима');
 
-    // Периодически обновляем sidebar (статусы серверов и список объектов)
+    // Периодически обновляем sidebar (статусы серверов и список объектов).
+    // Реже чем данные объектов — это служебная синхронизация sidebar UI.
     state.sse.sidebarPollInterval = setInterval(() => {
         refreshObjectsList();
-    }, state.sse.pollInterval * 6); // Реже чем данные объектов
+    }, state.sse.pollInterval * SSE_SIDEBAR_POLL_MULTIPLIER);
 
     state.tabs.forEach((tabState, tabKey) => {
         // Включаем polling для данных объекта
@@ -1234,7 +1382,7 @@ function enablePollingFallback() {
                 () => loadObjectData(tabKey),
                 state.sse.pollInterval
             );
-            console.log('Polling: Включен для', tabState.displayName, '(tab:', tabKey, ')');
+            debugLog('Polling: Включен для', tabState.displayName, '(tab:', tabKey, ')');
         }
 
         // Включаем polling для графиков
@@ -1254,7 +1402,7 @@ function enablePollingFallback() {
 
 // Отключить polling fallback (при восстановлении SSE)
 function disablePollingFallback() {
-    console.log('Polling: Отключение fallback режима');
+    debugLog('Polling: Отключение fallback режима');
 
     // Останавливаем polling sidebar
     if (state.sse.sidebarPollInterval) {
@@ -1293,13 +1441,13 @@ function disablePollingFallback() {
 function startSSERecoveryProbe() {
     if (state.sse.recoveryProbeInterval) return;
 
-    console.log('SSE: Запуск recovery probe каждые', SSE_RECOVERY_PROBE_INTERVAL, 'ms');
+    debugLog('SSE: Запуск recovery probe каждые', SSE_RECOVERY_PROBE_INTERVAL, 'ms');
 
     state.sse.recoveryProbeInterval = setInterval(async () => {
         try {
             const response = await fetch('/api/version', { method: 'HEAD' });
             if (response.ok) {
-                console.log('SSE: Сервер доступен, восстанавливаем SSE');
+                debugLog('SSE: Сервер доступен, восстанавливаем SSE');
                 disablePollingFallback();
                 state.sse.reconnectAttempts = 0;
                 initSSE();
@@ -1314,33 +1462,31 @@ function startSSERecoveryProbe() {
 function startServerStatusSync() {
     stopServerStatusSync();
     state.sse.statusSyncInterval = setInterval(async () => {
-        // Серверы
-        try {
-            const resp = await fetchServers();
-            if (resp?.servers) {
-                resp.servers.forEach(s => updateServerStatus(s.id, s.connected));
-            }
-        } catch (err) { /* фоновая синхронизация */ }
-
-        // Launcher'ы
-        try {
-            const lr = await fetch('/api/launchers');
-            if (lr.ok) {
+        // Все три запроса (серверы / launcher'ы / журналы) независимы — гоним
+        // параллельно через Promise.allSettled, фоновая ошибка одного не должна
+        // мешать остальным.
+        await Promise.allSettled([
+            (async () => {
+                const resp = await fetchServers();
+                if (resp?.servers) {
+                    resp.servers.forEach(s => updateServerStatus(s.id, s.connected));
+                }
+            })(),
+            (async () => {
+                const lr = await fetch('/api/launchers');
+                if (!lr.ok) return;
                 const data = await lr.json();
                 (data?.launchers || []).forEach(l => updateLauncherNodeStatus(l.id, l.connected));
-            }
-        } catch (err) { /* фоновая синхронизация */ }
-
-        // Журналы
-        try {
-            const jr = await fetch('/api/journals');
-            if (jr.ok) {
+            })(),
+            (async () => {
+                const jr = await fetch('/api/journals');
+                if (!jr.ok) return;
                 const data = await jr.json();
                 if (typeof updateJournalConnectionStatus === 'function') {
                     (data || []).forEach(j => updateJournalConnectionStatus(j.id, j.connected));
                 }
-            }
-        } catch (err) { /* фоновая синхронизация */ }
+            })(),
+        ]);
     }, SSE_RECOVERY_PROBE_INTERVAL);
 }
 
@@ -1353,7 +1499,7 @@ function stopServerStatusSync() {
 
 // Переподписка всех открытых вкладок после восстановления SSE
 function resubscribeAll() {
-    console.log('SSE: Переподписка всех вкладок после переподключения');
+    debugLog('SSE: Переподписка всех вкладок после переподключения');
     state.tabs.forEach((tabState, tabKey) => {
         const renderer = tabState.renderer;
         if (renderer?.resubscribeIfNeeded) {
@@ -1383,7 +1529,6 @@ document.addEventListener('visibilitychange', () => {
 });
 
 
-
 // === 06-utils.js ===
 // ============================================================================
 // Общие утилиты
@@ -1391,9 +1536,9 @@ document.addEventListener('visibilitychange', () => {
 
 // Экранирование HTML для безопасной вставки текста
 function escapeHtml(text) {
-    if (!text) return '';
+    if (text === null || text === undefined) return '';
     const div = document.createElement('div');
-    div.textContent = text;
+    div.textContent = String(text);
     return div.innerHTML;
 }
 
@@ -1419,16 +1564,37 @@ if (typeof globalThis !== 'undefined') {
     globalThis.escapeAttr = escapeAttr;
 }
 
+function buildObjectUrl(objectName, objectPath = '', serverId = null, query = null) {
+    const normalizedPath = objectPath
+        ? (objectPath.startsWith('/') ? objectPath : `/${objectPath}`)
+        : '';
+    const params = [];
+    Object.entries(query || {}).forEach(([key, value]) => {
+        if (value !== null && value !== undefined) {
+            params.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+        }
+    });
+    if (serverId) {
+        params.push(`server=${encodeURIComponent(serverId)}`);
+    }
+    const queryString = params.length > 0 ? `?${params.join('&')}` : '';
+    return `/api/objects/${encodeURIComponent(objectName)}${normalizedPath}${queryString}`;
+}
+
 // Универсальный resize-handle: mousedown → mousemove → mouseup паттерн
-function setupResizeHandle(handle, container, minHeight, onSave) {
+function setupResizeHandle(handle, container, minHeight, onSave, maxHeight = Infinity, onResize = null, options = {}) {
     if (!handle || !container) return;
     let startY = 0, startHeight = 0, isResizing = false;
+    const direction = options.direction === -1 ? -1 : 1;
+    const updateMaxHeight = options.updateMaxHeight !== false;
 
     const onMouseMove = (e) => {
         if (!isResizing) return;
-        const newHeight = Math.max(minHeight, startHeight + e.clientY - startY);
+        const delta = (e.clientY - startY) * direction;
+        const newHeight = Math.max(minHeight, Math.min(maxHeight, startHeight + delta));
         container.style.height = `${newHeight}px`;
-        container.style.maxHeight = `${newHeight}px`;
+        if (updateMaxHeight) container.style.maxHeight = `${newHeight}px`;
+        if (onResize) onResize(newHeight);
     };
     const onMouseUp = () => {
         if (!isResizing) return;
@@ -1437,7 +1603,7 @@ function setupResizeHandle(handle, container, minHeight, onSave) {
         document.removeEventListener('mouseup', onMouseUp);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
-        onSave(container.offsetHeight);
+        if (onSave) onSave(container.offsetHeight);
     };
     handle.addEventListener('mousedown', (e) => {
         e.preventDefault();
@@ -1460,6 +1626,253 @@ function debounce(fn, delay) {
     };
 }
 
+// Возвращает id первого подключённого сервера из state.servers,
+// или null если такого нет (или state ещё не инициализирован).
+// Используется dashboard'ом и активными widget'ами для legacy fallback.
+function getFirstConnectedServerId() {
+    if (typeof state === 'undefined' || !state.servers) return null;
+    for (const [id, server] of state.servers) {
+        if (server.connected) return id;
+    }
+    return null;
+}
+
+function parseNumberOrDefault(value, fallback) {
+    if (value === null || value === undefined || String(value).trim() === '') return fallback;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+}
+
+function parseDecimalInputOrDefault(value, fallback) {
+    if (value === null || value === undefined || String(value).trim() === '') return fallback;
+    const normalized = String(value).trim().replace(',', '.');
+    const n = Number(normalized);
+    return Number.isFinite(n) ? n : fallback;
+}
+
+function parseIntegerOrDefault(value, fallback) {
+    if (value === null || value === undefined || String(value).trim() === '') return fallback;
+    const n = parseInt(value, 10);
+    return Number.isFinite(n) ? n : fallback;
+}
+
+function percentInRange(value, min, max, scale = 1) {
+    const range = max - min;
+    if (!Number.isFinite(value) || !Number.isFinite(range) || range <= 0) return 0;
+    return Math.max(0, Math.min(scale, ((value - min) / range) * scale));
+}
+
+function createLineChartDataset(dataset) {
+    const color = dataset.color || dataset.borderColor || '#3274d9';
+    const isStepped = dataset.isDiscrete || dataset.stepped === true || dataset.stepped === 'before';
+    const stepped = dataset.stepped !== undefined
+        ? (dataset.stepped === true ? 'before' : dataset.stepped)
+        : (dataset.isDiscrete ? 'before' : false);
+
+    return {
+        label: dataset.label,
+        data: dataset.data || [],
+        borderColor: color,
+        backgroundColor: dataset.backgroundColor || `${color}20`,
+        fill: dataset.fill !== undefined ? dataset.fill : true,
+        tension: dataset.tension !== undefined ? dataset.tension : (isStepped ? 0 : CHART_LINE_TENSION),
+        stepped,
+        pointRadius: dataset.pointRadius ?? 0,
+        borderWidth: dataset.borderWidth !== undefined ? dataset.borderWidth : (isStepped ? CHART_STEPPED_LINE_BORDER_WIDTH : CHART_LINE_BORDER_WIDTH)
+    };
+}
+
+function createLineChartConfig({ datasets = [], timeRange = {}, options = {} }) {
+    const discreteYAxis = options.discreteYAxis !== undefined
+        ? options.discreteYAxis
+        : datasets.length === 1 && Boolean(datasets[0]?.isDiscrete);
+
+    const tooltip = {
+        backgroundColor: '#22252a',
+        titleColor: '#d8dce2',
+        bodyColor: '#d8dce2',
+        borderColor: '#333840',
+        borderWidth: 1
+    };
+    if (options.tooltipEnabled !== undefined) {
+        tooltip.enabled = options.tooltipEnabled;
+    }
+
+    const plugins = {
+        legend: options.legend || { display: false },
+        tooltip
+    };
+    if (options.decimation) {
+        plugins.decimation = {
+            enabled: true,
+            algorithm: options.decimationAlgorithm || 'min-max'
+        };
+    }
+
+    const chartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: {
+            intersect: false,
+            mode: options.interactionMode || 'index'
+        },
+        scales: {
+            x: {
+                type: 'time',
+                display: true,
+                grid: {
+                    color: '#333840',
+                    drawBorder: false
+                },
+                ticks: {
+                    color: '#8a9099',
+                    maxTicksLimit: options.xMaxTicksLimit ?? 10,
+                    display: options.xTicksDisplay ?? true
+                },
+                time: {
+                    displayFormats: {
+                        second: 'HH:mm:ss',
+                        minute: 'HH:mm',
+                        hour: 'HH:mm'
+                    }
+                },
+                min: timeRange.min,
+                max: timeRange.max
+            },
+            y: {
+                display: true,
+                position: 'left',
+                beginAtZero: discreteYAxis ? true : undefined,
+                suggestedMin: discreteYAxis ? 0 : undefined,
+                suggestedMax: discreteYAxis ? 1.1 : undefined,
+                grid: {
+                    color: '#333840',
+                    drawBorder: false
+                },
+                ticks: {
+                    color: '#8a9099',
+                    stepSize: discreteYAxis ? 1 : undefined
+                }
+            }
+        },
+        plugins
+    };
+
+    if (options.yMaxTicksLimit !== undefined) {
+        chartOptions.scales.y.ticks.maxTicksLimit = options.yMaxTicksLimit;
+    }
+    if (options.autoSkip !== undefined) {
+        chartOptions.scales.x.ticks.autoSkip = options.autoSkip;
+    }
+    if (options.tickSource !== undefined) {
+        chartOptions.scales.x.ticks.source = options.tickSource;
+    }
+    ['normalized', 'parsing', 'spanGaps'].forEach((key) => {
+        if (options[key] !== undefined) {
+            chartOptions[key] = options[key];
+        }
+    });
+
+    return {
+        type: 'line',
+        data: {
+            datasets: datasets.map(createLineChartDataset)
+        },
+        options: chartOptions
+    };
+}
+
+function bindSingleDoubleClick(element, onSingle, onDouble, delay = DOUBLE_CLICK_THRESHOLD) {
+    if (!element) return () => {};
+    let clickTimer = null;
+    const handler = () => {
+        if (clickTimer) {
+            clearTimeout(clickTimer);
+            clickTimer = null;
+            onDouble();
+            return;
+        }
+        clickTimer = setTimeout(() => {
+            clickTimer = null;
+            onSingle();
+        }, delay);
+    };
+    element.addEventListener('click', handler);
+    return () => {
+        if (clickTimer) clearTimeout(clickTimer);
+        element.removeEventListener('click', handler);
+    };
+}
+
+function isDebugLogEnabled() {
+    try {
+        return window.UNISET_UI_DEBUG === true
+            || localStorage.getItem(UI_DEBUG_LOG_STORAGE_KEY) === 'true';
+    } catch (e) {
+        return false;
+    }
+}
+
+function debugLog(...args) {
+    if (isDebugLogEnabled()) {
+        console.log(...args);
+    }
+}
+
+function renderColorZoneItem(zone = {}, index = 0, defaultColor = '#ef4444') {
+    return `
+        <div class="zone-item">
+            <input type="color" class="zone-color" name="zone-color-${index}" value="${escapeAttr(zone.color || defaultColor)}">
+            <div class="zone-inputs">
+                <input type="number" class="zone-input" name="zone-from-${index}" value="${escapeAttr(zone.from ?? 0)}" placeholder="From">
+                <span class="zone-separator">→</span>
+                <input type="number" class="zone-input" name="zone-to-${index}" value="${escapeAttr(zone.to ?? 100)}" placeholder="To">
+            </div>
+            <button type="button" class="zone-remove-btn" onclick="removeZoneField(this)">×</button>
+        </div>
+    `;
+}
+
+function renderColorZonesEditor(zones = [], defaultColor = '#ef4444') {
+    return `
+        <div class="zones-editor">
+            <div class="zones-header">
+                <label>Color Zones</label>
+                <button type="button" class="zones-add-btn" onclick="addZoneField(this)">+ Add Zone</button>
+            </div>
+            <div class="zones-list" id="zones-list">
+                ${zones.map((zone, index) => renderColorZoneItem(zone, index, defaultColor)).join('')}
+            </div>
+        </div>
+    `;
+}
+
+function parseColorZones(container) {
+    const zones = [];
+    container.querySelectorAll('.zone-item').forEach((item) => {
+        const color = item.querySelector('.zone-color')?.value;
+        const inputs = item.querySelectorAll('.zone-input');
+        const from = parseFloat(inputs[0]?.value);
+        const to = parseFloat(inputs[1]?.value);
+        if (color && !isNaN(from) && !isNaN(to)) zones.push({ from, to, color });
+    });
+    return zones;
+}
+
+if (typeof globalThis !== 'undefined') {
+    globalThis.parseNumberOrDefault = parseNumberOrDefault;
+    globalThis.parseDecimalInputOrDefault = parseDecimalInputOrDefault;
+    globalThis.parseIntegerOrDefault = parseIntegerOrDefault;
+    globalThis.createLineChartConfig = createLineChartConfig;
+    globalThis.setupResizeHandle = setupResizeHandle;
+    globalThis.bindSingleDoubleClick = bindSingleDoubleClick;
+    globalThis.renderColorZoneItem = renderColorZoneItem;
+    globalThis.renderColorZonesEditor = renderColorZonesEditor;
+    globalThis.parseColorZones = parseColorZones;
+    globalThis.getFirstConnectedServerId = getFirstConnectedServerId;
+}
+
 
 // === 08-signal-generator.js ===
 // ============================================================================
@@ -1471,6 +1884,152 @@ function debounce(fn, delay) {
 //
 // Контракт: pure value-functions + setInterval-менеджер + onTick колбэк.
 // ============================================================================
+
+const SIGNAL_GENERATOR_ALLOWED_TYPES = new Set(['square', 'sin', 'cos', 'linear', 'random']);
+
+function getSignalGeneratorType(rawType) {
+    return SIGNAL_GENERATOR_ALLOWED_TYPES.has(rawType) ? rawType : 'square';
+}
+
+function readSignalGeneratorNumber(raw, name, fallback) {
+    return parseDecimalInputOrDefault(raw[name], fallback);
+}
+
+const SIGNAL_GENERATOR_TYPE_RULES = {
+    linear: {
+        validate({ readNumber, min, max }) {
+            const pause = readNumber('pause');
+            const step = readNumber('step');
+            if (!Number.isFinite(pause) || !Number.isFinite(step)) {
+                return 'Пауза и Шаг должны быть числами';
+            }
+            if (pause < GENERATOR_MIN_WAVE_PAUSE_MS) {
+                return `Пауза должна быть не менее ${GENERATOR_MIN_WAVE_PAUSE_MS}мс`;
+            }
+            if (step === 0) {
+                return 'Шаг не может быть равен 0';
+            }
+            if (Math.abs(step) > (max - min)) {
+                return 'Шаг должен быть меньше или равен разности Max - Min';
+            }
+            return '';
+        },
+        normalize({ readNumber }) {
+            const step = readNumber('step', GENERATOR_DEFAULT_LINEAR_STEP);
+            return {
+                step: step !== 0 ? step : GENERATOR_DEFAULT_LINEAR_STEP,
+                pause: Math.max(GENERATOR_MIN_WAVE_PAUSE_MS, readNumber('pause', GENERATOR_DEFAULT_WAVE_PAUSE_MS)),
+            };
+        },
+    },
+    sin: {
+        validate: validateWaveSignalGeneratorConfig,
+        normalize: normalizeWaveSignalGeneratorConfig,
+    },
+    cos: {
+        validate: validateWaveSignalGeneratorConfig,
+        normalize: normalizeWaveSignalGeneratorConfig,
+    },
+    square: {
+        validate({ readNumber }) {
+            const pulseWidth = readNumber('pulseWidth');
+            const pause = readNumber('pause');
+            if (!Number.isFinite(pulseWidth) || !Number.isFinite(pause)) {
+                return 'Ширина импульса и Пауза должны быть числами';
+            }
+            if (pulseWidth < GENERATOR_MIN_PULSE_WIDTH_MS) {
+                return 'Ширина импульса должна быть больше 0';
+            }
+            if (pause < GENERATOR_MIN_PAUSE_MS) {
+                return 'Пауза должна быть больше 0';
+            }
+            return '';
+        },
+        normalize({ readNumber }) {
+            return {
+                pulseWidth: Math.max(
+                    GENERATOR_MIN_PULSE_WIDTH_MS,
+                    readNumber('pulseWidth', GENERATOR_DEFAULT_PULSE_WIDTH_MS)
+                ),
+                pause: Math.max(GENERATOR_MIN_PAUSE_MS, readNumber('pause', GENERATOR_DEFAULT_SQUARE_PAUSE_MS)),
+            };
+        },
+    },
+    random: {
+        validate({ readNumber }) {
+            const period = readNumber('period');
+            if (!Number.isFinite(period)) {
+                return 'Период должен быть числом';
+            }
+            if (period < GENERATOR_MIN_PERIOD_MS) {
+                return `Период должен быть не менее ${GENERATOR_MIN_PERIOD_MS}мс`;
+            }
+            return '';
+        },
+        normalize({ readNumber }) {
+            return {
+                period: Math.max(GENERATOR_MIN_PERIOD_MS, readNumber('period', GENERATOR_DEFAULT_RANDOM_PERIOD_MS)),
+            };
+        },
+    },
+};
+
+function validateWaveSignalGeneratorConfig({ readNumber }) {
+    const pause = readNumber('pause');
+    const step = readNumber('step');
+    if (!Number.isFinite(pause) || !Number.isFinite(step)) {
+        return 'Шаг обновления и Количество точек должны быть числами';
+    }
+    if (pause < GENERATOR_MIN_WAVE_PAUSE_MS) {
+        return `Шаг обновления должен быть не менее ${GENERATOR_MIN_WAVE_PAUSE_MS}мс`;
+    }
+    if (step < GENERATOR_MIN_WAVE_POINTS) {
+        return `Количество точек должно быть не менее ${GENERATOR_MIN_WAVE_POINTS}`;
+    }
+    return '';
+}
+
+function normalizeWaveSignalGeneratorConfig({ readNumber }) {
+    const points = Math.floor(Math.abs(readNumber('step', GENERATOR_DEFAULT_WAVE_POINTS)));
+    return {
+        step: Math.max(GENERATOR_MIN_WAVE_POINTS, points),
+        pause: Math.max(GENERATOR_MIN_WAVE_PAUSE_MS, readNumber('pause', GENERATOR_DEFAULT_WAVE_PAUSE_MS)),
+    };
+}
+
+function validateSignalGeneratorConfig(raw = {}) {
+    const type = getSignalGeneratorType(raw.type);
+    const readNumber = (name) => readSignalGeneratorNumber(raw, name, NaN);
+
+    const min = readNumber('min');
+    const max = readNumber('max');
+    if (!Number.isFinite(min) || !Number.isFinite(max)) {
+        return 'Min и Max должны быть числами';
+    }
+    if (min >= max) {
+        return 'Min должен быть меньше Max';
+    }
+
+    return SIGNAL_GENERATOR_TYPE_RULES[type].validate({ readNumber, min, max });
+}
+
+function normalizeSignalGeneratorConfig(raw = {}) {
+    const type = getSignalGeneratorType(raw.type);
+    const readNumber = (name, fallback) => readSignalGeneratorNumber(raw, name, fallback);
+
+    const minRaw = readNumber('min', GENERATOR_DEFAULT_MIN);
+    const maxRaw = readNumber('max', GENERATOR_DEFAULT_MAX);
+    const min = Math.min(minRaw, maxRaw);
+    let max = Math.max(minRaw, maxRaw);
+    if (max === min) max = min + 1;
+
+    return {
+        type,
+        min,
+        max,
+        ...SIGNAL_GENERATOR_TYPE_RULES[type].normalize({ readNumber, min, max }),
+    };
+}
 
 class SignalGenerator {
     /**
@@ -1501,13 +2060,19 @@ class SignalGenerator {
     // Интервал обновления подбирается по типу — ~20 обновлений за период.
     computeUpdateInterval() {
         if (this.type === 'square') {
-            return Math.max(50, Math.floor((this.pulseWidth + this.pause) / 20));
+            return Math.max(
+                SIGNAL_GENERATOR_MIN_UPDATE_INTERVAL_MS,
+                Math.floor((this.pulseWidth + this.pause) / SIGNAL_GENERATOR_TICKS_PER_PERIOD)
+            );
         }
         if (this.type === 'linear' || this.type === 'sin' || this.type === 'cos') {
-            return Math.min(this.pause, 50);
+            return Math.max(this.pause, SIGNAL_GENERATOR_MIN_UPDATE_INTERVAL_MS);
         }
         // random
-        return Math.max(50, Math.floor(this.period / 20));
+        return Math.max(
+            SIGNAL_GENERATOR_MIN_UPDATE_INTERVAL_MS,
+            Math.floor(this.period / SIGNAL_GENERATOR_TICKS_PER_PERIOD)
+        );
     }
 
     // Чистая функция — текущее значение по elapsed-ms от startTime.
@@ -1601,6 +2166,8 @@ class SignalGenerator {
 
 // Экспорт в глобальную область (соответствует style остальных файлов src/)
 window.SignalGenerator = SignalGenerator;
+window.validateSignalGeneratorConfig = validateSignalGeneratorConfig;
+window.normalizeSignalGeneratorConfig = normalizeSignalGeneratorConfig;
 
 
 // === 09-sensor-key.js ===
@@ -1624,9 +2191,26 @@ function parseSensorKey(key) {
     return { serverId: parts[0], objectName: parts[1], sensorName: parts[2] };
 }
 
+// Group key — две части (serverId|objectName), без sensorName. Используется
+// для batch-операций над датчиками одного объекта (subscribe, fetchSensorValues).
+// `objectName` теоретически может содержать `|` — поэтому слайсим по первому
+// разделителю, а не split().
+function makeGroupKey(serverId, objectName) {
+    return `${serverId}|${objectName}`;
+}
+
+function parseGroupKey(key) {
+    if (typeof key !== 'string') return null;
+    const sepIdx = key.indexOf('|');
+    if (sepIdx < 0) return null;
+    return { serverId: key.slice(0, sepIdx), objectName: key.slice(sepIdx + 1) };
+}
+
 // Прикрепляем к globalThis (работает в browser и node test env).
 globalThis.makeSensorKey = makeSensorKey;
 globalThis.parseSensorKey = parseSensorKey;
+globalThis.makeGroupKey = makeGroupKey;
+globalThis.parseGroupKey = parseGroupKey;
 
 
 // === 10-base-renderer.js ===
@@ -1703,7 +2287,7 @@ const VirtualScrollMixin = {
         const viewport = this.getEl(config.viewportId);
         if (!viewport) return;
 
-        const threshold = config.threshold || 100;
+        const threshold = config.threshold || SIMPLE_INFINITE_SCROLL_THRESHOLD;
         viewport.addEventListener('scroll', () => {
             const scrollTop = viewport.scrollTop;
             const viewportHeight = viewport.clientHeight;
@@ -1787,7 +2371,7 @@ const SSESubscriptionMixin = {
             });
 
             this.subscribedSensorIds = newIds;
-            console.log(`${logPrefix}: подписка на ${ids.length} элементов для ${this.objectName}`);
+            debugLog(`${logPrefix}: подписка на ${ids.length} элементов для ${this.objectName}`);
         } catch (err) {
             console.warn(`${logPrefix}: ошибка подписки:`, err);
         }
@@ -1805,7 +2389,7 @@ const SSESubscriptionMixin = {
                 body: JSON.stringify({ [idField]: ids })
             });
 
-            console.log(`${logPrefix}: отписка от ${ids.length} элементов для ${this.objectName}`);
+            debugLog(`${logPrefix}: отписка от ${ids.length} элементов для ${this.objectName}`);
             this.subscribedSensorIds.clear();
         } catch (err) {
             console.warn(`${logPrefix}: ошибка отписки:`, err);
@@ -1821,7 +2405,7 @@ const SSESubscriptionMixin = {
         const ids = [...this.subscribedSensorIds];
         const { apiPath, idField, logPrefix, extraBody } = this._sseSubscriptionParams;
 
-        console.log(`${logPrefix}: Переподписка ${ids.length} элементов для ${this.objectName}`);
+        debugLog(`${logPrefix}: Переподписка ${ids.length} элементов для ${this.objectName}`);
         this.subscribedSensorIds.clear(); // Очищаем кэш чтобы subscribeToSSEFor не пропустил
         await this.subscribeToSSEFor(apiPath, ids, idField, logPrefix, extraBody);
     }
@@ -1872,41 +2456,18 @@ const ResizableSectionMixin = {
 
         container.style.height = `${this[heightProp]}px`;
 
-        let startY = 0;
-        let startHeight = 0;
-        let isResizing = false;
-
-        const onMouseMove = (e) => {
-            if (!isResizing) return;
-            const delta = e.clientY - startY;
-            const newHeight = Math.max(minHeight, Math.min(maxHeight, startHeight + delta));
-            container.style.height = `${newHeight}px`;
-        };
-
-        const onMouseUp = () => {
-            if (!isResizing) return;
-            isResizing = false;
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-            const newHeight = parseInt(container.style.height, 10);
-            if (!Number.isNaN(newHeight)) {
-                this[heightProp] = newHeight;
-                this.saveSectionHeight(storageKey, newHeight);
-            }
-        };
-
-        handle.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            isResizing = true;
-            startY = e.clientY;
-            startHeight = container.offsetHeight;
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = 'ns-resize';
-            document.body.style.userSelect = 'none';
-        });
+        setupResizeHandle(
+            handle,
+            container,
+            minHeight,
+            (height) => {
+                this[heightProp] = height;
+                this.saveSectionHeight(storageKey, height);
+            },
+            maxHeight,
+            null,
+            { updateMaxHeight: false }
+        );
     }
 };
 
@@ -1914,6 +2475,24 @@ const ResizableSectionMixin = {
  * Миксин для фильтрации списка элементов
  */
 const FilterMixin = {
+    hasActiveFilters() {
+        const hasTextFilter = Boolean((this.filter || '').trim());
+        const hasTypeFilter = Boolean(this.typeFilter && this.typeFilter !== 'all');
+        const hasStatusFilter = Boolean(this.statusFilter && this.statusFilter !== 'all');
+        return hasTextFilter || hasTypeFilter || hasStatusFilter;
+    },
+
+    shouldShowPinnedOnly(hasPinned) {
+        return Boolean(hasPinned) && !FilterMixin.hasActiveFilters.call(this);
+    },
+
+    filterPinnedOnly(items, pinnedSet, idAccessor = item => item.id) {
+        if (!this.shouldShowPinnedOnly(pinnedSet.size > 0)) {
+            return items;
+        }
+        return items.filter(item => pinnedSet.has(String(idAccessor(item))));
+    },
+
     // Применение локальных фильтров к списку
     // extraFields - дополнительные поля для текстового поиска (например, ['mbreg'] для Modbus)
     // fieldAccessor - функция для получения значения поля (для вложенных объектов)
@@ -2121,7 +2700,7 @@ const ParamsManagerMixin = {
         // Selects (exchangeMode и др.)
         container.querySelectorAll('select[data-param], select[data-name]').forEach(select => {
             const name = select.dataset.param || select.dataset.name;
-            const newValue = parseInt(select.value);
+            const newValue = parseIntegerOrDefault(select.value, this.params[name]);
             if (this.params[name] !== newValue) {
                 changed[name] = newValue;
             }
@@ -2252,6 +2831,45 @@ const PinManagementMixin = {
         this.savePinnedItems(storageKey, new Set());
         if (renderCallback) {
             renderCallback.call(this);
+        }
+    },
+
+    async loadMissingPinnedSensors(apiPath, options = {}) {
+        const {
+            responseKey = 'sensors',
+            list = this.allSensors,
+            map = this.sensorMap,
+            idField = 'id',
+            warningMessage = 'Failed to load pinned sensors:'
+        } = options;
+        const pinnedIds = this.getPinned();
+        if (pinnedIds.size === 0 || !list || !map) return;
+
+        const missingIds = [];
+        for (const idStr of pinnedIds) {
+            const id = parseIntegerOrDefault(idStr, null);
+            if (id !== null && !map.has(id)) {
+                missingIds.push(id);
+            }
+        }
+
+        if (missingIds.length === 0) return;
+
+        try {
+            const idsParam = missingIds.join(',');
+            const separator = apiPath.includes('?') ? '&' : '?';
+            const response = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}${apiPath}${separator}filter=${idsParam}`);
+            const pinnedSensors = response[responseKey] || [];
+
+            for (const sensor of pinnedSensors) {
+                const id = sensor[idField];
+                if (!map.has(id)) {
+                    list.unshift(sensor);
+                    map.set(id, sensor);
+                }
+            }
+        } catch (err) {
+            console.warn(warningMessage, err);
         }
     },
 
@@ -2513,7 +3131,7 @@ const BatchRenderMixin = {
         if (!tbody) return;
 
         tbody.querySelectorAll('tr[data-sensor-id]').forEach(row => {
-            const id = parseInt(row.dataset.sensorId);
+            const id = parseIntegerOrDefault(row.dataset.sensorId, null);
             if (!id) return;
 
             const update = updateMap.get(id);
@@ -2597,7 +3215,7 @@ const ModbusRegistersMixin = {
                 registers.forEach(r => this.registerMap.set(r.id, r));
 
                 // Если нет фильтра и есть закреплённые регистры - загрузить их отдельно
-                if (!this.filter) {
+                if (!this.hasActiveFilters()) {
                     await this.loadPinnedRegisters();
                 }
             } else {
@@ -2638,7 +3256,7 @@ const ModbusRegistersMixin = {
         // Найти ID, которых нет в загруженных регистрах
         const missingIds = [];
         for (const idStr of pinnedIds) {
-            const id = parseInt(idStr);
+            const id = parseIntegerOrDefault(idStr, null);
             if (!this.registerMap.has(id)) {
                 missingIds.push(id);
             }
@@ -2790,7 +3408,23 @@ class BaseObjectRenderer {
         this.startStatusDisplayTimer();
     }
 
-    // Вспомогательные методы для создания секций
+    // ============================================================================
+    // Section markup helpers — без inline onclick/onchange.
+    // Click-handling — единая делегация в _setupSectionDelegation() (вызывается
+    // из 50-ui-tabs.js сразу после renderer.initialize()). Контракт CSS:
+    //   - .collapsible-header — клик → toggleSection(data-section родителя)
+    //   - .section-move-up / .section-move-down (data-section-id) — moveSectionUp/Down
+    //   - .add-sensor-btn — openSensorDialog(this.tabKey)
+    //   - .charts-pause-btn — toggleChartsPause(this.tabKey)
+    //   - .time-range-btn (data-range) — setTimeRange(parseInt(data-range))
+    //   - input#io-sequential-${objectName} change — toggleIOLayout
+    // Контейнеры с классами .section-reorder-buttons, .filter-bar,
+    //   .charts-time-range, .io-filter-wrapper, .io-sequential-toggle,
+    //   .header-indicators, .header-channels, .header-indicator-dot —
+    //   click внутри них НЕ должен toggle'ить секцию (раньше — inline
+    //   stopPropagation, теперь — explicit "no-toggle zone" в делегации).
+    // ============================================================================
+
     createCollapsibleSection(id, title, content, options = {}) {
         const { badge = false, hidden = false, headerExtra = '' } = options;
         const badgeHtml = badge ? `<span class="io-section-badge" id="${id}-count-${this.objectName}">0</span>` : '';
@@ -2799,16 +3433,16 @@ class BaseObjectRenderer {
 
         return `
             <div class="collapsible-section reorderable-section" data-section="${id}-${this.objectName}" data-section-id="${id}" id="${sectionId}" ${style}>
-                <div class="collapsible-header" onclick="toggleSection('${id}-${this.objectName}')">
+                <div class="collapsible-header">
                     <svg class="collapsible-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M6 9l6 6 6-6"/>
                     </svg>
                     <span class="collapsible-title">${title}</span>
                     ${badgeHtml}
                     ${headerExtra}
-                    <div class="section-reorder-buttons" onclick="event.stopPropagation()">
-                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.tabKey}', '${id}')" title="Move up">↑</button>
-                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.tabKey}', '${id}')" title="Move down">↓</button>
+                    <div class="section-reorder-buttons">
+                        <button class="section-move-btn section-move-up" data-move-section="${id}" title="Move up">↑</button>
+                        <button class="section-move-btn section-move-down" data-move-section="${id}" title="Move down">↓</button>
                     </div>
                 </div>
                 <div class="collapsible-content" id="section-${id}-${this.objectName}">
@@ -2821,28 +3455,24 @@ class BaseObjectRenderer {
     createChartsSection() {
         return `
             <div class="collapsible-section reorderable-section" data-section="charts-${this.objectName}" data-section-id="charts" id="charts-section-${this.objectName}">
-                <div class="collapsible-header" onclick="toggleSection('charts-${this.objectName}')">
+                <div class="collapsible-header">
                     <svg class="collapsible-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M6 9l6 6 6-6"/>
                     </svg>
                     <span class="collapsible-title">Charts</span>
                     ${this.showAddSensorButton ? `<button class="add-sensor-btn" id="add-sensor-btn-${this.objectName}"
-                            onclick="event.stopPropagation(); openSensorDialog('${this.tabKey}')"
                             ${!state.capabilities.smEnabled ? 'disabled title="SM not connected (-sm-url not set)"' : ''}>+ Sensor</button>` : ''}
-                    <div class="charts-time-range" onclick="event.stopPropagation()">
+                    <div class="charts-time-range">
                         <div class="time-range-selector">
-                            <button class="charts-pause-btn" id="charts-pause-${this.objectName}" onclick="toggleChartsPause('${this.tabKey}')" title="Pause chart updates">||</button>
-                            <button class="time-range-btn${state.timeRange === 60 ? ' active' : ''}" onclick="setTimeRange(60)">1m</button>
-                            <button class="time-range-btn${state.timeRange === 180 ? ' active' : ''}" onclick="setTimeRange(180)">3m</button>
-                            <button class="time-range-btn${state.timeRange === 300 ? ' active' : ''}" onclick="setTimeRange(300)">5m</button>
-                            <button class="time-range-btn${state.timeRange === 900 ? ' active' : ''}" onclick="setTimeRange(900)">15m</button>
-                            <button class="time-range-btn${state.timeRange === 3600 ? ' active' : ''}" onclick="setTimeRange(3600)">1h</button>
-                            <button class="time-range-btn${state.timeRange === 10800 ? ' active' : ''}" onclick="setTimeRange(10800)">3h</button>
+                            <button class="charts-pause-btn" id="charts-pause-${this.objectName}" title="Pause chart updates">||</button>
+                            ${CHART_TIME_RANGES_SECONDS.map(({ seconds, label }) => `
+                                <button class="time-range-btn${state.timeRange === seconds ? ' active' : ''}" data-range="${seconds}">${label}</button>
+                            `).join('')}
                         </div>
                     </div>
-                    <div class="section-reorder-buttons" onclick="event.stopPropagation()">
-                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.tabKey}', 'charts')" title="Move up">↑</button>
-                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.tabKey}', 'charts')" title="Move down">↓</button>
+                    <div class="section-reorder-buttons">
+                        <button class="section-move-btn section-move-up" data-move-section="charts" title="Move up">↑</button>
+                        <button class="section-move-btn section-move-down" data-move-section="charts" title="Move down">↓</button>
                     </div>
                 </div>
                 <div class="collapsible-content" id="section-charts-${this.objectName}">
@@ -2858,22 +3488,22 @@ class BaseObjectRenderer {
     createIOTimersSection() {
         return `
             <div class="collapsible-section io-timers-section reorderable-section" data-section="io-timers-${this.objectName}" data-section-id="io-timers" id="io-timers-section-${this.objectName}">
-                <div class="collapsible-header" onclick="toggleSection('io-timers-${this.objectName}')">
+                <div class="collapsible-header">
                     <svg class="collapsible-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M6 9l6 6 6-6"/>
                     </svg>
                     <span class="collapsible-title">I/O</span>
-                    <div class="io-filter-wrapper" onclick="event.stopPropagation()">
+                    <div class="io-filter-wrapper">
                         <input type="text" class="io-filter-input io-filter-global" id="io-filter-global-${this.objectName}"
                                placeholder="Filter..." data-object="${this.objectName}">
                     </div>
-                    <label class="io-sequential-toggle" onclick="event.stopPropagation()">
-                        <input type="checkbox" id="io-sequential-${this.objectName}" onchange="toggleIOLayout('${this.tabKey}', '${this.objectName}')">
+                    <label class="io-sequential-toggle">
+                        <input type="checkbox" id="io-sequential-${this.objectName}">
                         <span>Sequential</span>
                     </label>
-                    <div class="section-reorder-buttons" onclick="event.stopPropagation()">
-                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.tabKey}', 'io-timers')" title="Move up">↑</button>
-                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.tabKey}', 'io-timers')" title="Move down">↓</button>
+                    <div class="section-reorder-buttons">
+                        <button class="section-move-btn section-move-up" data-move-section="io-timers" title="Move up">↑</button>
+                        <button class="section-move-btn section-move-down" data-move-section="io-timers" title="Move down">↓</button>
                     </div>
                 </div>
                 <div class="collapsible-content" id="section-io-timers-${this.objectName}">
@@ -2885,6 +3515,68 @@ class BaseObjectRenderer {
                 </div>
             </div>
         `;
+    }
+
+    // Делегирование click/change для всех секций tab-панели. Вызывается из
+    // 50-ui-tabs.js один раз после renderer.initialize() — панель уже в DOM,
+    // listener один на всю вкладку, добавление новых .collapsible-section не
+    // требует повторной привязки.
+    _setupSectionDelegation() {
+        const panel = getTabPanel(this.tabKey);
+        if (!panel) return;
+        if (panel.dataset.sectionDelegationWired === 'true') return;
+        panel.dataset.sectionDelegationWired = 'true';
+
+        // CSS-классы внутри .collapsible-header, клик по которым НЕ toggle'ит секцию
+        // (раньше — inline onclick="event.stopPropagation()" на каждой коробке).
+        const NO_TOGGLE_ZONE_SELECTOR =
+            '.section-reorder-buttons, .filter-bar, .charts-time-range, ' +
+            '.io-filter-wrapper, .io-sequential-toggle, .add-sensor-btn, ' +
+            '.header-indicators, .header-channels, .header-indicator-dot';
+
+        panel.addEventListener('click', (e) => {
+            // 1) Конкретные кнопки секций
+            const moveUp = e.target.closest('.section-move-up');
+            if (moveUp && panel.contains(moveUp)) {
+                const id = moveUp.dataset.moveSection;
+                if (id) moveSectionUp(this.tabKey, id);
+                return;
+            }
+            const moveDown = e.target.closest('.section-move-down');
+            if (moveDown && panel.contains(moveDown)) {
+                const id = moveDown.dataset.moveSection;
+                if (id) moveSectionDown(this.tabKey, id);
+                return;
+            }
+            if (e.target.closest('.add-sensor-btn')) {
+                openSensorDialog(this.tabKey);
+                return;
+            }
+            if (e.target.closest('.charts-pause-btn')) {
+                toggleChartsPause(this.tabKey);
+                return;
+            }
+            const tr = e.target.closest('.time-range-btn');
+            if (tr && panel.contains(tr)) {
+                const seconds = parseIntegerOrDefault(tr.dataset.range, null);
+                if (seconds !== null) setTimeRange(seconds);
+                return;
+            }
+
+            // 2) Клик внутри известного "no-toggle" контейнера — игнорируем (не toggle'им секцию).
+            if (e.target.closest(NO_TOGGLE_ZONE_SELECTOR)) return;
+
+            // 3) Клик по самому header'у — toggle секции через data-section родителя.
+            const header = e.target.closest('.collapsible-header');
+            if (!header || !panel.contains(header)) return;
+            const sectionEl = header.closest('.collapsible-section');
+            const sectionAttr = sectionEl?.dataset.section;
+            if (sectionAttr) toggleSection(sectionAttr);
+        });
+
+        // change-обработчик IO sequential checkbox (один на вкладку — прямой bind).
+        const ioSeq = this.getEl(`io-sequential-${this.objectName}`);
+        ioSeq?.addEventListener('change', () => toggleIOLayout(this.tabKey, this.objectName));
     }
 
     createIOSection(type, title) {
@@ -3099,6 +3791,7 @@ class BaseObjectRenderer {
         const varName = `${prefix}-${sensorId}`;
         const checkboxId = `chart-${this.objectName}-${varName}`;
         const label = sensorLabel || sensorName;
+        const serverId = state.tabs.get(this.tabKey)?.serverId || '';
         return `
             <td class="add-buttons-col">
                 <span class="chart-toggle">
@@ -3118,6 +3811,9 @@ class BaseObjectRenderer {
                 <button class="dashboard-add-btn"
                         data-sensor-name="${escapeAttr(sensorName)}"
                         data-sensor-label="${escapeAttr(label)}"
+                        data-sensor-id="${escapeAttr(sensorId)}"
+                        data-server-id="${escapeAttr(serverId)}"
+                        data-object-name="${escapeAttr(this.objectName)}"
                         title="Add to Dashboard">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="3" width="7" height="7" rx="1"/>
@@ -3153,7 +3849,7 @@ class BaseObjectRenderer {
                 e.stopPropagation();
                 const sensorName = btn.dataset.sensorName;
                 const sensorLabel = btn.dataset.sensorLabel;
-                showAddToDashboardDialog(sensorName, sensorLabel);
+                showAddToDashboardDialog(sensorName, sensorLabel, getDashboardBindingFromButton(btn));
             });
         });
     }
@@ -3182,6 +3878,11 @@ class BaseObjectRenderer {
         return path;
     }
 
+    buildPaginatedSensorsUrl(apiPath, offset) {
+        const normalizedPath = apiPath.startsWith('/') ? apiPath : `/${apiPath}`;
+        return `/api/objects/${encodeURIComponent(this.objectName)}${normalizedPath}/sensors?limit=${this.chunkSize}&offset=${offset}`;
+    }
+
     // Выполнить запрос и вернуть JSON
     async fetchJSON(path, options = {}) {
         const url = this.buildUrl(path);
@@ -3201,39 +3902,74 @@ class BaseObjectRenderer {
         el.classList.toggle('note-error', !!(text && isError));
     }
 
-    // Базовый resize handler для секций
-    setupResize(containerSelector, handleSelector, storageKey, minHeight = 100, maxHeight = 800) {
-        const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
-        const container = panel ? panel.querySelector(containerSelector) : document.querySelector(containerSelector);
-        const handle = panel ? panel.querySelector(handleSelector) : document.querySelector(handleSelector);
-        if (!container || !handle) return;
+    renderHttpControl(prefix) {
+        const allow = this.status?.httpControlAllow && canControl();
+        const active = this.status?.httpControlActive;
+        const enabledParams = this.status?.httpEnabledSetParams;
+        const allowText = allow ? 'Take control' : (!canControl() ? 'Read-only mode' : 'Control not allowed');
 
-        let startY, startHeight;
+        const indAllow = this.getEl(`${prefix}-ind-allow-${this.objectName}`);
+        const indActive = this.getEl(`${prefix}-ind-active-${this.objectName}`);
+        const indParams = this.getEl(`${prefix}-ind-params-${this.objectName}`);
 
-        const onMouseMove = (e) => {
-            const delta = e.clientY - startY;
-            const newHeight = Math.min(maxHeight, Math.max(minHeight, startHeight + delta));
-            container.style.height = `${newHeight}px`;
-        };
+        if (indAllow) {
+            indAllow.className = `header-indicator-dot ${allow ? 'ok' : 'fail'}`;
+            indAllow.title = allow ? 'Allowed: Yes' : 'Allowed: No';
+        }
+        if (indActive) {
+            indActive.className = `header-indicator-dot ${active ? 'ok' : 'fail'}`;
+            indActive.title = active ? 'Active: Yes' : 'Active: No';
+        }
+        if (indParams) {
+            indParams.className = `header-indicator-dot ${enabledParams ? 'ok' : 'fail'}`;
+            indParams.title = enabledParams ? 'Parameters: Yes' : 'Parameters: No';
+        }
 
-        const onMouseUp = () => {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            localStorage.setItem(storageKey, container.style.height);
-        };
+        const takeBtn = this.getEl(`${prefix}-control-take-${this.objectName}`);
+        const releaseBtn = this.getEl(`${prefix}-control-release-${this.objectName}`);
+        const noteEl = this.getEl(`${prefix}-control-note-${this.objectName}`);
 
-        handle.addEventListener('mousedown', (e) => {
-            startY = e.clientY;
-            startHeight = container.offsetHeight;
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-            e.preventDefault();
-        });
+        if (takeBtn) {
+            takeBtn.disabled = !allow;
+            takeBtn.title = allowText;
+            takeBtn.classList.toggle('control-active', !!active);
+        }
+        if (releaseBtn) {
+            releaseBtn.disabled = !allow;
+            releaseBtn.title = allowText;
+        }
+        if (noteEl) {
+            noteEl.classList.toggle('control-note-success', !!active);
+        }
+    }
 
-        // Восстановить из localStorage
-        const savedHeight = localStorage.getItem(storageKey);
-        if (savedHeight) {
-            container.style.height = savedHeight;
+    async takeHttpControl(apiSegment, notePrefix) {
+        if (this.status && this.status.httpControlAllow === false) {
+            this.setNote(`${notePrefix}-control-note-${this.objectName}`, 'Control not allowed', true);
+            return;
+        }
+
+        try {
+            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/${apiSegment}/control/take`, { method: 'POST' });
+            this.setNote(`${notePrefix}-control-note-${this.objectName}`, 'HTTP control activated');
+            this.loadStatus();
+        } catch (err) {
+            this.setNote(`${notePrefix}-control-note-${this.objectName}`, err.message, true);
+        }
+    }
+
+    async releaseHttpControl(apiSegment, notePrefix) {
+        if (this.status && this.status.httpControlAllow === false) {
+            this.setNote(`${notePrefix}-control-note-${this.objectName}`, 'Control not allowed', true);
+            return;
+        }
+
+        try {
+            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/${apiSegment}/control/release`, { method: 'POST' });
+            this.setNote(`${notePrefix}-control-note-${this.objectName}`, 'Control returned to sensor');
+            this.loadStatus();
+        } catch (err) {
+            this.setNote(`${notePrefix}-control-note-${this.objectName}`, err.message, true);
         }
     }
 
@@ -3241,7 +3977,7 @@ class BaseObjectRenderer {
 
     startStatusAutoRefresh() {
         this.stopStatusAutoRefresh();
-        const interval = state.sse.pollInterval || 5000;
+        const interval = state.sse.pollInterval || SSE_DEFAULT_POLL_INTERVAL;
         if (interval <= 0) return;
         this.statusTimer = setInterval(() => this.loadStatus(), interval);
     }
@@ -3377,7 +4113,7 @@ class FallbackRenderer extends BaseObjectRenderer {
 
     update(data) {
         // Обновляем тип объекта в сообщении (используем tabKey для поиска панели)
-        const typeSpan = document.querySelector(`.tab-panel[data-name="${this.tabKey}"] .fallback-type`);
+        const typeSpan = getElementsInTab(this.tabKey, '.fallback-type')[0];
         const typeLabel = data.object?.extensionType || data.object?.extensionsType || data.object?.objectType;
         if (typeSpan && typeLabel) {
             typeSpan.textContent = typeLabel;
@@ -3441,7 +4177,6 @@ function resolveRenderer(objectInfo = {}) {
 // ============================================================================
 
 
-
 // === 20-ionc-renderer.js ===
 // ============================================================================
 // IONotifyControllerRenderer - рендерер для SharedMemory и подобных объектов
@@ -3485,6 +4220,10 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             type: { field: 'type', type: 'string' },
             value: { field: 'value', type: 'number' }
         };
+
+        // Pin management
+        this.pinStorageKey = 'uniset-panel-ionc-pinned';
+        this.renderAfterPinChange = this.renderSensorsTable;
     }
 
     // IONotifyController датчики - показываем badge "IO" и prefix "io"
@@ -3523,13 +4262,13 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     createSensorsSection() {
         return `
             <div class="collapsible-section reorderable-section ionc-sensors-section" data-section="ionc-sensors-${this.objectName}" data-section-id="ionc-sensors">
-                <div class="collapsible-header" onclick="toggleSection('ionc-sensors-${this.objectName}')">
+                <div class="collapsible-header">
                     <svg class="collapsible-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M6 9l6 6 6-6"/>
                     </svg>
                     <span class="collapsible-title">Sensors</span>
                     <span class="sensor-count" id="ionc-sensor-count-${this.objectName}">0</span>
-                    <div class="filter-bar" onclick="event.stopPropagation()">
+                    <div class="filter-bar">
                         <input type="text" class="filter-input" id="ionc-filter-${this.objectName}" placeholder="Filter...">
                         <select class="type-filter" id="ionc-type-filter-${this.objectName}">
                             <option value="all">All</option>
@@ -3539,9 +4278,9 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                             <option value="DO">DO</option>
                         </select>
                     </div>
-                    <div class="section-reorder-buttons" onclick="event.stopPropagation()">
-                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.tabKey}', 'ionc-sensors')" title="Move up">↑</button>
-                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.tabKey}', 'ionc-sensors')" title="Move down">↓</button>
+                    <div class="section-reorder-buttons">
+                        <button class="section-move-btn section-move-up" data-move-section="ionc-sensors" title="Move up">↑</button>
+                        <button class="section-move-btn section-move-down" data-move-section="ionc-sensors" title="Move down">↓</button>
                     </div>
                 </div>
                 <div class="collapsible-content" id="section-ionc-sensors-${this.objectName}">
@@ -3602,6 +4341,13 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             () => this.loadSensors()
         );
 
+        // Unpin all (persistent header element — wire'им один раз; в
+        // renderVisibleSensors больше не трогаем).
+        const unpinBtn = this.getEl(`ionc-unpin-${this.objectName}`);
+        if (unpinBtn) {
+            unpinBtn.addEventListener('click', () => this.unpinAll());
+        }
+
         // Делегирование событий для кнопки добавления на dashboard
         // устанавливается в setupDashboardClickHandler после загрузки данных
     }
@@ -3614,7 +4360,11 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                 const btn = e.target.closest('.dashboard-add-btn');
                 if (btn) {
                     e.stopPropagation();
-                    showAddToDashboardDialog(btn.dataset.sensorName, btn.dataset.sensorLabel);
+                    showAddToDashboardDialog(
+                        btn.dataset.sensorName,
+                        btn.dataset.sensorLabel,
+                        getDashboardBindingFromButton(btn)
+                    );
                 }
             });
             tbody._dashboardClickHandlerAttached = true;
@@ -3674,7 +4424,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             sensors.forEach(s => this.sensorMap.set(s.id, s));
 
             // Если нет фильтра и есть закреплённые датчики - загрузить их отдельно
-            if (!this.filter) {
+            if (!this.hasActiveFilters()) {
                 await this.loadPinnedSensors();
             }
 
@@ -3702,41 +4452,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     // Загружает закреплённые датчики, если они не в текущем списке
-    async loadPinnedSensors() {
-        const pinnedIds = this.getPinnedSensors();
-        if (pinnedIds.size === 0) return;
-
-        // Найти ID, которых нет в загруженных датчиках
-        const missingIds = [];
-        for (const idStr of pinnedIds) {
-            const id = parseInt(idStr);
-            if (!this.sensorMap.has(id)) {
-                missingIds.push(id);
-            }
-        }
-
-        if (missingIds.length === 0) return;
-
-        // Загрузить отсутствующие датчики по ID (используем /ionc/get с filter)
-        try {
-            const idsParam = missingIds.join(',');
-            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/get?filter=${idsParam}`);
-            const response = await fetch(url);
-            if (!response.ok) return;
-
-            const data = await response.json();
-            const pinnedSensors = data.sensors || [];
-
-            // Добавить закреплённые датчики в начало списка
-            for (const sensor of pinnedSensors) {
-                if (!this.sensorMap.has(sensor.id)) {
-                    this.allSensors.unshift(sensor);
-                    this.sensorMap.set(sensor.id, sensor);
-                }
-            }
-        } catch (err) {
-            console.warn('Failed to load pinned sensors:', err);
-        }
+    loadPinnedSensors() {
+        return this.loadMissingPinnedSensors('/ionc/get');
     }
 
     applyLocalFilters(sensors) {
@@ -3822,7 +4539,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         spacer.style.height = `${this.startIndex * this.rowHeight}px`;
 
         // Получаем закреплённые датчики
-        const pinnedSensors = this.getPinnedSensors();
+        const pinnedSensors = this.getPinned();
         const hasPinned = pinnedSensors.size > 0;
 
         // Показываем/скрываем кнопку "снять все"
@@ -3835,9 +4552,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         // - если есть текстовый фильтр — показываем все (для поиска новых датчиков)
         // - иначе если есть закреплённые — показываем только их
         let sensorsToShow = this.allSensors;
-        if (!this.filter && hasPinned) {
-            sensorsToShow = this.allSensors.filter(s => pinnedSensors.has(String(s.id)));
-        }
+        sensorsToShow = this.filterPinnedOnly(sensorsToShow, pinnedSensors);
 
         // Сортировка: pinned всегда вверху, остальные по выбранной колонке
         sensorsToShow = this.sortItems(sensorsToShow, pinnedSensors, this.sortColumnDefs);
@@ -3855,66 +4570,32 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         // Привязать события к строкам
         this.bindRowEvents(tbody);
 
-        // Обработчик кнопки "снять все"
-        if (unpinBtn) {
-            unpinBtn.onclick = () => this.unpinAll();
-        }
+        // unpinBtn handler — в setupEventListeners() (persistent элемент,
+        // не пересоздаётся; раньше тут было .onclick — переехало для consistency
+        // с modbus-master/slave).
     }
 
     bindRowEvents(tbody) {
         // Добавляем обработчики событий
         tbody.querySelectorAll('.ionc-btn-set').forEach(btn => {
-            btn.addEventListener('click', () => this.showSetDialog(parseInt(btn.dataset.id)));
+            btn.addEventListener('click', () => this.showSetDialog(parseInt(btn.dataset.id, 10)));
         });
-        // Кнопка заморозки: одинарный клик = диалог, двойной клик = быстрая заморозка
-        tbody.querySelectorAll('.ionc-btn-freeze').forEach(btn => {
-            let clickTimer = null;
-            const sensorId = parseInt(btn.dataset.id);
-            btn.addEventListener('click', () => {
-                if (clickTimer) {
-                    clearTimeout(clickTimer);
-                    clickTimer = null;
-                    this.quickFreeze(sensorId);
-                } else {
-                    clickTimer = setTimeout(() => {
-                        clickTimer = null;
-                        this.showFreezeDialog(sensorId);
-                    }, DOUBLE_CLICK_THRESHOLD);
-                }
-            });
-        });
-        // Кнопка разморозки: одинарный клик = диалог, двойной клик = быстрая разморозка
-        tbody.querySelectorAll('.ionc-btn-unfreeze').forEach(btn => {
-            let clickTimer = null;
-            const sensorId = parseInt(btn.dataset.id);
-            btn.addEventListener('click', () => {
-                if (clickTimer) {
-                    clearTimeout(clickTimer);
-                    clickTimer = null;
-                    this.quickUnfreeze(sensorId);
-                } else {
-                    clickTimer = setTimeout(() => {
-                        clickTimer = null;
-                        this.showUnfreezeDialog(sensorId);
-                    }, DOUBLE_CLICK_THRESHOLD);
-                }
-            });
-        });
+        this.bindFreezeToggleButtons(tbody);
         tbody.querySelectorAll('.ionc-btn-consumers').forEach(btn => {
-            btn.addEventListener('click', () => this.showConsumersDialog(parseInt(btn.dataset.id)));
+            btn.addEventListener('click', () => this.showConsumersDialog(parseInt(btn.dataset.id, 10)));
         });
         // Кнопки генератора
         tbody.querySelectorAll('.ionc-btn-gen').forEach(btn => {
-            btn.addEventListener('click', () => this.showGeneratorDialog(parseInt(btn.dataset.id)));
+            btn.addEventListener('click', () => this.showGeneratorDialog(parseInt(btn.dataset.id, 10)));
         });
         tbody.querySelectorAll('.ionc-btn-gen-stop').forEach(btn => {
-            btn.addEventListener('click', () => this.stopGenerator(parseInt(btn.dataset.id)));
+            btn.addEventListener('click', () => this.stopGenerator(parseInt(btn.dataset.id, 10)));
         });
         tbody.querySelectorAll('.pin-toggle').forEach(btn => {
-            btn.addEventListener('click', () => this.togglePin(parseInt(btn.dataset.id)));
+            btn.addEventListener('click', () => this.togglePin(parseInt(btn.dataset.id, 10)));
         });
         tbody.querySelectorAll('.ionc-chart-checkbox').forEach(cb => {
-            cb.addEventListener('change', () => this.toggleSensorChartById(parseInt(cb.dataset.id)));
+            cb.addEventListener('change', () => this.toggleSensorChartById(parseIntegerOrDefault(cb.dataset.id, null)));
         });
         // Кнопки добавления на dashboard обрабатываются через делегирование в setupDashboardClickHandler
     }
@@ -4002,6 +4683,9 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                     <button class="dashboard-add-btn"
                             data-sensor-name="${escapeAttr(sensor.name)}"
                             data-sensor-label="${escapeAttr(textname || sensor.name)}"
+                            data-sensor-id="${escapeAttr(sensor.id)}"
+                            data-server-id="${escapeAttr(serverId)}"
+                            data-object-name="${escapeAttr(this.objectName)}"
                             title="Add to Dashboard">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <rect x="3" y="3" width="7" height="7" rx="1"/>
@@ -4011,17 +4695,17 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                         </svg>
                     </button>
                 </td>
-                <td class="ionc-col-id">${sensor.id}</td>
+                <td class="ionc-col-id">${escapeHtml(sensor.id ?? '')}</td>
                 <td class="ionc-col-name" title="${escapeAttr(textname)}">${escapeHtml(sensor.name)}</td>
-                <td class="ionc-col-type"><span class="type-badge type-${sensor.type}">${sensor.type}</span></td>
+                <td class="ionc-col-type"><span class="type-badge type-${escapeAttr(sensor.type || '')}">${escapeHtml(sensor.type || '')}</span></td>
                 <td class="ionc-col-value">
                     ${sensor.frozen && sensor.real_value !== undefined && sensor.real_value !== sensor.value
-                        ? `<span class="ionc-value ionc-value-frozen" id="ionc-value-${this.objectName}-${sensor.id}">
-                               <span class="ionc-real-value">${sensor.real_value}</span>
+                        ? `<span class="ionc-value ionc-value-frozen" id="ionc-value-${escapeAttr(this.objectName)}-${escapeAttr(sensor.id)}">
+                               <span class="ionc-real-value">${formatValueHtml(sensor.real_value)}</span>
                                <span class="ionc-frozen-arrow">→</span>
-                               <span class="ionc-frozen-value">${sensor.value}❄</span>
+                               <span class="ionc-frozen-value">${formatValueHtml(sensor.value)}❄</span>
                            </span>`
-                        : `<span class="ionc-value" id="ionc-value-${this.objectName}-${sensor.id}">${sensor.value}</span>`
+                        : `<span class="ionc-value" id="ionc-value-${escapeAttr(this.objectName)}-${escapeAttr(sensor.id)}">${formatValueHtml(sensor.value)}</span>`
                     }
                 </td>
                 <td class="ionc-col-flags">${flags.join(' ') || '—'}</td>
@@ -4036,45 +4720,6 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                 </td>
             </tr>
         `;
-    }
-
-    // Управление закреплёнными датчиками
-    getPinnedSensors() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-ionc-pinned') || '{}');
-            return new Set(saved[this.tabKey] || saved[this.objectName] || []);
-        } catch (err) {
-            return new Set();
-        }
-    }
-
-    savePinnedSensors(pinnedSet) {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-ionc-pinned') || '{}');
-            saved[this.tabKey] = Array.from(pinnedSet);
-            localStorage.setItem('uniset-panel-ionc-pinned', JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save pinned sensors:', err);
-        }
-    }
-
-    togglePin(sensorId) {
-        const pinned = this.getPinnedSensors();
-        const idStr = String(sensorId);
-
-        if (pinned.has(idStr)) {
-            pinned.delete(idStr);
-        } else {
-            pinned.add(idStr);
-        }
-
-        this.savePinnedSensors(pinned);
-        this.renderSensorsTable();
-    }
-
-    unpinAll() {
-        this.savePinnedSensors(new Set());
-        this.renderSensorsTable();
     }
 
     // Используем метод toggleSensorChart из базового класса
@@ -4242,31 +4887,40 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         document.getElementById('ionc-freeze-confirm').addEventListener('click', doFreeze);
     }
 
-    // Быстрая заморозка на текущем значении (двойной клик на ❄)
-    async quickFreeze(sensorId) {
+    // Internal: общий POST к ionc-эндпоинту с локальным sensor mutate + перерисовкой.
+    // endpoint: 'freeze' | 'unfreeze'
+    // body: payload для POST (sensor_id обязателен)
+    // mutateSensor(sensor): функция локального обновления sensor для мгновенной FB
+    // onError (optional): дефолтный msg если err.error пустой
+    async _ioncSensorAction(sensorId, endpoint, body, mutateSensor, onError) {
         const sensor = this.sensorMap.get(sensorId);
         if (!sensor) return;
-
         try {
-            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/freeze`);
+            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/${endpoint}`);
             const response = await controlledFetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sensor_id: sensorId, value: sensor.value })
+                body: JSON.stringify({ sensor_id: sensorId, ...body })
             });
-
             if (!response.ok) {
                 const err = await response.json();
-                throw new Error(err.error || 'Failed to freeze');
+                throw new Error(err.error || onError || `Failed to ${endpoint}`);
             }
-
-            // Локальное обновление для мгновенной обратной связи
-            sensor.real_value = sensor.value;
-            sensor.frozen = true;
+            mutateSensor(sensor);
             this.reRenderSensorRow(sensorId);
         } catch (err) {
             showIoncDialogError(`Error: ${err.message}`);
         }
+    }
+
+    // Быстрая заморозка на текущем значении (двойной клик на ❄)
+    async quickFreeze(sensorId) {
+        const sensor = this.sensorMap.get(sensorId);
+        if (!sensor) return;
+        await this._ioncSensorAction(sensorId, 'freeze',
+            { value: sensor.value },
+            (s) => { s.real_value = s.value; s.frozen = true; },
+            'Failed to freeze');
     }
 
     // Показать диалог разморозки (клик на 🔥)
@@ -4341,31 +4995,13 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
     // Быстрая разморозка (двойной клик на 🔥)
     async quickUnfreeze(sensorId) {
-        const sensor = this.sensorMap.get(sensorId);
-        if (!sensor) return;
-
-        try {
-            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/unfreeze`);
-            const response = await controlledFetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sensor_id: sensorId })
-            });
-
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.error || 'Failed to unfreeze');
-            }
-
-            // Локальное обновление для мгновенной обратной связи
-            sensor.frozen = false;
-            if (sensor.real_value !== undefined) {
-                sensor.value = sensor.real_value;
-            }
-            this.reRenderSensorRow(sensorId);
-        } catch (err) {
-            showIoncDialogError(`Error: ${err.message}`);
-        }
+        await this._ioncSensorAction(sensorId, 'unfreeze',
+            {},
+            (s) => {
+                s.frozen = false;
+                if (s.real_value !== undefined) s.value = s.real_value;
+            },
+            'Failed to unfreeze');
     }
 
     // ===== Генератор значений =====
@@ -4373,11 +5009,35 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     // Значения по умолчанию для параметров генератора
     getDefaultGeneratorParams() {
         return {
-            sin: { min: -50, max: 50, pause: 100, step: 100 },
-            cos: { min: -50, max: 50, pause: 100, step: 100 },
-            linear: { min: 0, max: 100, pause: 100, step: 1 },
-            random: { min: 0, max: 100, period: 5000 },
-            square: { min: 0, max: 100, pulseWidth: 2000, pause: 2000 }
+            sin: {
+                min: GENERATOR_DEFAULT_WAVE_MIN,
+                max: GENERATOR_DEFAULT_WAVE_MAX,
+                pause: GENERATOR_DEFAULT_WAVE_PAUSE_MS,
+                step: GENERATOR_DEFAULT_WAVE_POINTS
+            },
+            cos: {
+                min: GENERATOR_DEFAULT_WAVE_MIN,
+                max: GENERATOR_DEFAULT_WAVE_MAX,
+                pause: GENERATOR_DEFAULT_WAVE_PAUSE_MS,
+                step: GENERATOR_DEFAULT_WAVE_POINTS
+            },
+            linear: {
+                min: GENERATOR_DEFAULT_MIN,
+                max: GENERATOR_DEFAULT_MAX,
+                pause: GENERATOR_DEFAULT_WAVE_PAUSE_MS,
+                step: GENERATOR_DEFAULT_LINEAR_STEP
+            },
+            random: {
+                min: GENERATOR_DEFAULT_MIN,
+                max: GENERATOR_DEFAULT_MAX,
+                period: GENERATOR_DEFAULT_RANDOM_PERIOD_MS
+            },
+            square: {
+                min: GENERATOR_DEFAULT_MIN,
+                max: GENERATOR_DEFAULT_MAX,
+                pulseWidth: GENERATOR_DEFAULT_IONC_SQUARE_PULSE_WIDTH_MS,
+                pause: GENERATOR_DEFAULT_IONC_SQUARE_PAUSE_MS
+            }
         };
     }
 
@@ -4428,8 +5088,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         if (!calcPeriodValue || !pauseInput || !pointsInput) return;
 
-        const pause = parseInt(pauseInput.value, 10) || 0;
-        const points = parseInt(pointsInput.value, 10) || 0;
+        const pause = parseIntegerOrDefault(pauseInput.value, 0);
+        const points = parseIntegerOrDefault(pointsInput.value, 0);
         const totalPeriod = pause * points;
 
         if (totalPeriod > 0) {
@@ -4465,7 +5125,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             periodField.style.display = 'block';
             stepField.style.display = 'block';
             if (periodLabel) periodLabel.textContent = 'Пауза между шагами (мс)';
-            if (periodHint) periodHint.textContent = 'Задержка перед следующим шагом. Мин: 10мс';
+            if (periodHint) periodHint.textContent = `Задержка перед следующим шагом. Мин: ${GENERATOR_MIN_WAVE_PAUSE_MS}мс`;
             if (stepLabel) stepLabel.textContent = 'Шаг';
             if (stepHint) stepHint.textContent = 'Размер одного шага изменения значения';
         } else if (type === 'sin' || type === 'cos') {
@@ -4474,7 +5134,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             stepField.style.display = 'block';
             if (calcPeriodField) calcPeriodField.style.display = 'block';
             if (periodLabel) periodLabel.textContent = 'Шаг обновления (мс)';
-            if (periodHint) periodHint.textContent = 'Время между обновлениями значения. Мин: 10мс';
+            if (periodHint) periodHint.textContent = `Время между обновлениями значения. Мин: ${GENERATOR_MIN_WAVE_PAUSE_MS}мс`;
             if (stepLabel) stepLabel.textContent = 'Количество точек на период';
             if (stepHint) stepHint.textContent = 'Сколько точек отрисует синусоида за один полный период';
             // Обновляем расчётный период
@@ -4556,12 +5216,12 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                 </div>
                 <div class="ionc-dialog-field" id="ionc-gen-period-field">
                     <label for="ionc-gen-period"><span id="ionc-gen-period-label">Период (мс)</span>:</label>
-                    <input type="number" id="ionc-gen-period" value="${params.period || params.pause || 5000}" step="100">
-                    <div class="ionc-dialog-hint" id="ionc-gen-period-hint">Длительность полного цикла. Мин: 100мс</div>
+                    <input type="number" id="ionc-gen-period" value="${params.period || params.pause || GENERATOR_DEFAULT_RANDOM_PERIOD_MS}" step="100">
+                    <div class="ionc-dialog-hint" id="ionc-gen-period-hint">Длительность полного цикла. Мин: ${GENERATOR_MIN_PERIOD_MS}мс</div>
                 </div>
                 <div class="ionc-dialog-field" id="ionc-gen-step-field" style="display: none;">
                     <label for="ionc-gen-step"><span id="ionc-gen-step-label">Шаг</span>:</label>
-                    <input type="number" id="ionc-gen-step" value="${params.step || 20}" step="1">
+                    <input type="number" id="ionc-gen-step" value="${params.step || GENERATOR_DEFAULT_WAVE_POINTS}" step="1">
                     <div class="ionc-dialog-hint" id="ionc-gen-step-hint">Размер одного шага изменения значения</div>
                 </div>
                 <div class="ionc-dialog-field" id="ionc-gen-calc-period" style="display: none;">
@@ -4573,11 +5233,11 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                     <div class="ionc-dialog-field-row">
                         <div class="ionc-dialog-field ionc-dialog-field-half">
                             <label for="ionc-gen-pulse-width">Ширина импульса (мс):</label>
-                            <input type="number" id="ionc-gen-pulse-width" value="${params.pulseWidth || 2500}" step="100" min="1">
+                            <input type="number" id="ionc-gen-pulse-width" value="${params.pulseWidth || GENERATOR_DEFAULT_IONC_SQUARE_PULSE_WIDTH_MS}" step="100" min="${GENERATOR_MIN_PULSE_WIDTH_MS}">
                         </div>
                         <div class="ionc-dialog-field ionc-dialog-field-half">
                             <label for="ionc-gen-pause">Пауза (мс):</label>
-                            <input type="number" id="ionc-gen-pause" value="${params.pause || 2500}" step="100" min="1">
+                            <input type="number" id="ionc-gen-pause" value="${params.pause || GENERATOR_DEFAULT_IONC_SQUARE_PAUSE_MS}" step="100" min="${GENERATOR_MIN_PAUSE_MS}">
                         </div>
                     </div>
                     <div class="ionc-dialog-hint">Период = Ширина импульса + Пауза</div>
@@ -4638,95 +5298,32 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         const sensor = this.sensorMap.get(sensorId);
         if (!sensor) return;
 
-        // Парсим значения формы
-        const type = document.getElementById('ionc-gen-type').value;
-        const min = parseInt(document.getElementById('ionc-gen-min').value, 10);
-        const max = parseInt(document.getElementById('ionc-gen-max').value, 10);
-
-        // Парсим специфичные для типа параметры
-        let period, step, pulseWidth, pause;
-        if (type === 'linear' || type === 'sin' || type === 'cos') {
-            pause = parseInt(document.getElementById('ionc-gen-period').value, 10);
-            step = parseInt(document.getElementById('ionc-gen-step').value, 10);
-        } else if (type === 'square') {
-            pulseWidth = parseInt(document.getElementById('ionc-gen-pulse-width').value, 10);
-            pause = parseInt(document.getElementById('ionc-gen-pause').value, 10);
-        } else {
-            // random
-            period = parseInt(document.getElementById('ionc-gen-period').value, 10);
-        }
-
-        // Валидация общих параметров
-        if (isNaN(min) || isNaN(max)) {
-            showIoncDialogError('Min и Max должны быть числами');
-            return;
-        }
-        if (min >= max) {
-            showIoncDialogError('Min должен быть меньше Max');
+        const selectedType = document.getElementById('ionc-gen-type').value;
+        const rawConfig = {
+            type: selectedType,
+            min: document.getElementById('ionc-gen-min').value,
+            max: document.getElementById('ionc-gen-max').value,
+            step: document.getElementById('ionc-gen-step')?.value,
+            pause: selectedType === 'square'
+                ? document.getElementById('ionc-gen-pause')?.value
+                : document.getElementById('ionc-gen-period')?.value,
+            pulseWidth: document.getElementById('ionc-gen-pulse-width')?.value,
+            period: document.getElementById('ionc-gen-period')?.value,
+        };
+        const validationError = validateSignalGeneratorConfig(rawConfig);
+        if (validationError) {
+            showIoncDialogError(validationError);
             return;
         }
 
-        // Валидация специфичных для типа параметров
-        if (type === 'linear') {
-            if (isNaN(pause) || isNaN(step)) {
-                showIoncDialogError('Пауза и Шаг должны быть числами');
-                return;
-            }
-            if (pause < 10) {
-                showIoncDialogError('Пауза должна быть не менее 10мс');
-                return;
-            }
-            if (step === 0) {
-                showIoncDialogError('Шаг не может быть равен 0');
-                return;
-            }
-            if (Math.abs(step) > (max - min)) {
-                showIoncDialogError('Шаг должен быть меньше или равен разности Max - Min');
-                return;
-            }
-        } else if (type === 'sin' || type === 'cos') {
-            if (isNaN(pause) || isNaN(step)) {
-                showIoncDialogError('Шаг обновления и Количество точек должны быть числами');
-                return;
-            }
-            if (pause < 10) {
-                showIoncDialogError('Шаг обновления должен быть не менее 10мс');
-                return;
-            }
-            if (step < 4) {
-                showIoncDialogError('Количество точек должно быть не менее 4');
-                return;
-            }
-        } else if (type === 'square') {
-            if (isNaN(pulseWidth) || isNaN(pause)) {
-                showIoncDialogError('Ширина импульса и Пауза должны быть числами');
-                return;
-            }
-            if (pulseWidth <= 0) {
-                showIoncDialogError('Ширина импульса должна быть больше 0');
-                return;
-            }
-            if (pause <= 0) {
-                showIoncDialogError('Пауза должна быть больше 0');
-                return;
-            }
-        } else {
-            // sin, cos, random
-            if (isNaN(period)) {
-                showIoncDialogError('Период должен быть числом');
-                return;
-            }
-            if (period < 100) {
-                showIoncDialogError('Период должен быть не менее 100мс');
-                return;
-            }
-        }
+        const genConfig = normalizeSignalGeneratorConfig(rawConfig);
+        const { type, min, max, step, pause, pulseWidth, period } = genConfig;
 
         // Останавливаем существующий генератор если есть
         this.stopGenerator(sensorId);
 
         const generator = new SignalGenerator({
-            type, min, max, step, pause, pulseWidth, period,
+            ...genConfig,
             onTick: (value) => {
                 this.setValueForGenerator(sensorId, value);
             }
@@ -4848,7 +5445,10 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         const sensor = this.sensorMap.get(sensorId);
         if (!sensor) return;
 
-        const row = document.querySelector(`tr[data-sensor-id="${sensorId}"]`);
+        // getEls (внутри панели this.tabKey) — а не document.querySelector,
+        // иначе при multi-server одинаковый sensorId на разных серверах
+        // указывал бы на чужую вкладку.
+        const row = this.getEls(`tr[data-sensor-id="${sensorId}"]`)[0];
         if (row) {
             row.outerHTML = this.renderSensorRow(sensor);
             this.attachRowEventListeners(sensorId);
@@ -4856,52 +5456,34 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     // Подключение обработчиков к строке датчика
+    bindFreezeToggleButtons(root) {
+        root.querySelectorAll('.ionc-btn-freeze').forEach(btn => {
+            const sensorId = parseInt(btn.dataset.id, 10);
+            bindSingleDoubleClick(
+                btn,
+                () => this.showFreezeDialog(sensorId),
+                () => this.quickFreeze(sensorId)
+            );
+        });
+
+        root.querySelectorAll('.ionc-btn-unfreeze').forEach(btn => {
+            const sensorId = parseInt(btn.dataset.id, 10);
+            bindSingleDoubleClick(
+                btn,
+                () => this.showUnfreezeDialog(sensorId),
+                () => this.quickUnfreeze(sensorId)
+            );
+        });
+    }
+
     attachRowEventListeners(sensorId) {
-        const row = document.querySelector(`tr[data-sensor-id="${sensorId}"]`);
+        // getEls внутри панели вкладки — см. reRenderSensorRow.
+        const row = this.getEls(`tr[data-sensor-id="${sensorId}"]`)[0];
         if (!row) return;
 
         row.querySelector('.ionc-btn-set')?.addEventListener('click', () => this.showSetDialog(sensorId));
         row.querySelector('.ionc-btn-consumers')?.addEventListener('click', () => this.showConsumersDialog(sensorId));
-
-        // Кнопка заморозки — одинарный/двойной клик
-        const freezeBtn = row.querySelector('.ionc-btn-freeze');
-        if (freezeBtn) {
-            let clickTimer = null;
-            freezeBtn.addEventListener('click', (e) => {
-                if (clickTimer) {
-                    // Двойной клик — быстрая заморозка
-                    clearTimeout(clickTimer);
-                    clickTimer = null;
-                    this.quickFreeze(sensorId);
-                } else {
-                    // Одинарный клик — ждём второй клик или открываем диалог
-                    clickTimer = setTimeout(() => {
-                        clickTimer = null;
-                        this.showFreezeDialog(sensorId);
-                    }, DOUBLE_CLICK_THRESHOLD);
-                }
-            });
-        }
-
-        // Кнопка разморозки — одинарный/двойной клик
-        const unfreezeBtn = row.querySelector('.ionc-btn-unfreeze');
-        if (unfreezeBtn) {
-            let clickTimer = null;
-            unfreezeBtn.addEventListener('click', (e) => {
-                if (clickTimer) {
-                    // Двойной клик — быстрая разморозка
-                    clearTimeout(clickTimer);
-                    clickTimer = null;
-                    this.quickUnfreeze(sensorId);
-                } else {
-                    // Одинарный клик — ждём второй клик или открываем диалог
-                    clickTimer = setTimeout(() => {
-                        clickTimer = null;
-                        this.showUnfreezeDialog(sensorId);
-                    }, DOUBLE_CLICK_THRESHOLD);
-                }
-            });
-        }
+        this.bindFreezeToggleButtons(row);
 
         // Кнопки генератора
         row.querySelector('.ionc-btn-gen')?.addEventListener('click', () => this.showGeneratorDialog(sensorId));
@@ -4916,7 +5498,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             const btn = e.currentTarget;
             const sensorName = btn.dataset.sensorName;
             const sensorLabel = btn.dataset.sensorLabel;
-            showAddToDashboardDialog(sensorName, sensorLabel);
+            showAddToDashboardDialog(sensorName, sensorLabel, getDashboardBindingFromButton(btn));
         });
     }
 
@@ -5070,9 +5652,9 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                     // Формат: real_value → frozen_value❄
                     valueEl.className = 'ionc-value ionc-value-frozen ionc-value-updated';
                     valueEl.innerHTML = `
-                        <span class="ionc-real-value">${sensor.real_value}</span>
+                        <span class="ionc-real-value">${formatValueHtml(sensor.real_value)}</span>
                         <span class="ionc-frozen-arrow">→</span>
-                        <span class="ionc-frozen-value">${sensor.value}❄</span>
+                        <span class="ionc-frozen-value">${formatValueHtml(sensor.value)}❄</span>
                     `;
                 } else {
                     // Обычный формат
@@ -5103,7 +5685,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         // Убираем анимацию через ANIMATION_REMOVAL_DELAY
         setTimeout(() => {
-            const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
+            const panel = getTabPanel(this.tabKey);
             if (panel) {
                 panel.querySelectorAll('.ionc-value-updated').forEach(el => el.classList.remove('ionc-value-updated'));
             }
@@ -5137,8 +5719,8 @@ applyMixin(IONotifyControllerRenderer, SSESubscriptionMixin);
 applyMixin(IONotifyControllerRenderer, ResizableSectionMixin);
 applyMixin(IONotifyControllerRenderer, FilterMixin);
 applyMixin(IONotifyControllerRenderer, ItemCounterMixin);
+applyMixin(IONotifyControllerRenderer, PinManagementMixin);
 applyMixin(IONotifyControllerRenderer, TableSortMixin);
-
 
 
 // === 21-opcua-exchange.js ===
@@ -5282,7 +5864,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             `opcua-sensors-filter-${this.objectName}`,
             `opcua-type-filter-${this.objectName}`,
             () => this.loadSensors(),
-            300,
+            FILTER_DEBOUNCE_DELAY,
             `opcua-status-filter-${this.objectName}`
         );
 
@@ -5305,7 +5887,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     createOPCUAStatusSection() {
         const headerExtra = `
             ${this.createStatusHeaderExtra()}
-            <div class="header-channels" id="opcua-header-channels-${this.objectName}" onclick="event.stopPropagation()"></div>
+            <div class="header-channels" id="opcua-header-channels-${this.objectName}"></div>
         `;
         return this.createCollapsibleSection('opcua-status', 'OPC UA Status', `
             <div class="opcua-actions">
@@ -5318,7 +5900,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
     createOPCUAControlSection() {
         const headerIndicators = `
-            <div class="header-indicators" id="opcua-control-indicators-${this.objectName}" onclick="event.stopPropagation()">
+            <div class="header-indicators" id="opcua-control-indicators-${this.objectName}">
                 <div class="header-indicator">
                     <span class="header-indicator-label">Allowed</span>
                     <span class="header-indicator-dot" id="opcua-ind-allow-${this.objectName}"></span>
@@ -5344,7 +5926,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
     createOPCUAParamsSection() {
         const headerIndicator = `
-            <span class="header-indicator-dot fail" id="opcua-ind-params-${this.objectName}" onclick="event.stopPropagation()" title="Parameters: loading..."></span>
+            <span class="header-indicator-dot fail" id="opcua-ind-params-${this.objectName}" title="Parameters: loading..."></span>
         `;
         return this.createCollapsibleSection('opcua-params', 'Exchange Parameters', `
             <div class="opcua-actions">
@@ -5466,7 +6048,6 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         const ioSize = status.iolist_size ?? status.iolistSize ?? '—';
         const errCount = status.errorHistorySize ?? 0;
         const errMax = status.errorHistoryMax ?? 100;
-        const errClass = errCount >= errMax ? 'error' : (errCount > 0 ? 'warn' : '');
 
         // Определяем класс индикатора ошибок
         const errDotClass = errCount >= errMax ? 'fail' : (errCount > 0 ? 'warn' : 'ok');
@@ -5537,57 +6118,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     renderControl() {
-        const allow = this.status?.httpControlAllow && canControl();
-        const active = this.status?.httpControlActive;
-        const enabledParams = this.status?.httpEnabledSetParams;
-        const allowText = allow ? 'Take control' : (!canControl() ? 'Read-only mode' : 'Control not allowed');
-
-        // Обновляем индикаторы в шапке
-        const indAllow = this.getEl(`opcua-ind-allow-${this.objectName}`);
-        const indActive = this.getEl(`opcua-ind-active-${this.objectName}`);
-        const indParams = this.getEl(`opcua-ind-params-${this.objectName}`);
-
-        if (indAllow) {
-            indAllow.className = `header-indicator-dot ${allow ? 'ok' : 'fail'}`;
-            indAllow.title = allow ? 'Allowed: Yes' : 'Allowed: No';
-        }
-        if (indActive) {
-            indActive.className = `header-indicator-dot ${active ? 'ok' : 'fail'}`;
-            indActive.title = active ? 'Active: Yes' : 'Active: No';
-        }
-        if (indParams) {
-            indParams.className = `header-indicator-dot ${enabledParams ? 'ok' : 'fail'}`;
-            indParams.title = enabledParams ? 'Parameters: Yes' : 'Parameters: No';
-        }
-
-        // Обновляем кнопки
-        const takeBtn = this.getEl(`opcua-control-take-${this.objectName}`);
-        const releaseBtn = this.getEl(`opcua-control-release-${this.objectName}`);
-        const noteEl = this.getEl(`opcua-control-note-${this.objectName}`);
-
-        if (takeBtn) {
-            takeBtn.disabled = !allow;
-            takeBtn.title = allowText;
-            // Подсветка кнопки когда контроль активен
-            if (active) {
-                takeBtn.classList.add('control-active');
-            } else {
-                takeBtn.classList.remove('control-active');
-            }
-        }
-        if (releaseBtn) {
-            releaseBtn.disabled = !allow;
-            releaseBtn.title = allowText;
-        }
-
-        // Обновляем стиль сообщения
-        if (noteEl) {
-            if (active) {
-                noteEl.classList.add('control-note-success');
-            } else {
-                noteEl.classList.remove('control-note-success');
-            }
-        }
+        this.renderHttpControl('opcua');
     }
 
     formatSubscription(status) {
@@ -5638,7 +6169,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         this.readonlyParams.forEach(name => {
             const current = this.params[name];
             const tr = document.createElement('tr');
-            let displayValue = current !== undefined ? formatValue(current) : '—';
+            let displayValue = current !== undefined ? formatValueHtml(current) : '—';
             // Форматируем activated как Да/Нет
             if (name === 'activated') {
                 displayValue = current ? 'Yes' : 'No';
@@ -5707,7 +6238,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         const useUIFilter = state.config.opcuaUISensorsFilter;
 
         try {
-            let url = `/api/objects/${encodeURIComponent(this.objectName)}/opcua/sensors?limit=${this.chunkSize}&offset=0`;
+            let url = this.buildPaginatedSensorsUrl('/opcua', 0);
 
             // Серверная фильтрация (если не включена UI фильтрация)
             if (!useUIFilter) {
@@ -5738,7 +6269,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             sensors.forEach(s => this.sensorMap.set(s.id, s));
 
             // Если нет фильтра и есть закреплённые датчики - загрузить их отдельно
-            if (!this.filter) {
+            if (!this.hasActiveFilters()) {
                 await this.loadPinnedSensors();
             }
 
@@ -5762,38 +6293,8 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     // Загружает закреплённые датчики, если они не в текущем списке
-    async loadPinnedSensors() {
-        const pinnedIds = this.getPinned();
-        if (pinnedIds.size === 0) return;
-
-        // Найти ID, которых нет в загруженных датчиках
-        const missingIds = [];
-        for (const idStr of pinnedIds) {
-            const id = parseInt(idStr);
-            if (!this.sensorMap.has(id)) {
-                missingIds.push(id);
-            }
-        }
-
-        if (missingIds.length === 0) return;
-
-        // Загрузить отсутствующие датчики по ID
-        try {
-            const idsParam = missingIds.join(',');
-            const url = `/api/objects/${encodeURIComponent(this.objectName)}/opcua/get?filter=${idsParam}`;
-            const response = await this.fetchJSON(url);
-            const pinnedSensors = response.sensors || [];
-
-            // Добавить закреплённые датчики в начало списка
-            for (const sensor of pinnedSensors) {
-                if (!this.sensorMap.has(sensor.id)) {
-                    this.allSensors.unshift(sensor);
-                    this.sensorMap.set(sensor.id, sensor);
-                }
-            }
-        } catch (err) {
-            console.warn('Failed to load pinned sensors:', err);
-        }
+    loadPinnedSensors() {
+        return this.loadMissingPinnedSensors('/opcua/get');
     }
 
     applyLocalFilters(sensors) {
@@ -5827,7 +6328,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
         try {
             const nextOffset = this.allSensors.length;
-            let url = `/api/objects/${encodeURIComponent(this.objectName)}/opcua/sensors?limit=${this.chunkSize}&offset=${nextOffset}`;
+            let url = this.buildPaginatedSensorsUrl('/opcua', nextOffset);
 
             // Серверная фильтрация (если не включена UI фильтрация)
             if (!useUIFilter) {
@@ -5884,10 +6385,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         }
 
         // Фильтруем датчики: если есть закрепленные — показываем только их (если нет фильтра)
-        let sensorsToShow = this.allSensors;
-        if (hasPinned && !this.filter) {
-            sensorsToShow = this.allSensors.filter(s => pinnedSensors.has(String(s.id)));
-        }
+        let sensorsToShow = this.filterPinnedOnly(this.allSensors, pinnedSensors);
 
         // Set spacer height to position visible rows correctly
         const spacerHeight = this.startIndex * this.rowHeight;
@@ -5948,7 +6446,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
         // Bind pin toggle events
         tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => this.togglePin(parseInt(toggle.dataset.id)));
+            toggle.addEventListener('click', () => this.togglePin(parseIntegerOrDefault(toggle.dataset.id, null)));
         });
 
         // Обработчик кнопки "снять все"
@@ -6079,12 +6577,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     loadDiagnosticsHeight() {
-        return this.loadSectionHeight('uniset-panel-opcua-diagnostics', 260);
-    }
-
-    saveDiagnosticsHeight(value) {
-        this.diagnosticsHeight = value;
-        this.saveSectionHeight('uniset-panel-opcua-diagnostics', value);
+        return this.loadSectionHeight('uniset-panel-opcua-diagnostics', OPCUA_DIAGNOSTICS_DEFAULT_HEIGHT);
     }
 
     setupDiagnosticsResize() {
@@ -6093,17 +6586,12 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             `opcua-diagnostics-container-${this.objectName}`,
             'uniset-panel-opcua-diagnostics',
             'diagnosticsHeight',
-            { minHeight: 160, maxHeight: 600 }
+            { minHeight: OPCUA_DIAGNOSTICS_MIN_HEIGHT, maxHeight: OPCUA_DIAGNOSTICS_MAX_HEIGHT }
         );
     }
 
     loadSensorsHeight() {
-        return this.loadSectionHeight('uniset-panel-opcua-sensors', 320);
-    }
-
-    saveSensorsHeight(value) {
-        this.sensorsHeight = value;
-        this.saveSectionHeight('uniset-panel-opcua-sensors', value);
+        return this.loadSectionHeight('uniset-panel-opcua-sensors', DATA_TABLE_DEFAULT_HEIGHT);
     }
 
     setupSensorsResize() {
@@ -6112,38 +6600,16 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             `opcua-sensors-container-${this.objectName}`,
             'uniset-panel-opcua-sensors',
             'sensorsHeight',
-            { minHeight: 200, maxHeight: 700 }
+            { minHeight: SENSORS_CONTAINER_MIN_HEIGHT, maxHeight: DATA_TABLE_MAX_HEIGHT }
         );
     }
 
     async takeControl() {
-        if (this.status && this.status.httpControlAllow === false) {
-            this.setNote(`opcua-control-note-${this.objectName}`, 'Control not allowed', true);
-            return;
-        }
-
-        try {
-            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/opcua/control/take`, { method: 'POST' });
-            this.setNote(`opcua-control-note-${this.objectName}`, 'HTTP control activated');
-            this.loadStatus();
-        } catch (err) {
-            this.setNote(`opcua-control-note-${this.objectName}`, err.message, true);
-        }
+        await this.takeHttpControl('opcua', 'opcua');
     }
 
     async releaseControl() {
-        if (this.status && this.status.httpControlAllow === false) {
-            this.setNote(`opcua-control-note-${this.objectName}`, 'Control not allowed', true);
-            return;
-        }
-
-        try {
-            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/opcua/control/release`, { method: 'POST' });
-            this.setNote(`opcua-control-note-${this.objectName}`, 'Control returned to sensor');
-            this.loadStatus();
-        } catch (err) {
-            this.setNote(`opcua-control-note-${this.objectName}`, err.message, true);
-        }
+        await this.releaseHttpControl('opcua', 'opcua');
     }
 
     // === SSE подписка на обновления датчиков (использует SSESubscriptionMixin) ===
@@ -6216,7 +6682,6 @@ applyMixin(OPCUAExchangeRenderer, ParamsManagerMixin);
 applyMixin(OPCUAExchangeRenderer, ItemCounterMixin);
 applyMixin(OPCUAExchangeRenderer, PinManagementMixin);
 applyMixin(OPCUAExchangeRenderer, TableSortMixin);
-
 
 
 // === 22-modbus-master.js ===
@@ -6321,7 +6786,6 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         this.setupRegistersResize();
         this.setupSimpleInfiniteScroll({
             viewportId: `mb-registers-viewport-${this.objectName}`,
-            threshold: 100,
         });
         this.initStatusAutoRefresh();
     }
@@ -6372,12 +6836,19 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         if (releaseControl) {
             releaseControl.addEventListener('click', () => this.releaseControl());
         }
+
+        // Unpin all (persistent header element — wire'им один раз; в renderRegisters
+        // больше не трогаем).
+        const unpinBtn = this.getEl(`mb-unpin-${this.objectName}`);
+        if (unpinBtn) {
+            unpinBtn.addEventListener('click', () => this.unpinAll());
+        }
     }
 
 
     createMBControlSection() {
         const headerIndicators = `
-            <div class="header-indicators" id="mb-control-indicators-${this.objectName}" onclick="event.stopPropagation()">
+            <div class="header-indicators" id="mb-control-indicators-${this.objectName}">
                 <div class="header-indicator">
                     <span class="header-indicator-label">Allowed</span>
                     <span class="header-indicator-dot" id="mb-ind-allow-${this.objectName}"></span>
@@ -6415,7 +6886,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     createMBParamsSection() {
         return this.createCollapsibleSection('mb-params', 'Exchange Parameters', `
             <div class="mb-actions">
-                <button class="btn" id="mb-params-refresh-${this.objectName}">Перезагрузить</button>
+                    <button class="btn" id="mb-params-refresh-${this.objectName}">Reload</button>
                 <button class="btn primary" id="mb-params-save-${this.objectName}">Apply</button>
                 <span class="mb-note" id="mb-params-note-${this.objectName}"></span>
             </div>
@@ -6472,9 +6943,9 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
                                 ${this.renderSortableHeader('name', 'Name', true, 'col-name')}
                                 ${this.renderSortableHeader('type', 'Type', true, 'col-type')}
                                 ${this.renderSortableHeader('value', 'Value', true, 'col-value')}
-                                ${this.renderSortableHeader('device', 'Устройство', true, 'col-device')}
-                                ${this.renderSortableHeader('register', 'Регистр', true, 'col-register')}
-                                ${this.renderSortableHeader('func', 'Функция', true, 'col-func')}
+                                ${this.renderSortableHeader('device', 'Device', true, 'col-device')}
+                                ${this.renderSortableHeader('register', 'Register', true, 'col-register')}
+                                ${this.renderSortableHeader('func', 'Function', true, 'col-func')}
                                 <th class="col-mbval">MB Val</th>
                             </tr>
                         </thead>
@@ -6530,94 +7001,22 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="info-label">${row.label}</td>
-                <td class="info-value">${formatValue(row.value)}</td>
+                <td class="info-value">${formatValueHtml(row.value)}</td>
             `;
             tbody.appendChild(tr);
         });
     }
 
     renderControl() {
-        const allow = this.status?.httpControlAllow && canControl();
-        const active = this.status?.httpControlActive;
-        const enabledParams = this.status?.httpEnabledSetParams;
-        const allowText = allow ? 'Take control' : (!canControl() ? 'Read-only mode' : 'Control not allowed');
-
-        // Обновляем индикаторы в шапке
-        const indAllow = this.getEl(`mb-ind-allow-${this.objectName}`);
-        const indActive = this.getEl(`mb-ind-active-${this.objectName}`);
-        const indParams = this.getEl(`mb-ind-params-${this.objectName}`);
-
-        if (indAllow) {
-            indAllow.className = `header-indicator-dot ${allow ? 'ok' : 'fail'}`;
-            indAllow.title = allow ? 'Allowed: Yes' : 'Allowed: No';
-        }
-        if (indActive) {
-            indActive.className = `header-indicator-dot ${active ? 'ok' : 'fail'}`;
-            indActive.title = active ? 'Active: Yes' : 'Active: No';
-        }
-        if (indParams) {
-            indParams.className = `header-indicator-dot ${enabledParams ? 'ok' : 'fail'}`;
-            indParams.title = enabledParams ? 'Parameters: Yes' : 'Parameters: No';
-        }
-
-        // Обновляем кнопки
-        const takeBtn = this.getEl(`mb-control-take-${this.objectName}`);
-        const releaseBtn = this.getEl(`mb-control-release-${this.objectName}`);
-        const noteEl = this.getEl(`mb-control-note-${this.objectName}`);
-
-        if (takeBtn) {
-            takeBtn.disabled = !allow;
-            takeBtn.title = allowText;
-            // Подсветка кнопки когда контроль активен
-            if (active) {
-                takeBtn.classList.add('control-active');
-            } else {
-                takeBtn.classList.remove('control-active');
-            }
-        }
-        if (releaseBtn) {
-            releaseBtn.disabled = !allow;
-            releaseBtn.title = allowText;
-        }
-
-        // Обновляем стиль сообщения
-        if (noteEl) {
-            if (active) {
-                noteEl.classList.add('control-note-success');
-            } else {
-                noteEl.classList.remove('control-note-success');
-            }
-        }
+        this.renderHttpControl('mb');
     }
 
     async takeControl() {
-        if (this.status && this.status.httpControlAllow === false) {
-            this.setNote(`mb-control-note-${this.objectName}`, 'Control not allowed', true);
-            return;
-        }
-
-        try {
-            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/control/take`, { method: 'POST' });
-            this.setNote(`mb-control-note-${this.objectName}`, 'HTTP control activated');
-            this.loadStatus();
-        } catch (err) {
-            this.setNote(`mb-control-note-${this.objectName}`, err.message, true);
-        }
+        await this.takeHttpControl('modbus', 'mb');
     }
 
     async releaseControl() {
-        if (this.status && this.status.httpControlAllow === false) {
-            this.setNote(`mb-control-note-${this.objectName}`, 'Control not allowed', true);
-            return;
-        }
-
-        try {
-            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/control/release`, { method: 'POST' });
-            this.setNote(`mb-control-note-${this.objectName}`, 'Control returned to sensor');
-            this.loadStatus();
-        } catch (err) {
-            this.setNote(`mb-control-note-${this.objectName}`, err.message, true);
-        }
+        await this.releaseHttpControl('modbus', 'mb');
     }
 
     renderParams() {
@@ -6646,7 +7045,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="param-name">${paramLabels[name] || name}</td>
-                <td class="param-value">${value !== undefined ? formatValue(value) : '—'}</td>
+                <td class="param-value">${value !== undefined ? formatValueHtml(value) : '—'}</td>
                 <td class="param-input">—</td>
             `;
             tbody.appendChild(tr);
@@ -6673,7 +7072,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
 
             tr.innerHTML = `
                 <td class="param-name">${paramLabels[name] || name}</td>
-                <td class="param-value">${value !== undefined ? formatValue(value) : '—'}</td>
+                <td class="param-value">${value !== undefined ? formatValueHtml(value) : '—'}</td>
                 <td class="param-input">${inputHtml}</td>
             `;
             tbody.appendChild(tr);
@@ -6764,9 +7163,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         let registersToShow = this.applyFilters(this.allRegisters, 'name', 'iotype', null, ['mbreg'], mbregAccessor);
 
         // Если есть закрепленные и нет фильтра — показываем только их
-        if (hasPinned && !this.filter) {
-            registersToShow = registersToShow.filter(r => pinnedRegisters.has(String(r.id)));
-        }
+        registersToShow = this.filterPinnedOnly(registersToShow, pinnedRegisters);
 
         // Сортировка: pinned всегда вверху, остальные по выбранной колонке
         registersToShow = this.sortItems(registersToShow, pinnedRegisters, this.sortColumnDefs);
@@ -6821,13 +7218,9 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
 
         // Bind pin toggle events
         tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => this.togglePin(parseInt(toggle.dataset.id)));
+            toggle.addEventListener('click', () => this.togglePin(parseIntegerOrDefault(toggle.dataset.id, null)));
         });
-
-        // Обработчик кнопки "снять все"
-        if (unpinBtn) {
-            unpinBtn.onclick = () => this.unpinAll();
-        }
+        // unpinBtn handler — в bindEvents() (persistent элемент, не пересоздаётся).
     }
 
     // Override to use Modbus SSE subscription
@@ -6839,12 +7232,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     }
 
     loadRegistersHeight() {
-        return this.loadSectionHeight('uniset-panel-mb-registers', 320);
-    }
-
-    saveRegistersHeight(value) {
-        this.registersHeight = value;
-        this.saveSectionHeight('uniset-panel-mb-registers', value);
+        return this.loadSectionHeight('uniset-panel-mb-registers', DATA_TABLE_DEFAULT_HEIGHT);
     }
 
     setupRegistersResize() {
@@ -6853,7 +7241,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
             `mb-registers-container-${this.objectName}`,
             'uniset-panel-mb-registers',
             'registersHeight',
-            { minHeight: 200, maxHeight: 700 }
+            { minHeight: SENSORS_CONTAINER_MIN_HEIGHT, maxHeight: DATA_TABLE_MAX_HEIGHT }
         );
     }
 
@@ -6932,7 +7320,6 @@ registerRenderer('MBTCPMultiMaster', ModbusMasterRenderer);
 registerRenderer('MBRTUMaster', ModbusMasterRenderer);
 registerRenderer('ModbusTCPMaster', ModbusMasterRenderer);
 registerRenderer('ModbusRTUMaster', ModbusMasterRenderer);
-
 
 
 // === 23-modbus-slave.js ===
@@ -7022,7 +7409,6 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         this.setupRegistersResize();
         this.setupSimpleInfiniteScroll({
             viewportId: `mbs-registers-viewport-${this.objectName}`,
-            threshold: 100,
         });
         this.initStatusAutoRefresh();
     }
@@ -7061,6 +7447,13 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             FILTER_DEBOUNCE_DELAY, null,
             () => this.renderRegisters()      // text filter → локальная фильтрация
         );
+
+        // Unpin all (persistent header element — wire'им один раз; в renderRegisters
+        // больше не трогаем).
+        const unpinBtn = this.getEl(`mbs-unpin-${this.objectName}`);
+        if (unpinBtn) {
+            unpinBtn.addEventListener('click', () => this.unpinAll());
+        }
     }
 
 
@@ -7207,7 +7600,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="info-label">${row.label}</td>
-                <td class="info-value">${formatValue(row.value)}</td>
+                <td class="info-value">${formatValueHtml(row.value)}</td>
             `;
             tbody.appendChild(tr);
         });
@@ -7294,9 +7687,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         let registersToShow = this.applyFilters(this.allRegisters, 'name', 'iotype', null, ['mbreg'], mbregAccessor);
 
         // Если есть закрепленные и нет фильтра — показываем только их
-        if (hasPinned && !this.filter) {
-            registersToShow = registersToShow.filter(r => pinnedRegisters.has(String(r.id)));
-        }
+        registersToShow = this.filterPinnedOnly(registersToShow, pinnedRegisters);
 
         // Сортировка: pinned всегда вверху, остальные по выбранной колонке
         registersToShow = this.sortItems(registersToShow, pinnedRegisters, this.sortColumnDefs);
@@ -7352,13 +7743,9 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
 
         // Bind pin toggle events
         tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => this.togglePin(parseInt(toggle.dataset.id)));
+            toggle.addEventListener('click', () => this.togglePin(parseIntegerOrDefault(toggle.dataset.id, null)));
         });
-
-        // Обработчик кнопки "снять все"
-        if (unpinBtn) {
-            unpinBtn.onclick = () => this.unpinAll();
-        }
+        // unpinBtn handler — в bindEvents() (persistent элемент, не пересоздаётся).
     }
 
     // Override to use ModbusSlave SSE subscription
@@ -7370,12 +7757,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     }
 
     loadRegistersHeight() {
-        return this.loadSectionHeight('uniset-panel-mbs-registers', 320);
-    }
-
-    saveRegistersHeight(value) {
-        this.registersHeight = value;
-        this.saveSectionHeight('uniset-panel-mbs-registers', value);
+        return this.loadSectionHeight('uniset-panel-mbs-registers', DATA_TABLE_DEFAULT_HEIGHT);
     }
 
     setupRegistersResize() {
@@ -7384,7 +7766,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             `mbs-registers-container-${this.objectName}`,
             'uniset-panel-mbs-registers',
             'registersHeight',
-            { minHeight: 200, maxHeight: 700 }
+            { minHeight: SENSORS_CONTAINER_MIN_HEIGHT, maxHeight: DATA_TABLE_MAX_HEIGHT }
         );
     }
 
@@ -7410,13 +7792,6 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         // Value
         if (update.value !== undefined) {
             this._animateCellValue(row, '.col-value', String(update.value), 'value-changed');
-        }
-        // Device respond status
-        const deviceCell = row.querySelector('.col-device .mb-respond');
-        if (deviceCell && update.device !== undefined) {
-            const deviceAddr = update.device;
-            const deviceInfo = this.devicesDict ? (this.devicesDict[deviceAddr] || {}) : {};
-            deviceCell.className = `mb-respond ${deviceInfo.respond ? 'ok' : 'fail'}`;
         }
     }
 
@@ -7450,7 +7825,6 @@ registerRenderer('MBSlave1', ModbusSlaveRenderer);
 
 // OPCUAServerRenderer - рендерер для OPCUAServer extensionType
 // OPCUAServer - это OPC UA сервер, который предоставляет доступ к переменным через OPC UA протокол
-
 
 
 // === 24-opcua-server.js ===
@@ -7527,7 +7901,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         this.setupSensorsResize();
         this.setupFullVirtualScroll({
             viewportId: `opcuasrv-sensors-viewport-${this.objectName}`,
-            threshold: 80,
+            threshold: VIRTUAL_SCROLL_PERCENT_THRESHOLD,
             thresholdType: 'percent',
         });
         this.initStatusAutoRefresh();
@@ -7578,7 +7952,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
     createOPCUAServerParamsSection() {
         const headerIndicator = `
-            <span class="header-indicator-dot fail" id="opcuasrv-ind-params-${this.objectName}" onclick="event.stopPropagation()" title="Parameters: loading..."></span>
+            <span class="header-indicator-dot fail" id="opcuasrv-ind-params-${this.objectName}" title="Parameters: loading..."></span>
         `;
         return this.createCollapsibleSection('opcuasrv-params', 'Server Parameters', `
             <div class="opcua-actions">
@@ -7696,7 +8070,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="info-label">${row.label}</td>
-                <td class="info-value">${formatValue(row.value)}</td>
+                <td class="info-value">${formatValueHtml(row.value)}</td>
             `;
             tbody.appendChild(tr);
         });
@@ -7734,7 +8108,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td class="info-label">${row.label}</td>
-                    <td class="info-value">${formatValue(row.value)}</td>
+                    <td class="info-value">${formatValueHtml(row.value)}</td>
                 `;
                 configTbody.appendChild(tr);
             });
@@ -7762,7 +8136,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="variable-name">${name}</td>
-                <td class="variable-value">${current !== undefined ? formatValue(current) : '—'}</td>
+                <td class="variable-value">${current !== undefined ? formatValueHtml(current) : '—'}</td>
                 <td><input class="opcua-param-input" data-name="${escapeAttr(name)}" value="${escapeAttr(current !== undefined ? current : '')}"></td>
             `;
             tbody.appendChild(tr);
@@ -7781,7 +8155,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         if (viewport) viewport.scrollTop = 0;
 
         try {
-            let url = `/api/objects/${encodeURIComponent(this.objectName)}/opcua/sensors?limit=${this.chunkSize}&offset=0`;
+            let url = this.buildPaginatedSensorsUrl('/opcua', 0);
 
             if (this.filter) {
                 url += `&search=${encodeURIComponent(this.filter)}`;
@@ -7799,7 +8173,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
             sensors.forEach(s => this.sensorMap.set(s.id, s));
 
             // Если нет фильтра и есть закреплённые датчики - загрузить их отдельно
-            if (!this.filter) {
+            if (!this.hasActiveFilters()) {
                 await this.loadPinnedSensors();
             }
 
@@ -7823,38 +8197,8 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     // Загружает закреплённые датчики, если они не в текущем списке
-    async loadPinnedSensors() {
-        const pinnedIds = this.getPinned();
-        if (pinnedIds.size === 0) return;
-
-        // Найти ID, которых нет в загруженных датчиках
-        const missingIds = [];
-        for (const idStr of pinnedIds) {
-            const id = parseInt(idStr);
-            if (!this.sensorMap.has(id)) {
-                missingIds.push(id);
-            }
-        }
-
-        if (missingIds.length === 0) return;
-
-        // Загрузить отсутствующие датчики по ID
-        try {
-            const idsParam = missingIds.join(',');
-            const url = `/api/objects/${encodeURIComponent(this.objectName)}/opcua/get?filter=${idsParam}`;
-            const response = await this.fetchJSON(url);
-            const pinnedSensors = response.sensors || [];
-
-            // Добавить закреплённые датчики в начало списка
-            for (const sensor of pinnedSensors) {
-                if (!this.sensorMap.has(sensor.id)) {
-                    this.allSensors.unshift(sensor);
-                    this.sensorMap.set(sensor.id, sensor);
-                }
-            }
-        } catch (err) {
-            console.warn('Failed to load pinned sensors:', err);
-        }
+    loadPinnedSensors() {
+        return this.loadMissingPinnedSensors('/opcua/get');
     }
 
     async loadMoreSensors() {
@@ -7865,7 +8209,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
         try {
             const nextOffset = this.allSensors.length;
-            let url = `/api/objects/${encodeURIComponent(this.objectName)}/opcua/sensors?limit=${this.chunkSize}&offset=${nextOffset}`;
+            let url = this.buildPaginatedSensorsUrl('/opcua', nextOffset);
 
             if (this.filter) {
                 url += `&search=${encodeURIComponent(this.filter)}`;
@@ -7912,9 +8256,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         let sensorsToShow = this.applyFilters(this.allSensors, 'name', 'iotype');
 
         // Если есть закрепленные и нет фильтра — показываем только их
-        if (hasPinned && !this.filter) {
-            sensorsToShow = this.allSensors.filter(s => pinnedSensors.has(String(s.id)));
-        }
+        sensorsToShow = this.filterPinnedOnly(sensorsToShow, pinnedSensors);
 
         // Set spacer height to position visible rows correctly
         const spacerHeight = this.startIndex * this.rowHeight;
@@ -7959,7 +8301,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
                 <td>${sensor.id || ''}</td>
                 <td class="sensor-name" title="${escapeAttr(sensor.textname || sensor.comment || '')}">${escapeHtml(sensor.name || '')}</td>
                 <td><span class="${typeBadgeClass}">${iotype}</span></td>
-                <td class="sensor-value">${sensor.value !== undefined ? formatValue(sensor.value) : '—'}</td>
+                <td class="sensor-value">${sensor.value !== undefined ? formatValueHtml(sensor.value) : '—'}</td>
                 <td>${sensor.vtype || ''}</td>
                 <td>${sensor.precision !== undefined ? sensor.precision : ''}</td>
             </tr>
@@ -7974,7 +8316,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
         // Bind pin toggle events
         tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => this.togglePin(parseInt(toggle.dataset.id)));
+            toggle.addEventListener('click', () => this.togglePin(parseIntegerOrDefault(toggle.dataset.id, null)));
         });
 
         // Обработчик кнопки "снять все"
@@ -8004,11 +8346,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
     loadSensorsHeight() {
         // Используем формат JSON как другие рендереры
-        return this.loadSectionHeight('uniset-panel-opcuasrv-sensors', 300);
-    }
-
-    saveSensorsHeight(height) {
-        this.saveSectionHeight('uniset-panel-opcuasrv-sensors', height);
+        return this.loadSectionHeight('uniset-panel-opcuasrv-sensors', DEFAULT_SECTION_HEIGHT);
     }
 
     setupSensorsResize() {
@@ -8017,7 +8355,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
             `opcuasrv-sensors-container-${this.objectName}`,
             'uniset-panel-opcuasrv-sensors',
             'sensorsHeight',
-            { minHeight: 200, maxHeight: 700 }
+            { minHeight: SENSORS_CONTAINER_MIN_HEIGHT, maxHeight: DATA_TABLE_MAX_HEIGHT }
         );
     }
 
@@ -8067,7 +8405,6 @@ applyMixin(OPCUAServerRenderer, TableSortMixin);
 registerRenderer('OPCUAServer', OPCUAServerRenderer);
 
 
-
 // === 25-uwsgate.js ===
 // ============================================================================
 // UWebSocketGateRenderer - рендерер для объектов UWebSocketGate
@@ -8096,7 +8433,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         this.selectedAutocompleteIndex = 0;
 
         // Высота секции датчиков
-        this.sensorsHeight = this.loadSectionHeight('uwsgate-sensors-height', 400);
+        this.sensorsHeight = this.loadSectionHeight('uwsgate-sensors-height', UWSGATE_SENSORS_DEFAULT_HEIGHT);
 
         // Инициализация сортировки
         this.initSortProps();
@@ -8131,7 +8468,9 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
     saveHighlightSetting() {
         try {
             localStorage.setItem(this.highlightKey, this.highlightEnabled.toString());
-        } catch (e) {}
+        } catch (err) {
+            console.warn('UWebSocketGate: failed to save highlight setting:', err);
+        }
     }
 
     loadPinnedSensors() {
@@ -8140,13 +8479,17 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
             if (saved) {
                 this.pinnedSensors = new Set(JSON.parse(saved));
             }
-        } catch (e) {}
+        } catch (err) {
+            console.warn('UWebSocketGate: failed to load pinned sensors:', err);
+        }
     }
 
     savePinnedSensors() {
         try {
             localStorage.setItem(this.pinnedKey, JSON.stringify(Array.from(this.pinnedSensors)));
-        } catch (e) {}
+        } catch (err) {
+            console.warn('UWebSocketGate: failed to save pinned sensors:', err);
+        }
     }
 
     togglePin(sensorName) {
@@ -8300,26 +8643,18 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         const container = getElementInTab(this.tabKey, `uwsgate-sensors-container-${this.objectName}`);
         if (!handle || !container) return;
 
-        let startY, startHeight;
-        const onMouseMove = (e) => {
-            const newHeight = startHeight + (e.clientY - startY);
-            if (newHeight >= 100 && newHeight <= 800) {
-                container.style.height = `${newHeight}px`;
-                this.sensorsHeight = newHeight;
-            }
-        };
-        const onMouseUp = () => {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            this.saveSectionHeight('uwsgate-sensors-height', this.sensorsHeight);
-        };
-        handle.addEventListener('mousedown', (e) => {
-            startY = e.clientY;
-            startHeight = container.offsetHeight;
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-            e.preventDefault();
-        });
+        setupResizeHandle(
+            handle,
+            container,
+            MIN_SECTION_HEIGHT,
+            (height) => {
+                this.sensorsHeight = height;
+                this.saveSectionHeight('uwsgate-sensors-height', height);
+            },
+            MAX_SECTION_HEIGHT,
+            (height) => { this.sensorsHeight = height; },
+            { updateMaxHeight: false }
+        );
     }
 
     async loadAllSensors() {
@@ -8548,6 +8883,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
     }
 
     renderSensorRow(sensor) {
+        const serverId = state.tabs.get(this.tabKey)?.serverId || '';
         const chartOptions = this.getChartOptions();
         const varName = `${chartOptions.prefix}:${sensor.name}`;
         const isOnChart = this.isSensorOnChart(varName);
@@ -8582,6 +8918,9 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
                     <button class="dashboard-add-btn"
                             data-sensor-name="${escapeAttr(sensor.name)}"
                             data-sensor-label="${escapeAttr(sensor.textname || sensor.name)}"
+                            data-sensor-id="${escapeAttr(sensor.id ?? '')}"
+                            data-server-id="${escapeAttr(serverId)}"
+                            data-object-name="${escapeAttr(this.objectName)}"
                             title="Add to Dashboard">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <rect x="3" y="3" width="7" height="7" rx="1"/>
@@ -8591,12 +8930,12 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
                         </svg>
                     </button>
                 </td>
-                <td class="col-id">${sensor.id}</td>
+                <td class="col-id">${escapeHtml(sensor.id ?? '')}</td>
                 <td class="col-name" title="${escapeAttr(sensor.textname || sensor.name)}">${escapeHtml(sensor.name)}</td>
-                <td class="col-type"><span class="type-badge type-${sensor.iotype}">${sensor.iotype || '?'}</span></td>
-                <td class="col-value" id="uwsgate-value-${this.objectName}-${escapeAttr(sensor.name)}">${sensor.value}</td>
+                <td class="col-type"><span class="type-badge type-${escapeAttr(sensor.iotype || '')}">${escapeHtml(sensor.iotype || '?')}</span></td>
+                <td class="col-value" id="uwsgate-value-${escapeAttr(this.objectName)}-${escapeAttr(sensor.name)}">${formatValueHtml(sensor.value)}</td>
                 <td class="col-supplier" id="uwsgate-supplier-${this.objectName}-${escapeAttr(sensor.name)}" title="${escapeAttr(sensor.supplier || '')}">${escapeHtml(sensor.supplier || '-')}</td>
-                <td class="col-status">${sensor.error ? `<span class="error-flag">Error: ${sensor.error}</span>` : '-'}</td>
+                <td class="col-status">${sensor.error ? `<span class="error-flag">Error: ${escapeHtml(sensor.error)}</span>` : '-'}</td>
                 <td class="col-actions">
                     <button class="uwsgate-btn-remove" data-name="${escapeAttr(sensor.name)}" title="Remove sensor">✕</button>
                 </td>
@@ -8631,7 +8970,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
                 e.stopPropagation();
                 const sensorName = btn.dataset.sensorName;
                 const sensorLabel = btn.dataset.sensorLabel;
-                showAddToDashboardDialog(sensorName, sensorLabel);
+                showAddToDashboardDialog(sensorName, sensorLabel, getDashboardBindingFromButton(btn));
             });
         });
     }
@@ -8645,13 +8984,10 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         const chartOptions = this.getChartOptions();
         const varName = `${chartOptions.prefix}:${sensor.name}`;
         const tabState = state.tabs.get(this.tabKey);
-        console.log('UWebSocketGate: toggleSensorChart', { varName, tabKey: this.tabKey, hasChart: tabState?.charts?.has(varName) });
 
         if (tabState?.charts?.has(varName)) {
-            console.log('UWebSocketGate: Removing chart', varName);
             removeChart(this.tabKey, varName);
         } else {
-            console.log('UWebSocketGate: Adding chart', varName, 'sensorId:', sensor.id);
             addExternalSensorChart(this.tabKey, varName, sensor.id, sensor.textname || sensor.name, chartOptions);
         }
     }
@@ -8717,8 +9053,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
             });
 
             // Trim old data
-            const maxPoints = 1000;
-            if (chartData.chart.data.datasets[0].data.length > maxPoints) {
+            if (chartData.chart.data.datasets[0].data.length > MAX_CHART_POINTS) {
                 chartData.chart.data.datasets[0].data.shift();
             }
 
@@ -8784,7 +9119,6 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
             if (sensorsResponse.ok) {
                 const data = await sensorsResponse.json();
                 if (data.sensors && data.sensors.length > 0) {
-                    console.log(`UWebSocketGate: Loading ${data.sensors.length} sensors from server`);
                     // Add sensors with their current values
                     for (const sensor of data.sensors) {
                         if (!this.sensors.has(sensor.name)) {
@@ -8814,7 +9148,6 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
             const names = JSON.parse(saved);
             if (!Array.isArray(names) || names.length === 0) return;
 
-            console.log(`UWebSocketGate: Loading ${names.length} subscriptions from localStorage`);
             // Restore subscriptions (will re-subscribe to server)
             for (const name of names) {
                 await this.addSensorByName(name);
@@ -8856,7 +9189,6 @@ applyMixin(UWebSocketGateRenderer, TableSortMixin);
 
 // UWebSocketGate рендерер (по extensionType)
 registerRenderer('UWebSocketGate', UWebSocketGateRenderer);
-
 
 
 // === 26-unet-exchange.js ===
@@ -9009,13 +9341,13 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
     }
 
     async loadStatus() {
-        const serverParam = this.getServerParam();
-
         try {
-            const response = await fetch(`/api/objects/${this.objectName}/unet/status?${serverParam}`);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-            this.status = await response.json();
+            // fetchJSON прокидывает server=... через buildUrl и кидает на !ok —
+            // ручной fetch + getServerParam здесь дублировал бы базу и забывал
+            // encodeURIComponent для objectName.
+            this.status = await this.fetchJSON(
+                `/api/objects/${encodeURIComponent(this.objectName)}/unet/status`
+            );
             this.updateStatusTimestamp();
 
             // Распаковываем receivers и senders из status
@@ -9125,10 +9457,10 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
                         <td class="col-add-buttons add-buttons-col">
                             <span class="chart-toggle">
                                 <input type="checkbox"
-                                       class="chart-checkbox chart-toggle-input"
+                                       class="chart-checkbox chart-toggle-input unet-chart-toggle"
                                        id="chart-${this.objectName}-recv-${nodeIndex}-${chanKey}"
-                                       ${isEnabled ? 'checked' : ''}
-                                       onchange="toggleUNetChannel('${this.tabKey}', 'recv', '${channelId}', this.checked)">
+                                       data-unet-type="recv" data-unet-channel="${escapeAttr(channelId)}"
+                                       ${isEnabled ? 'checked' : ''}>
                                 <label class="chart-toggle-label" for="chart-${this.objectName}-recv-${nodeIndex}-${chanKey}" title="Add to Charts">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M3 3v18h18"/>
@@ -9151,7 +9483,19 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
         });
 
         tbody.innerHTML = rows.join('');
+        this._wireChartToggles(tbody);
         if (countEl) countEl.textContent = totalChannels.toString();
+    }
+
+    // Привязывает change-handler к unet-chart-toggle чекбоксам в указанном root.
+    // Извлекает type и channelId из data-* атрибутов (избегая inline onchange=
+    // с интерполяцией tabKey/channelId — содержит ':' и ломает JS-контекст атрибута).
+    _wireChartToggles(root) {
+        root.querySelectorAll('.unet-chart-toggle').forEach(cb => {
+            cb.addEventListener('change', () => {
+                toggleUNetChannel(this.tabKey, cb.dataset.unetType, cb.dataset.unetChannel, cb.checked);
+            });
+        });
     }
 
     renderSenders() {
@@ -9181,10 +9525,10 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
                     <td class="col-add-buttons add-buttons-col">
                         <span class="chart-toggle">
                             <input type="checkbox"
-                                   class="chart-checkbox chart-toggle-input"
+                                   class="chart-checkbox chart-toggle-input unet-chart-toggle"
                                    id="chart-${this.objectName}-send-${chanKey}"
-                                   ${isEnabled ? 'checked' : ''}
-                                   onchange="toggleUNetChannel('${this.tabKey}', 'send', '${channelId}', this.checked)">
+                                   data-unet-type="send" data-unet-channel="${escapeAttr(channelId)}"
+                                   ${isEnabled ? 'checked' : ''}>
                             <label class="chart-toggle-label" for="chart-${this.objectName}-send-${chanKey}" title="Add to Charts">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M3 3v18h18"/>
@@ -9204,6 +9548,7 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
         });
 
         tbody.innerHTML = rows.join('');
+        this._wireChartToggles(tbody);
         if (countEl) countEl.textContent = channels.length.toString();
     }
 
@@ -9232,10 +9577,10 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
                 <div class="chart-panel-header">
                     <div class="chart-panel-info">
                         <span class="chart-panel-badge">UNET</span>
-                        <span class="chart-panel-title">${type === 'recv' ? 'Recv' : 'Send'}: ${metricLabel}</span>
+                        <span class="chart-panel-title">${type === 'recv' ? 'Recv' : 'Send'}: ${escapeHtml(metricLabel)}</span>
                     </div>
                     <div class="chart-panel-right">
-                        <button class="btn-icon" title="Close" onclick="removeUNetMetricChart('${this.tabKey}', '${chartKey}')">
+                        <button class="btn-icon unet-metric-close" title="Close" data-unet-chart-key="${escapeAttr(chartKey)}">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M18 6L6 18M6 6l12 12"/>
                             </svg>
@@ -9247,38 +9592,26 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
                 </div>
             `;
             chartsGrid.appendChild(chartContainer);
+            chartContainer.querySelector('.unet-metric-close').addEventListener('click', () => {
+                removeUNetMetricChart(this.tabKey, chartKey);
+            });
 
             const canvas = this.getEl(`chart-canvas-${this.objectName}-${safeChartKey}`);
-            const chart = new Chart(canvas, {
-                type: 'line',
-                data: {
-                    datasets: []
-                },
+            const chart = new Chart(canvas, createLineChartConfig({
+                datasets: [],
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    animation: false,
-                    scales: {
-                        x: {
-                            type: 'time',
-                            time: {
-                                displayFormats: { second: 'HH:mm:ss' }
-                            },
-                            ticks: { maxTicksLimit: 6 }
-                        },
-                        y: {
-                            beginAtZero: true
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            display: true,
-                            position: 'bottom',
-                            labels: { boxWidth: 12, padding: 8 }
+                    discreteYAxis: true,
+                    xMaxTicksLimit: UNET_CHART_X_MAX_TICKS,
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        labels: {
+                            boxWidth: CHART_LEGEND_BOX_WIDTH,
+                            padding: CHART_LEGEND_PADDING
                         }
                     }
                 }
-            });
+            }));
 
             tabState.charts.set(chartKey, {
                 chart: chart,
@@ -9303,9 +9636,9 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
             data: [],
             borderColor: color,
             backgroundColor: 'transparent',
-            borderWidth: 1.5,
+            borderWidth: CHART_LINE_BORDER_WIDTH,
             pointRadius: 0,
-            tension: 0.1
+            tension: UNET_CHART_LINE_TENSION
         });
 
         chartData.channels.set(channelId, datasetIndex);
@@ -9399,7 +9732,7 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
         if (!tabState || !tabState.charts) return;
 
         const now = Date.now();
-        const maxPoints = 300;
+        const maxPoints = UNET_CHART_MAX_POINTS;
 
         // Обновляем графики receivers
         UNET_RECV_METRICS.forEach(metric => {
@@ -10019,9 +10352,9 @@ class LogViewer {
 
         // Reconnection settings
         this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
-        this.baseReconnectDelay = 1000; // 1 second
-        this.maxReconnectDelay = 30000; // 30 seconds
+        this.maxReconnectAttempts = LOGVIEWER_MAX_RECONNECT_ATTEMPTS;
+        this.baseReconnectDelay = LOGVIEWER_BASE_RECONNECT_DELAY;
+        this.maxReconnectDelay = LOGVIEWER_MAX_RECONNECT_DELAY;
         this.reconnectTimer = null;
 
         this.init();
@@ -10109,20 +10442,16 @@ class LogViewer {
                         </button>
                         <button class="log-connect-btn" id="log-connect-${this.objectName}">Connect</button>
                         <select class="log-buffer-select" id="log-buffer-${this.objectName}" title="Buffer size">
-                            <option value="500">500</option>
-                            <option value="1000">1000</option>
-                            <option value="2000">2000</option>
-                            <option value="5000">5000</option>
-                            <option value="10000" selected>10000</option>
-                            <option value="20000">20000</option>
-                            <option value="50000">50000</option>
+                            ${LOGVIEWER_BUFFER_OPTIONS.map(size => `
+                                <option value="${size}" ${size === MAX_LOG_LINES ? 'selected' : ''}>${size}</option>
+                            `).join('')}
                         </select>
                         <button class="log-download-btn" id="log-download-${this.objectName}" title="Download logs">💾</button>
                         <button class="log-clear-btn" id="log-clear-${this.objectName}" title="Clear">Clear</button>
                     </div>
-                    <div class="section-reorder-buttons" onclick="event.stopPropagation()">
-                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.tabKey}', 'logviewer')" title="Move up">↑</button>
-                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.tabKey}', 'logviewer')" title="Move down">↓</button>
+                    <div class="section-reorder-buttons" id="log-reorder-${this.objectName}">
+                        <button class="section-move-btn section-move-up" id="log-move-up-${this.objectName}" title="Move up">↑</button>
+                        <button class="section-move-btn section-move-down" id="log-move-down-${this.objectName}" title="Move down">↓</button>
                     </div>
                 </div>
                 <div class="logviewer-content">
@@ -10174,6 +10503,14 @@ class LogViewer {
         const pauseBtn = this.getEl(`log-pause-${this.objectName}`);
         pauseBtn.addEventListener('click', () => this.togglePause());
 
+        // Section reorder buttons (раньше — inline onclick в HTML).
+        const reorderRoot = this.getEl(`log-reorder-${this.objectName}`);
+        reorderRoot?.addEventListener('click', (e) => e.stopPropagation());
+        const moveUpBtn = this.getEl(`log-move-up-${this.objectName}`);
+        moveUpBtn?.addEventListener('click', () => moveSectionUp(this.tabKey, 'logviewer'));
+        const moveDownBtn = this.getEl(`log-move-down-${this.objectName}`);
+        moveDownBtn?.addEventListener('click', () => moveSectionDown(this.tabKey, 'logviewer'));
+
         // Level dropdown
         this.setupLevelDropdown();
 
@@ -10185,7 +10522,7 @@ class LogViewer {
             filterTimeout = setTimeout(() => {
                 this.filter = e.target.value;
                 this.applyFilter();
-            }, 300);
+            }, LOGVIEWER_FILTER_DEBOUNCE_DELAY);
         });
 
         // Filter options
@@ -10210,9 +10547,11 @@ class LogViewer {
             this.applyFilter();
         });
 
-        // Hotkey "/" for filter focus, Esc for pause toggle
-        document.addEventListener('keydown', (e) => {
-            // Check if LogViewer section is visible
+        // Hotkey "/" for filter focus, Esc for pause toggle.
+        // Сохраняем ссылку на handler — нужен для removeEventListener в destroy(),
+        // иначе document держит замыкание на весь LogViewer instance + filterInput
+        // навечно (утечка на каждое открытие/закрытие вкладки).
+        this._keydownHandler = (e) => {
             const section = this.getEl(`logviewer-section-${this.objectName}`);
             if (!section || section.classList.contains('collapsed')) return;
 
@@ -10222,22 +10561,21 @@ class LogViewer {
             }
             if (e.key === 'Escape') {
                 if (document.activeElement === filterInput) {
-                    // Clear filter and blur
                     filterInput.value = '';
                     this.filter = '';
                     this.applyFilter();
                     filterInput.blur();
                 } else if (document.activeElement.tagName !== 'INPUT') {
-                    // Toggle pause when not in input
                     this.togglePause();
                 }
             }
-        });
+        };
+        document.addEventListener('keydown', this._keydownHandler);
 
         // Buffer size select
         const bufferSelect = this.getEl(`log-buffer-${this.objectName}`);
         bufferSelect.addEventListener('change', (e) => {
-            this.maxLines = parseInt(e.target.value);
+            this.maxLines = parseIntegerOrDefault(e.target.value, this.maxLines);
             this.saveBufferSize();
             this.updateStats();
         });
@@ -10249,7 +10587,7 @@ class LogViewer {
         const logContainer = this.getEl(`log-container-${this.objectName}`);
         logContainer.addEventListener('scroll', () => {
             const { scrollTop, scrollHeight, clientHeight } = logContainer;
-            this.autoScroll = scrollHeight - scrollTop - clientHeight < 50;
+            this.autoScroll = scrollHeight - scrollTop - clientHeight < LOGVIEWER_AUTOSCROLL_THRESHOLD_PX;
         });
 
         // Load saved settings
@@ -10485,39 +10823,14 @@ class LogViewer {
     setupResize() {
         const resizeHandle = this.getEl(`log-resize-${this.objectName}`);
         const logContainer = this.getEl(`log-container-${this.objectName}`);
-
-        let startY = 0;
-        let startHeight = 0;
-        let isResizing = false;
-
-        const onMouseMove = (e) => {
-            if (!isResizing) return;
-            const delta = e.clientY - startY;
-            const newHeight = Math.max(LOGVIEWER_MIN_HEIGHT, Math.min(LOGVIEWER_MAX_HEIGHT, startHeight + delta));
-            logContainer.style.height = `${newHeight}px`;
-            this.height = newHeight;
-        };
-
-        const onMouseUp = () => {
-            if (!isResizing) return;
-            isResizing = false;
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-            this.saveHeight();
-        };
-
-        resizeHandle.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            isResizing = true;
-            startY = e.clientY;
-            startHeight = logContainer.offsetHeight;
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = 'ns-resize';
-            document.body.style.userSelect = 'none';
-        });
+        setupResizeHandle(
+            resizeHandle,
+            logContainer,
+            LOGVIEWER_MIN_HEIGHT,
+            (height) => { this.height = height; this.saveHeight(); },
+            LOGVIEWER_MAX_HEIGHT,
+            (height) => { this.height = height; }
+        );
     }
 
     toggleCollapse() {
@@ -10567,9 +10880,9 @@ class LogViewer {
 
             try {
                 const data = JSON.parse(e.data);
-                console.log(`LogViewer: Connected to ${data.host}:${data.port}`);
+                debugLog(`LogViewer: Connected to ${data.host}:${data.port}`);
             } catch (err) {
-                console.log('LogViewer: Connected');
+                debugLog('LogViewer: Connected');
             }
         });
 
@@ -10588,7 +10901,7 @@ class LogViewer {
         });
 
         this.eventSource.addEventListener('disconnected', () => {
-            console.log('LogViewer: Disconnected from LogServer, will reconnect');
+            debugLog('LogViewer: Disconnected from LogServer, will reconnect');
             this.handleConnectionError();
         });
 
@@ -10624,7 +10937,7 @@ class LogViewer {
             const jitter = cappedDelay * 0.1 * (Math.random() * 2 - 1);
             const delay = Math.round(cappedDelay + jitter);
 
-            console.log(`LogViewer: Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+            debugLog(`LogViewer: Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
             this.updateStatus('reconnecting');
 
             // Clear any existing timer
@@ -11106,10 +11419,13 @@ class LogViewer {
     }
 
     destroy() {
+        if (this._keydownHandler) {
+            document.removeEventListener('keydown', this._keydownHandler);
+            this._keydownHandler = null;
+        }
         this.disconnect();
     }
 }
-
 
 
 // === 35-journal.js ===
@@ -11317,19 +11633,9 @@ class JournalRenderer {
             return;
         }
 
-        const multipliers = {
-            '15m': 15 * 60 * 1000,
-            '1h': 60 * 60 * 1000,
-            '3h': 3 * 60 * 60 * 1000,
-            '10h': 10 * 60 * 60 * 1000,
-            '1d': 24 * 60 * 60 * 1000,
-            '3d': 3 * 24 * 60 * 60 * 1000,
-            '1w': 7 * 24 * 60 * 60 * 1000,
-            '1M': 30 * 24 * 60 * 60 * 1000
-        };
-
-        if (multipliers[range]) {
-            from = new Date(now.getTime() - multipliers[range]);
+        const offset = JOURNAL_TIME_RANGE_MS[range];
+        if (offset) {
+            from = new Date(now.getTime() - offset);
         }
 
         this.filters.from = from ? from.toISOString() : null;
@@ -11344,8 +11650,7 @@ class JournalRenderer {
             if (this.isLoading || !this.hasMore) return;
 
             const { scrollTop, scrollHeight, clientHeight } = wrapper;
-            // Load more when scrolled to 80% of the content
-            if (scrollTop + clientHeight >= scrollHeight * 0.8) {
+            if (scrollTop + clientHeight >= scrollHeight * JOURNAL_SCROLL_LOAD_RATIO) {
                 this.loadMore();
             }
         });
@@ -11354,32 +11659,14 @@ class JournalRenderer {
     setupResize() {
         const handle = document.getElementById(`journal-resize-${this.journalId}`);
         const container = document.getElementById(`journal-container-${this.journalId}`);
-        if (!handle || !container) return;
-
-        let startY, startHeight;
-
-        const onMouseMove = (e) => {
-            const delta = e.clientY - startY;
-            const newHeight = Math.max(150, Math.min(800, startHeight + delta));
-            container.style.height = `${newHeight}px`;
-            container.style.flex = 'none'; // Override flex: 1 to allow fixed height
-        };
-
-        const onMouseUp = () => {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-        };
-
-        handle.addEventListener('mousedown', (e) => {
-            startY = e.clientY;
-            startHeight = container.offsetHeight;
-            document.body.style.cursor = 'ns-resize';
-            document.body.style.userSelect = 'none';
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-        });
+        setupResizeHandle(
+            handle,
+            container,
+            JOURNAL_CONTAINER_MIN_HEIGHT,
+            null,
+            JOURNAL_CONTAINER_MAX_HEIGHT,
+            () => { container.style.flex = 'none'; }
+        );
     }
 
     async loadMTypes() {
@@ -11495,7 +11782,30 @@ class JournalRenderer {
     }
 
     renderMessageRow(msg) {
-        const time = new Date(msg.timestamp);
+        return `
+            <tr class="journal-row ${this.getMTypeClass(msg.mtype)}">
+                ${this.renderMessageCells(msg)}
+            </tr>
+        `;
+    }
+
+    renderMessageCells(msg) {
+        const { displayTime, titleTime } = this.getMessageTimeParts(msg.timestamp);
+        const mtypeClass = this.getMTypeClass(msg.mtype);
+
+        return `
+            <td class="col-time" title="${escapeAttr(titleTime)}">${escapeHtml(displayTime)}</td>
+            <td class="col-type"><span class="journal-badge ${mtypeClass}">${escapeHtml(msg.mtype || '')}</span></td>
+            <td class="col-message" title="${escapeAttr(msg.message || '')}">${this.highlightText(msg.message)}</td>
+            <td class="col-code">${this.highlightText(msg.mcode)}</td>
+            <td class="col-group">${this.highlightText(msg.mgroup)}</td>
+            <td class="col-name" title="${escapeAttr(msg.name || '')}">${this.highlightText(msg.name)}</td>
+            <td class="col-value">${escapeHtml(msg.value ?? '')}</td>
+        `;
+    }
+
+    getMessageTimeParts(timestamp) {
+        const time = new Date(timestamp);
         const today = new Date();
         const isToday = time.toDateString() === today.toDateString();
 
@@ -11512,29 +11822,28 @@ class JournalRenderer {
 
         // Show date if not today
         const displayTime = isToday ? timeStr : `${dateStr} ${timeStr}`;
-
-        const mtypeClass = this.getMTypeClass(msg.mtype);
-        const searchTerm = this.filters.search;
-
-        // Highlight search matches
-        const highlightText = (text) => {
-            if (!searchTerm || !text) return this.escapeHtml(text || '');
-            const escaped = this.escapeHtml(text);
-            const regex = new RegExp(`(${this.escapeRegex(searchTerm)})`, 'gi');
-            return escaped.replace(regex, '<mark class="journal-highlight">$1</mark>');
+        return {
+            displayTime,
+            titleTime: time.toLocaleString('ru-RU')
         };
+    }
 
-        return `
-            <tr class="journal-row ${mtypeClass}">
-                <td class="col-time" title="${time.toLocaleString('ru-RU')}">${displayTime}</td>
-                <td class="col-type"><span class="journal-badge ${mtypeClass}">${this.escapeHtml(msg.mtype || '')}</span></td>
-                <td class="col-message" title="${this.escapeHtml(msg.message || '')}">${highlightText(msg.message)}</td>
-                <td class="col-code">${highlightText(msg.mcode)}</td>
-                <td class="col-group">${highlightText(msg.mgroup)}</td>
-                <td class="col-name" title="${this.escapeHtml(msg.name || '')}">${highlightText(msg.name)}</td>
-                <td class="col-value">${msg.value !== undefined ? msg.value : ''}</td>
-            </tr>
-        `;
+    highlightText(text) {
+        if (text === null || text === undefined) return '';
+        const raw = String(text);
+        const searchTerm = this.filters.search;
+        if (!searchTerm || raw === '') return escapeHtml(raw);
+
+        // Сплитим raw по совпадениям, escapeHtml каждый фрагмент. Раньше regex
+        // применялся к escaped-строке — поиск по '<', '>', '&', '"', '=' в тексте
+        // вроде "value >= 5" не находил совпадение, потому что ищем в "value &gt;= 5".
+        const regex = new RegExp(`(${this.escapeRegex(searchTerm)})`, 'gi');
+        const parts = raw.split(regex);
+        return parts.map((part, i) =>
+            i % 2 === 1
+                ? `<mark class="journal-highlight">${escapeHtml(part)}</mark>`
+                : escapeHtml(part)
+        ).join('');
     }
 
     escapeRegex(str) {
@@ -11606,7 +11915,7 @@ class JournalRenderer {
 
             const row = document.createElement('tr');
             row.className = `journal-row ${this.getMTypeClass(msg.mtype)} journal-new`;
-            row.innerHTML = this.renderMessageRowContent(msg);
+            row.innerHTML = this.renderMessageCells(msg);
             tbody.insertBefore(row, tbody.firstChild);
 
             setTimeout(() => row.classList.remove('journal-new'), JOURNAL_HIGHLIGHT_DURATION);
@@ -11630,44 +11939,6 @@ class JournalRenderer {
         return true;
     }
 
-    renderMessageRowContent(msg) {
-        const time = new Date(msg.timestamp);
-        const today = new Date();
-        const isToday = time.toDateString() === today.toDateString();
-
-        const timeStr = time.toLocaleTimeString('ru-RU', {
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-        });
-
-        const dateStr = time.toLocaleDateString('ru-RU', {
-            day: '2-digit',
-            month: '2-digit'
-        });
-
-        const displayTime = isToday ? timeStr : `${dateStr} ${timeStr}`;
-        const mtypeClass = this.getMTypeClass(msg.mtype);
-        const searchTerm = this.filters.search;
-
-        const highlightText = (text) => {
-            if (!searchTerm || !text) return this.escapeHtml(text || '');
-            const escaped = this.escapeHtml(text);
-            const regex = new RegExp(`(${this.escapeRegex(searchTerm)})`, 'gi');
-            return escaped.replace(regex, '<mark class="journal-highlight">$1</mark>');
-        };
-
-        return `
-            <td class="col-time" title="${time.toLocaleString('ru-RU')}">${displayTime}</td>
-            <td class="col-type"><span class="journal-badge ${mtypeClass}">${this.escapeHtml(msg.mtype || '')}</span></td>
-            <td class="col-message" title="${this.escapeHtml(msg.message || '')}">${highlightText(msg.message)}</td>
-            <td class="col-code">${highlightText(msg.mcode)}</td>
-            <td class="col-group">${highlightText(msg.mgroup)}</td>
-            <td class="col-name" title="${this.escapeHtml(msg.name || '')}">${highlightText(msg.name)}</td>
-            <td class="col-value">${msg.value !== undefined ? msg.value : ''}</td>
-        `;
-    }
-
     updatePendingCount() {
         const pendingEl = document.getElementById(`journal-pending-${this.journalId}`);
         if (pendingEl) {
@@ -11680,14 +11951,8 @@ class JournalRenderer {
     showError(message) {
         const tbody = document.getElementById(`journal-tbody-${this.journalId}`);
         if (tbody) {
-            tbody.innerHTML = `<tr class="journal-error"><td colspan="7">${this.escapeHtml(message)}</td></tr>`;
+            tbody.innerHTML = `<tr class="journal-error"><td colspan="7">${escapeHtml(message)}</td></tr>`;
         }
-    }
-
-    escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
     }
 
     destroy() {
@@ -11743,8 +12008,8 @@ class JournalManager {
                         <polyline points="10 9 9 9 8 9"/>
                     </svg>
                 </span>
-                <span class="journal-item-name">${this.escapeHtml(j.name)}</span>
-                <span class="journal-item-status ${j.status}">${j.status}</span>
+                <span class="journal-item-name">${escapeHtml(j.name)}</span>
+                <span class="journal-item-status ${escapeAttr(j.status)}">${escapeHtml(j.status)}</span>
             </li>
         `).join('');
 
@@ -11778,6 +12043,11 @@ class JournalManager {
         if (!renderer) {
             renderer = new JournalRenderer(journalId, journal.name);
             this.renderers.set(journalId, renderer);
+        } else {
+            // При повторном открытии: очистить timer'ы старого инстанса перед
+            // переинициализацией. content.innerHTML ниже выкинет старый DOM,
+            // но searchDebounceTimer / SSE-пингинг могут жить ещё ~debounce ms.
+            renderer.destroy();
         }
 
         // Render journal panel
@@ -11796,11 +12066,6 @@ class JournalManager {
         }
     }
 
-    escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
-    }
 }
 
 // Global journal manager instance
@@ -12021,7 +12286,7 @@ async function refreshObjectsList() {
     try {
         const data = await fetchObjects();
         renderObjectsList(data);
-        console.log('Список объектов обновлён');
+        debugLog('Список объектов обновлён');
     } catch (err) {
         console.error('Error обновления списка объектов:', err);
     } finally {
@@ -12034,40 +12299,37 @@ async function refreshObjectsList() {
 }
 
 async function fetchObjectData(name, serverId = null) {
-    let url = `/api/objects/${encodeURIComponent(name)}`;
-    if (serverId) {
-        url += `?server=${encodeURIComponent(serverId)}`;
-    }
+    const url = buildObjectUrl(name, '', serverId);
     const response = await fetch(url);
     if (!response.ok) throw new Error('Failed to load object data');
     return response.json();
 }
 
 async function watchObject(name, serverId = null) {
-    let url = `/api/objects/${encodeURIComponent(name)}/watch`;
-    if (serverId) {
-        url += `?server=${encodeURIComponent(serverId)}`;
-    }
+    const url = buildObjectUrl(name, '/watch', serverId);
     const response = await fetch(url, { method: 'POST' });
     if (!response.ok) throw new Error('Failed to start watching');
     return response.json();
 }
 
 async function unwatchObject(name, serverId = null) {
-    let url = `/api/objects/${encodeURIComponent(name)}/watch`;
-    if (serverId) {
-        url += `?server=${encodeURIComponent(serverId)}`;
-    }
+    const url = buildObjectUrl(name, '/watch', serverId);
     const response = await fetch(url, { method: 'DELETE' });
     if (!response.ok) throw new Error('Failed to stop watching');
     return response.json();
 }
 
+function buildVariableHistoryUrl(objectName, variableName, count = 100, serverId = null) {
+    return buildObjectUrl(
+        objectName,
+        `/variables/${encodeURIComponent(variableName)}/history`,
+        serverId,
+        { count }
+    );
+}
+
 async function fetchVariableHistory(objectName, variableName, count = 100, serverId = null) {
-    let url = `/api/objects/${encodeURIComponent(objectName)}/variables/${encodeURIComponent(variableName)}/history?count=${count}`;
-    if (serverId) {
-        url += `&server=${encodeURIComponent(serverId)}`;
-    }
+    const url = buildVariableHistoryUrl(objectName, variableName, count, serverId);
     const response = await fetch(url);
     if (!response.ok) throw new Error('Failed to load history');
     return response.json();
@@ -12114,7 +12376,7 @@ async function loadSensorsConfig() {
 
         // Если ничего не загрузилось, пробуем SharedMemory как fallback
         if (totalLoaded === 0) {
-            console.log('Конфиг датчиков пуст, загружаю из SharedMemory...');
+            debugLog('Конфиг датчиков пуст, загружаю из SharedMemory...');
             const data = await fetchSMSensors();
             if (data.sensors) {
                 data.sensors.forEach(sensor => {
@@ -12127,7 +12389,7 @@ async function loadSensorsConfig() {
             }
         }
 
-        console.log(`Загружено ${state.sensors.size} сенсоров`);
+        debugLog(`Загружено ${state.sensors.size} сенсоров`);
     } catch (err) {
         console.error('Error загрузки конфигурации сенсоров:', err);
     }
@@ -12169,7 +12431,6 @@ function isDiscreteSignal(sensor) {
     if (!sensor) return false;
     return sensor.isDiscrete === true || sensor.iotype === 'DI' || sensor.iotype === 'DO';
 }
-
 
 
 // === 41-dialogs.js ===
@@ -12305,7 +12566,10 @@ function openSensorDialog(tabKey) {
         }
     }
 
-    // Обработчик фильтра
+    // Обработчик фильтра. .oninput (а не addEventListener) — намеренно:
+    // openSensorDialog зовётся повторно (диалог singleton-овый, элемент не
+    // пересоздаётся), .oninput идемпотентно перезаписывает; addEventListener
+    // копил бы дубликаты на каждое открытие.
     filterInput.oninput = () => {
         filterSensors(filterInput.value);
         renderSensorTable();
@@ -12434,27 +12698,42 @@ function renderSensorTable() {
 // Экранирование HTML
 // escapeHtml() определена в 06-utils.js
 
+function buildObjectApiUrl(tabKey, objectPath) {
+    const tabState = state.tabs.get(tabKey);
+    const serverId = tabState?.serverId;
+    const objectName = tabState?.displayName || tabKey;
+    const url = buildObjectUrl(objectName, objectPath, serverId);
+
+    return { url, tabState, serverId, objectName };
+}
+
+async function fetchObjectApi(tabKey, objectPath, options = {}) {
+    const { url, tabState, serverId, objectName } = buildObjectApiUrl(tabKey, objectPath);
+    const response = await fetch(url, options);
+    return { response, tabState, serverId, objectName };
+}
+
+async function warnObjectApiError(response, message) {
+    let err = {};
+    try {
+        err = await response.json();
+    } catch (parseErr) {
+        err = {};
+    }
+    console.warn(message, err.error || response.statusText);
+}
+
 // Подписаться на внешние датчики через API
 // tabKey - ключ вкладки (serverId:objectName)
 async function subscribeToExternalSensors(tabKey, sensorNames) {
     try {
-        const tabState = state.tabs.get(tabKey);
-        const serverId = tabState?.serverId;
-        const objectName = tabState?.displayName || tabKey;
-
-        let url = `/api/objects/${encodeURIComponent(objectName)}/external-sensors`;
-        if (serverId) {
-            url += `?server=${encodeURIComponent(serverId)}`;
-        }
-
-        const response = await fetch(url, {
+        const { response } = await fetchObjectApi(tabKey, '/external-sensors', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sensors: sensorNames })
         });
         if (!response.ok) {
-            const err = await response.json();
-            console.warn('Error подписки на датчики:', err.error || response.statusText);
+            await warnObjectApiError(response, 'Error подписки на датчики:');
         }
     } catch (err) {
         console.warn('Error подписки на датчики:', err);
@@ -12465,19 +12744,13 @@ async function subscribeToExternalSensors(tabKey, sensorNames) {
 // tabKey - ключ вкладки (serverId:objectName)
 async function unsubscribeFromExternalSensor(tabKey, sensorName) {
     try {
-        const tabState = state.tabs.get(tabKey);
-        const serverId = tabState?.serverId;
-        const objectName = tabState?.displayName || tabKey;
-
-        let url = `/api/objects/${encodeURIComponent(objectName)}/external-sensors/${encodeURIComponent(sensorName)}`;
-        if (serverId) {
-            url += `?server=${encodeURIComponent(serverId)}`;
-        }
-
-        const response = await fetch(url, { method: 'DELETE' });
+        const { response } = await fetchObjectApi(
+            tabKey,
+            `/external-sensors/${encodeURIComponent(sensorName)}`,
+            { method: 'DELETE' }
+        );
         if (!response.ok) {
-            const err = await response.json();
-            console.warn('Error отписки от датчика:', err.error || response.statusText);
+            await warnObjectApiError(response, 'Error отписки от датчика:');
         }
     } catch (err) {
         console.warn('Error отписки от датчика:', err);
@@ -12488,29 +12761,19 @@ async function unsubscribeFromExternalSensor(tabKey, sensorName) {
 // tabKey - ключ вкладки (serverId:objectName)
 async function subscribeToIONCSensor(tabKey, sensorId) {
     try {
-        const tabState = state.tabs.get(tabKey);
-        const serverId = tabState?.serverId;
-        const objectName = tabState?.displayName || tabKey;
-
-        let url = `/api/objects/${encodeURIComponent(objectName)}/ionc/subscribe`;
-        if (serverId) {
-            url += `?server=${encodeURIComponent(serverId)}`;
-        }
-
-        const response = await fetch(url, {
+        const { response, tabState, serverId, objectName } = await fetchObjectApi(tabKey, '/ionc/subscribe', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sensor_ids: [sensorId] })
         });
         if (!response.ok) {
-            const err = await response.json();
-            console.warn('Error подписки на IONC датчик:', err.error || response.statusText);
+            await warnObjectApiError(response, 'Error подписки на IONC датчик:');
         } else {
             // Добавляем в список подписок рендерера
             if (tabState && tabState.renderer && tabState.renderer.subscribedSensorIds) {
                 tabState.renderer.subscribedSensorIds.add(sensorId);
             }
-            console.log(`IONC: Подписка на датчик ${sensorId} для ${objectName} (server: ${serverId})`);
+            debugLog(`IONC: Подписка на датчик ${sensorId} для ${objectName} (server: ${serverId})`);
         }
     } catch (err) {
         console.warn('Error подписки на IONC датчик:', err);
@@ -12521,29 +12784,19 @@ async function subscribeToIONCSensor(tabKey, sensorId) {
 // tabKey - ключ вкладки (serverId:objectName)
 async function unsubscribeFromIONCSensor(tabKey, sensorId) {
     try {
-        const tabState = state.tabs.get(tabKey);
-        const serverId = tabState?.serverId;
-        const objectName = tabState?.displayName || tabKey;
-
-        let url = `/api/objects/${encodeURIComponent(objectName)}/ionc/unsubscribe`;
-        if (serverId) {
-            url += `?server=${encodeURIComponent(serverId)}`;
-        }
-
-        const response = await fetch(url, {
+        const { response, tabState, serverId, objectName } = await fetchObjectApi(tabKey, '/ionc/unsubscribe', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sensor_ids: [sensorId] })
         });
         if (!response.ok) {
-            const err = await response.json();
-            console.warn('Error отписки от IONC датчика:', err.error || response.statusText);
+            await warnObjectApiError(response, 'Error отписки от IONC датчика:');
         } else {
             // Удаляем из списка подписок рендерера
             if (tabState && tabState.renderer && tabState.renderer.subscribedSensorIds) {
                 tabState.renderer.subscribedSensorIds.delete(sensorId);
             }
-            console.log(`IONC: Отписка от датчика ${sensorId} для ${objectName} (server: ${serverId})`);
+            debugLog(`IONC: Отписка от датчика ${sensorId} для ${objectName} (server: ${serverId})`);
         }
     } catch (err) {
         console.warn('Error отписки от IONC датчика:', err);
@@ -12590,7 +12843,7 @@ function addExternalSensor(tabKey, sensorName) {
     // Обновляем таблицу (чтобы кнопка стала disabled)
     renderSensorTable();
 
-    console.log(`External sensor added ${sensorName} для ${displayName}`);
+    debugLog(`External sensor added ${sensorName} для ${displayName}`);
 
     if (state.capabilities.smEnabled) {
         // SM включен - подписываемся через SM API
@@ -12616,7 +12869,7 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
 
     // Проверяем, не создан ли уже график
     if (tabState.charts.has(varName)) {
-        console.log(`График для ${varName} уже существует`);
+        debugLog(`График для ${varName} уже существует`);
         return;
     }
 
@@ -12681,87 +12934,18 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
 
     // Получаем диапазон времени
     const timeRange = getTimeRangeForObject(objectName);
-    const fillEnabled = true;
-    const steppedEnabled = isDiscrete;
 
     // Создаём Chart.js график
     const ctx = getElementInTab(tabKey, `canvas-${objectName}-${safeVarName}`).getContext('2d');
-    const chartConfig = {
-        type: 'line',
-        data: {
-            datasets: [{
-                label: displayName,
-                data: [],
-                borderColor: color,
-                backgroundColor: `${color}20`,
-                fill: fillEnabled,
-                tension: isDiscrete ? 0 : 0.3,
-                stepped: isDiscrete ? 'before' : false,
-                pointRadius: 0,
-                borderWidth: isDiscrete ? 2 : 1.5
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: false,
-            interaction: {
-                intersect: false,
-                mode: 'index'
-            },
-            scales: {
-                x: {
-                    type: 'time',
-                    display: true,
-                    grid: {
-                        color: '#333840',
-                        drawBorder: false
-                    },
-                    ticks: {
-                        color: '#8a9099',
-                        maxTicksLimit: 10,
-                        display: true
-                    },
-                    time: {
-                        displayFormats: {
-                            second: 'HH:mm:ss',
-                            minute: 'HH:mm',
-                            hour: 'HH:mm'
-                        }
-                    },
-                    min: timeRange.min,
-                    max: timeRange.max
-                },
-                y: {
-                    display: true,
-                    position: 'left',
-                    beginAtZero: isDiscrete,
-                    suggestedMin: isDiscrete ? 0 : undefined,
-                    suggestedMax: isDiscrete ? 1.1 : undefined,
-                    grid: {
-                        color: '#333840',
-                        drawBorder: false
-                    },
-                    ticks: {
-                        color: '#8a9099',
-                        stepSize: isDiscrete ? 1 : undefined
-                    }
-                }
-            },
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    backgroundColor: '#22252a',
-                    titleColor: '#d8dce2',
-                    bodyColor: '#d8dce2',
-                    borderColor: '#333840',
-                    borderWidth: 1
-                }
-            }
-        }
-    };
+    const chartConfig = createLineChartConfig({
+        datasets: [{
+            label: displayName,
+            data: [],
+            color,
+            isDiscrete
+        }],
+        timeRange
+    });
 
     const chart = new Chart(ctx, chartConfig);
 
@@ -12813,7 +12997,7 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
     const smoothCheckbox = getElementInTab(tabKey, `smooth-${objectName}-${safeVarName}`);
     if (smoothCheckbox) {
         smoothCheckbox.addEventListener('change', (e) => {
-            chart.data.datasets[0].tension = e.target.checked ? 0.3 : 0;
+            chart.data.datasets[0].tension = e.target.checked ? CHART_LINE_TENSION : 0;
             chart.update('none');
         });
     }
@@ -12832,7 +13016,7 @@ function addExternalSensorChart(tabKey, varName, sensorId, textname, options = {
 
     // Проверяем, не создан ли уже график
     if (tabState.charts.has(varName)) {
-        console.log(`График для ${varName} уже существует`);
+        debugLog(`График для ${varName} уже существует`);
         return;
     }
 
@@ -12926,7 +13110,7 @@ function removeExternalSensor(tabKey, sensorName, options = {}) {
         renderSensorTable();
     }
 
-    console.log(`Удалён внешний датчик ${sensorName} для ${tabKey}`);
+    debugLog(`Удалён внешний датчик ${sensorName} для ${tabKey}`);
 
     // Отписываемся от датчика через API
     if (state.capabilities.smEnabled) {
@@ -12994,7 +13178,7 @@ function restoreExternalSensors(tabKey, displayName) {
         const tabState = state.tabs.get(tabKey);
         if (!tabState) {
             if (++attempts > RESTORE_SENSORS_MAX_ATTEMPTS) return;
-            setTimeout(restoreSensors, 100);
+            setTimeout(restoreSensors, RESTORE_SENSORS_RETRY_DELAY_MS);
             return;
         }
 
@@ -13062,16 +13246,11 @@ function restoreExternalSensors(tabKey, displayName) {
                 subscribeToExternalSensors(tabKey, restoredSensorNames);
             } else if (tabState.renderer && tabState.renderer.subscribedSensorIds) {
                 // IONC подписка
-                const serverId = tabState.serverId;
-                let url = `/api/objects/${encodeURIComponent(displayName)}/ionc/subscribe`;
-                if (serverId) {
-                    url += `?server=${encodeURIComponent(serverId)}`;
-                }
-                fetch(url, {
+                fetchObjectApi(tabKey, '/ionc/subscribe', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ sensor_ids: restoredSensorIds })
-                }).then(response => {
+                }).then(({ response }) => {
                     if (response.ok) {
                         restoredSensorIds.forEach(id => {
                             tabState.renderer.subscribedSensorIds.add(id);
@@ -13083,11 +13262,11 @@ function restoreExternalSensors(tabKey, displayName) {
             }
         }
 
-        console.log(`Восстановлено ${restoredSensorIds.length} датчиков на графике для ${displayName}`);
+        debugLog(`Восстановлено ${restoredSensorIds.length} датчиков на графике для ${displayName}`);
     };
 
     // Даём время на инициализацию вкладки
-    setTimeout(restoreSensors, 200);
+    setTimeout(restoreSensors, RESTORE_SENSORS_INITIAL_DELAY_MS);
 }
 
 // Загрузка сенсоров для конкретного сервера
@@ -13112,13 +13291,6 @@ async function fetchSensorsForServer(serverId) {
 // числовой id в hidden input. Стрелки ↑↓ — навигация. Esc — закрыть.
 // При смене objectName (через resetOnObjectChange()) — очищает выбор.
 // ============================================================================
-
-const SENSOR_AUTOCOMPLETE_DEBOUNCE_MS = 150;
-const SENSOR_AUTOCOMPLETE_LIMIT = 20;
-// На focus показываем top-N из IONC объекта (без search фильтра), чтобы юзер
-// сразу видел ассортимент, а не результат поиска по уже введённому тексту
-// (typically — имя сохранённого sensor'а из existing config). Spec требует 10.
-const SENSOR_AUTOCOMPLETE_FOCUS_LIMIT = 10;
 
 function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId) {
     if (!inputEl) return null;
@@ -13147,7 +13319,7 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
         dropdown.style.left = `${rect.left}px`;
         dropdown.style.top = `${rect.bottom + 2}px`;
         dropdown.style.width = `${rect.width}px`;
-        dropdown.style.zIndex = '10000';
+        dropdown.style.zIndex = String(SENSOR_AUTOCOMPLETE_DROPDOWN_Z_INDEX);
         document.body.appendChild(dropdown);
     }
 
@@ -13161,10 +13333,10 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
         dropdown.innerHTML = items.map((s, idx) => `
             <div class="sensor-autocomplete-item ${idx === activeIndex ? 'active' : ''}"
                  data-idx="${idx}"
-                 data-id="${s.id}"
+                 data-id="${escapeAttr(s.id)}"
                  data-name="${escapeAttr(s.name)}">
                 <div class="sensor-autocomplete-name">${escapeHtml(s.name)}</div>
-                <div class="sensor-autocomplete-meta">id=${s.id} · type=${escapeHtml(s.type || '?')} · value=${s.value ?? '—'}</div>
+                <div class="sensor-autocomplete-meta">id=${escapeHtml(String(s.id))} · type=${escapeHtml(s.type || '?')} · value=${escapeHtml(String(s.value ?? '—'))}</div>
             </div>
         `).join('');
         dropdown.querySelectorAll('.sensor-autocomplete-item').forEach(el => {
@@ -13228,7 +13400,7 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
         if (hiddenIdEl) hiddenIdEl.value = '';
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => fetchAndShow(inputEl.value.trim()),
-            SENSOR_AUTOCOMPLETE_DEBOUNCE_MS);
+            AUTOCOMPLETE_DEBOUNCE_DELAY);
     });
 
     inputEl.addEventListener('keydown', (e) => {
@@ -13253,7 +13425,7 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
 
     inputEl.addEventListener('blur', () => {
         // Delay so click on dropdown item fires first (mousedown handler runs).
-        setTimeout(destroyDropdown, 150);
+        setTimeout(destroyDropdown, SENSOR_AUTOCOMPLETE_BLUR_DELAY_MS);
     });
 
     return {
@@ -13556,12 +13728,6 @@ async function openObjectTab(name, serverId, serverName) {
 }
 
 function createTab(tabKey, displayName, rendererInfo, initialData, serverId, serverName) {
-    const tabsHeader = document.getElementById('tabs-header');
-    const tabsContent = document.getElementById('tabs-content');
-
-    const placeholder = tabsContent.querySelector('.placeholder');
-    if (placeholder) placeholder.remove();
-
     // Получаем класс рендерера для данного типа объекта/расширения
     const RendererClass = rendererInfo.RendererClass || DefaultObjectRenderer;
     const renderer = new RendererClass(displayName, tabKey);
@@ -13572,40 +13738,24 @@ function createTab(tabKey, displayName, rendererInfo, initialData, serverId, ser
     const serverData = state.servers.get(serverId);
     const serverConnected = serverData?.connected !== false;
 
-    const tabBtn = document.createElement('button');
-    tabBtn.className = 'tab-btn' + (serverConnected ? '' : ' server-disconnected');
-    tabBtn.dataset.name = tabKey;
-    tabBtn.dataset.objectType = rendererInfo.rendererType;
-    tabBtn.dataset.serverId = serverId;
-
     const badgeType = rendererInfo.badgeType || rendererInfo.rendererType || 'Default';
 
     // Формируем HTML вкладки
-    const tabHTML = `
+    const buttonHtml = `
         <span class="tab-type-badge">${badgeType}</span>
-        <span class="tab-server-badge${serverConnected ? '' : ' disconnected'}" data-server-id="${serverId}">${serverName}</span>
-        ${displayName}
+        <span class="tab-server-badge${serverConnected ? '' : ' disconnected'}" data-server-id="${escapeAttr(serverId)}">${escapeHtml(serverName)}</span>
+        ${escapeHtml(displayName)}
         <span class="close">&times;</span>
     `;
-    tabBtn.innerHTML = tabHTML;
 
-    tabBtn.addEventListener('click', (e) => {
-        if (e.target.classList.contains('close')) {
-            closeTab(tabKey);
-        } else {
-            activateTab(tabKey);
-        }
+    createTabShell({
+        tabKey,
+        objectType: rendererInfo.rendererType,
+        connected: serverConnected,
+        serverId,
+        buttonHtml,
+        panelHtml: renderer.createPanelHTML()
     });
-    tabsHeader.appendChild(tabBtn);
-
-    // Панель содержимого - создаётся рендерером
-    const panel = document.createElement('div');
-    panel.className = 'tab-panel' + (serverConnected ? '' : ' server-disconnected');
-    panel.dataset.name = tabKey;
-    panel.dataset.objectType = rendererInfo.rendererType;
-    panel.dataset.serverId = serverId;
-    panel.innerHTML = renderer.createPanelHTML();
-    tabsContent.appendChild(panel);
 
     // Восстановить состояние спойлеров
     restoreCollapsedSections(displayName);
@@ -13634,6 +13784,12 @@ function createTab(tabKey, displayName, rendererInfo, initialData, serverId, ser
     // Инициализация рендерера (настройка обработчиков и т.д.)
     renderer.initialize();
 
+    // Делегированные click-handlers для всех secций tab-панели
+    // (toggleSection, moveSectionUp/Down, addSensor, time-range, IO sequential).
+    // Раньше эти handler'ы шли inline onclick="..." из шаблонов 10-base-renderer
+    // и 20-ionc-renderer; теперь — единый bind после initialize().
+    renderer._setupSectionDelegation?.();
+
     // Восстанавливаем внешние датчики из localStorage
     restoreExternalSensors(tabKey, displayName);
 
@@ -13650,6 +13806,57 @@ function createTab(tabKey, displayName, rendererInfo, initialData, serverId, ser
     updateAllControlButtons();
 }
 
+function createTabShell({ tabKey, objectType, connected, serverId = null, buttonHtml, panelHtml }) {
+    const tabsHeader = document.getElementById('tabs-header');
+    const tabsContent = document.getElementById('tabs-content');
+
+    const placeholder = tabsContent.querySelector('.placeholder');
+    if (placeholder) placeholder.remove();
+
+    const tabBtn = document.createElement('button');
+    tabBtn.className = 'tab-btn' + (connected ? '' : ' server-disconnected');
+    tabBtn.dataset.name = tabKey;
+    tabBtn.dataset.objectType = objectType;
+    if (serverId) {
+        tabBtn.dataset.serverId = serverId;
+    }
+    tabBtn.innerHTML = buttonHtml;
+    tabBtn.addEventListener('click', (e) => {
+        if (e.target.classList.contains('close')) {
+            closeTab(tabKey);
+        } else {
+            activateTab(tabKey);
+        }
+    });
+    tabsHeader.appendChild(tabBtn);
+
+    const panel = document.createElement('div');
+    panel.className = 'tab-panel' + (connected ? '' : ' server-disconnected');
+    panel.dataset.name = tabKey;
+    panel.dataset.objectType = objectType;
+    if (serverId) {
+        panel.dataset.serverId = serverId;
+    }
+    panel.innerHTML = panelHtml;
+    tabsContent.appendChild(panel);
+
+    return { tabBtn, panel };
+}
+
+function getTabButton(name) {
+    return Array.from(document.querySelectorAll('.tab-btn'))
+        .find(btn => btn.dataset.name === name) || null;
+}
+
+function getObjectListItem(tabKey) {
+    const tabState = state.tabs.get(tabKey);
+    const displayName = tabState?.displayName || tabKey;
+    const serverId = tabState?.serverId || null;
+
+    return Array.from(document.querySelectorAll('.objects-list li'))
+        .find(li => li.dataset.name === displayName && (!serverId || li.dataset.serverId === serverId)) || null;
+}
+
 function activateTab(name) {
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
@@ -13657,9 +13864,9 @@ function activateTab(name) {
     // Снимаем выделение с dashboard items в sidebar
     document.querySelectorAll('.dashboard-item').forEach(item => item.classList.remove('active'));
 
-    document.querySelector(`.tab-btn[data-name="${name}"]`)?.classList.add('active');
-    document.querySelector(`.tab-panel[data-name="${name}"]`)?.classList.add('active');
-    document.querySelector(`.objects-list li[data-name="${name}"]`)?.classList.add('active');
+    getTabButton(name)?.classList.add('active');
+    getTabPanel(name)?.classList.add('active');
+    getObjectListItem(name)?.classList.add('active');
 
     state.activeTab = name;
 }
@@ -13684,8 +13891,8 @@ function closeTab(name) {
 
     state.tabs.delete(name);
 
-    document.querySelector(`.tab-btn[data-name="${name}"]`)?.remove();
-    document.querySelector(`.tab-panel[data-name="${name}"]`)?.remove();
+    getTabButton(name)?.remove();
+    getTabPanel(name)?.remove();
 
     if (state.tabs.size === 0) {
         const tabsContent = document.getElementById('tabs-content');
@@ -13719,44 +13926,24 @@ function openLauncherTab(nodeId, nodeName, launcherUrl, hasControl) {
 }
 
 function createLauncherTab(tabKey, nodeId, nodeName, launcherUrl, hasControl) {
-    const tabsHeader = document.getElementById('tabs-header');
-    const tabsContent = document.getElementById('tabs-content');
-
-    const placeholder = tabsContent.querySelector('.placeholder');
-    if (placeholder) placeholder.remove();
-
     const renderer = new LauncherRenderer(nodeName, tabKey, nodeId, launcherUrl, hasControl);
 
     // Проверяем начальный статус подключения
     const nodeState = state.nodes.get(nodeId);
     const nodeConnected = nodeState?.connected !== false;
 
-    // Кнопка вкладки
-    const tabBtn = document.createElement('button');
-    tabBtn.className = 'tab-btn' + (nodeConnected ? '' : ' server-disconnected');
-    tabBtn.dataset.name = tabKey;
-    tabBtn.dataset.objectType = 'Launcher';
-    tabBtn.innerHTML = `
+    createTabShell({
+        tabKey,
+        objectType: 'Launcher',
+        connected: nodeConnected,
+        serverId: nodeId,
+        buttonHtml: `
         <span class="tab-type-badge tab-badge-launcher">Launcher</span>
         ${escapeHtml(nodeName)}
         <span class="close">&times;</span>
-    `;
-    tabBtn.addEventListener('click', (e) => {
-        if (e.target.classList.contains('close')) {
-            closeTab(tabKey);
-        } else {
-            activateTab(tabKey);
-        }
+    `,
+        panelHtml: renderer.createPanelHTML()
     });
-    tabsHeader.appendChild(tabBtn);
-
-    // Панель содержимого
-    const panel = document.createElement('div');
-    panel.className = 'tab-panel' + (nodeConnected ? '' : ' server-disconnected');
-    panel.dataset.name = tabKey;
-    panel.dataset.objectType = 'Launcher';
-    panel.innerHTML = renderer.createPanelHTML();
-    tabsContent.appendChild(panel);
 
     // Сохраняем состояние
     state.tabs.set(tabKey, {
@@ -13876,11 +14063,11 @@ function updateLauncherNodeStatus(nodeId, connected) {
 
     // Обновляем CSS-класс tab-кнопки и панели (аналогично updateServerStatus)
     const tabKey = `launcher:${nodeId}`;
-    const tabBtn = document.querySelector(`.tab-btn[data-name="${CSS.escape(tabKey)}"]`);
+    const tabBtn = getTabButton(tabKey);
     if (tabBtn) {
         tabBtn.classList.toggle('server-disconnected', !connected);
     }
-    const tabPanel = document.querySelector(`.tab-panel[data-name="${CSS.escape(tabKey)}"]`);
+    const tabPanel = getTabPanel(tabKey);
     if (tabPanel) {
         tabPanel.classList.toggle('server-disconnected', !connected);
     }
@@ -13927,12 +14114,16 @@ async function loadObjectData(tabKey) {
 }
 
 
-
 // === 51-ui-render.js ===
 // ============================================================================
 // Helper для безопасного поиска элементов внутри панели вкладки
 // Решает проблему конфликта ID при multi-server с одинаковыми displayName
 // ============================================================================
+
+function getTabPanel(tabKey) {
+    return Array.from(document.querySelectorAll('.tab-panel'))
+        .find(panel => panel.dataset.name === tabKey) || null;
+}
 
 /**
  * Находит элемент внутри панели конкретной вкладки
@@ -13941,7 +14132,7 @@ async function loadObjectData(tabKey) {
  * @returns {HTMLElement|null} - Найденный элемент или null
  */
 function getElementInTab(tabKey, elementId) {
-    const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+    const panel = getTabPanel(tabKey);
     if (!panel) return null;
     // Escape special CSS characters in elementId (e.g., colon in "ws:SensorName")
     const escapedId = CSS.escape(elementId);
@@ -13955,7 +14146,7 @@ function getElementInTab(tabKey, elementId) {
  * @returns {NodeList} - Список найденных элементов
  */
 function getElementsInTab(tabKey, selector) {
-    const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+    const panel = getTabPanel(tabKey);
     if (!panel) return [];
     return panel.querySelectorAll(selector);
 }
@@ -13986,8 +14177,8 @@ function renderVariables(tabKey, variables, filterText = '') {
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td class="variable-name">${varName}</td>
-            <td class="variable-value">${formatValue(value)}</td>
+            <td class="variable-name">${escapeHtml(varName)}</td>
+            <td class="variable-value">${formatValueHtml(value)}</td>
             <td></td>
         `;
 
@@ -14069,8 +14260,8 @@ function renderIO(tabKey, type, ioData) {
             <td class="io-spacer-col"></td>
             <td><span class="variable-iotype iotype-${iotype.toLowerCase()}">${iotype}</span></td>
             <td>${io.id}</td>
-            <td class="variable-name" title="${textname}">${io.name || key}</td>
-            <td class="variable-value" data-var="${varName}">${formatValue(io.value)}</td>
+            <td class="variable-name" title="${escapeAttr(textname)}">${escapeHtml(io.name || key)}</td>
+            <td class="variable-value" data-var="${varName}">${formatValueHtml(io.value)}</td>
         `;
 
         // Pin toggle handler
@@ -14099,6 +14290,10 @@ function formatValue(value) {
         return Number.isInteger(value) ? value : value.toFixed(2);
     }
     return String(value);
+}
+
+function formatValueHtml(value) {
+    return escapeHtml(String(formatValue(value)));
 }
 
 // Находит tabKey по displayName (для обратной совместимости с кодом использующим objectName)
@@ -14176,7 +14371,7 @@ async function addChart(tabKey, varName, sensorId, passedTextname) {
                     <input type="checkbox" id="fill-${displayName}-${varName}" checked>
                     <span class="fill-toggle-label">fill</span>
                 </label>
-                <button class="btn-icon" title="Close" onclick="removeChartByButton('${tabKey}', '${varName}')">
+                <button class="btn-icon chart-close-btn" title="Close">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M18 6L6 18M6 6l12 12"/>
                     </svg>
@@ -14188,6 +14383,13 @@ async function addChart(tabKey, varName, sensorId, passedTextname) {
         </div>
     `;
     chartsContainer.appendChild(chartDiv);
+
+    // Вместо inline onclick — addEventListener со ссылками на tabKey/varName
+    // из closure'а. Inline-вариант ломался бы на varName со спецсимволами
+    // (одинарные кавычки в имени датчика и т.п.) и был XSS-вектором.
+    chartDiv.querySelector('.chart-close-btn')?.addEventListener('click', () => {
+        removeChart(tabKey, varName);
+    });
 
     // Обработчик для чекбокса заливки
     const fillCheckbox = getElementInTab(tabKey, `fill-${displayName}-${varName}`);
@@ -14208,7 +14410,7 @@ async function addChart(tabKey, varName, sensorId, passedTextname) {
     // Загружаем историю
     try {
         const serverId = tabState?.serverId;
-        const history = await fetchVariableHistory(displayName, varName, 200, serverId);
+        const history = await fetchVariableHistory(displayName, varName, OBJECT_CHART_HISTORY_LIMIT, serverId);
         const ctx = getElementInTab(tabKey, `canvas-${displayName}-${varName}`).getContext('2d');
 
         // Преобразуем данные для временной шкалы
@@ -14220,86 +14422,15 @@ async function addChart(tabKey, varName, sensorId, passedTextname) {
         // Получаем диапазон времени (при первом графике устанавливается начало)
         const timeRange = getTimeRangeForObject(tabKey);
 
-        // Заливка по умолчанию только для аналоговых
-        const fillEnabled = true;
-
-        // Конфигурация графика в зависимости от типа сигнала
-        const chartConfig = {
-            type: 'line',
-            data: {
-                datasets: [{
-                    label: sensorDisplayName,
-                    data: historyData,
-                    borderColor: color,
-                    backgroundColor: `${color}20`,
-                    fill: fillEnabled,
-                    tension: isDiscrete ? 0 : 0.3,
-                    stepped: isDiscrete ? 'before' : false,
-                    pointRadius: 0,
-                    borderWidth: isDiscrete ? 2 : 1.5
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: false,
-                interaction: {
-                    intersect: false,
-                    mode: 'index'
-                },
-                scales: {
-                    x: {
-                        type: 'time',
-                        display: true,
-                        grid: {
-                            color: '#333840',
-                            drawBorder: false
-                        },
-                        ticks: {
-                            color: '#8a9099',
-                            maxTicksLimit: 10,
-                            display: true
-                        },
-                        time: {
-                            displayFormats: {
-                                second: 'HH:mm:ss',
-                                minute: 'HH:mm',
-                                hour: 'HH:mm'
-                            }
-                        },
-                        min: timeRange.min,
-                        max: timeRange.max
-                    },
-                    y: {
-                        display: true,
-                        position: 'left',
-                        beginAtZero: isDiscrete,
-                        suggestedMin: isDiscrete ? 0 : undefined,
-                        suggestedMax: isDiscrete ? 1.1 : undefined,
-                        grid: {
-                            color: '#333840',
-                            drawBorder: false
-                        },
-                        ticks: {
-                            color: '#8a9099',
-                            stepSize: isDiscrete ? 1 : undefined
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: false
-                    },
-                    tooltip: {
-                        backgroundColor: '#22252a',
-                        titleColor: '#d8dce2',
-                        bodyColor: '#d8dce2',
-                        borderColor: '#333840',
-                        borderWidth: 1
-                    }
-                }
-            }
-        };
+        const chartConfig = createLineChartConfig({
+            datasets: [{
+                label: sensorDisplayName,
+                data: historyData,
+                color,
+                isDiscrete
+            }],
+            timeRange
+        });
 
         const chart = new Chart(ctx, chartConfig);
 
@@ -14348,7 +14479,7 @@ async function updateChart(objectName, varName, chart) {
     try {
         const serverId = tabState?.serverId;
         const displayName = tabState?.displayName || objectName;
-        const history = await fetchVariableHistory(displayName, varName, 200, serverId);
+        const history = await fetchVariableHistory(displayName, varName, OBJECT_CHART_HISTORY_LIMIT, serverId);
 
         // Преобразуем данные для временной шкалы
         const chartData = history.points?.map(p => ({
@@ -14365,10 +14496,13 @@ async function updateChart(objectName, varName, chart) {
 
         chart.update('none');
 
-        // Обновить значение в легенде
+        // Обновить значение в легенде. ID элемента создаётся в addChart с
+        // displayName, а не objectName: при polling-вызове из setInterval
+        // objectName == tabKey, и при multi-server (tabKey != displayName)
+        // запрос мимо.
         if (history.points && history.points.length > 0) {
             const lastValue = history.points[history.points.length - 1].value;
-            const legendEl = getElementInTab(tabKey, `legend-value-${objectName}-${varName}`);
+            const legendEl = getElementInTab(tabKey, `legend-value-${displayName}-${varName}`);
             if (legendEl) {
                 legendEl.textContent = formatValue(lastValue);
             }
@@ -14438,7 +14572,7 @@ function updateXAxisVisibility(tabKey) {
 
     // ВАЖНО: Ограничиваем поиск панелью конкретной вкладки
     // для избежания конфликтов ID при multi-server (когда displayName одинаковый)
-    const tabPanel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+    const tabPanel = getTabPanel(tabKey);
     if (!tabPanel) return;
 
     const chartPanels = tabPanel.querySelectorAll(`#charts-${displayName} .chart-panel`);
@@ -14673,27 +14807,26 @@ function renderTimersTable(tabKey, timers) {
 function startTimerUpdateInterval() {
     if (timerUpdateInterval) return;
 
-    const UPDATE_INTERVAL = 100; // мс
-
     timerUpdateInterval = setInterval(() => {
         const now = Date.now();
 
-        Object.entries(timerDataCache).forEach(([objectName, cache]) => {
+        Object.entries(timerDataCache).forEach(([tabKey, cache]) => {
+            // Обновляем timeleft для каждого таймера. Decrement = реальный
+            // elapsed (now - cache.lastUpdate), а не TIMER_UPDATE_INTERVAL_MS:
+            // если вкладка была background'ом, setInterval мог пропустить тики,
+            // и интервал между фактическими вызовами callback'а > nominal'а.
             const elapsed = now - cache.lastUpdate;
-
-            // Обновляем timeleft для каждого таймера
             cache.timers.forEach(timer => {
                 if (timer.tick !== -1 && timer.timeleft > 0) {
-                    timer.timeleft = Math.max(0, timer.timeleft - UPDATE_INTERVAL);
+                    timer.timeleft = Math.max(0, timer.timeleft - elapsed);
                 }
             });
 
             cache.lastUpdate = now;
 
-            // Перерисовываем таблицу
-            renderTimersTable(objectName, cache.timers);
+            renderTimersTable(tabKey, cache.timers);
         });
-    }, UPDATE_INTERVAL);
+    }, TIMER_UPDATE_INTERVAL_MS);
 }
 
 // Рендеринг информации об объекте
@@ -14916,7 +15049,7 @@ function renderStatistics(tabKey, statsData) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td class="info-label">${escapeHtml(key)}</td>
-            <td class="info-value">${escapeHtml(String(formatValue(value)))}</td>
+            <td class="info-value">${formatValueHtml(value)}</td>
         `;
         generalTbody.appendChild(tr);
     });
@@ -14973,7 +15106,7 @@ function renderStatisticsSensors(tabKey, filterText = '') {
         tr.innerHTML = `
             <td>${escapeHtml(String(sensorId))}</td>
             <td class="variable-name">${escapeHtml(String(sensorName))}</td>
-            <td class="variable-value">${escapeHtml(String(formatValue(sensorCount)))}</td>
+            <td class="variable-value">${formatValueHtml(sensorCount)}</td>
         `;
         tbody.appendChild(tr);
     });
@@ -15096,11 +15229,13 @@ function changeChartColor(tabKey, varName, newColor) {
     chart.data.datasets[0].backgroundColor = `${newColor}20`;
     chart.update('none');
 
-    // Обновить цвет квадратика в шапке
-    // Используем displayName для ID элемента (objectName)
+    // Обновить цвет квадратика в шапке. Scoped lookup внутри панели вкладки —
+    // при multi-server одинаковый displayName на разных серверах не должен
+    // тащить chart-panel из чужой вкладки.
     const displayName = tabState.displayName || tabKey;
     const safeVarName = varName.replace(/:/g, '-');
-    const colorPicker = document.querySelector(`#chart-panel-${displayName}-${safeVarName} .legend-color-picker`);
+    const tabPanel = getTabPanel(tabKey);
+    const colorPicker = tabPanel?.querySelector(`#chart-panel-${CSS.escape(`${displayName}-${safeVarName}`)} .legend-color-picker`);
     if (colorPicker) {
         colorPicker.style.background = newColor;
     }
@@ -15128,7 +15263,7 @@ function toggleChartSmooth(tabKey, varName, smoothEnabled) {
     const chartData = tabState.charts.get(varName);
     if (!chartData) return;
 
-    chartData.chart.data.datasets[0].tension = smoothEnabled ? 0.3 : 0;
+    chartData.chart.data.datasets[0].tension = smoothEnabled ? CHART_LINE_TENSION : 0;
     chartData.chart.update('none');
 }
 
@@ -15351,7 +15486,7 @@ function moveSectionDown(tabKey, sectionId) {
 
 function getSectionElement(tabKey, sectionId) {
     // Ищем секцию по data-section-id внутри панели вкладки
-    const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+    const panel = getTabPanel(tabKey);
     if (!panel) return null;
     return panel.querySelector(`.reorderable-section[data-section-id="${sectionId}"]`);
 }
@@ -15381,7 +15516,7 @@ function getNextReorderableSection(element) {
 // tabKey - ключ вкладки (serverId:objectName)
 function saveSectionOrder(tabKey) {
     try {
-        const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+        const panel = getTabPanel(tabKey);
         if (!panel) return;
 
         const sections = panel.querySelectorAll('.reorderable-section[data-section-id]');
@@ -15402,7 +15537,7 @@ function loadSectionOrder(tabKey) {
         const order = saved[tabKey];
         if (!order || !Array.isArray(order)) return;
 
-        const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+        const panel = getTabPanel(tabKey);
         if (!panel) return;
 
         // Собираем все reorderable секции в Map
@@ -15442,7 +15577,7 @@ function loadSectionOrder(tabKey) {
 
 // tabKey - ключ вкладки (serverId:objectName)
 function updateReorderButtons(tabKey) {
-    const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+    const panel = getTabPanel(tabKey);
     if (!panel) return;
 
     const sections = Array.from(panel.querySelectorAll('.reorderable-section[data-section-id]'))
@@ -15479,7 +15614,7 @@ function setupIOSections(tabKey) {
 }
 
 function setupIOCollapse(tabKey, objectName, type) {
-    const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+    const panel = getTabPanel(tabKey);
     if (!panel) return;
 
     const toggleEl = panel.querySelector(`.io-section-toggle[data-section="${type}-${objectName}"]`);
@@ -15662,7 +15797,7 @@ function clearIOPinnedRows(tabKey, type) {
 function setTimeRange(range) {
     // Обновляем active класс на всех кнопках
     document.querySelectorAll('.time-range-btn').forEach(btn => {
-        const btnRange = parseInt(btn.getAttribute('onclick')?.match(/setTimeRange\((\d+)\)/)?.[1], 10);
+        const btnRange = parseInt(btn.dataset.range, 10);
         btn.classList.toggle('active', btnRange === range);
     });
 
@@ -15741,13 +15876,12 @@ async function loadAppConfig() {
         if (response.ok) {
             const config = await response.json();
             state.config = { ...state.config, ...config };
-            console.log('App config loaded:', state.config);
+            debugLog('App config loaded:', state.config);
         }
     } catch (err) {
         console.warn('Failed to load app config:', err);
     }
 }
-
 
 
 // === 55-sidebar-groups.js ===
@@ -15773,7 +15907,7 @@ async function loadSidebar() {
         }
         const data = await response.json();
         state.sidebarGroups = Array.isArray(data.groups) ? data.groups : [];
-        console.log(`Sidebar: ${state.sidebarGroups.length} groups loaded`);
+        debugLog(`Sidebar: ${state.sidebarGroups.length} groups loaded`);
     } catch (err) {
         console.warn('Failed to load sidebar config:', err);
         state.sidebarGroups = [];
@@ -16040,8 +16174,7 @@ const DASHBOARD_VERSION = 1;
 const dashboardState = window.dashboardState = {
     currentView: 'objects', // 'objects' or 'dashboard'
     currentDashboard: null, // current dashboard name
-    dashboards: new Map(),  // name -> dashboard config
-    serverDashboards: [],   // list of server-side dashboards
+    dashboards: new Map(),  // name -> dashboard config (server dashboards помечены _server: true)
     editMode: false,
     selectedWidgetId: null, // selected widget for keyboard movement
     widgets: new Map(),     // widgetId -> widget instance
@@ -16066,7 +16199,7 @@ class DashboardWidget {
 
     constructor(id, config, container) {
         this.id = id;
-        this.config = config;
+        this.config = config || {};
         this.container = container;
         this.value = null;
         this.error = null;
@@ -16117,15 +16250,22 @@ class DashboardWidget {
         }
     }
 
-    getConfig() {
-        return { ...this.config };
+    // Подбирает цвет по значению из настройки zones[]. Используется LevelWidget,
+    // GaugeWidget — везде, где есть цветовые зоны. Static, чтобы можно было
+    // дёрнуть из любого instance без зависимости от подкласса.
+    static getColorForZones(value, zones = []) {
+        if (!zones || zones.length === 0) return 'var(--accent-blue)';
+        for (const zone of zones) {
+            if (value >= zone.from && value <= zone.to) return zone.color;
+        }
+        return 'var(--accent-blue)';
     }
+
 }
 
 // ============================================================================
 // Gauge Widget (SVG)
 // ============================================================================
-
 
 
 // === 60-widget-sensor-binding.js ===
@@ -16191,11 +16331,7 @@ function renderSensorBindingFields(config = {}, opts = {}) {
 function parseSensorBindingFields(form, opts = {}) {
     const prefix = opts.fieldPrefix || '';
     const rawId = form.querySelector(`[name="${prefix}sensorId"]`)?.value;
-    let sensorId = null;
-    if (rawId !== '' && rawId !== undefined && rawId !== null) {
-        const n = parseInt(rawId, 10);
-        sensorId = Number.isFinite(n) ? n : null;
-    }
+    const sensorId = parseIntegerOrDefault(rawId, null);
     return {
         serverId:   form.querySelector(`[name="${prefix}serverId"]`)?.value || null,
         objectName: form.querySelector(`[name="${prefix}objectName"]`)?.value || (opts.objectNameDefault || 'SharedMemory'),
@@ -16227,13 +16363,36 @@ function parseSensorItemList(form, opts = {}) {
     const { rowClass = 'sensor-item', parseExtraFields } = opts;
     const items = [];
     form.querySelectorAll(`.${rowClass}`).forEach(el => {
-        const idx = parseInt(el.dataset.idx, 10);
+        const idx = parseIntegerOrDefault(el.dataset.idx, NaN);
         if (!Number.isFinite(idx)) return; // skip malformed rows
         const binding = parseSensorBindingFields(form, { fieldPrefix: `item-${idx}-` });
         const extra = parseExtraFields ? parseExtraFields(el, idx) : {};
         items.push({ ...binding, ...extra });
     });
     return items;
+}
+
+function getSensorNameFromBinding(binding = {}) {
+    return binding.sensor || binding.name || '';
+}
+
+function sensorItemMatchesUpdate(item = {}, sensorName, ctx = null) {
+    if (getSensorNameFromBinding(item) !== sensorName) return false;
+    if (ctx?.serverId && item.serverId && ctx.serverId !== item.serverId) return false;
+    if (ctx?.objectName && item.objectName && ctx.objectName !== item.objectName) return false;
+    return true;
+}
+
+function updateSensorItemsByName(items = [], sensorName, ctx = null, updateItem) {
+    items.forEach((item, idx) => {
+        if (sensorItemMatchesUpdate(item, sensorName, ctx)) {
+            updateItem(item, idx);
+        }
+    });
+}
+
+function getSensorNamesFromItems(items = []) {
+    return items.map(getSensorNameFromBinding).filter(Boolean);
 }
 
 // Wire'ит для одного binding-блока: token-guarded loadIONCObjects при смене
@@ -16335,7 +16494,7 @@ function initSensorItemListHandlers(form, config = {}, opts = {}) {
 
     // Wire each existing row
     form.querySelectorAll(`.${rowClass}`).forEach(el => {
-        const idx = parseInt(el.dataset.idx, 10);
+        const idx = parseIntegerOrDefault(el.dataset.idx, NaN);
         if (!Number.isFinite(idx)) return;
         initSensorBindingHandlers(form, config?.items?.[idx] || {}, { fieldPrefix: `item-${idx}-` });
     });
@@ -16345,7 +16504,7 @@ function initSensorItemListHandlers(form, config = {}, opts = {}) {
     // дефолтит первую row → counted from DOM iff config.items пуст.
     let nextIdx = 0;
     container?.querySelectorAll(`.${rowClass}`).forEach(el => {
-        const i = parseInt(el.dataset.idx, 10);
+        const i = parseIntegerOrDefault(el.dataset.idx, NaN);
         if (Number.isFinite(i) && i + 1 > nextIdx) nextIdx = i + 1;
     });
 
@@ -16355,10 +16514,8 @@ function initSensorItemListHandlers(form, config = {}, opts = {}) {
         const existing = parseSensorItemList(form, { rowClass, parseExtraFields });
         const last = existing[existing.length - 1];
         let prefilled = { serverId: last?.serverId || '', objectName: last?.objectName || 'SharedMemory' };
-        if (!prefilled.serverId && typeof state !== 'undefined' && state?.servers) {
-            for (const [id, srv] of state.servers) {
-                if (srv.connected) { prefilled.serverId = id; break; }
-            }
+        if (!prefilled.serverId) {
+            prefilled.serverId = getFirstConnectedServerId() || '';
         }
         const item = { ...prefilled, sensor: '', sensorId: null, ...defaultExtras() };
         const html = renderRow({ idx, item });
@@ -16465,6 +16622,10 @@ if (typeof globalThis !== 'undefined') {
     globalThis.parseSensorBindingFields  = parseSensorBindingFields;
     globalThis.renderSensorItemRow       = renderSensorItemRow;
     globalThis.parseSensorItemList       = parseSensorItemList;
+    globalThis.sensorItemMatchesUpdate   = sensorItemMatchesUpdate;
+    globalThis.updateSensorItemsByName   = updateSensorItemsByName;
+    globalThis.getSensorNameFromBinding  = getSensorNameFromBinding;
+    globalThis.getSensorNamesFromItems   = getSensorNamesFromItems;
     globalThis.initSensorBindingHandlers = initSensorBindingHandlers;
     globalThis.initSensorItemListHandlers = initSensorItemListHandlers;
     globalThis._migrateBindingPure       = _migrateBindingPure;
@@ -16712,11 +16873,7 @@ class ActiveDashboardWidget extends DashboardWidget {
 
     _resolveServerId() {
         // Берём первый подключённый сервер (как делает dashboard для чтения).
-        if (typeof state === 'undefined' || !state.servers) return null;
-        for (const [id, server] of state.servers) {
-            if (server.connected) return id;
-        }
-        return null;
+        return getFirstConnectedServerId();
     }
 
     // ===== Render hooks (override в наследниках) =====
@@ -16820,7 +16977,7 @@ window.ActiveDashboardWidget = ActiveDashboardWidget;
 //   valueOn     — числовое значение «нажато» (default 1)
 //   valueOff    — числовое значение «отпущено» (default 0)
 //   mode        — 'pulse' (default) | 'momentary'
-//   pulseWidth  — ms, длительность импульса для pulse режима (default 500)
+//   pulseWidth  — ms, длительность импульса для pulse режима (default PUSHBUTTON_DEFAULT_PULSE_WIDTH_MS)
 //   style       — 'flat' (default) | 'mushroom' | 'pill'
 //   requireConfirmation — bool (от base; в momentary НЕ работает, warning в форме)
 // ============================================================================
@@ -16894,9 +17051,9 @@ class PushButtonWidget extends ActiveDashboardWidget {
         if (!this.isInteractive()) return;
         const valueOn = this.config?.valueOn ?? 1;
         const valueOff = this.config?.valueOff ?? 0;
-        const pulseWidth = this.config?.pulseWidth ?? 500;
+        const pulseWidth = this.config?.pulseWidth ?? PUSHBUTTON_DEFAULT_PULSE_WIDTH_MS;
 
-        // Visual flash (300ms независимо от pulseWidth — это UI feedback).
+        // Visual flash независимо от pulseWidth — это UI feedback.
         // Timer хранится на instance чтобы destroy() мог его отменить и не
         // снимать класс с уже удалённого DOM-узла.
         const btn = this.element?.querySelector('[data-test="btn"]');
@@ -16906,7 +17063,7 @@ class PushButtonWidget extends ActiveDashboardWidget {
             this._pulseFlashTimer = setTimeout(() => {
                 this._pulseFlashTimer = null;
                 btn?.classList.remove('pulsing');
-            }, 300);
+            }, PUSHBUTTON_FLASH_MS);
         }
 
         // POST valueOn → wait pulseWidth → POST valueOff. Таймер стартует
@@ -16987,7 +17144,7 @@ class PushButtonWidget extends ActiveDashboardWidget {
                 <div class="widget-config-field" data-pulse-only style="display:${mode === 'pulse' ? '' : 'none'}">
                     <label>Pulse width (ms)</label>
                     <input type="number" class="widget-input" name="pulseWidth"
-                           value="${config.pulseWidth ?? 500}" min="50" data-test="cfg-pulseWidth">
+                           value="${config.pulseWidth ?? PUSHBUTTON_DEFAULT_PULSE_WIDTH_MS}" min="${PUSHBUTTON_MIN_PULSE_WIDTH_MS}" data-test="cfg-pulseWidth">
                 </div>
             </div>
             <div class="widget-config-row">
@@ -17003,7 +17160,7 @@ class PushButtonWidget extends ActiveDashboardWidget {
                 </div>
             </div>
             <div class="widget-config-field" data-momentary-warning style="display:${mode === 'momentary' ? '' : 'none'}">
-                <small style="color:#f59e0b">⚠ В momentary режиме requireConfirmation не работает (POST уйдёт без диалога).</small>
+                <small style="color:#f59e0b">⚠ В momentary режиме confirm применяется только к ON; release/OFF уйдёт без повторного диалога.</small>
             </div>
         `;
     }
@@ -17027,10 +17184,12 @@ class PushButtonWidget extends ActiveDashboardWidget {
 
     static parseActiveConfigFields(form) {
         const pulseRaw = parseInt(form.querySelector('[name="pulseWidth"]')?.value, 10);
-        // pulseWidth: clamp к [50, ∞) — html min=50 это hint, не enforcement.
-        // Number.isFinite check вместо `|| 500` — иначе pulseWidth=0 неправильно
-        // парсится как 500 (falsy-zero).
-        const pulseWidth = Number.isFinite(pulseRaw) ? Math.max(50, pulseRaw) : 500;
+        // pulseWidth: clamp к [PUSHBUTTON_MIN_PULSE_WIDTH_MS, ∞) — html min это hint, не enforcement.
+        // Number.isFinite check вместо `|| default` — иначе pulseWidth=0 неправильно
+        // парсится как default (falsy-zero).
+        const pulseWidth = Number.isFinite(pulseRaw)
+            ? Math.max(PUSHBUTTON_MIN_PULSE_WIDTH_MS, pulseRaw)
+            : PUSHBUTTON_DEFAULT_PULSE_WIDTH_MS;
         return {
             mode:       form.querySelector('[name="mode"]')?.value || 'pulse',
             pulseWidth,
@@ -17145,10 +17304,14 @@ class GeneratorWidget extends ActiveDashboardWidget {
             this._setWriteState('error', 'Sensor not configured');
             return;
         }
-        const serverId = this._resolveServerId();
+        const serverId = this.config?.serverId ?? this._resolveServerId();
         if (!serverId) {
             this._setWriteState('error', 'No connected server');
             return;
+        }
+        if (!this.config?.serverId && !this._serverIdFallbackWarned) {
+            this._serverIdFallbackWarned = true;
+            console.warn(`Generator widget ${this.id || '<unknown>'}: serverId missing in config, using fallback ${serverId} — config will be migrated on next dashboard load`);
         }
         const objectName = this.config?.objectName || 'SharedMemory';
         // S-3: guard against double-start (rapid double-toggle leak).
@@ -17158,8 +17321,8 @@ class GeneratorWidget extends ActiveDashboardWidget {
         this._writeSensorId = sensorId;
         this._signalGen = new SignalGenerator({
             type: this.config?.type || 'square',
-            min: this.config?.min ?? 0,
-            max: this.config?.max ?? 100,
+            min: this.config?.min ?? GENERATOR_DEFAULT_MIN,
+            max: this.config?.max ?? GENERATOR_DEFAULT_MAX,
             step: this.config?.step,
             pause: this.config?.pause,
             pulseWidth: this.config?.pulseWidth,
@@ -17279,37 +17442,37 @@ class GeneratorWidget extends ActiveDashboardWidget {
             <div class="widget-config-row">
                 <div class="widget-config-field">
                     <label>min</label>
-                    <input type="number" class="widget-input" name="min" value="${config.min ?? 0}" data-test="cfg-min">
+                    <input type="number" class="widget-input" name="min" value="${config.min ?? GENERATOR_DEFAULT_MIN}" data-test="cfg-min">
                 </div>
                 <div class="widget-config-field">
                     <label>max</label>
-                    <input type="number" class="widget-input" name="max" value="${config.max ?? 100}" data-test="cfg-max">
+                    <input type="number" class="widget-input" name="max" value="${config.max ?? GENERATOR_DEFAULT_MAX}" data-test="cfg-max">
                 </div>
             </div>
             <div class="widget-config-row gen-cfg-lin-sin-cos" data-test="cfg-row-step-pause" style="display:${showLinSinCos?'flex':'none'}">
                 <div class="widget-config-field">
                     <label>step</label>
-                    <input type="number" class="widget-input" name="step" value="${config.step ?? 10}" data-test="cfg-step">
+                    <input type="number" class="widget-input" name="step" value="${config.step ?? GENERATOR_DEFAULT_STEP}" data-test="cfg-step">
                 </div>
                 <div class="widget-config-field">
                     <label>pause (ms)</label>
-                    <input type="number" class="widget-input" name="pause" value="${config.pause ?? 200}" min="1" data-test="cfg-pause">
+                    <input type="number" class="widget-input" name="pause" value="${config.pause ?? GENERATOR_DEFAULT_PAUSE_MS}" min="${GENERATOR_MIN_PAUSE_MS}" data-test="cfg-pause">
                 </div>
             </div>
             <div class="widget-config-row gen-cfg-square" data-test="cfg-row-square" style="display:${showSquare?'flex':'none'}">
                 <div class="widget-config-field">
                     <label>pulseWidth (ms)</label>
-                    <input type="number" class="widget-input" name="pulseWidth" value="${config.pulseWidth ?? 500}" min="1" data-test="cfg-pulseWidth">
+                    <input type="number" class="widget-input" name="pulseWidth" value="${config.pulseWidth ?? GENERATOR_DEFAULT_PULSE_WIDTH_MS}" min="${GENERATOR_MIN_PULSE_WIDTH_MS}" data-test="cfg-pulseWidth">
                 </div>
                 <div class="widget-config-field">
                     <label>pause (ms)</label>
-                    <input type="number" class="widget-input" name="pause-square" value="${config.pause ?? 500}" min="1" data-test="cfg-pause-square">
+                    <input type="number" class="widget-input" name="pause-square" value="${config.pause ?? GENERATOR_DEFAULT_SQUARE_PAUSE_MS}" min="${GENERATOR_MIN_PAUSE_MS}" data-test="cfg-pause-square">
                 </div>
             </div>
             <div class="widget-config-row gen-cfg-random" data-test="cfg-row-random" style="display:${showRandom?'flex':'none'}">
                 <div class="widget-config-field">
                     <label>period (ms)</label>
-                    <input type="number" class="widget-input" name="period" value="${config.period ?? 1000}" min="100" data-test="cfg-period">
+                    <input type="number" class="widget-input" name="period" value="${config.period ?? GENERATOR_DEFAULT_PERIOD_MS}" min="${GENERATOR_MIN_PERIOD_MS}" data-test="cfg-period">
                 </div>
             </div>
         `;
@@ -17341,31 +17504,17 @@ class GeneratorWidget extends ActiveDashboardWidget {
 
     static parseActiveConfigFields(form) {
         const type = form.querySelector('[name="type"]')?.value || 'square';
-        const numOrDefault = (name, def) => {
-            const v = Number(form.querySelector(`[name="${name}"]`)?.value);
-            return Number.isFinite(v) ? v : def;
-        };
-        const minRaw = numOrDefault('min', 0);
-        const maxRaw = numOrDefault('max', 100);
-        // Validation: min<max swap; period>=100; pause>0; pulseWidth>0; step≠0
-        const min = Math.min(minRaw, maxRaw);
-        const max = Math.max(minRaw, maxRaw);
-
-        const result = { type, min, max };
-        if (type === 'linear' || type === 'sin' || type === 'cos') {
-            const step = numOrDefault('step', 10);
-            const pause = Math.max(1, numOrDefault('pause', 200));
-            result.step = step !== 0 ? step : 10;
-            result.pause = pause;
-        } else if (type === 'square') {
-            result.pulseWidth = Math.max(1, numOrDefault('pulseWidth', 500));
-            // Note: square pause input has different name 'pause-square' для уникальности
-            const pauseSq = Number(form.querySelector('[name="pause-square"]')?.value);
-            result.pause = Math.max(1, Number.isFinite(pauseSq) ? pauseSq : 500);
-        } else { // random
-            result.period = Math.max(100, numOrDefault('period', 1000));
-        }
-        return result;
+        return normalizeSignalGeneratorConfig({
+            type,
+            min: form.querySelector('[name="min"]')?.value,
+            max: form.querySelector('[name="max"]')?.value,
+            step: form.querySelector('[name="step"]')?.value,
+            pause: type === 'square'
+                ? form.querySelector('[name="pause-square"]')?.value
+                : form.querySelector('[name="pause"]')?.value,
+            pulseWidth: form.querySelector('[name="pulseWidth"]')?.value,
+            period: form.querySelector('[name="period"]')?.value,
+        });
     }
 }
 
@@ -17399,7 +17548,8 @@ window.GeneratorWidget = GeneratorWidget;
 //   - 'stepper': '−' [value] '+' (auto-apply on click; inline-edit на value)
 // ============================================================================
 
-const SETPOINT_AUTO_APPLY_DEBOUNCE_MS = 500;
+// SETPOINT_* константы — в 00-constants.js (общие дефолты, могут use'аться
+// тестами и сторонним кодом).
 
 class SetpointWidget extends ActiveDashboardWidget {
     static type = 'setpoint';
@@ -17420,6 +17570,15 @@ class SetpointWidget extends ActiveDashboardWidget {
         // (иначе после blur значение возвращалось бы на старое feedback).
         // Сбрасывается в _cancel() (Esc) — для resync с актуальным feedback.
         this._userHasEdited = false;
+    }
+
+    // Filter keydown в numeric input'ах: только цифры/знак/точка/запятая, плюс
+    // пропуск Ctrl/Meta/Alt (Ctrl+C/V/A) и многосимвольных ключей (Backspace,
+    // ArrowLeft и т.п.). Используется в _renderInput и в inline-edit (_makeInlineEditable).
+    _filterNumericKey(e) {
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        if (e.key.length !== 1) return;
+        if (!/[0-9.,\-]/.test(e.key)) e.preventDefault();
     }
 
     _currentStyle() {
@@ -17513,7 +17672,7 @@ class SetpointWidget extends ActiveDashboardWidget {
         });
         input.addEventListener('input', () => {
             this._userHasEdited = true;
-            const num = Number(input.value);
+            const num = parseDecimalInputOrDefault(input.value, NaN);
             if (!Number.isFinite(num)) return;
             this._setCommand(num);
         });
@@ -17522,12 +17681,7 @@ class SetpointWidget extends ActiveDashboardWidget {
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); commit(); return; }
             if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); input.blur(); this._cancel(); return; }
-            if (e.ctrlKey || e.metaKey || e.altKey) return; // Ctrl+C/V/A и т.п.
-            if (e.key.length === 1) {
-                // Single-char key — фильтруем
-                const allowed = /[0-9.,\-]/;
-                if (!allowed.test(e.key)) { e.preventDefault(); }
-            }
+            this._filterNumericKey(e);
         });
         applyBtn.addEventListener('mousedown', (e) => e.preventDefault());
         cancelBtn.addEventListener('mousedown', (e) => e.preventDefault());
@@ -17538,9 +17692,9 @@ class SetpointWidget extends ActiveDashboardWidget {
     // ===== Style: slider =====
     _renderSlider() {
         const unit = escapeHtml(this.config?.unit || '');
-        const min = this.config?.min ?? 0;
-        const max = this.config?.max ?? 100;
-        const step = this.config?.step ?? 1;
+        const min = this.config?.min ?? SETPOINT_DEFAULT_MIN;
+        const max = this.config?.max ?? SETPOINT_DEFAULT_MAX;
+        const step = this.config?.step ?? SETPOINT_DEFAULT_STEP;
         this.element.innerHTML = `
             ${this._labelHtml()}
             <div class="setpoint-slider-wrap">
@@ -17603,7 +17757,7 @@ class SetpointWidget extends ActiveDashboardWidget {
         const stepBy = (delta, ev) => {
             if (ev) { ev.stopPropagation(); ev.preventDefault(); }
             if (!this.isInteractive()) return;
-            const current = this.commandValue ?? this.feedbackValue ?? this.config?.min ?? 0;
+            const current = this.commandValue ?? this.feedbackValue ?? this.config?.min ?? SETPOINT_DEFAULT_MIN;
             const next = this._clamp(current + delta);
             this._setCommand(next);
             // Stepper всегда auto-apply (нет explicit Apply кнопки).
@@ -17747,7 +17901,7 @@ class SetpointWidget extends ActiveDashboardWidget {
                 if (finished) return;
                 finished = true;
                 if (apply) {
-                    const num = Number(input.value);
+                    const num = parseDecimalInputOrDefault(input.value, NaN);
                     if (Number.isFinite(num)) {
                         this._setCommand(num);
                         // Inline-edit Enter/blur — explicit commit gesture; всегда apply
@@ -17763,11 +17917,7 @@ class SetpointWidget extends ActiveDashboardWidget {
                 e.stopPropagation();
                 if (e.key === 'Enter') { e.preventDefault(); finish(true); return; }
                 if (e.key === 'Escape') { e.preventDefault(); finish(false); return; }
-                if (e.ctrlKey || e.metaKey || e.altKey) return;
-                if (e.key.length === 1) {
-                    const allowed = /[0-9.,\-]/;
-                    if (!allowed.test(e.key)) { e.preventDefault(); }
-                }
+                this._filterNumericKey(e);
             });
             input.addEventListener('blur', () => finish(true));
             // Stop click propagation, чтобы не открыть widget config dialog
@@ -17785,17 +17935,17 @@ class SetpointWidget extends ActiveDashboardWidget {
                 <div class="widget-config-field">
                     <label>min</label>
                     <input type="number" class="widget-input" name="min"
-                           value="${config.min ?? 0}" data-test="cfg-min">
+                           value="${config.min ?? SETPOINT_DEFAULT_MIN}" data-test="cfg-min">
                 </div>
                 <div class="widget-config-field">
                     <label>max</label>
                     <input type="number" class="widget-input" name="max"
-                           value="${config.max ?? 100}" data-test="cfg-max">
+                           value="${config.max ?? SETPOINT_DEFAULT_MAX}" data-test="cfg-max">
                 </div>
                 <div class="widget-config-field">
                     <label>step</label>
                     <input type="number" class="widget-input" name="step"
-                           value="${config.step ?? 1}" min="0" data-test="cfg-step">
+                           value="${config.step ?? SETPOINT_DEFAULT_STEP}" min="0" data-test="cfg-step">
                 </div>
             </div>
             <div class="widget-config-row">
@@ -17816,11 +17966,10 @@ class SetpointWidget extends ActiveDashboardWidget {
     }
 
     static parseActiveConfigFields(form) {
-        const minRaw = (() => { const v = form.querySelector('[name="min"]')?.value; return (v === '' || v === undefined) ? 0 : Number(v); })();
-        const maxRaw = (() => { const v = form.querySelector('[name="max"]')?.value; return (v === '' || v === undefined) ? 100 : Number(v); })();
-        const min = Number.isFinite(minRaw) ? minRaw : 0;
-        const max = Number.isFinite(maxRaw) ? maxRaw : 100;
-        const step = (() => { const v = Number(form.querySelector('[name="step"]')?.value); return (Number.isFinite(v) && v > 0) ? v : 1; })();
+        const min = parseDecimalInputOrDefault(form.querySelector('[name="min"]')?.value, SETPOINT_DEFAULT_MIN);
+        const max = parseDecimalInputOrDefault(form.querySelector('[name="max"]')?.value, SETPOINT_DEFAULT_MAX);
+        const stepRaw = parseDecimalInputOrDefault(form.querySelector('[name="step"]')?.value, SETPOINT_DEFAULT_STEP);
+        const step = stepRaw > 0 ? stepRaw : SETPOINT_DEFAULT_STEP;
         return {
             min: Math.min(min, max),
             max: Math.max(min, max),
@@ -18081,7 +18230,130 @@ class ToggleWidget extends ActiveDashboardWidget {
 window.ToggleWidget = ToggleWidget;
 
 
-// === 61-dashboard-widgets.js ===
+// === 61-dashboard-gauge-geometry.js ===
+// ============================================================================
+// Gauge Geometry Helpers
+// ============================================================================
+
+const GAUGE_SECTOR_PRESETS = {
+    default: { cx: 50, cy: 50, r: 35 },
+    semicircle: { cx: 50, cy: 46, r: 34 },
+    arc270: { cx: 60, cy: 55, r: 44 },
+    speedometer: { cx: 60, cy: 55, r: 44 },
+    dual: { cx: 60, cy: 62, r: 44 }
+};
+
+const GAUGE_STYLE_LAYOUTS = {
+    semicircle: {
+        cx: 50, cy: 46, r: 41,
+        zoneR: 34,
+        tickOuterR: 36,
+        tickMajorInnerR: 30,
+        tickMinorInnerR: 33,
+        tickTextR: 23
+    },
+    arc270: {
+        cx: 60, cy: 55, r: 51,
+        zoneR: 38,
+        tickOuterR: 42,
+        tickMajorInnerR: 34,
+        tickMinorInnerR: 38,
+        tickTextR: 26
+    },
+    speedometer: {
+        cx: 60, cy: 55, r: 48,
+        zoneOffset: 6,
+        tickOuterOffset: 4,
+        tickMajorInnerOffset: 12,
+        tickMinorInnerOffset: 8,
+        tickTextOffset: 24
+    },
+    dual: {
+        cx: 60, cy: 62, r: 55,
+        zoneOffset: 6,
+        targetArcOffset: 2,
+        tickOuterOffset: 4,
+        tickMajorInnerOffset: 11,
+        tickMinorInnerOffset: 7,
+        tickTextOffset: 19
+    }
+};
+
+const GaugeGeometry = {
+    SEMICIRCLE_DEGREES: 180,
+    ARC270_START_DEGREES: 135,
+    ARC270_DEGREES: 270,
+    FULL_CIRCLE_DEGREES: 360,
+    CSS_SEMICIRCLE_START_DEGREES: -90,
+    CSS_ARC270_START_DEGREES: -135,
+    SECTOR_MIN_PERCENT: 0.001,
+    TARGET_ARC_MIN_PERCENT: 0.01,
+    SECTOR_ANIMATION_EPSILON: 0.002,
+    SECTOR_ANIMATION_MAX_MS: 1500,
+    MAJOR_STEP_EPSILON: 0.001,
+    MINOR_TICKS_PER_MAJOR: 4,
+
+    toRadians(angle) {
+        return angle * Math.PI / GaugeGeometry.SEMICIRCLE_DEGREES;
+    },
+
+    polarPoint(cx, cy, radius, angle) {
+        const rad = GaugeGeometry.toRadians(angle);
+        return {
+            x: cx + radius * Math.cos(rad),
+            y: cy + radius * Math.sin(rad)
+        };
+    },
+
+    isArc270Style(style) {
+        return style === 'arc270' || style === 'speedometer' || style === 'dual';
+    },
+
+    cssArcStartForStyle(style) {
+        return GaugeGeometry.isArc270Style(style)
+            ? GaugeGeometry.CSS_ARC270_START_DEGREES
+            : GaugeGeometry.CSS_SEMICIRCLE_START_DEGREES;
+    },
+
+    cssArcSpanForStyle(style) {
+        return GaugeGeometry.isArc270Style(style)
+            ? GaugeGeometry.ARC270_DEGREES
+            : GaugeGeometry.SEMICIRCLE_DEGREES;
+    },
+
+    angleForPercent(style, percent) {
+        return GaugeGeometry.cssArcStartForStyle(style)
+            + (percent * GaugeGeometry.cssArcSpanForStyle(style));
+    },
+
+    percentFromAngle(style, angle) {
+        return (angle - GaugeGeometry.cssArcStartForStyle(style))
+            / GaugeGeometry.cssArcSpanForStyle(style);
+    },
+
+    sectorParamsForStyle(style) {
+        return GAUGE_SECTOR_PRESETS[style] || GAUGE_SECTOR_PRESETS.default;
+    },
+
+    layoutForStyle(style) {
+        return GAUGE_STYLE_LAYOUTS[style] || GAUGE_STYLE_LAYOUTS.semicircle;
+    }
+};
+
+const GAUGE_MAJOR_STEP_RULES = [
+    { maxRange: 100, step: 10 },
+    { maxRange: 500, step: 50 },
+    { maxRange: 1000, step: 100 },
+    { maxRange: 5000, step: 500 },
+    { maxRange: 10000, step: 1000 }
+];
+
+
+// === 61-dashboard-widget-gauge.js ===
+// ============================================================================
+// Gauge Widget (SVG)
+// ============================================================================
+
 class GaugeWidget extends DashboardWidget {
     static type = 'gauge';
     static usesNewSensorAutocomplete = true;
@@ -18089,6 +18361,44 @@ class GaugeWidget extends DashboardWidget {
     static description = 'Circular gauge with needle';
     static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>';
     static defaultSize = { width: 8, height: 4 };
+    static GEOMETRY = GaugeGeometry;
+    static MAJOR_STEP_RULES = GAUGE_MAJOR_STEP_RULES;
+
+    static toRadians(angle) {
+        return GaugeGeometry.toRadians(angle);
+    }
+
+    static polarPoint(cx, cy, radius, angle) {
+        return GaugeGeometry.polarPoint(cx, cy, radius, angle);
+    }
+
+    static isArc270Style(style) {
+        return GaugeGeometry.isArc270Style(style);
+    }
+
+    static cssArcStartForStyle(style) {
+        return GaugeGeometry.cssArcStartForStyle(style);
+    }
+
+    static cssArcSpanForStyle(style) {
+        return GaugeGeometry.cssArcSpanForStyle(style);
+    }
+
+    static angleForPercent(style, percent) {
+        return GaugeGeometry.angleForPercent(style, percent);
+    }
+
+    static percentFromAngle(style, angle) {
+        return GaugeGeometry.percentFromAngle(style, angle);
+    }
+
+    static sectorParamsForStyle(style) {
+        return GaugeGeometry.sectorParamsForStyle(style);
+    }
+
+    static layoutForStyle(style) {
+        return GaugeGeometry.layoutForStyle(style);
+    }
 
     render() {
         const { style = 'default' } = this.config;
@@ -18129,7 +18439,7 @@ class GaugeWidget extends DashboardWidget {
                 <!-- Value arc -->
                 <path class="gauge-value-arc" id="gauge-arc-${this.id}" d="M 10 50 A 40 40 0 0 1 90 50"/>
                 <!-- Needle -->
-                <g class="gauge-needle" id="gauge-needle-${this.id}" style="transform-origin: 50px 50px; transform: rotate(-90deg)">
+                <g class="gauge-needle" id="gauge-needle-${this.id}" style="transform-origin: 50px 50px; transform: rotate(${GaugeWidget.cssArcStartForStyle('default')}deg)">
                     <polygon points="50,15 48,50 52,50"/>
                 </g>
                 <!-- Center -->
@@ -18156,7 +18466,7 @@ class GaugeWidget extends DashboardWidget {
         const ticks = this.generateTicks(min, max, 5);
 
         // Semicircular gauge with value below on dark background
-        const cx = 50, cy = 46, r = 41;
+        const { cx, cy, r } = GaugeWidget.layoutForStyle('semicircle');
 
         this.element.innerHTML = `
             <svg class="gauge-svg gauge-semicircle" viewBox="0 0 100 72">
@@ -18196,7 +18506,7 @@ class GaugeWidget extends DashboardWidget {
                 ${ticks.map(t => this.renderClassicTick(t.angle, t.value, t.major)).join('')}
 
                 <!-- Needle -->
-                <g class="gauge-needle-semicircle" id="gauge-needle-${this.id}" style="transform-origin: ${cx}px ${cy}px; transform: rotate(-90deg)">
+                <g class="gauge-needle-semicircle" id="gauge-needle-${this.id}" style="transform-origin: ${cx}px ${cy}px; transform: rotate(${GaugeWidget.cssArcStartForStyle('semicircle')}deg)">
                     <polygon points="${cx},${cy - r + 6} ${cx - 2},${cy - 3} ${cx + 2},${cy - 3}" fill="#222"/>
                     <polygon points="${cx},${cy - r + 8} ${cx - 1.5},${cy - 4} ${cx + 1.5},${cy - 4}" fill="#c00"/>
                 </g>
@@ -18219,63 +18529,40 @@ class GaugeWidget extends DashboardWidget {
     }
 
     renderClassicZones(zones, min, max) {
-        if (!zones || zones.length === 0) return '';
-
-        const cx = 50, cy = 46, r = 34;
-        let html = '';
-
-        for (const zone of zones) {
-            const startPercent = (zone.from - min) / (max - min);
-            const endPercent = (zone.to - min) / (max - min);
-            // Position angles for cos/sin: LEFT (180°) to RIGHT (360°) via TOP (270°)
-            const startAngle = 180 + (startPercent * 180);
-            const endAngle = 180 + (endPercent * 180);
-
-            const startRad = startAngle * Math.PI / 180;
-            const endRad = endAngle * Math.PI / 180;
-
-            const x1 = cx + r * Math.cos(startRad);
-            const y1 = cy + r * Math.sin(startRad);
-            const x2 = cx + r * Math.cos(endRad);
-            const y2 = cy + r * Math.sin(endRad);
-
-            // Arc spans from startAngle to endAngle (sweep=1 for upper arc in SVG Y-down)
-            const arcSpan = Math.abs(endAngle - startAngle);
-            const largeArc = arcSpan > 180 ? 1 : 0;
-
-            html += `<path d="M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}"
-                          fill="none" stroke="${zone.color}" stroke-width="4" opacity="0.8"/>`;
-        }
-
-        return html;
+        const layout = GaugeWidget.layoutForStyle('semicircle');
+        return this.renderZoneArcs(zones, min, max, {
+            ...layout,
+            r: layout.zoneR,
+            startAngle: GaugeWidget.GEOMETRY.SEMICIRCLE_DEGREES,
+            angleSpan: GaugeWidget.GEOMETRY.SEMICIRCLE_DEGREES,
+            strokeWidth: 4, opacity: 0.8
+        });
     }
 
     renderClassicTick(angle, value, major) {
-        const cx = 50, cy = 46;
-        const outerR = 36;
-        const innerR = major ? 30 : 33;
-        const textR = 23;
+        const layout = GaugeWidget.layoutForStyle('semicircle');
+        const { cx, cy } = layout;
+        const outerR = layout.tickOuterR;
+        const innerR = major ? layout.tickMajorInnerR : layout.tickMinorInnerR;
+        const textR = layout.tickTextR;
 
         // Convert from lower semicircle angles (180→0) to upper semicircle (180→360)
-        const upperAngle = 360 - angle;
-        const rad = upperAngle * Math.PI / 180;
-        const x1 = cx + outerR * Math.cos(rad);
-        const y1 = cy + outerR * Math.sin(rad);
-        const x2 = cx + innerR * Math.cos(rad);
-        const y2 = cy + innerR * Math.sin(rad);
-        const tx = cx + textR * Math.cos(rad);
-        let ty = cy + textR * Math.sin(rad);
+        const upperAngle = GaugeWidget.GEOMETRY.FULL_CIRCLE_DEGREES - angle;
+        const outer = GaugeWidget.polarPoint(cx, cy, outerR, upperAngle);
+        const inner = GaugeWidget.polarPoint(cx, cy, innerR, upperAngle);
+        const text = GaugeWidget.polarPoint(cx, cy, textR, upperAngle);
+        let ty = text.y;
 
         // Raise extreme labels (0 and max) by 3px so they don't extend beyond gauge background
-        if (angle === 180 || angle === 0) {
+        if (angle === GaugeWidget.GEOMETRY.SEMICIRCLE_DEGREES || angle === 0) {
             ty -= 3;
         }
 
-        let html = `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"
+        let html = `<line x1="${outer.x}" y1="${outer.y}" x2="${inner.x}" y2="${inner.y}"
                          stroke="#444" stroke-width="${major ? 1 : 0.5}"/>`;
 
         if (major) {
-            html += `<text x="${tx}" y="${ty}" class="gauge-semicircle-tick" text-anchor="middle" dominant-baseline="middle">${value}</text>`;
+            html += `<text x="${text.x}" y="${ty}" class="gauge-semicircle-tick" text-anchor="middle" dominant-baseline="middle">${value}</text>`;
         }
 
         return html;
@@ -18287,7 +18574,7 @@ class GaugeWidget extends DashboardWidget {
         const ticks = this.generateTicks(min, max, 5);
 
         // Match speedometer outer diameter with thicker bezel
-        const cx = 60, cy = 55, r = 51;
+        const { cx, cy, r } = GaugeWidget.layoutForStyle('arc270');
 
         this.element.innerHTML = `
             <svg class="gauge-svg gauge-arc270" viewBox="0 0 120 115">
@@ -18340,7 +18627,7 @@ class GaugeWidget extends DashboardWidget {
                 ${ticks.map(t => this.renderModernTick(t.angle, t.value, t.major)).join('')}
 
                 <!-- Needle -->
-                <g class="gauge-needle-arc270" id="gauge-needle-${this.id}" style="transform-origin: ${cx}px ${cy}px; transform: rotate(-135deg)">
+                <g class="gauge-needle-arc270" id="gauge-needle-${this.id}" style="transform-origin: ${cx}px ${cy}px; transform: rotate(${GaugeWidget.cssArcStartForStyle('arc270')}deg)">
                     <line x1="${cx}" y1="${cy}" x2="${cx}" y2="${cy - r + 10}" stroke="#ff6b35" stroke-width="2" stroke-linecap="round"/>
                     <circle cx="${cx}" cy="${cy}" r="4" fill="#333" stroke="#ff6b35" stroke-width="1"/>
                 </g>
@@ -18363,60 +18650,36 @@ class GaugeWidget extends DashboardWidget {
     }
 
     renderModernRedZone(zones, min, max) {
-        if (!zones || zones.length === 0) return '';
-
-        const cx = 60, cy = 55, r = 38;
-        let html = '';
-
-        // Find red/warning zones (typically high values)
-        for (const zone of zones) {
-            const startPercent = (zone.from - min) / (max - min);
-            const endPercent = (zone.to - min) / (max - min);
-            // Position angles for cos/sin: BOTTOM-LEFT (135°) to BOTTOM-RIGHT (45°) via TOP (270°)
-            const startAngle = 135 + (startPercent * 270);
-            const endAngle = 135 + (endPercent * 270);
-
-            const startRad = startAngle * Math.PI / 180;
-            const endRad = endAngle * Math.PI / 180;
-
-            const x1 = cx + r * Math.cos(startRad);
-            const y1 = cy + r * Math.sin(startRad);
-            const x2 = cx + r * Math.cos(endRad);
-            const y2 = cy + r * Math.sin(endRad);
-
-            // Arc spans from startAngle to endAngle (increasing angles with sweep=1)
-            const arcSpan = Math.abs(endAngle - startAngle);
-            const largeArc = arcSpan > 180 ? 1 : 0;
-
-            html += `<path d="M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}"
-                          fill="none" stroke="${zone.color}" stroke-width="4" opacity="0.8"/>`;
-        }
-
-        return html;
+        const layout = GaugeWidget.layoutForStyle('arc270');
+        return this.renderZoneArcs(zones, min, max, {
+            ...layout,
+            r: layout.zoneR,
+            startAngle: GaugeWidget.GEOMETRY.ARC270_START_DEGREES,
+            angleSpan: GaugeWidget.GEOMETRY.ARC270_DEGREES,
+            strokeWidth: 4, opacity: 0.8
+        });
     }
 
     renderModernTick(angle, value, major) {
-        const cx = 60, cy = 55;
-        const outerR = 42;
-        const innerR = major ? 34 : 38;
-        const textR = 26;
+        const layout = GaugeWidget.layoutForStyle('arc270');
+        const { cx, cy } = layout;
+        const outerR = layout.tickOuterR;
+        const innerR = major ? layout.tickMajorInnerR : layout.tickMinorInnerR;
+        const textR = layout.tickTextR;
 
         // Convert from semicircle position angles (180° to 0°) to arc270 (135° to 405°)
-        const adjustedAngle = 135 + (180 - angle) / 180 * 270;
-        const rad = adjustedAngle * Math.PI / 180;
+        const { ARC270_START_DEGREES, ARC270_DEGREES, SEMICIRCLE_DEGREES } = GaugeWidget.GEOMETRY;
+        const adjustedAngle = ARC270_START_DEGREES
+            + (SEMICIRCLE_DEGREES - angle) / SEMICIRCLE_DEGREES * ARC270_DEGREES;
+        const outer = GaugeWidget.polarPoint(cx, cy, outerR, adjustedAngle);
+        const inner = GaugeWidget.polarPoint(cx, cy, innerR, adjustedAngle);
+        const text = GaugeWidget.polarPoint(cx, cy, textR, adjustedAngle);
 
-        const x1 = cx + outerR * Math.cos(rad);
-        const y1 = cy + outerR * Math.sin(rad);
-        const x2 = cx + innerR * Math.cos(rad);
-        const y2 = cy + innerR * Math.sin(rad);
-        const tx = cx + textR * Math.cos(rad);
-        const ty = cy + textR * Math.sin(rad);
-
-        let html = `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"
+        let html = `<line x1="${outer.x}" y1="${outer.y}" x2="${inner.x}" y2="${inner.y}"
                          stroke="${major ? '#888' : '#555'}" stroke-width="${major ? 1.5 : 0.5}"/>`;
 
         if (major) {
-            html += `<text x="${tx}" y="${ty}" class="gauge-arc270-tick" text-anchor="middle" dominant-baseline="middle">${value}</text>`;
+            html += `<text x="${text.x}" y="${text.y}" class="gauge-arc270-tick" text-anchor="middle" dominant-baseline="middle">${value}</text>`;
         }
 
         return html;
@@ -18428,7 +18691,7 @@ class GaugeWidget extends DashboardWidget {
         const majorStep = this.calculateMajorStep(min, max);
         const ticks = this.generateSpeedoTicks(min, max, majorStep);
 
-        const cx = 60, cy = 55, r = 48;
+        const { cx, cy, r } = GaugeWidget.layoutForStyle('speedometer');
 
         this.element.innerHTML = `
             <svg class="gauge-svg gauge-speedometer" viewBox="0 0 120 115">
@@ -18485,13 +18748,13 @@ class GaugeWidget extends DashboardWidget {
                 <path class="gauge-sector-fill" id="gauge-sector-${this.id}" style="display: none; opacity: 0.3;"/>
 
                 <!-- Color zones (danger zone etc) -->
-                ${this.renderSpeedoZones(zones, min, max, cx, cy, r - 6)}
+                ${this.renderSpeedoZones(zones, min, max, cx, cy, r - GaugeWidget.layoutForStyle('speedometer').zoneOffset)}
 
                 <!-- Tick marks and numbers -->
                 ${ticks.map(t => this.renderSpeedoTick(t, cx, cy, r)).join('')}
 
                 <!-- Needle assembly -->
-                <g class="gauge-needle-tacho" id="gauge-needle-${this.id}" style="transform-origin: ${cx}px ${cy}px; transform: rotate(-135deg)">
+                <g class="gauge-needle-tacho" id="gauge-needle-${this.id}" style="transform-origin: ${cx}px ${cy}px; transform: rotate(${GaugeWidget.cssArcStartForStyle('speedometer')}deg)">
                     <!-- Needle shadow -->
                     <polygon points="${cx},${cy - r + 14} ${cx - 3},${cy + 8} ${cx + 3},${cy + 8}"
                              fill="rgba(0,0,0,0.2)" transform="translate(1, 1)"/>
@@ -18533,7 +18796,7 @@ class GaugeWidget extends DashboardWidget {
         const { min = 0, max = 100, unit = '', zones = [], sensor2 = '' } = this.config;
         const hasSensor2 = sensor2 && sensor2.trim() !== '';
 
-        const cx = 60, cy = 62, r = 55;
+        const { cx, cy, r } = GaugeWidget.layoutForStyle('dual');
         const majorStep = this.calculateMajorStep(min, max);
         const ticks = this.generateSpeedoTicks(min, max, majorStep);
 
@@ -18595,7 +18858,7 @@ class GaugeWidget extends DashboardWidget {
                 <path class="gauge-sector-fill" id="gauge-sector-${this.id}" style="display: none; opacity: 0.3;"/>
 
                 <!-- Color zones -->
-                ${this.renderSpeedoZones(zones, min, max, cx, cy, r - 6)}
+                ${this.renderSpeedoZones(zones, min, max, cx, cy, r - GaugeWidget.layoutForStyle('dual').zoneOffset)}
 
                 <!-- Scale: tick marks -->
                 ${ticks.map(t => this.renderDualOuterTick(t, cx, cy, r)).join('')}
@@ -18606,10 +18869,10 @@ class GaugeWidget extends DashboardWidget {
                       filter="url(#dual-target-glow-${this.id})" style="display: none;"/>
 
                 <!-- Target indicator (invisible, used only for angle calculation) -->
-                <g class="dual-target-marker" id="gauge-target-${this.id}" style="transform-origin: ${cx}px ${cy}px; transform: rotate(-135deg); display: none;"></g>
+                <g class="dual-target-marker" id="gauge-target-${this.id}" style="transform-origin: ${cx}px ${cy}px; transform: rotate(${GaugeWidget.cssArcStartForStyle('dual')}deg); display: none;"></g>
 
                 <!-- Needle assembly (cyan) -->
-                <g class="gauge-needle-dual" id="gauge-needle-${this.id}" style="transform-origin: ${cx}px ${cy}px; transform: rotate(-135deg)">
+                <g class="gauge-needle-dual" id="gauge-needle-${this.id}" style="transform-origin: ${cx}px ${cy}px; transform: rotate(${GaugeWidget.cssArcStartForStyle('dual')}deg)">
                     <!-- Needle glow -->
                     <polygon points="${cx},${cy - r + 14} ${cx - 2.5},${cy + 6} ${cx + 2.5},${cy + 6}"
                              fill="#00d4ff" filter="url(#dual-glow-${this.id})" opacity="0.5"/>
@@ -18650,30 +18913,26 @@ class GaugeWidget extends DashboardWidget {
         this.targetDigitalEl = this.element.querySelector(`#gauge-target-digital-${this.id}`);
         this.sectorEl = this.element.querySelector(`#gauge-sector-${this.id}`);
         // Store dimensions for arc calculation
-        this.dualParams = { cx, cy, r, arcR: r - 2 };
+        this.dualParams = { cx, cy, r, arcR: r - GaugeWidget.layoutForStyle('dual').targetArcOffset };
     }
 
     renderDualOuterTick(tick, cx, cy, r) {
         const { angle, value, major } = tick;
-        const rad = angle * Math.PI / 180;
-
         // Outer scale: ticks at edge, numbers between ticks and inner dots
-        const outerR = r - 4;      // tick outer edge
-        const innerR = major ? r - 11 : r - 7;  // tick inner edge
-        const textR = r - 19;      // numbers position (between ticks and dots)
+        const layout = GaugeWidget.layoutForStyle('dual');
+        const outerR = r - layout.tickOuterOffset;
+        const innerR = major ? r - layout.tickMajorInnerOffset : r - layout.tickMinorInnerOffset;
+        const textR = r - layout.tickTextOffset;
 
-        const x1 = cx + outerR * Math.cos(rad);
-        const y1 = cy + outerR * Math.sin(rad);
-        const x2 = cx + innerR * Math.cos(rad);
-        const y2 = cy + innerR * Math.sin(rad);
+        const outer = GaugeWidget.polarPoint(cx, cy, outerR, angle);
+        const inner = GaugeWidget.polarPoint(cx, cy, innerR, angle);
 
-        let html = `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"
+        let html = `<line x1="${outer.x}" y1="${outer.y}" x2="${inner.x}" y2="${inner.y}"
                          stroke="#ccc" stroke-width="${major ? 1.8 : 0.8}"/>`;
 
         if (major) {
-            const tx = cx + textR * Math.cos(rad);
-            const ty = cy + textR * Math.sin(rad);
-            html += `<text x="${tx}" y="${ty}" class="dual-outer-label"
+            const text = GaugeWidget.polarPoint(cx, cy, textR, angle);
+            html += `<text x="${text.x}" y="${text.y}" class="dual-outer-label"
                           text-anchor="middle" dominant-baseline="middle">${value}</text>`;
         }
 
@@ -18682,23 +18941,22 @@ class GaugeWidget extends DashboardWidget {
 
     calculateMajorStep(min, max) {
         const range = max - min;
-        if (range <= 100) return 10;
-        if (range <= 500) return 50;
-        if (range <= 1000) return 100;
-        if (range <= 5000) return 500;
-        if (range <= 10000) return 1000;
-        return 2000;
+        const rule = GaugeWidget.MAJOR_STEP_RULES.find(({ maxRange }) => range <= maxRange);
+        if (rule) return rule.step;
+        return GAUGE_FALLBACK_MAJOR_STEP;
     }
 
     generateSpeedoTicks(min, max, majorStep) {
         const ticks = [];
         const minorStep = majorStep / 5;
+        const { ARC270_START_DEGREES, ARC270_DEGREES, MAJOR_STEP_EPSILON } = GaugeWidget.GEOMETRY;
 
         for (let v = min; v <= max; v += minorStep) {
-            const isMajor = Math.abs(v % majorStep) < 0.001 || Math.abs(v % majorStep - majorStep) < 0.001;
-            const percent = (v - min) / (max - min);
+            const isMajor = Math.abs(v % majorStep) < MAJOR_STEP_EPSILON
+                || Math.abs(v % majorStep - majorStep) < MAJOR_STEP_EPSILON;
+            const percent = percentInRange(v, min, max);
             // 270° arc for positioning with cos/sin (135° to 405°/45°)
-            const angle = 135 + (percent * 270);
+            const angle = ARC270_START_DEGREES + (percent * ARC270_DEGREES);
             ticks.push({ value: Math.round(v), angle, major: isMajor });
         }
 
@@ -18707,24 +18965,21 @@ class GaugeWidget extends DashboardWidget {
 
     renderSpeedoTick(tick, cx, cy, r) {
         const { angle, value, major } = tick;
-        const rad = angle * Math.PI / 180;
 
-        const outerR = r - 4;
-        const innerR = major ? r - 12 : r - 8;
-        const textR = r - 24;
+        const layout = GaugeWidget.layoutForStyle('speedometer');
+        const outerR = r - layout.tickOuterOffset;
+        const innerR = major ? r - layout.tickMajorInnerOffset : r - layout.tickMinorInnerOffset;
+        const textR = r - layout.tickTextOffset;
 
-        const x1 = cx + outerR * Math.cos(rad);
-        const y1 = cy + outerR * Math.sin(rad);
-        const x2 = cx + innerR * Math.cos(rad);
-        const y2 = cy + innerR * Math.sin(rad);
+        const outer = GaugeWidget.polarPoint(cx, cy, outerR, angle);
+        const inner = GaugeWidget.polarPoint(cx, cy, innerR, angle);
 
-        let html = `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"
+        let html = `<line x1="${outer.x}" y1="${outer.y}" x2="${inner.x}" y2="${inner.y}"
                          stroke="#333" stroke-width="${major ? 1.5 : 0.7}"/>`;
 
         if (major) {
-            const tx = cx + textR * Math.cos(rad);
-            const ty = cy + textR * Math.sin(rad);
-            html += `<text x="${tx}" y="${ty}" class="speedo-tick-label"
+            const text = GaugeWidget.polarPoint(cx, cy, textR, angle);
+            html += `<text x="${text.x}" y="${text.y}" class="speedo-tick-label"
                           text-anchor="middle" dominant-baseline="middle">${value}</text>`;
         }
 
@@ -18732,30 +18987,32 @@ class GaugeWidget extends DashboardWidget {
     }
 
     renderSpeedoZones(zones, min, max, cx, cy, r) {
+        return this.renderZoneArcs(zones, min, max, {
+            cx, cy, r,
+            startAngle: GaugeWidget.GEOMETRY.ARC270_START_DEGREES,
+            angleSpan: GaugeWidget.GEOMETRY.ARC270_DEGREES,
+            strokeWidth: 6, opacity: 0.7
+        });
+    }
+
+    renderZoneArcs(zones, min, max, opts) {
         if (!zones || zones.length === 0) return '';
 
         let html = '';
         for (const zone of zones) {
-            const startPercent = (zone.from - min) / (max - min);
-            const endPercent = (zone.to - min) / (max - min);
-            // Position angles for cos/sin (135° to 405°/45°)
-            const startAngle = 135 + (startPercent * 270);
-            const endAngle = 135 + (endPercent * 270);
+            const startPercent = percentInRange(zone.from, min, max);
+            const endPercent = percentInRange(zone.to, min, max);
+            const startAngle = opts.startAngle + (startPercent * opts.angleSpan);
+            const endAngle = opts.startAngle + (endPercent * opts.angleSpan);
 
-            const startRad = startAngle * Math.PI / 180;
-            const endRad = endAngle * Math.PI / 180;
+            const start = GaugeWidget.polarPoint(opts.cx, opts.cy, opts.r, startAngle);
+            const end = GaugeWidget.polarPoint(opts.cx, opts.cy, opts.r, endAngle);
 
-            const x1 = cx + r * Math.cos(startRad);
-            const y1 = cy + r * Math.sin(startRad);
-            const x2 = cx + r * Math.cos(endRad);
-            const y2 = cy + r * Math.sin(endRad);
-
-            // Arc spans from startAngle to endAngle (increasing angles with sweep=1)
             const arcSpan = Math.abs(endAngle - startAngle);
-            const largeArc = arcSpan > 180 ? 1 : 0;
+            const largeArc = arcSpan > GaugeWidget.GEOMETRY.SEMICIRCLE_DEGREES ? 1 : 0;
 
-            html += `<path d="M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}"
-                          fill="none" stroke="${zone.color}" stroke-width="6" opacity="0.7"/>`;
+            html += `<path d="M ${start.x} ${start.y} A ${opts.r} ${opts.r} 0 ${largeArc} 1 ${end.x} ${end.y}"
+                          fill="none" stroke="${zone.color}" stroke-width="${opts.strokeWidth}" opacity="${opts.opacity}"/>`;
         }
 
         return html;
@@ -18766,20 +19023,22 @@ class GaugeWidget extends DashboardWidget {
         const ticks = [];
         const range = max - min;
         const majorStep = range / majorCount;
-        const minorPerMajor = 4;
+        const minorPerMajor = GaugeWidget.GEOMETRY.MINOR_TICKS_PER_MAJOR;
 
         for (let i = 0; i <= majorCount; i++) {
             const value = min + (i * majorStep);
             const percent = i / majorCount;
             // Position angle for cos/sin: 180° (left) to 0° (right) via 90° (bottom)
-            const angle = 180 - (percent * 180);
+            const angle = GaugeWidget.GEOMETRY.SEMICIRCLE_DEGREES
+                - (percent * GaugeWidget.GEOMETRY.SEMICIRCLE_DEGREES);
             ticks.push({ angle, value: Math.round(value), major: true });
 
             // Minor ticks
             if (i < majorCount) {
                 for (let j = 1; j <= minorPerMajor; j++) {
                     const minorPercent = (i + j / (minorPerMajor + 1)) / majorCount;
-                    const minorAngle = 180 - (minorPercent * 180);
+                    const minorAngle = GaugeWidget.GEOMETRY.SEMICIRCLE_DEGREES
+                        - (minorPercent * GaugeWidget.GEOMETRY.SEMICIRCLE_DEGREES);
                     const minorValue = min + (minorPercent * range);
                     ticks.push({ angle: minorAngle, value: Math.round(minorValue), major: false });
                 }
@@ -18790,19 +19049,7 @@ class GaugeWidget extends DashboardWidget {
     }
 
     getColorForValue(value) {
-        const { zones = [] } = this.config;
-
-        if (zones.length === 0) {
-            return 'var(--accent-blue)';
-        }
-
-        for (const zone of zones) {
-            if (value >= zone.from && value <= zone.to) {
-                return zone.color;
-            }
-        }
-
-        return 'var(--accent-blue)';
+        return DashboardWidget.getColorForZones(value, this.config.zones);
     }
 
     updateArcColor(value) {
@@ -18827,9 +19074,9 @@ class GaugeWidget extends DashboardWidget {
             return;
         }
 
-        const numValue = parseFloat(value) || 0;
+        const numValue = parseNumberOrDefault(value, 0);
         const clampedValue = Math.max(min, Math.min(max, numValue));
-        const percent = (clampedValue - min) / (max - min);
+        const percent = percentInRange(clampedValue, min, max);
 
         // Detect overrange condition
         const isOverrange = numValue < min || numValue > max;
@@ -18837,41 +19084,9 @@ class GaugeWidget extends DashboardWidget {
         // Update value text (always show actual value, not clamped)
         if (this.valueEl) this.valueEl.textContent = numValue.toFixed(decimals);
 
-        // Update needle rotation based on style
-        // CSS rotate: 0 = UP, positive = clockwise
-        // Position angle (math): 0 = RIGHT, positive = counter-clockwise in SVG (Y down)
-        // To point at position P: CSS angle = P - 270
-        let angle;
-        switch (style) {
-            case 'semicircle':
-                // 180° arc: LEFT (180°) to RIGHT (360°) via TOP (270°) - UPPER semicircle
-                // Position = 180 + percent*180, so CSS = (180 + p*180) - 270 = -90 + p*180
-                angle = -90 + (percent * 180);
-                break;
-            case 'arc270':
-                // 270° arc: -135 to +135
-                angle = -135 + (percent * 270);
-                break;
-            case 'speedometer':
-                // 270° arc: -135 to +135 (same as arc270)
-                angle = -135 + (percent * 270);
-                // Update digital display (use decimals config)
-                if (this.digitalEl) {
-                    this.digitalEl.textContent = numValue.toFixed(decimals);
-                }
-                break;
-            case 'dual':
-                // 270° arc: -135 to +135 (same as speedometer)
-                angle = -135 + (percent * 270);
-                // Update digital display
-                if (this.digitalEl) {
-                    this.digitalEl.textContent = numValue.toFixed(decimals);
-                }
-                break;
-            default:
-                // 180° arc: LEFT (180°) to RIGHT (360°) via TOP (270°) - UPPER semicircle
-                // Position = 180 + percent*180, so CSS = (180 + p*180) - 270 = -90 + p*180
-                angle = -90 + (percent * 180);
+        const angle = GaugeWidget.angleForPercent(style, percent);
+        if ((style === 'speedometer' || style === 'dual') && this.digitalEl) {
+            this.digitalEl.textContent = numValue.toFixed(decimals);
         }
 
         // Apply needle rotation with CSS variable for animation
@@ -18916,12 +19131,11 @@ class GaugeWidget extends DashboardWidget {
             return;
         }
 
-        const numValue = parseFloat(value) || 0;
+        const numValue = parseNumberOrDefault(value, 0);
         const clampedValue = Math.max(min, Math.min(max, numValue));
-        const percent = (clampedValue - min) / (max - min);
+        const percent = percentInRange(clampedValue, min, max);
 
-        // Calculate rotation angle (270° arc: -135° to +135°)
-        const angle = -135 + (percent * 270);
+        const angle = GaugeWidget.angleForPercent(style, percent);
 
         // Set rotation directly without transition (instant move)
         this.targetEl.style.transform = `rotate(${angle}deg)`;
@@ -18935,10 +19149,10 @@ class GaugeWidget extends DashboardWidget {
         // Update target arc (from 0/min to target value)
         if (this.targetArcEl && this.dualParams) {
             const { cx, cy, arcR } = this.dualParams;
-            const startAngle = -135; // Start at min (0)
+            const startAngle = GaugeWidget.cssArcStartForStyle(style);
             const endAngle = angle;  // End at target
 
-            if (percent > 0.01) {
+            if (percent > GaugeWidget.GEOMETRY.TARGET_ARC_MIN_PERCENT) {
                 const arcPath = this.describeArc(cx, cy, arcR, startAngle, endAngle);
                 this.targetArcEl.setAttribute('d', arcPath);
                 this.targetArcEl.style.display = 'block';
@@ -18952,12 +19166,12 @@ class GaugeWidget extends DashboardWidget {
     describeArc(cx, cy, r, startAngle, endAngle) {
         const start = this.polarToCartesian(cx, cy, r, endAngle);
         const end = this.polarToCartesian(cx, cy, r, startAngle);
-        const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+        const largeArcFlag = endAngle - startAngle <= GaugeWidget.GEOMETRY.SEMICIRCLE_DEGREES ? "0" : "1";
         return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} 0 ${end.x} ${end.y}`;
     }
 
     polarToCartesian(cx, cy, r, angleDeg) {
-        const angleRad = (angleDeg - 90) * Math.PI / 180;
+        const angleRad = GaugeWidget.toRadians(angleDeg - 90);
         return {
             x: cx + r * Math.cos(angleRad),
             y: cy + r * Math.sin(angleRad)
@@ -18968,7 +19182,7 @@ class GaugeWidget extends DashboardWidget {
     describeSector(cx, cy, r, startAngle, endAngle) {
         const start = this.polarToCartesian(cx, cy, r, startAngle);
         const end = this.polarToCartesian(cx, cy, r, endAngle);
-        const largeArcFlag = Math.abs(endAngle - startAngle) > 180 ? 1 : 0;
+        const largeArcFlag = Math.abs(endAngle - startAngle) > GaugeWidget.GEOMETRY.SEMICIRCLE_DEGREES ? 1 : 0;
         const sweepFlag = endAngle > startAngle ? 1 : 0;
         return `M ${cx} ${cy} L ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} ${sweepFlag} ${end.x} ${end.y} Z`;
     }
@@ -18987,7 +19201,7 @@ class GaugeWidget extends DashboardWidget {
         // Store target for comparison
         this.targetPercent = targetPercent;
         const startTime = performance.now();
-        const maxDuration = 1500; // Safety timeout slightly longer than CSS transition (1.2s)
+        const maxDuration = GaugeWidget.GEOMETRY.SECTOR_ANIMATION_MAX_MS;
 
         const animate = () => {
             // Read actual needle angle from computed transform
@@ -19005,25 +19219,8 @@ class GaugeWidget extends DashboardWidget {
                     const b = values[1];
                     // Calculate rotation angle in radians, then convert to degrees
                     const angleRad = Math.atan2(b, a);
-                    const angleDeg = angleRad * (180 / Math.PI);
-
-                    // Convert angle to percent based on gauge style
-                    switch (style) {
-                        case 'semicircle':
-                            // Range: -90° to +90°, so 180° total
-                            currentPercent = (angleDeg + 90) / 180;
-                            break;
-                        case 'arc270':
-                        case 'speedometer':
-                        case 'dual':
-                            // Range: -135° to +135°, so 270° total
-                            currentPercent = (angleDeg + 135) / 270;
-                            break;
-                        default:
-                            // Default: -90° to +90°, so 180° total
-                            currentPercent = (angleDeg + 90) / 180;
-                            break;
-                    }
+                    const angleDeg = angleRad * (GaugeWidget.GEOMETRY.SEMICIRCLE_DEGREES / Math.PI);
+                    currentPercent = GaugeWidget.percentFromAngle(style, angleDeg);
                 }
             }
 
@@ -19033,7 +19230,8 @@ class GaugeWidget extends DashboardWidget {
 
             // Continue animating until needle stops (close to target or timeout)
             const elapsed = performance.now() - startTime;
-            if (Math.abs(currentPercent - this.targetPercent) > 0.002 && elapsed < maxDuration) {
+            if (Math.abs(currentPercent - this.targetPercent) > GaugeWidget.GEOMETRY.SECTOR_ANIMATION_EPSILON
+                && elapsed < maxDuration) {
                 this.sectorAnimationId = requestAnimationFrame(animate);
             }
         };
@@ -19045,7 +19243,7 @@ class GaugeWidget extends DashboardWidget {
     updateSectorPath(percent) {
         if (!this.sectorEl) return;
 
-        if (percent <= 0.001) {
+        if (percent <= GaugeWidget.GEOMETRY.SECTOR_MIN_PERCENT) {
             this.sectorEl.style.display = 'none';
             return;
         }
@@ -19053,39 +19251,10 @@ class GaugeWidget extends DashboardWidget {
         this.sectorEl.style.display = 'block';
 
         const { style = 'default' } = this.config;
-        let path = '';
-
-        switch (style) {
-            case 'semicircle': {
-                const cx = 50, cy = 46, r = 34;
-                const startAngle = -90;
-                const endAngle = -90 + (percent * 180);
-                path = this.describeSector(cx, cy, r, startAngle, endAngle);
-                break;
-            }
-            case 'arc270':
-            case 'speedometer': {
-                const cx = 60, cy = 55, r = 44;
-                const startAngle = -135;
-                const endAngle = -135 + (percent * 270);
-                path = this.describeSector(cx, cy, r, startAngle, endAngle);
-                break;
-            }
-            case 'dual': {
-                const cx = 60, cy = 62, r = 44;
-                const startAngle = -135;
-                const endAngle = -135 + (percent * 270);
-                path = this.describeSector(cx, cy, r, startAngle, endAngle);
-                break;
-            }
-            default: {
-                const cx = 50, cy = 50, r = 35;
-                const startAngle = -90;
-                const endAngle = -90 + (percent * 180);
-                path = this.describeSector(cx, cy, r, startAngle, endAngle);
-                break;
-            }
-        }
+        const { cx, cy, r } = GaugeWidget.sectorParamsForStyle(style);
+        const startAngle = GaugeWidget.cssArcStartForStyle(style);
+        const endAngle = GaugeWidget.angleForPercent(style, percent);
+        const path = this.describeSector(cx, cy, r, startAngle, endAngle);
 
         this.sectorEl.setAttribute('d', path);
         this.sectorEl.style.fill = this.getColorForValue(this.lastValue || 0);
@@ -19123,7 +19292,7 @@ class GaugeWidget extends DashboardWidget {
             </div>
             <div class="widget-config-field">
                 <label>Style</label>
-                <select class="widget-select" name="style" onchange="toggleDualScaleFields(this)">
+                <select class="widget-select" name="style">
                     <option value="default" ${!config.style || config.style === 'default' ? 'selected' : ''}>Default</option>
                     <option value="semicircle" ${config.style === 'semicircle' ? 'selected' : ''}>Semicircle White</option>
                     <option value="arc270" ${config.style === 'arc270' ? 'selected' : ''}>Arc 270° Black</option>
@@ -19163,39 +19332,13 @@ class GaugeWidget extends DashboardWidget {
                 </div>
             </div>
             <div class="widget-config-field">
-                <div class="zones-editor">
-                    <div class="zones-header">
-                        <label>Color Zones</label>
-                        <button type="button" class="zones-add-btn" onclick="addZoneField(this)">+ Add Zone</button>
-                    </div>
-                    <div class="zones-list" id="zones-list">
-                        ${zones.map((z, i) => `
-                            <div class="zone-item">
-                                <input type="color" class="zone-color" name="zone-color-${i}" value="${z.color || '#22c55e'}">
-                                <div class="zone-inputs">
-                                    <input type="number" class="zone-input" name="zone-from-${i}" value="${z.from ?? 0}" placeholder="From">
-                                    <span class="zone-separator">→</span>
-                                    <input type="number" class="zone-input" name="zone-to-${i}" value="${z.to ?? 100}" placeholder="To">
-                                </div>
-                                <button type="button" class="zone-remove-btn" onclick="removeZoneField(this)">×</button>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
+                ${renderColorZonesEditor(zones, '#22c55e')}
             </div>
         `;
     }
 
     static parseConfigForm(form) {
-        const zones = [];
-        const zoneItems = form.querySelectorAll('.zone-item');
-        zoneItems.forEach((item) => {
-            const color = item.querySelector('.zone-color')?.value;
-            const inputs = item.querySelectorAll('.zone-input');
-            const from = parseFloat(inputs[0]?.value);
-            const to = parseFloat(inputs[1]?.value);
-            if (color && !isNaN(from) && !isNaN(to)) zones.push({ from, to, color });
-        });
+        const zones = parseColorZones(form);
 
         const binding = parseSensorBindingFields(form, { fieldPrefix: '' });
         const style = form.querySelector('[name="style"]')?.value || 'default';
@@ -19203,10 +19346,10 @@ class GaugeWidget extends DashboardWidget {
             ...binding,
             label: form.querySelector('[name="label"]')?.value || '',
             style,
-            min: parseFloat(form.querySelector('[name="min"]')?.value) || 0,
-            max: parseFloat(form.querySelector('[name="max"]')?.value) || 100,
+            min: parseNumberOrDefault(form.querySelector('[name="min"]')?.value, 0),
+            max: parseNumberOrDefault(form.querySelector('[name="max"]')?.value, 100),
             unit: form.querySelector('[name="unit"]')?.value || '',
-            decimals: parseInt(form.querySelector('[name="decimals"]')?.value) || 1,
+            decimals: parseIntegerOrDefault(form.querySelector('[name="decimals"]')?.value, 1),
             fillSector: form.querySelector('[name="fillSector"]')?.checked || false,
             zones
         };
@@ -19237,13 +19380,18 @@ class GaugeWidget extends DashboardWidget {
         // Если юзер переключит style → dual после открытия диалога, sensor2 поля
         // станут видны (toggleDualScaleFields), но без wiring останутся пустыми.
         // Listener wire'ит их при первом переходе в dual; helper idempotent.
+        // Также явно дёргаем toggleDualScaleFields — раньше это делал inline
+        // onchange="toggleDualScaleFields(this)" в HTML (убран как двойной binding).
         const styleSel = form.querySelector('[name="style"]');
         styleSel?.addEventListener('change', () => {
+            toggleDualScaleFields(styleSel);
             if (styleSel.value === 'dual') wireDual();
         });
     }
 }
 
+
+// === 61-dashboard-widgets.js ===
 // ============================================================================
 // Level Widget (CSS + SVG)
 // ============================================================================
@@ -19277,19 +19425,7 @@ class LevelWidget extends DashboardWidget {
     }
 
     getColorForValue(value) {
-        const { zones = [] } = this.config;
-
-        if (zones.length === 0) {
-            return 'var(--accent-blue)';
-        }
-
-        for (const zone of zones) {
-            if (value >= zone.from && value <= zone.to) {
-                return zone.color;
-            }
-        }
-
-        return 'var(--accent-blue)';
+        return DashboardWidget.getColorForZones(value, this.config.zones);
     }
 
     update(value, error = null) {
@@ -19303,8 +19439,8 @@ class LevelWidget extends DashboardWidget {
         }
 
         const { min = 0, max = 100, orientation = 'vertical', unit = '%', decimals = 0 } = this.config;
-        const numValue = parseFloat(value) || 0;
-        const percent = Math.max(0, Math.min(100, ((numValue - min) / (max - min)) * 100));
+        const numValue = parseNumberOrDefault(value, 0);
+        const percent = percentInRange(numValue, min, max, 100);
 
         const isVertical = orientation === 'vertical';
         if (isVertical) {
@@ -19351,43 +19487,18 @@ class LevelWidget extends DashboardWidget {
                 </div>
             </div>
             <div class="widget-config-field">
-                <div class="zones-editor">
-                    <div class="zones-header">
-                        <label>Color Zones</label>
-                        <button type="button" class="zones-add-btn" onclick="addZoneField(this)">+ Add Zone</button>
-                    </div>
-                    <div class="zones-list" id="zones-list">
-                        ${zones.map((z, i) => `
-                            <div class="zone-item">
-                                <input type="color" class="zone-color" name="zone-color-${i}" value="${z.color || '#3b82f6'}">
-                                <div class="zone-inputs">
-                                    <input type="number" class="zone-input" name="zone-from-${i}" value="${z.from ?? 0}" placeholder="From">
-                                    <span class="zone-separator">→</span>
-                                    <input type="number" class="zone-input" name="zone-to-${i}" value="${z.to ?? 100}" placeholder="To">
-                                </div>
-                                <button type="button" class="zone-remove-btn" onclick="removeZoneField(this)">×</button>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
+                ${renderColorZonesEditor(zones, '#3b82f6')}
             </div>
         `;
     }
 
     static parseConfigForm(form) {
-        const zones = [];
-        form.querySelectorAll('.zone-item').forEach((item) => {
-            const color = item.querySelector('.zone-color')?.value;
-            const inputs = item.querySelectorAll('.zone-input');
-            const from = parseFloat(inputs[0]?.value);
-            const to = parseFloat(inputs[1]?.value);
-            if (color && !isNaN(from) && !isNaN(to)) zones.push({ from, to, color });
-        });
+        const zones = parseColorZones(form);
         return {
             ...parseSensorBindingFields(form, { fieldPrefix: '' }),
             label: form.querySelector('[name="label"]')?.value || '',
-            min: parseFloat(form.querySelector('[name="min"]')?.value) || 0,
-            max: parseFloat(form.querySelector('[name="max"]')?.value) || 100,
+            min: parseNumberOrDefault(form.querySelector('[name="min"]')?.value, 0),
+            max: parseNumberOrDefault(form.querySelector('[name="max"]')?.value, 100),
             orientation: form.querySelector('[name="orientation"]')?.value || 'vertical',
             unit: form.querySelector('[name="unit"]')?.value || '%',
             zones
@@ -19450,7 +19561,7 @@ class LedWidget extends DashboardWidget {
         super.update(value, error);
 
         const { threshold = 0 } = this.config;
-        const numValue = parseFloat(value) || 0;
+        const numValue = parseNumberOrDefault(value, 0);
         const isOn = numValue > threshold;
 
         this.updateLed(isOn, !!error);
@@ -19501,7 +19612,7 @@ class LedWidget extends DashboardWidget {
         return {
             ...parseSensorBindingFields(form, { fieldPrefix: '' }),
             label: form.querySelector('[name="label"]')?.value || '',
-            threshold: parseFloat(form.querySelector('[name="threshold"]')?.value) || 0,
+            threshold: parseNumberOrDefault(form.querySelector('[name="threshold"]')?.value, 0),
             onColor: form.querySelector('[name="onColor"]')?.value || '#22c55e',
             offColor: form.querySelector('[name="offColor"]')?.value || '#6b7280',
             errorColor: form.querySelector('[name="errorColor"]')?.value || '#ef4444',
@@ -19518,18 +19629,12 @@ class LedWidget extends DashboardWidget {
 // Label Widget (static text)
 // ============================================================================
 
-class LabelWidget {
+class LabelWidget extends DashboardWidget {
     static type = 'label';
     static displayName = 'Label';
     static description = 'Static text label or header';
     static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><text x="12" y="16" text-anchor="middle" font-size="14" fill="currentColor">Aa</text></svg>';
     static defaultSize = { width: 8, height: 2 };
-
-    constructor(id, config, container) {
-        this.id = id;
-        this.config = config || {};
-        this.container = container;
-    }
 
     render() {
         const {
@@ -19581,13 +19686,6 @@ class LabelWidget {
     // Label doesn't need sensor updates, but we need the method for compatibility
     update(value, error = null) {
         // No-op - label is static
-    }
-
-    // Update text dynamically if needed
-    setText(text) {
-        if (this.labelEl) {
-            this.labelEl.textContent = text;
-        }
     }
 
     static getConfigForm(config = {}) {
@@ -19643,7 +19741,7 @@ class LabelWidget {
                 <div class="widget-config-field">
                     <label>Border Radius</label>
                     <input type="number" class="widget-input" name="borderRadius"
-                           value="${config.borderRadius || 4}" min="0" max="20">
+                           value="${config.borderRadius ?? 4}" min="0" max="20">
                 </div>
                 <div class="widget-config-field">
                     <label>Background</label>
@@ -19673,8 +19771,8 @@ class LabelWidget {
             color: form.querySelector('[name="color"]')?.value || '#d8dce2',
             border: form.querySelector('[name="border"]')?.checked || false,
             borderColor: form.querySelector('[name="borderColor"]')?.value || '#4b5563',
-            borderWidth: parseInt(form.querySelector('[name="borderWidth"]')?.value) || 1,
-            borderRadius: parseInt(form.querySelector('[name="borderRadius"]')?.value) || 4,
+            borderWidth: parseIntegerOrDefault(form.querySelector('[name="borderWidth"]')?.value, 1),
+            borderRadius: parseIntegerOrDefault(form.querySelector('[name="borderRadius"]')?.value, 4),
             backgroundColor: form.querySelector('[name="backgroundColor"]')?.value || '#1f2937'
         };
     }
@@ -19684,18 +19782,12 @@ class LabelWidget {
 // Divider Widget (visual separator)
 // ============================================================================
 
-class DividerWidget {
+class DividerWidget extends DashboardWidget {
     static type = 'divider';
     static displayName = 'Divider';
     static description = 'Horizontal or vertical separator line';
     static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="12" x2="20" y2="12"/></svg>';
     static defaultSize = { width: 12, height: 1 };
-
-    constructor(id, config, container) {
-        this.id = id;
-        this.config = config || {};
-        this.container = container;
-    }
 
     render() {
         const {
@@ -19759,7 +19851,7 @@ class DividerWidget {
                 <div class="widget-config-field">
                     <label>Margin (px)</label>
                     <input type="number" class="widget-input" name="margin"
-                           value="${config.margin || 8}" min="0" max="50">
+                           value="${config.margin ?? 8}" min="0" max="50">
                 </div>
                 <div class="widget-config-field">
                     <label>Color</label>
@@ -19774,8 +19866,8 @@ class DividerWidget {
         return {
             orientation: form.querySelector('[name="orientation"]')?.value || 'horizontal',
             style: form.querySelector('[name="style"]')?.value || 'solid',
-            thickness: parseInt(form.querySelector('[name="thickness"]')?.value) || 1,
-            margin: parseInt(form.querySelector('[name="margin"]')?.value) || 8,
+            thickness: parseIntegerOrDefault(form.querySelector('[name="thickness"]')?.value, 1),
+            margin: parseIntegerOrDefault(form.querySelector('[name="margin"]')?.value, 8),
             color: form.querySelector('[name="color"]')?.value || '#4b5563'
         };
     }
@@ -19785,7 +19877,7 @@ class DividerWidget {
 // StatusBar Widget (multiple status indicators)
 // ============================================================================
 
-class StatusBarWidget {
+class StatusBarWidget extends DashboardWidget {
     static type = 'statusbar';
     static usesNewSensorAutocomplete = true;
     static displayName = 'Status Bar';
@@ -19794,9 +19886,7 @@ class StatusBarWidget {
     static defaultSize = { width: 12, height: 3 };
 
     constructor(id, config, container) {
-        this.id = id;
-        this.config = config || {};
-        this.container = container;
+        super(id, config, container);
         this.indicators = new Map();
     }
 
@@ -19870,7 +19960,12 @@ class StatusBarWidget {
         if (!indicator) return;
 
         const { item, led } = indicator;
-        const { threshold = 0.5, onColor = '#22c55e', offColor = '#6b7280', errorColor = '#ef4444' } = item;
+        const {
+            threshold = STATUS_WIDGET_DEFAULT_THRESHOLD,
+            onColor = '#22c55e',
+            offColor = '#6b7280',
+            errorColor = '#ef4444'
+        } = item;
 
         if (error) {
             led.style.background = errorColor;
@@ -19901,10 +19996,7 @@ class StatusBarWidget {
     // строгий; если у item только sensor — соответствие по имени (legacy).
     updateBySensor(sensorName, value, error = null, ctx = null) {
         const { items = [] } = this.config;
-        items.forEach((item, idx) => {
-            if (item.sensor !== sensorName) return;
-            if (ctx?.serverId && item.serverId && ctx.serverId !== item.serverId) return;
-            if (ctx?.objectName && item.objectName && ctx.objectName !== item.objectName) return;
+        updateSensorItemsByName(items, sensorName, ctx, (item, idx) => {
             this.updateIndicator(idx, value, error);
         });
     }
@@ -19920,7 +20012,7 @@ class StatusBarWidget {
                 <div class="widget-config-field">
                     <label>Threshold</label>
                     <input type="number" class="widget-input" name="item-${idx}-threshold"
-                           value="${item.threshold ?? 0.5}" step="0.1">
+                           value="${item.threshold ?? STATUS_WIDGET_DEFAULT_THRESHOLD}" step="0.1">
                 </div>
                 <div class="widget-config-field">
                     <label>On</label>
@@ -19965,26 +20057,33 @@ class StatusBarWidget {
             addBtnSelector: '#add-statusbar-item',
             containerSelector: '#statusbar-items-container',
             rowClass: 'statusbar-item',
-            defaultExtras: () => ({ label: '', threshold: 0.5, onColor: '#22c55e', offColor: '#6b7280' }),
-            renderRow: StatusBarWidget._renderItemRow,
-            parseExtraFields: (el, idx) => ({
-                label:    form.querySelector(`[name="item-${idx}-label"]`)?.value || '',
-                threshold: parseFloat(form.querySelector(`[name="item-${idx}-threshold"]`)?.value) || 0.5,
-                onColor:  form.querySelector(`[name="item-${idx}-onColor"]`)?.value || '#22c55e',
-                offColor: form.querySelector(`[name="item-${idx}-offColor"]`)?.value || '#6b7280',
+            defaultExtras: () => ({
+                label: '',
+                threshold: STATUS_WIDGET_DEFAULT_THRESHOLD,
+                onColor: '#22c55e',
+                offColor: '#6b7280'
             }),
+            renderRow: StatusBarWidget._renderItemRow,
+            parseExtraFields: (el, idx) => StatusBarWidget.parseItemExtraFields(form, idx),
         });
+    }
+
+    static parseItemExtraFields(form, idx) {
+        return {
+            label: form.querySelector(`[name="item-${idx}-label"]`)?.value || '',
+            threshold: parseNumberOrDefault(
+                form.querySelector(`[name="item-${idx}-threshold"]`)?.value,
+                STATUS_WIDGET_DEFAULT_THRESHOLD
+            ),
+            onColor: form.querySelector(`[name="item-${idx}-onColor"]`)?.value || '#22c55e',
+            offColor: form.querySelector(`[name="item-${idx}-offColor"]`)?.value || '#6b7280',
+        };
     }
 
     static parseConfigForm(form) {
         const items = parseSensorItemList(form, {
             rowClass: 'statusbar-item',
-            parseExtraFields: (el, idx) => ({
-                label:    form.querySelector(`[name="item-${idx}-label"]`)?.value || '',
-                threshold: parseFloat(form.querySelector(`[name="item-${idx}-threshold"]`)?.value) || 0.5,
-                onColor:  form.querySelector(`[name="item-${idx}-onColor"]`)?.value || '#22c55e',
-                offColor: form.querySelector(`[name="item-${idx}-offColor"]`)?.value || '#6b7280',
-            }),
+            parseExtraFields: (el, idx) => StatusBarWidget.parseItemExtraFields(form, idx),
         });
         return {
             layout: form.querySelector('[name="layout"]')?.value || 'horizontal',
@@ -19994,7 +20093,7 @@ class StatusBarWidget {
 
     // Get list of sensors this widget uses (for SSE subscription)
     getSensors() {
-        return (this.config.items || []).map(item => item.sensor).filter(s => s);
+        return getSensorNamesFromItems(this.config.items || []);
     }
 }
 
@@ -20002,7 +20101,7 @@ class StatusBarWidget {
 // BarGraph Widget (compare multiple values)
 // ============================================================================
 
-class BarGraphWidget {
+class BarGraphWidget extends DashboardWidget {
     static type = 'bargraph';
     static usesNewSensorAutocomplete = true;
     static displayName = 'Bar Graph';
@@ -20011,9 +20110,7 @@ class BarGraphWidget {
     static defaultSize = { width: 10, height: 6 };
 
     constructor(id, config, container) {
-        this.id = id;
-        this.config = config || {};
-        this.container = container;
+        super(id, config, container);
         this.bars = new Map();
     }
 
@@ -20126,8 +20223,7 @@ class BarGraphWidget {
         const isVertical = orientation === 'vertical';
 
         // Calculate percentage
-        const range = max - min;
-        const percent = range > 0 ? Math.max(0, Math.min(100, ((value - min) / range) * 100)) : 0;
+        const percent = percentInRange(value, min, max, 100);
 
         // Update fill
         if (isVertical) {
@@ -20136,9 +20232,12 @@ class BarGraphWidget {
             fill.style.width = `${percent}%`;
         }
 
-        // Update value text
+        // Update value text. value может прийти из SSE строкой — без guard'а
+        // value.toFixed бросал TypeError. Аналогично сделано в LevelWidget /
+        // DigitalWidget.update.
         if (valueEl) {
-            const displayValue = typeof decimals === 'number' ? value.toFixed(decimals) : value;
+            const numValue = typeof value === 'number' ? value : parseNumberOrDefault(value, 0);
+            const displayValue = numValue.toFixed(decimals);
             valueEl.textContent = unit ? `${displayValue} ${unit}` : displayValue;
         }
     }
@@ -20159,10 +20258,7 @@ class BarGraphWidget {
     // См. StatusBarWidget.updateBySensor — тот же контракт ctx для multi-server.
     updateBySensor(sensorName, value, error = null, ctx = null) {
         const { items = [] } = this.config;
-        items.forEach((item, idx) => {
-            if (item.sensor !== sensorName) return;
-            if (ctx?.serverId && item.serverId && ctx.serverId !== item.serverId) return;
-            if (ctx?.objectName && item.objectName && ctx.objectName !== item.objectName) return;
+        updateSensorItemsByName(items, sensorName, ctx, (item, idx) => {
             this.updateBar(idx, value);
         });
     }
@@ -20245,26 +20341,24 @@ class BarGraphWidget {
                 color: colors[(colorIdx++) % colors.length],
             }),
             renderRow: BarGraphWidget._renderItemRow,
-            parseExtraFields: (el, idx) => ({
-                label: form.querySelector(`[name="item-${idx}-label"]`)?.value || '',
-                min:   parseFloat(form.querySelector(`[name="item-${idx}-min"]`)?.value) || 0,
-                max:   parseFloat(form.querySelector(`[name="item-${idx}-max"]`)?.value) || 100,
-                unit:  form.querySelector(`[name="item-${idx}-unit"]`)?.value || '',
-                color: form.querySelector(`[name="item-${idx}-color"]`)?.value || '#3b82f6',
-            }),
+            parseExtraFields: (el, idx) => BarGraphWidget.parseItemExtraFields(form, idx),
         });
+    }
+
+    static parseItemExtraFields(form, idx) {
+        return {
+            label: form.querySelector(`[name="item-${idx}-label"]`)?.value || '',
+            min: parseNumberOrDefault(form.querySelector(`[name="item-${idx}-min"]`)?.value, 0),
+            max: parseNumberOrDefault(form.querySelector(`[name="item-${idx}-max"]`)?.value, 100),
+            unit: form.querySelector(`[name="item-${idx}-unit"]`)?.value || '',
+            color: form.querySelector(`[name="item-${idx}-color"]`)?.value || '#3b82f6',
+        };
     }
 
     static parseConfigForm(form) {
         const items = parseSensorItemList(form, {
             rowClass: 'bargraph-item',
-            parseExtraFields: (el, idx) => ({
-                label: form.querySelector(`[name="item-${idx}-label"]`)?.value || '',
-                min:   parseFloat(form.querySelector(`[name="item-${idx}-min"]`)?.value) || 0,
-                max:   parseFloat(form.querySelector(`[name="item-${idx}-max"]`)?.value) || 100,
-                unit:  form.querySelector(`[name="item-${idx}-unit"]`)?.value || '',
-                color: form.querySelector(`[name="item-${idx}-color"]`)?.value || '#3b82f6',
-            }),
+            parseExtraFields: (el, idx) => BarGraphWidget.parseItemExtraFields(form, idx),
         });
         return {
             orientation: form.querySelector('[name="orientation"]')?.value || 'vertical',
@@ -20275,7 +20369,7 @@ class BarGraphWidget {
     }
 
     getSensors() {
-        return (this.config.items || []).map(item => item.sensor).filter(s => s);
+        return getSensorNamesFromItems(this.config.items || []);
     }
 }
 
@@ -20341,13 +20435,13 @@ class DigitalWidget extends DashboardWidget {
     }
 
     renderLCD() {
-        const { digits = 6, decimals = 0, unit = '' } = this.config;
+        const { digits = 6, unit = '' } = this.config;
         const totalDigits = digits + (unit ? 2 : 0); // Extra space for unit
 
         this.element.innerHTML = `
             <div class="digital-lcd-display" id="digital-lcd-${this.id}">
                 <div class="digital-lcd-screen">
-                    <svg class="digital-lcd-svg" id="digital-svg-${this.id}" viewBox="0 0 ${totalDigits * 24 + 10} 48">
+                    <svg class="digital-lcd-svg" id="digital-svg-${this.id}" viewBox="0 0 ${totalDigits * DIGITAL_DIGIT_SLOT_WIDTH + DIGITAL_VIEWBOX_PADDING} ${DIGITAL_VIEWBOX_HEIGHT}">
                         <defs>
                             <linearGradient id="lcd-bg-${this.id}" x1="0%" y1="0%" x2="0%" y2="100%">
                                 <stop offset="0%" style="stop-color:#c8d4c0"/>
@@ -20367,13 +20461,13 @@ class DigitalWidget extends DashboardWidget {
     }
 
     renderLED() {
-        const { digits = 6, decimals = 0, unit = '', color = '#ff0000' } = this.config;
+        const { digits = 6, unit = '', color = '#ff0000' } = this.config;
         const totalDigits = digits + (unit ? 2 : 0);
 
         this.element.innerHTML = `
             <div class="digital-led-display" id="digital-led-${this.id}">
                 <div class="digital-led-screen">
-                    <svg class="digital-led-svg" id="digital-svg-${this.id}" viewBox="0 0 ${totalDigits * 24 + 10} 48">
+                    <svg class="digital-led-svg" id="digital-svg-${this.id}" viewBox="0 0 ${totalDigits * DIGITAL_DIGIT_SLOT_WIDTH + DIGITAL_VIEWBOX_PADDING} ${DIGITAL_VIEWBOX_HEIGHT}">
                         <defs>
                             <filter id="led-glow-${this.id}" x="-50%" y="-50%" width="200%" height="200%">
                                 <feGaussianBlur stdDeviation="1.5" result="blur"/>
@@ -20429,7 +20523,9 @@ class DigitalWidget extends DashboardWidget {
 
         // Segment paths (relative to digit position)
         // Each digit is 20px wide, 36px tall
-        const w = 16, h = 32, t = 3; // width, height, thickness
+        const w = DIGITAL_SEGMENT_WIDTH;
+        const h = DIGITAL_SEGMENT_HEIGHT;
+        const t = DIGITAL_SEGMENT_THICKNESS;
         const segments = [
             // a - top horizontal
             `<polygon points="${x+2},0 ${x+w-2},0 ${x+w-4},${t} ${x+4},${t}" fill="${pattern[0] ? onColor : offColor}" ${pattern[0] ? glowFilter : ''}/>`,
@@ -20461,10 +20557,10 @@ class DigitalWidget extends DashboardWidget {
         for (const char of text) {
             if (char === '.' || char === ':') {
                 html += this.renderDigit(char, x, isLCD);
-                x += 8; // Smaller width for dot/colon
+                x += DIGITAL_SPECIAL_CHAR_ADVANCE;
             } else {
                 html += this.renderDigit(char, x, isLCD);
-                x += 22; // Full digit width + spacing
+                x += DIGITAL_DIGIT_ADVANCE;
             }
         }
 
@@ -20472,7 +20568,7 @@ class DigitalWidget extends DashboardWidget {
 
         // Update SVG viewBox to fit content
         if (this.svgEl) {
-            this.svgEl.setAttribute('viewBox', `0 0 ${x + 10} 48`);
+            this.svgEl.setAttribute('viewBox', `0 0 ${x + DIGITAL_VIEWBOX_PADDING} ${DIGITAL_VIEWBOX_HEIGHT}`);
         }
     }
 
@@ -20490,7 +20586,7 @@ class DigitalWidget extends DashboardWidget {
                 return;
             }
 
-            const numValue = parseFloat(value) || 0;
+            const numValue = parseNumberOrDefault(value, 0);
             let text = numValue.toFixed(decimals);
 
             // Pad with zeros if needed
@@ -20513,7 +20609,7 @@ class DigitalWidget extends DashboardWidget {
                 return;
             }
 
-            const numValue = parseFloat(value) || 0;
+            const numValue = parseNumberOrDefault(value, 0);
             let text = numValue.toFixed(decimals);
 
             // Pad with leading spaces/zeros
@@ -20573,8 +20669,8 @@ class DigitalWidget extends DashboardWidget {
             ...parseSensorBindingFields(form, { fieldPrefix: '' }),
             label: form.querySelector('[name="label"]')?.value || '',
             style: form.querySelector('[name="style"]')?.value || 'default',
-            digits: parseInt(form.querySelector('[name="digits"]')?.value) || 6,
-            decimals: parseInt(form.querySelector('[name="decimals"]')?.value) || 0,
+            digits: parseIntegerOrDefault(form.querySelector('[name="digits"]')?.value, 6),
+            decimals: parseIntegerOrDefault(form.querySelector('[name="decimals"]')?.value, 0),
             color: form.querySelector('[name="color"]')?.value || '#22c55e',
             unit: form.querySelector('[name="unit"]')?.value || ''
         };
@@ -20606,21 +20702,20 @@ class ChartWidget extends DashboardWidget {
     constructor(id, config, container) {
         super(id, config, container);
         this.charts = new Map();      // zoneId -> Chart.js instance
-        this.sensorData = new Map();  // sensorName -> { value, timestamp }
         this.chartStartTime = Date.now();
         this.updateInterval = null;
         this.visibilityHandler = null;
     }
 
     render() {
-        const { zones = [], showTable = true, tableHeight = 100 } = this.config;
+        const { zones = [], showTable = true, tableHeight = CHART_WIDGET_DEFAULT_TABLE_HEIGHT } = this.config;
 
         this.element = document.createElement('div');
         this.element.className = 'widget-content chart-widget-content';
 
         // Zones container
         const zonesHtml = zones.map((zone, idx) => `
-            <div class="chart-widget-zone" data-zone-id="${zone.id || `zone-${idx}`}">
+            <div class="chart-widget-zone" data-zone-id="${ChartWidget.getZoneId(zone, idx)}">
                 <canvas id="chart-canvas-${this.id}-${idx}"></canvas>
             </div>
         `).join('');
@@ -20650,7 +20745,7 @@ class ChartWidget extends DashboardWidget {
         ` : '';
 
         // Get saved zones height or use default
-        const zonesHeight = this.config.zonesHeight || 150;
+        const zonesHeight = this.config.zonesHeight ?? CHART_WIDGET_DEFAULT_ZONES_HEIGHT;
 
         this.element.innerHTML = `
             <div class="chart-widget-zones" style="height: ${zonesHeight}px;">
@@ -20677,12 +20772,12 @@ class ChartWidget extends DashboardWidget {
         // Load history for all sensors
         this.loadHistory();
 
-        // Start periodic update interval (every 2 seconds, only when visible)
+        // Start periodic update interval, only when visible.
         this.updateInterval = setInterval(() => {
             if (!document.hidden && this.charts.size > 0) {
                 this.syncTimeRange();
             }
-        }, 2000);
+        }, CHART_WIDGET_SYNC_INTERVAL_MS);
 
         // Add visibility change handler
         this.visibilityHandler = () => {
@@ -20703,9 +20798,10 @@ class ChartWidget extends DashboardWidget {
 
             const ctx = canvas.getContext('2d');
             const datasets = (zone.sensors || []).map((sensor, sensorIdx) => {
-                let label = sensor.label || sensor.name;
+                const sensorName = ChartWidget.getSensorName(sensor);
+                let label = sensor.label || sensorName;
                 if (useTextname && !sensor.label) {
-                    const sensorInfo = typeof getSensorInfo === 'function' ? getSensorInfo(sensor.name) : null;
+                    const sensorInfo = ChartWidget.getScopedSensorInfo(sensor);
                     if (sensorInfo?.textname) {
                         label = sensorInfo.textname;
                     }
@@ -20716,86 +20812,32 @@ class ChartWidget extends DashboardWidget {
                     borderColor: sensor.color || ChartWidget.COLORS[sensorIdx % ChartWidget.COLORS.length],
                     backgroundColor: `${sensor.color || ChartWidget.COLORS[sensorIdx % ChartWidget.COLORS.length]}20`,
                     fill: sensor.fill !== false,
-                    tension: sensor.stepped ? 0 : (sensor.smooth !== false ? 0.3 : 0),
+                    tension: sensor.stepped ? 0 : (sensor.smooth !== false ? CHART_LINE_TENSION : 0),
                     stepped: sensor.stepped ? 'before' : false,
                     pointRadius: 0,
-                    borderWidth: sensor.stepped ? 2 : 1.5
+                    borderWidth: sensor.stepped ? CHART_STEPPED_LINE_BORDER_WIDTH : CHART_LINE_BORDER_WIDTH
                 };
             });
 
             const timeRange = this.getTimeRange();
-            const chart = new Chart(ctx, {
-                type: 'line',
-                data: { datasets },
+            const chart = new Chart(ctx, createLineChartConfig({
+                datasets,
+                timeRange,
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    animation: false,
                     normalized: true,
                     parsing: false,
                     spanGaps: true,
-                    interaction: {
-                        mode: 'nearest',
-                        intersect: false
-                    },
-                    plugins: {
-                        legend: {
-                            display: false
-                        },
-                        tooltip: {
-                            enabled: true,
-                            backgroundColor: '#22252a',
-                            titleColor: '#d8dce2',
-                            bodyColor: '#d8dce2',
-                            borderColor: '#333840',
-                            borderWidth: 1
-                        },
-                        decimation: {
-                            enabled: true,
-                            algorithm: 'min-max'
-                        }
-                    },
-                    scales: {
-                        x: {
-                            type: 'time',
-                            display: true,
-                            min: timeRange.min,
-                            max: timeRange.max,
-                            grid: {
-                                color: '#333840',
-                                drawBorder: false
-                            },
-                            ticks: {
-                                color: '#8a9099',
-                                maxTicksLimit: 6,
-                                autoSkip: true,
-                                source: 'auto'
-                            },
-                            time: {
-                                displayFormats: {
-                                    second: 'HH:mm:ss',
-                                    minute: 'HH:mm',
-                                    hour: 'HH:mm'
-                                }
-                            }
-                        },
-                        y: {
-                            display: true,
-                            position: 'left',
-                            grid: {
-                                color: '#333840',
-                                drawBorder: false
-                            },
-                            ticks: {
-                                color: '#8a9099',
-                                maxTicksLimit: 5
-                            }
-                        }
-                    }
+                    interactionMode: 'nearest',
+                    xMaxTicksLimit: CHART_WIDGET_X_MAX_TICKS,
+                    yMaxTicksLimit: CHART_WIDGET_Y_MAX_TICKS,
+                    autoSkip: true,
+                    tickSource: 'auto',
+                    tooltipEnabled: true,
+                    decimation: true
                 }
-            });
+            }));
 
-            this.charts.set(zone.id || `zone-${idx}`, {
+            this.charts.set(ChartWidget.getZoneId(zone, idx), {
                 chart,
                 sensors: zone.sensors || []
             });
@@ -20811,13 +20853,12 @@ class ChartWidget extends DashboardWidget {
         const allSensors = [];
         zones.forEach((zone, zoneIdx) => {
             (zone.sensors || []).forEach((sensor, sensorIdx) => {
-                // Get sensor info from global state
-                const sensorInfo = typeof getSensorInfo === 'function' ? getSensorInfo(sensor.name) : null;
+                const sensorInfo = ChartWidget.getScopedSensorInfo(sensor);
                 allSensors.push({
                     ...sensor,
                     zoneIdx,
                     sensorIdx,
-                    zoneId: zone.id || `zone-${zoneIdx}`,
+                    zoneId: ChartWidget.getZoneId(zone, zoneIdx),
                     color: sensor.color || ChartWidget.COLORS[sensorIdx % ChartWidget.COLORS.length],
                     iotype: sensorInfo?.iotype || '',
                     textname: sensorInfo?.textname || ''
@@ -20827,19 +20868,20 @@ class ChartWidget extends DashboardWidget {
 
         // IONC-style table rows
         tbody.innerHTML = allSensors.map((sensor, idx) => {
-            const safeId = sensor.name.replace(/[^a-zA-Z0-9]/g, '_');
-            const sensorInfo = typeof getSensorInfo === 'function' ? getSensorInfo(sensor.name) : null;
+            const sensorName = ChartWidget.getSensorName(sensor);
+            const safeId = ChartWidget.getSensorDomKey(sensor);
+            const sensorInfo = ChartWidget.getScopedSensorInfo(sensor);
             const sensorId = sensorInfo?.id || '';
             const supplier = sensorInfo?.supplier || '';
             // Use textname if enabled and available
-            const displayName = (useTextname && sensor.textname) ? sensor.textname : sensor.name;
+            const displayName = (useTextname && sensor.textname) ? sensor.textname : sensorName;
             return `
-            <tr data-sensor="${escapeAttr(sensor.name)}" data-zone="${sensor.zoneIdx}" data-idx="${sensor.sensorIdx}">
+            <tr data-sensor="${escapeAttr(sensorName)}" data-zone="${sensor.zoneIdx}" data-idx="${sensor.sensorIdx}">
                 <td class="col-color">
                     <span class="color-indicator" style="background: ${sensor.color}"></span>
                 </td>
                 <td class="col-id">${escapeHtml(String(sensorId))}</td>
-                <td class="col-name" title="${escapeAttr(sensor.name)}">${escapeHtml(displayName)}</td>
+                <td class="col-name" title="${escapeAttr(sensorName)}">${escapeHtml(displayName)}</td>
                 <td class="col-type">
                     ${sensor.iotype ? `<span class="type-badge type-${sensor.iotype}">${sensor.iotype}</span>` : ''}
                 </td>
@@ -20855,35 +20897,18 @@ class ChartWidget extends DashboardWidget {
         const resizer = this.element.querySelector('.chart-widget-table-resizer');
         if (!container || !resizer) return;
 
-        let startY, startHeight;
-
-        const onMouseMove = (e) => {
-            const delta = startY - e.clientY;
-            const newHeight = Math.max(50, Math.min(300, startHeight + delta));
-            container.style.height = `${newHeight}px`;
-        };
-
-        const onMouseUp = () => {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = '';
-
-            // Save new height to config
-            this.config.tableHeight = parseInt(container.style.height);
-            // Trigger save through dashboard manager
-            if (window.dashboardManager) {
-                dashboardManager.saveDashboard();
-            }
-        };
-
-        resizer.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            startY = e.clientY;
-            startHeight = container.offsetHeight;
-            document.body.style.cursor = 'ns-resize';
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-        });
+        setupResizeHandle(
+            resizer,
+            container,
+            CHART_WIDGET_TABLE_MIN_HEIGHT,
+            (height) => {
+                this.config.tableHeight = height;
+                if (window.dashboardManager) dashboardManager.saveDashboard();
+            },
+            CHART_WIDGET_TABLE_MAX_HEIGHT,
+            null,
+            { direction: -1, updateMaxHeight: false }
+        );
     }
 
     initZonesResizer() {
@@ -20891,42 +20916,23 @@ class ChartWidget extends DashboardWidget {
         const resizer = this.element.querySelector('.chart-widget-zones-resizer');
         if (!zones || !resizer) return;
 
-        let startY, startHeight;
-
-        const onMouseMove = (e) => {
-            const delta = e.clientY - startY;
-            const newHeight = Math.max(80, Math.min(500, startHeight + delta));
-            zones.style.height = `${newHeight}px`;
-            // Trigger chart resize
-            this.charts.forEach(({ chart }) => chart.resize());
-        };
-
-        const onMouseUp = () => {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = '';
-
-            // Save new height to config
-            this.config.zonesHeight = parseInt(zones.style.height);
-            // Trigger save through dashboard manager
-            if (window.dashboardManager) {
-                dashboardManager.saveDashboard();
-            }
-        };
-
-        resizer.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            startY = e.clientY;
-            startHeight = zones.offsetHeight;
-            document.body.style.cursor = 'ns-resize';
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-        });
+        setupResizeHandle(
+            resizer,
+            zones,
+            CHART_WIDGET_ZONES_MIN_HEIGHT,
+            (height) => {
+                this.config.zonesHeight = height;
+                if (window.dashboardManager) dashboardManager.saveDashboard();
+            },
+            CHART_WIDGET_ZONES_MAX_HEIGHT,
+            () => this.charts.forEach(({ chart }) => chart.resize()),
+            { updateMaxHeight: false }
+        );
     }
 
     getTimeRange() {
         // Use widget's own timeRange or default to 15 minutes
-        const rangeMs = this.config.timeRange || 900000;
+        const rangeMs = this.config.timeRange || CHART_WIDGET_DEFAULT_TIME_RANGE_MS;
         const now = Date.now();
 
         let min = this.chartStartTime;
@@ -20934,7 +20940,7 @@ class ChartWidget extends DashboardWidget {
 
         // Shift window if current time exceeds
         if (now >= max) {
-            const shiftAmount = rangeMs * 0.9;
+            const shiftAmount = rangeMs * CHART_WIDGET_TIME_WINDOW_SHIFT_RATIO;
             this.chartStartTime = min + shiftAmount;
             min = this.chartStartTime;
             max = min + rangeMs;
@@ -20946,15 +20952,16 @@ class ChartWidget extends DashboardWidget {
     async loadHistory() {
         const { zones = [] } = this.config;
 
-        for (const zone of zones) {
-            const chartData = this.charts.get(zone.id);
+        for (let zoneIdx = 0; zoneIdx < zones.length; zoneIdx++) {
+            const zone = zones[zoneIdx];
+            const chartData = this.charts.get(ChartWidget.getZoneId(zone, zoneIdx));
             if (!chartData) continue;
 
             for (let i = 0; i < (zone.sensors || []).length; i++) {
                 const sensor = zone.sensors[i];
+                const sensorName = ChartWidget.getSensorName(sensor);
                 try {
-                    // Try to load history from SM API
-                    const response = await fetch(`/api/sm/sensors/${encodeURIComponent(sensor.name)}/history?limit=200`);
+                    const response = await fetch(ChartWidget.getHistoryUrl(sensor));
                     if (response.ok) {
                         const history = await response.json();
                         if (history.points && history.points.length > 0) {
@@ -20967,7 +20974,7 @@ class ChartWidget extends DashboardWidget {
                         }
                     }
                 } catch (e) {
-                    console.warn(`Failed to load history for ${sensor.name}:`, e);
+                    console.warn(`Failed to load history for ${sensorName}:`, e);
                 }
             }
 
@@ -20987,27 +20994,27 @@ class ChartWidget extends DashboardWidget {
         // Use timestamp as number for decimation to work with parsing: false
         const ts = timestamp ? new Date(timestamp).getTime() : Date.now();
 
-        // Store current value
-        this.sensorData.set(sensorName, { value, timestamp: ts });
-
         // Update table value
-        const safeId = sensorName.replace(/[^a-zA-Z0-9]/g, '_');
-        const valueEl = this.element?.querySelector(`#chart-value-${this.id}-${safeId}`);
-        if (valueEl) {
-            valueEl.textContent = typeof value === 'number' ? value.toFixed(2) : value;
-        }
+        const { zones = [] } = this.config;
+        zones.forEach((zone, zoneIdx) => {
+            (zone.sensors || []).forEach(sensor => {
+                if (!ChartWidget.sensorMatchesUpdate(sensor, sensorName, ctx)) return;
+                const safeId = ChartWidget.getSensorDomKey(sensor);
+                const valueEl = this.element?.querySelector(`#chart-value-${this.id}-${safeId}`);
+                if (valueEl) {
+                    valueEl.textContent = typeof value === 'number' ? value.toFixed(2) : value;
+                }
+            });
+        });
 
         // Add point to chart
-        const { zones = [] } = this.config;
-        for (const zone of zones) {
-            const chartData = this.charts.get(zone.id);
+        for (let zoneIdx = 0; zoneIdx < zones.length; zoneIdx++) {
+            const zone = zones[zoneIdx];
+            const chartData = this.charts.get(ChartWidget.getZoneId(zone, zoneIdx));
             if (!chartData) continue;
 
             const sensorIdx = (zone.sensors || []).findIndex(s => {
-                if ((s.name || s.sensor) !== sensorName) return false;
-                if (ctx?.serverId && s.serverId && ctx.serverId !== s.serverId) return false;
-                if (ctx?.objectName && s.objectName && ctx.objectName !== s.objectName) return false;
-                return true;
+                return ChartWidget.sensorMatchesUpdate(s, sensorName, ctx);
             });
             if (sensorIdx === -1) continue;
 
@@ -21017,7 +21024,7 @@ class ChartWidget extends DashboardWidget {
             dataset.data.push({ x: ts, y: value });
 
             // Limit data points
-            if (dataset.data.length > 1000) {
+            if (dataset.data.length > MAX_CHART_POINTS) {
                 dataset.data.shift();
             }
         }
@@ -21052,18 +21059,50 @@ class ChartWidget extends DashboardWidget {
             chart.destroy();
         });
         this.charts.clear();
-        this.sensorData.clear();
         super.destroy();
     }
 
-    static TIME_RANGES = [
-        { value: 60000, label: '1m' },
-        { value: 180000, label: '3m' },
-        { value: 300000, label: '5m' },
-        { value: 900000, label: '15m' },
-        { value: 3600000, label: '1h' },
-        { value: 10800000, label: '3h' }
-    ];
+    static getSensorName(sensor = {}) {
+        return getSensorNameFromBinding(sensor);
+    }
+
+    static getZoneId(zone = {}, idx = 0) {
+        return zone.id || `zone-${idx}`;
+    }
+
+    static getScopedSensorInfo(sensor = {}) {
+        const sensorName = ChartWidget.getSensorName(sensor);
+        if (sensor.serverId && sensor.objectName && typeof getSensorInfoByKey === 'function') {
+            const scoped = getSensorInfoByKey(sensor.serverId, sensor.objectName, sensorName);
+            if (scoped) return scoped;
+        }
+        return typeof getSensorInfo === 'function' ? getSensorInfo(sensorName) : null;
+    }
+
+    static getSensorDomKey(sensor = {}) {
+        const sensorName = ChartWidget.getSensorName(sensor);
+        const key = sensor.serverId && sensor.objectName && typeof makeSensorKey === 'function'
+            ? makeSensorKey(sensor.serverId, sensor.objectName, sensorName)
+            : sensorName;
+        return String(key).replace(/[^a-zA-Z0-9_-]/g, '_');
+    }
+
+    static sensorMatchesUpdate(sensor = {}, sensorName, ctx = null) {
+        return sensorItemMatchesUpdate(sensor, sensorName, ctx);
+    }
+
+    static getHistoryUrl(sensor = {}) {
+        const sensorName = ChartWidget.getSensorName(sensor);
+        const objectName = sensor.objectName || 'SharedMemory';
+        return buildObjectUrl(
+            objectName,
+            `/variables/${encodeURIComponent(sensorName)}/history`,
+            sensor.serverId || null,
+            { count: CHART_WIDGET_HISTORY_LIMIT }
+        );
+    }
+
+    static TIME_RANGES = CHART_TIME_RANGES_MS;
 
     // === Single sensor row (renders inside chart-zone-sensors-{zoneIdx}) ===
     static _renderChartSensorRow({ zoneIdx, sensorIdx, sensor }) {
@@ -21103,8 +21142,10 @@ class ChartWidget extends DashboardWidget {
 
     static getConfigForm(config = {}) {
         const zones = config.zones || [{ id: 'zone-0', sensors: [] }];
-        const timeRange = config.timeRange || 900000;
+        const timeRange = config.timeRange || CHART_WIDGET_DEFAULT_TIME_RANGE_MS;
         return `
+            <input type="hidden" name="tableHeight" value="${config.tableHeight ?? CHART_WIDGET_DEFAULT_TABLE_HEIGHT}">
+            <input type="hidden" name="zonesHeight" value="${config.zonesHeight ?? CHART_WIDGET_DEFAULT_ZONES_HEIGHT}">
             <div class="widget-config-field">
                 <label>Label</label>
                 <input type="text" class="widget-input" name="label"
@@ -21229,10 +21270,19 @@ class ChartWidget extends DashboardWidget {
         const timeRangeInput = form.querySelector('[name="timeRange"]:checked');
         return {
             label: form.querySelector('[name="label"]')?.value || '',
-            timeRange: timeRangeInput ? parseInt(timeRangeInput.value) : 900000,
+            timeRange: timeRangeInput
+                ? parseIntegerOrDefault(timeRangeInput.value, CHART_WIDGET_DEFAULT_TIME_RANGE_MS)
+                : CHART_WIDGET_DEFAULT_TIME_RANGE_MS,
             showTable: form.querySelector('[name="showTable"]')?.checked !== false,
             useTextname: form.querySelector('[name="useTextname"]')?.checked || false,
-            tableHeight: 100,
+            tableHeight: parseIntegerOrDefault(
+                form.querySelector('[name="tableHeight"]')?.value,
+                CHART_WIDGET_DEFAULT_TABLE_HEIGHT
+            ),
+            zonesHeight: parseIntegerOrDefault(
+                form.querySelector('[name="zonesHeight"]')?.value,
+                CHART_WIDGET_DEFAULT_ZONES_HEIGHT
+            ),
             zones
         };
     }
@@ -21261,7 +21311,11 @@ const WIDGET_TYPES = {
     'chart': ChartWidget
 };
 
-// Grid settings используют константы из 05-constants.js:
+window.registerDashboardWidgetType = function(type, WidgetClass) {
+    WIDGET_TYPES[type] = WidgetClass;
+};
+
+// Grid settings используют константы из 00-constants.js:
 // DASHBOARD_GRID_COLS, DASHBOARD_GRID_ROW_HEIGHT, DASHBOARD_GRID_GAP
 
 // ============================================================================
@@ -21359,6 +21413,32 @@ class DashboardManager {
         });
     }
 
+    getGridMetrics() {
+        const gridEl = this.gridEl || document.querySelector('.dashboard-grid');
+        if (!gridEl) return null;
+
+        const gridRect = gridEl.getBoundingClientRect();
+        const computedStyle = window.getComputedStyle(gridEl);
+        const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
+        const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
+        const gap = DASHBOARD_GRID_GAP;
+        const contentWidth = gridRect.width - paddingLeft * 2;
+        const columnsGapWidth = gap * (DASHBOARD_GRID_COLS - 1);
+        const cellWidth = (contentWidth - columnsGapWidth) / DASHBOARD_GRID_COLS;
+        const cellHeight = DASHBOARD_GRID_ROW_HEIGHT;
+
+        return {
+            gridEl,
+            gridRect,
+            paddingLeft,
+            paddingTop,
+            gap,
+            contentWidth,
+            cellWidth,
+            cellHeight
+        };
+    }
+
     loadDashboards() {
         // Load from localStorage
         try {
@@ -21416,38 +21496,39 @@ class DashboardManager {
                 }
             }
         } catch (err) {
-            console.log('No server dashboards available');
+            debugLog('No server dashboards available');
         }
+    }
+
+    // Разбивает dashboardState.dashboards на server/user по флагу config._server.
+    // Используется в updateDashboardSelector и updateSidebarDashboards.
+    _partitionDashboards() {
+        const all = Array.from(dashboardState.dashboards.entries());
+        return {
+            server: all.filter(([_, c]) => c._server),
+            user:   all.filter(([_, c]) => !c._server),
+            all,
+        };
     }
 
     updateDashboardSelector() {
         if (!this.selectEl) return;
 
         const currentValue = this.selectEl.value;
+        const { server, user } = this._partitionDashboards();
 
         let html = '<option value="">Select dashboard...</option>';
 
-        // Server dashboards
-        const serverDashboards = Array.from(dashboardState.dashboards.entries())
-            .filter(([_, config]) => config._server);
-        if (serverDashboards.length > 0) {
-            html += '<optgroup label="Server Dashboards">';
-            serverDashboards.forEach(([name]) => {
-                html += `<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`;
-            });
-            html += '</optgroup>';
-        }
+        const renderGroup = (label, items) => {
+            if (items.length === 0) return '';
+            const opts = items.map(([name]) =>
+                `<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`
+            ).join('');
+            return `<optgroup label="${label}">${opts}</optgroup>`;
+        };
 
-        // User dashboards
-        const userDashboards = Array.from(dashboardState.dashboards.entries())
-            .filter(([_, config]) => !config._server);
-        if (userDashboards.length > 0) {
-            html += '<optgroup label="My Dashboards">';
-            userDashboards.forEach(([name]) => {
-                html += `<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`;
-            });
-            html += '</optgroup>';
-        }
+        html += renderGroup('Server Dashboards', server);
+        html += renderGroup('My Dashboards', user);
 
         this.selectEl.innerHTML = html;
         this.selectEl.value = currentValue;
@@ -21466,50 +21547,37 @@ class DashboardManager {
         const countEl = document.getElementById('dashboards-count');
         if (!listEl) return;
 
-        const allDashboards = Array.from(dashboardState.dashboards.entries());
-        const serverDashboards = allDashboards.filter(([_, c]) => c._server);
-        const userDashboards = allDashboards.filter(([_, c]) => !c._server);
+        const { server: serverDashboards, user: userDashboards, all: allDashboards } = this._partitionDashboards();
 
         // Update count
         if (countEl) {
             countEl.textContent = allDashboards.length;
         }
 
-        // Build list HTML
-        let html = '';
+        const dashboardIcon = `
+            <svg class="dashboard-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7"/>
+                <rect x="14" y="3" width="7" height="7"/>
+                <rect x="14" y="14" width="7" height="7"/>
+                <rect x="3" y="14" width="7" height="7"/>
+            </svg>`;
 
-        // Server dashboards first
-        serverDashboards.forEach(([name]) => {
+        const renderItem = (name, isServer) => {
             const isActive = dashboardState.currentDashboard === name;
-            html += `
-                <li class="dashboard-item server${isActive ? ' active' : ''}" data-name="${escapeAttr(name)}">
-                    <svg class="dashboard-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="7" height="7"/>
-                        <rect x="14" y="3" width="7" height="7"/>
-                        <rect x="14" y="14" width="7" height="7"/>
-                        <rect x="3" y="14" width="7" height="7"/>
-                    </svg>
+            const cls = `dashboard-item${isServer ? ' server' : ''}${isActive ? ' active' : ''}`;
+            const badge = isServer ? '<span class="dashboard-badge">srv</span>' : '';
+            return `
+                <li class="${cls}" data-name="${escapeAttr(name)}">
+                    ${dashboardIcon}
                     <span class="dashboard-name">${escapeHtml(name)}</span>
-                    <span class="dashboard-badge">srv</span>
+                    ${badge}
                 </li>
             `;
-        });
+        };
 
-        // User dashboards
-        userDashboards.forEach(([name]) => {
-            const isActive = dashboardState.currentDashboard === name;
-            html += `
-                <li class="dashboard-item${isActive ? ' active' : ''}" data-name="${escapeAttr(name)}">
-                    <svg class="dashboard-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="7" height="7"/>
-                        <rect x="14" y="3" width="7" height="7"/>
-                        <rect x="14" y="14" width="7" height="7"/>
-                        <rect x="3" y="14" width="7" height="7"/>
-                    </svg>
-                    <span class="dashboard-name">${escapeHtml(name)}</span>
-                </li>
-            `;
-        });
+        // Server dashboards first, then user dashboards
+        const html = serverDashboards.map(([name]) => renderItem(name, true)).join('')
+                   + userDashboards.map(([name]) => renderItem(name, false)).join('');
 
         listEl.innerHTML = html;
 
@@ -21524,15 +21592,6 @@ class DashboardManager {
                 }
             });
         });
-    }
-
-    // Resolve первый connected server. Используется для legacy fallback и migration.
-    _resolveFirstConnectedServerId() {
-        if (typeof state === 'undefined' || !state.servers) return null;
-        for (const [id, server] of state.servers) {
-            if (server.connected) return id;
-        }
-        return null;
     }
 
     // Lazy resolve binding'а из state.sensorsByKey (берёт первый match по sensorName).
@@ -21619,11 +21678,11 @@ class DashboardManager {
                 .filter(Boolean);
 
             // Параллельно fetch'аем sensors per object — server'ам обычно ОК с десятком
-            // одновременных запросов (limit=10000 покрывает типичные IONC объекты).
+            // одновременных запросов.
             await Promise.allSettled(objects.map(async (objectName) => {
                 const sensorsResp = await fetch(
                     `/api/objects/${encodeURIComponent(objectName)}/ionc/sensors`
-                    + `?server=${encodeURIComponent(serverId)}&limit=10000`
+                    + `?server=${encodeURIComponent(serverId)}&limit=${DASHBOARD_SENSOR_REGISTRY_FETCH_LIMIT}`
                 );
                 if (!sensorsResp.ok) return;
                 const data = await sensorsResp.json();
@@ -21771,8 +21830,7 @@ class DashboardManager {
         for (const cacheKey of sensorKeys) {
             const cached = state.sensorValuesCache.get(cacheKey);
             if (cached) {
-                // Use cached value (not older than 60 seconds)
-                if (Date.now() - cached.timestamp < 60000) {
+                if (Date.now() - cached.timestamp < DASHBOARD_SENSOR_CACHE_TTL_MS) {
                     this.handleSensorUpdate(cacheKey, cached.value, cached.error);
                 } else {
                     uncachedKeys.push(cacheKey);
@@ -21793,20 +21851,19 @@ class DashboardManager {
     // Группирует по (serverId, objectName), делает один search request
     // на каждый sensorName (текущий API не поддерживает batch search).
     async fetchSensorValues(sensorKeys) {
-        // Group by (serverId, objectName).
-        // grpKey = `${serverId}|${objectName}` → Map<sensorName, sensorKey>.
+        // Group by (serverId, objectName) → Map<sensorName, sensorKey>.
         const groups = new Map();
 
         for (const key of sensorKeys) {
             const parsed = parseSensorKey(key);
             if (!parsed) continue; // legacy / malformed — пропускаем
-            const grpKey = `${parsed.serverId}|${parsed.objectName}`;
+            const grpKey = makeGroupKey(parsed.serverId, parsed.objectName);
             if (!groups.has(grpKey)) groups.set(grpKey, new Map());
             groups.get(grpKey).set(parsed.sensorName, key);
         }
 
         for (const [grpKey, nameToKey] of groups) {
-            const [serverId, objectName] = grpKey.split('|');
+            const { serverId, objectName } = parseGroupKey(grpKey);
             for (const [sensorName, sensorKey] of nameToKey) {
                 try {
                     const url = `/api/objects/${encodeURIComponent(objectName)}/ionc/sensors`
@@ -21840,7 +21897,7 @@ class DashboardManager {
         }
 
         const { position = {} } = widgetConfig;
-        const { col = 0, row = 0, width = 2, height = 1, freePosition, offset } = position;
+        const { col = 0, row = 0, width = 2, height = 1, freePosition } = position;
 
         // Create widget container
         const container = document.createElement('div');
@@ -21853,20 +21910,9 @@ class DashboardManager {
         if (isTransparent) {
             container.classList.add('transparent');
         }
-        // Build transform string (offset + rotation)
-        const rotate = widgetConfig.config?.rotate || 0;
-        const transforms = [];
-        if (offset && (offset.x || offset.y)) {
-            transforms.push(`translate(${offset.x || 0}px, ${offset.y || 0}px)`);
-        }
-        if (rotate) {
-            transforms.push(`rotate(${rotate}deg)`);
-        }
-        if (transforms.length > 0) {
-            container.style.transform = transforms.join(' ');
-        }
         container.dataset.widgetId = widgetConfig.id;
         container.dataset.type = widgetConfig.type;
+        this.applyWidgetTransform(container, widgetConfig);
 
         // Free pixel positioning (Shift+drag) or grid snap
         if (freePosition) {
@@ -21874,15 +21920,9 @@ class DashboardManager {
             container.style.left = `${freePosition.left}px`;
             container.style.top = `${freePosition.top}px`;
             // Always calculate size from grid cells (width/height are always in cells)
-            const gap = DASHBOARD_GRID_GAP;
-            const gridEl = this.gridEl || document.querySelector('.dashboard-grid');
-            if (gridEl) {
-                const gridRect = gridEl.getBoundingClientRect();
-                const computedStyle = window.getComputedStyle(gridEl);
-                const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
-                const contentWidth = gridRect.width - paddingLeft * 2;
-                const cellWidth = (contentWidth - gap * (DASHBOARD_GRID_COLS - 1)) / DASHBOARD_GRID_COLS;
-                const cellHeight = DASHBOARD_GRID_ROW_HEIGHT;
+            const gridMetrics = this.getGridMetrics();
+            if (gridMetrics) {
+                const { gap, cellWidth, cellHeight } = gridMetrics;
                 container.style.width = `${width * cellWidth + (width - 1) * gap}px`;
                 container.style.height = `${height * cellHeight + (height - 1) * gap}px`;
             }
@@ -21924,26 +21964,7 @@ class DashboardManager {
             container.dataset.activeWidget = 'true';
         }
 
-        widget.render();
-
-        // Initial interactivity sync (без него виджет создаётся в правильном
-        // visual state до первого editMode toggle / controlToken event).
-        if (typeof widget._updateInteractivityClass === 'function') {
-            widget._updateInteractivityClass();
-        }
-
-        // Inject title if configured (before widget-content, not inside)
-        const title = widgetConfig.config?.title;
-        if (title) {
-            const widgetContent = container.querySelector('.widget-content');
-            if (widgetContent) {
-                const titleEl = document.createElement('div');
-                titleEl.className = 'widget-title-label' + (widgetConfig.config?.titleBorder ? ' title-badge' : '');
-                titleEl.textContent = title;
-                // Insert BEFORE widget-content, not inside it
-                widgetContent.parentNode.insertBefore(titleEl, widgetContent);
-            }
-        }
+        this.renderWidgetContent(widget, widgetConfig);
 
         // Bind widget events
         container.querySelector('.widget-action-btn.config')?.addEventListener('click', (e) => {
@@ -21999,6 +22020,44 @@ class DashboardManager {
         dashboardState.widgets.set(widgetConfig.id, widget);
 
         return widget;
+    }
+
+    applyWidgetTransform(container, widgetConfig) {
+        const rotate = widgetConfig.config?.rotate || 0;
+        const offset = widgetConfig.position?.offset;
+        const transforms = [];
+        if (offset && (offset.x || offset.y)) {
+            transforms.push(`translate(${offset.x || 0}px, ${offset.y || 0}px)`);
+        }
+        if (rotate) {
+            transforms.push(`rotate(${rotate}deg)`);
+        }
+        container.style.transform = transforms.length > 0 ? transforms.join(' ') : '';
+    }
+
+    renderWidgetTitle(container, config) {
+        const title = config?.title;
+        if (!title) return;
+
+        const widgetContent = container.querySelector('.widget-content');
+        if (!widgetContent) return;
+
+        const titleEl = document.createElement('div');
+        titleEl.className = 'widget-title-label' + (config.titleBorder ? ' title-badge' : '');
+        titleEl.textContent = title;
+        widgetContent.parentNode.insertBefore(titleEl, widgetContent);
+    }
+
+    renderWidgetContent(widget, widgetConfig) {
+        widget.render();
+
+        // Initial interactivity sync (без него виджет создаётся в правильном
+        // visual state до первого editMode toggle / controlToken event).
+        if (typeof widget._updateInteractivityClass === 'function') {
+            widget._updateInteractivityClass();
+        }
+
+        this.renderWidgetTitle(widget.container, widgetConfig.config || {});
     }
 
     clearWidgets() {
@@ -22159,13 +22218,12 @@ class DashboardManager {
         // открытия handler'ы рано-return'ят и autocomplete не работает.
         delete content.dataset.activeHandlersWired;
         delete content.dataset.genHandlersWired;
-        // Helper из 60-widget-sensor-binding.js использует свой dataset-флаг
-        // вида sensorBinding_{prefix}_wired. Для single-sensor binding (prefix='')
-        // ключ — sensorBinding__wired (двойное подчёркивание после нормализации).
-        // Item-row форм (prefix='item-N-') живут на свежесозданных <div>'ах
-        // внутри form, не на content — их флаги уходят вместе с DOM.
+        delete content.dataset.chartHandlersWired;
+        // Helpers из 60-widget-sensor-binding.js используют dataset-флаги
+        // sensorBinding_* и sensorItemList_*. content живёт между открытиями
+        // диалога, поэтому сбрасываем оба семейства перед новым wiring.
         for (const key of Object.keys(content.dataset)) {
-            if (key.startsWith('sensorBinding')) {
+            if (key.startsWith('sensorBinding') || key.startsWith('sensorItemList')) {
                 delete content.dataset[key];
             }
         }
@@ -22191,10 +22249,6 @@ class DashboardManager {
         if (title) {
             title.textContent = widgetId ? `Configure ${WidgetClass.displayName}` : `Add ${WidgetClass.displayName}`;
         }
-
-        // Get current size from position, or default
-        const currentWidth = position.width || WidgetClass.defaultSize.width;
-        const currentHeight = position.height || WidgetClass.defaultSize.height;
 
         // Chart widget doesn't show transparent option (always opaque)
         const showTransparent = type !== 'chart';
@@ -22258,15 +22312,6 @@ class DashboardManager {
         content.dataset.widgetId = widgetId || '';
         content.dataset.widgetType = type;
 
-        // Setup legacy in-memory sensor autocomplete for all sensor inputs.
-        // Active widgets с usesNewSensorAutocomplete=true используют свой собственный
-        // setupSensorAutocomplete (из 41-sensor-autocomplete.js) с резолвом sensor_id;
-        // пропускаем legacy attach, чтобы не было дублирующего dropdown'а на одном input.
-        if (!WidgetClass.usesNewSensorAutocomplete) {
-            this.setupSensorAutocomplete(content, 'sensor');
-            this.setupSensorAutocomplete(content, 'sensor2');
-        }
-
         // Setup custom number inputs
         setupNumberInputs(content);
 
@@ -22286,160 +22331,6 @@ class DashboardManager {
         }
 
         overlay?.classList.remove('hidden');
-    }
-
-    setupSensorAutocomplete(container, fieldName = 'sensor') {
-        const sensorInput = container.querySelector(`[name="${fieldName}"]`);
-        if (!sensorInput) return;
-
-        // Wrap input in relative container and add autocomplete dropdown
-        const field = sensorInput.closest('.widget-config-field');
-        if (!field) return;
-
-        field.classList.add('sensor-autocomplete-field');
-
-        // Create autocomplete container
-        const autocompleteContainer = document.createElement('div');
-        autocompleteContainer.className = 'widget-sensor-autocomplete';
-        autocompleteContainer.style.display = 'none';
-        field.appendChild(autocompleteContainer);
-
-        // State
-        let autocompleteResults = [];
-        let selectedIndex = 0;
-        let debounceTimer = null;
-
-        const sensors = Array.from(state.sensorsByName.entries()).map(([name, data]) => ({
-            name,
-            iotype: data?.iotype || '?',
-            textname: data?.textname || ''
-        }));
-
-        const hideAutocomplete = () => {
-            autocompleteContainer.style.display = 'none';
-            autocompleteContainer.innerHTML = '';
-            autocompleteResults = [];
-            selectedIndex = 0;
-        };
-
-        const showAutocomplete = (matches) => {
-            if (matches.length === 0) {
-                hideAutocomplete();
-                return;
-            }
-
-            autocompleteResults = matches;
-            selectedIndex = 0;
-
-            autocompleteContainer.innerHTML = matches.map((s, i) => `
-                <div class="widget-autocomplete-item${i === 0 ? ' selected' : ''}" data-name="${escapeAttr(s.name)}">
-                    <span class="sensor-name">${escapeHtml(s.name)}</span>
-                    <span class="type-badge type-${s.iotype}">${s.iotype}</span>
-                    ${s.textname ? `<span class="sensor-textname">${escapeHtml(s.textname)}</span>` : ''}
-                </div>
-            `).join('');
-
-            // Click handlers
-            autocompleteContainer.querySelectorAll('.widget-autocomplete-item').forEach(item => {
-                item.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    sensorInput.value = item.dataset.name;
-                    hideAutocomplete();
-                });
-            });
-
-            autocompleteContainer.style.display = 'block';
-        };
-
-        const updateSelection = () => {
-            const items = autocompleteContainer.querySelectorAll('.widget-autocomplete-item');
-            items.forEach((item, i) => {
-                item.classList.toggle('selected', i === selectedIndex);
-            });
-            // Scroll selected into view
-            const selected = autocompleteContainer.querySelector('.selected');
-            if (selected) {
-                selected.scrollIntoView({ block: 'nearest' });
-            }
-        };
-
-        const navigateAutocomplete = (direction) => {
-            if (autocompleteResults.length === 0) return;
-            selectedIndex = Math.max(0, Math.min(autocompleteResults.length - 1, selectedIndex + direction));
-            updateSelection();
-        };
-
-        // Input event - debounced search
-        sensorInput.addEventListener('input', () => {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => {
-                const query = sensorInput.value.trim().toLowerCase();
-                if (query.length < AUTOCOMPLETE_MIN_QUERY) {
-                    hideAutocomplete();
-                    return;
-                }
-
-                // Filter: partial match (contains)
-                const matches = sensors
-                    .filter(s => s.name.toLowerCase().includes(query))
-                    .slice(0, 10);
-
-                showAutocomplete(matches);
-            }, 150);
-        });
-
-        // Keyboard navigation
-        sensorInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                sensorInput.value = '';
-                sensorInput.blur();
-                hideAutocomplete();
-            } else if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                navigateAutocomplete(1);
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                navigateAutocomplete(-1);
-            } else if (e.key === 'Enter') {
-                if (autocompleteResults.length > 0) {
-                    e.preventDefault();
-                    sensorInput.value = autocompleteResults[selectedIndex].name;
-                    hideAutocomplete();
-                }
-            }
-        });
-
-        // Focus - show autocomplete if text is present
-        sensorInput.addEventListener('focus', () => {
-            const query = sensorInput.value.trim().toLowerCase();
-            if (query.length >= AUTOCOMPLETE_MIN_QUERY) {
-                const matches = sensors
-                    .filter(s => s.name.toLowerCase().includes(query))
-                    .slice(0, 10);
-                showAutocomplete(matches);
-            }
-        });
-
-        // Click outside to hide
-        const clickOutsideHandler = (e) => {
-            if (!field.contains(e.target)) {
-                hideAutocomplete();
-            }
-        };
-        document.addEventListener('click', clickOutsideHandler);
-
-        // Cleanup on overlay close
-        const overlay = document.getElementById('widget-config-overlay');
-        if (overlay) {
-            const observer = new MutationObserver(() => {
-                if (overlay.classList.contains('hidden')) {
-                    document.removeEventListener('click', clickOutsideHandler);
-                    observer.disconnect();
-                }
-            });
-            observer.observe(overlay, { attributes: true, attributeFilter: ['class'] });
-        }
     }
 
     applyWidgetConfig() {
@@ -22468,7 +22359,7 @@ class DashboardManager {
 
         // Read rotate value
         const rotateInput = content.querySelector('[name="rotate"]');
-        const rotate = parseInt(rotateInput?.value) || 0;
+        const rotate = parseIntegerOrDefault(rotateInput?.value, 0);
         config.rotate = rotate;
 
         const dashboard = dashboardState.dashboards.get(dashboardState.currentDashboard);
@@ -22492,33 +22383,12 @@ class DashboardManager {
                     if (dashboardState.editMode) {
                         widget.container.classList.add('edit-mode');
                     }
-                    // Apply transform (offset + rotation)
-                    const offset = widgetConfig.position?.offset;
-                    const transforms = [];
-                    if (offset && (offset.x || offset.y)) {
-                        transforms.push(`translate(${offset.x || 0}px, ${offset.y || 0}px)`);
-                    }
-                    if (rotate) {
-                        transforms.push(`rotate(${rotate}deg)`);
-                    }
-                    widget.container.style.transform = transforms.length > 0 ? transforms.join(' ') : '';
+                    this.applyWidgetTransform(widget.container, widgetConfig);
                     widget.container.querySelector('.widget-title').textContent = config.label || type;
                     // Remove old title and content before re-render
                     widget.container.querySelector('.widget-title-label')?.remove();
                     widget.container.querySelector('.widget-content')?.remove();
-                    widget.render();
-
-                    // Inject title if configured (before widget-content, not inside)
-                    if (config.title) {
-                        const widgetContent = widget.container.querySelector('.widget-content');
-                        if (widgetContent) {
-                            const titleEl = document.createElement('div');
-                            titleEl.className = 'widget-title-label' + (config.titleBorder ? ' title-badge' : '');
-                            titleEl.textContent = config.title;
-                            // Insert BEFORE widget-content, not inside it
-                            widgetContent.parentNode.insertBefore(titleEl, widgetContent);
-                        }
-                    }
+                    this.renderWidgetContent(widget, widgetConfig);
                 }
             }
         } else {
@@ -22570,7 +22440,7 @@ class DashboardManager {
         });
 
         // Find first empty position
-        for (let row = 0; row < 100; row++) {
+        for (let row = 0; row < DASHBOARD_POSITION_SCAN_ROWS; row++) {
             for (let col = 0; col <= cols - width; col++) {
                 let fits = true;
                 for (let c = col; c < col + width && fits; c++) {
@@ -22606,8 +22476,10 @@ class DashboardManager {
         // Remove widget instance
         const widget = dashboardState.widgets.get(widgetId);
         if (widget) {
-            widget.container.remove();
-            widget.destroy();
+            if (typeof widget.destroy === 'function') {
+                widget.destroy();
+            }
+            widget.container?.remove();
             dashboardState.widgets.delete(widgetId);
         }
 
@@ -22622,16 +22494,23 @@ class DashboardManager {
         const widgetConfig = dashboard.widgets.find(w => w.id === widgetId);
         if (!widgetConfig) return;
 
-        const gridRect = this.gridEl.getBoundingClientRect();
         const startX = startEvent.clientX;
         const startY = startEvent.clientY;
-        const startWidth = widgetConfig.position.width || 2;
-        const startHeight = widgetConfig.position.height || 1;
+        const startWidth = widgetConfig.position.width || DASHBOARD_DEFAULT_WIDGET_WIDTH;
+        const startHeight = widgetConfig.position.height || DASHBOARD_DEFAULT_WIDGET_HEIGHT;
 
         // Calculate cell size
-        const gap = DASHBOARD_GRID_GAP;
-        const cellWidth = (gridRect.width - gap * (DASHBOARD_GRID_COLS - 1)) / DASHBOARD_GRID_COLS;
-        const cellHeight = DASHBOARD_GRID_ROW_HEIGHT;
+        const gridMetrics = this.getGridMetrics();
+        if (!gridMetrics) return;
+        const { gap, cellWidth, cellHeight } = gridMetrics;
+
+        // minSize widget'а — fall back на 1×1 если static minSize не задан.
+        // Без этого resize мог сжать любой widget до 1×1, игнорируя задекларированные
+        // в классе ограничения (напр. ToggleWidget.minSize = { width: 2, height: 1 }).
+        const widget = dashboardState.widgets.get(widgetId);
+        const minSize = widget?.constructor?.minSize || { width: 1, height: 1 };
+        const minWidth = minSize.width || 1;
+        const minHeight = minSize.height || 1;
 
         container.classList.add('resizing');
 
@@ -22642,8 +22521,8 @@ class DashboardManager {
             // Calculate new size in cells
             const col = widgetConfig.position.col || 0;
             const maxWidth = DASHBOARD_GRID_COLS - col; // Can't extend beyond grid
-            let newWidth = Math.max(1, Math.min(maxWidth, Math.round(startWidth + deltaX / (cellWidth + gap))));
-            let newHeight = Math.max(1, Math.min(20, Math.round(startHeight + deltaY / (cellHeight + gap))));
+            let newWidth = Math.max(minWidth, Math.min(maxWidth, Math.round(startWidth + deltaX / (cellWidth + gap))));
+            let newHeight = Math.max(minHeight, Math.min(DASHBOARD_MAX_WIDGET_HEIGHT, Math.round(startHeight + deltaY / (cellHeight + gap))));
 
             // Update visual preview
             container.style.gridColumn = `${(widgetConfig.position.col || 0) + 1} / span ${newWidth}`;
@@ -22660,8 +22539,8 @@ class DashboardManager {
             document.removeEventListener('mouseup', onMouseUp);
 
             // Apply new size
-            const newWidth = parseInt(container.dataset.pendingWidth) || startWidth;
-            const newHeight = parseInt(container.dataset.pendingHeight) || startHeight;
+            const newWidth = parseIntegerOrDefault(container.dataset.pendingWidth, startWidth);
+            const newHeight = parseIntegerOrDefault(container.dataset.pendingHeight, startHeight);
 
             if (newWidth !== startWidth || newHeight !== startHeight) {
                 widgetConfig.position.width = newWidth;
@@ -22693,24 +22572,17 @@ class DashboardManager {
         const widgetConfig = dashboard.widgets.find(w => w.id === widgetId);
         if (!widgetConfig) return;
 
-        const gridRect = this.gridEl.getBoundingClientRect();
+        const gridMetrics = this.getGridMetrics();
+        if (!gridMetrics) return;
+        const { gridEl, gridRect, paddingLeft, paddingTop, gap, cellWidth, cellHeight } = gridMetrics;
         const containerRect = container.getBoundingClientRect();
-        const computedStyle = window.getComputedStyle(this.gridEl);
-        const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
-        const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
 
         // Offset from mouse to container top-left
         const offsetX = startEvent.clientX - containerRect.left;
         const offsetY = startEvent.clientY - containerRect.top;
 
-        // Calculate cell size (grid content area = width minus padding on both sides)
-        const gap = DASHBOARD_GRID_GAP;
-        const contentWidth = gridRect.width - paddingLeft * 2;
-        const cellWidth = (contentWidth - gap * (DASHBOARD_GRID_COLS - 1)) / DASHBOARD_GRID_COLS;
-        const cellHeight = DASHBOARD_GRID_ROW_HEIGHT;
-
-        const width = widgetConfig.position.width || 2;
-        const height = widgetConfig.position.height || 1;
+        const width = widgetConfig.position.width || DASHBOARD_DEFAULT_WIDGET_WIDTH;
+        const height = widgetConfig.position.height || DASHBOARD_DEFAULT_WIDGET_HEIGHT;
 
         // Switch to absolute positioning for smooth drag
         container.classList.add('dragging');
@@ -22719,7 +22591,7 @@ class DashboardManager {
         container.style.height = `${containerRect.height}px`;
         container.style.left = `${containerRect.left}px`;
         container.style.top = `${containerRect.top}px`;
-        container.style.zIndex = '1000';
+        container.style.zIndex = String(DASHBOARD_DRAG_Z_INDEX);
         container.style.gridColumn = '';
         container.style.gridRow = '';
 
@@ -22740,7 +22612,7 @@ class DashboardManager {
             placeholder.style.left = `${initCol * (cellWidth + gap)}px`;
             placeholder.style.top = `${initRow * (cellHeight + gap)}px`;
         }
-        this.gridEl.appendChild(placeholder);
+        gridEl.appendChild(placeholder);
 
         let pendingCol = initCol;
         let pendingRow = initRow;
@@ -22812,8 +22684,8 @@ class DashboardManager {
                 container.style.position = 'absolute';
                 container.style.left = `${pendingFreePosition.left}px`;
                 container.style.top = `${pendingFreePosition.top}px`;
-                container.style.width = `${pendingFreePosition.width}px`;
-                container.style.height = `${pendingFreePosition.height}px`;
+                container.style.width = `${containerRect.width}px`;
+                container.style.height = `${containerRect.height}px`;
                 container.classList.add('free-position');
                 this.saveDashboard();
             } else {
@@ -22850,10 +22722,7 @@ class DashboardManager {
             widget.container.classList.toggle('edit-mode', dashboardState.editMode);
         });
 
-        if (dashboardState.editMode) {
-            this.enableDragAndDrop();
-        } else {
-            this.disableDragAndDrop();
+        if (!dashboardState.editMode) {
             // Deselect widget when exiting edit mode
             this.selectWidget(null);
         }
@@ -22891,16 +22760,12 @@ class DashboardManager {
         const container = widget.container;
 
         // Calculate grid parameters
-        const gridRect = this.gridEl.getBoundingClientRect();
-        const computedStyle = window.getComputedStyle(this.gridEl);
-        const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
-        const gap = DASHBOARD_GRID_GAP;
-        const contentWidth = gridRect.width - paddingLeft * 2;
-        const cellWidth = (contentWidth - gap * (DASHBOARD_GRID_COLS - 1)) / DASHBOARD_GRID_COLS;
-        const cellHeight = DASHBOARD_GRID_ROW_HEIGHT;
+        const gridMetrics = this.getGridMetrics();
+        if (!gridMetrics) return;
+        const { gap, cellWidth, cellHeight } = gridMetrics;
 
-        const width = widgetConfig.position.width || 2;
-        const height = widgetConfig.position.height || 1;
+        const width = widgetConfig.position.width || DASHBOARD_DEFAULT_WIDGET_WIDTH;
+        const height = widgetConfig.position.height || DASHBOARD_DEFAULT_WIDGET_HEIGHT;
 
         if (fineMode) {
             // Fine mode (Shift): move by 1px using freePosition
@@ -22916,7 +22781,7 @@ class DashboardManager {
                 };
             }
 
-            const step = 1;
+            const step = DASHBOARD_FINE_MOVE_STEP_PX;
             switch (key) {
                 case 'ArrowUp':
                     freePos.top = Math.max(0, freePos.top - step);
@@ -22979,57 +22844,6 @@ class DashboardManager {
         this.saveDashboard();
     }
 
-    enableDragAndDrop() {
-        // Сохраняем bound handlers, чтобы disableDragAndDrop мог их снять.
-        // Без этого listeners накапливались при каждом toggle edit-mode.
-        this._dndHandlers = this._dndHandlers || new Map(); // widgetId -> {dragstart, dragend}
-
-        dashboardState.widgets.forEach((widget, id) => {
-            widget.container.draggable = true;
-            // Если уже было повешено (повторный enable без disable) — не дублируем.
-            if (this._dndHandlers.has(id)) return;
-
-            const onDragStart = (e) => {
-                e.dataTransfer.setData('text/plain', id);
-                widget.container.classList.add('dragging');
-            };
-            const onDragEnd = () => {
-                widget.container.classList.remove('dragging');
-            };
-            widget.container.addEventListener('dragstart', onDragStart);
-            widget.container.addEventListener('dragend', onDragEnd);
-            this._dndHandlers.set(id, { onDragStart, onDragEnd });
-        });
-
-        if (this.gridEl && !this._gridDndHandlers) {
-            const onDragOver = (e) => e.preventDefault();
-            const onDrop = (e) => {
-                e.preventDefault();
-                // TODO: Implement grid position calculation
-            };
-            this.gridEl.addEventListener('dragover', onDragOver);
-            this.gridEl.addEventListener('drop', onDrop);
-            this._gridDndHandlers = { onDragOver, onDrop };
-        }
-    }
-
-    disableDragAndDrop() {
-        dashboardState.widgets.forEach((widget, id) => {
-            widget.container.draggable = false;
-            const handlers = this._dndHandlers?.get(id);
-            if (handlers) {
-                widget.container.removeEventListener('dragstart', handlers.onDragStart);
-                widget.container.removeEventListener('dragend', handlers.onDragEnd);
-                this._dndHandlers.delete(id);
-            }
-        });
-        if (this.gridEl && this._gridDndHandlers) {
-            this.gridEl.removeEventListener('dragover', this._gridDndHandlers.onDragOver);
-            this.gridEl.removeEventListener('drop', this._gridDndHandlers.onDrop);
-            this._gridDndHandlers = null;
-        }
-    }
-
     updateSensorSubscriptions() {
         dashboardState.sensorSubscriptions.clear();
         dashboardState.setpointSubscriptions.clear();
@@ -23077,13 +22891,13 @@ class DashboardManager {
     }
 
     _subscribeActiveSensorsBackend() {
-        // grpKey = `${serverId}|${objectName}` → Set<sensorId>.
+        // Group key (serverId|objectName) → Set<sensorId>.
         const groups = new Map();
 
         const addId = (b) => {
             if (!b?.serverId || !b?.objectName) return;
             if (!Number.isFinite(b.sensorId)) return;
-            const k = `${b.serverId}|${b.objectName}`;
+            const k = makeGroupKey(b.serverId, b.objectName);
             if (!groups.has(k)) groups.set(k, new Set());
             groups.get(k).add(b.sensorId);
         };
@@ -23103,9 +22917,7 @@ class DashboardManager {
         });
 
         for (const [grpKey, idSet] of groups) {
-            const sepIdx = grpKey.indexOf('|');
-            const serverId   = grpKey.slice(0, sepIdx);
-            const objectName = grpKey.slice(sepIdx + 1);
+            const { serverId, objectName } = parseGroupKey(grpKey);
             const url = `/api/objects/${encodeURIComponent(objectName)}/ionc/subscribe`
                 + `?server=${encodeURIComponent(serverId)}`;
             fetch(url, {
@@ -23322,17 +23134,26 @@ class DashboardManager {
         this.loadDashboard(name);
     }
 
-    deleteDashboard() {
+    async deleteDashboard() {
         const name = dashboardState.currentDashboard;
         if (!name) return;
 
         const config = dashboardState.dashboards.get(name);
         if (config?._server) {
+            // TODO: server dashboards — Delete-кнопку лучше дисейблить заранее в UI;
+            // пока fallback на alert, чтобы кейс не пропадал тихо.
             alert('Cannot delete server dashboards');
             return;
         }
 
-        if (!confirm(`Delete dashboard "${name}"?`)) return;
+        // showConfirmDialog (Promise<bool>) вместо нативного confirm — единый
+        // стиль модалок проекта, не блокирует event loop.
+        const confirmed = await showConfirmDialog(
+            'Delete Dashboard',
+            `Delete dashboard "${name}"?`,
+            'Delete'
+        );
+        if (!confirmed) return;
 
         dashboardState.dashboards.delete(name);
         localStorage.removeItem(`dashboard:${name}`);
@@ -23347,57 +23168,6 @@ class DashboardManager {
         this.clearDashboard();
     }
 }
-
-// Dashboard migration
-
-// ============================================================================
-// DEBUG: регистрация test-only виджета для e2e тестов базового класса.
-// Только Playwright-тесты вызывают это. Не использовать в production.
-// ============================================================================
-window.__DEBUG_REGISTER_TEST_WIDGET = function () {
-    if (WIDGET_TYPES['test-active']) return;
-
-    class TestActiveWidget extends ActiveDashboardWidget {
-        static type = 'test-active';
-        static displayName = 'TEST Active';
-        static description = 'TEST-ONLY: smoke widget for ActiveDashboardWidget base';
-        static icon = '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16"/></svg>';
-        static defaultSize = { width: 4, height: 2 };
-
-        render() {
-            this.element = document.createElement('div');
-            this.element.className = 'widget-content test-active-widget';
-            this.element.innerHTML = `
-                <button class="test-active-btn" data-test="write-btn">SET 42</button>
-                <div class="test-active-feedback" data-test="feedback">--</div>
-                <div class="test-active-command" data-test="command">--</div>
-                <div class="test-active-state" data-test="state">idle</div>
-            `;
-            this.container.appendChild(this.element);
-
-            this.element.querySelector('[data-test="write-btn"]').addEventListener('click', () => {
-                this.writeValue(42);
-            });
-        }
-
-        renderCommand() {
-            const el = this.element?.querySelector('[data-test="command"]');
-            if (el) el.textContent = String(this.commandValue ?? '--');
-            const stateEl = this.element?.querySelector('[data-test="state"]');
-            if (stateEl) stateEl.textContent = this.writeState;
-        }
-
-        renderFeedback() {
-            const el = this.element?.querySelector('[data-test="feedback"]');
-            if (el) el.textContent = String(this.feedbackValue ?? '--');
-        }
-
-        static getActiveConfigFields() { return ''; }
-        static parseActiveConfigFields() { return {}; }
-    }
-
-    WIDGET_TYPES['test-active'] = TestActiveWidget;
-};
 
 
 // === 63-dashboard-dialogs.js ===
@@ -23506,7 +23276,6 @@ function setupNumberInputs(container) {
         wrapper.appendChild(arrows);
 
         // Arrow button handlers
-        const step = parseFloat(input.step) || 1;
         arrows.querySelector('.up').addEventListener('click', (e) => {
             e.preventDefault();
             input.stepUp();
@@ -23537,22 +23306,12 @@ function addZoneField(btn) {
     const form = btn.closest('.widget-config-form') || btn.closest('#widget-config-content');
     const minInput = form?.querySelector('[name="min"]');
     const maxInput = form?.querySelector('[name="max"]');
-    const min = parseFloat(minInput?.value) || 0;
-    const max = parseFloat(maxInput?.value) || 100;
+    const min = parseNumberOrDefault(minInput?.value, 0);
+    const max = parseNumberOrDefault(maxInput?.value, 100);
 
     const index = zonesList.children.length;
-    const zoneHtml = `
-        <div class="zone-item">
-            <input type="color" class="zone-color" name="zone-color-${index}" value="#ef4444">
-            <div class="zone-inputs">
-                <input type="number" class="zone-input" name="zone-from-${index}" value="${min}" placeholder="From">
-                <span class="zone-separator">→</span>
-                <input type="number" class="zone-input" name="zone-to-${index}" value="${max}" placeholder="To">
-            </div>
-            <button type="button" class="zone-remove-btn" onclick="removeZoneField(this)">×</button>
-        </div>
-    `;
-    zonesList.insertAdjacentHTML('beforeend', zoneHtml);
+    zonesList.insertAdjacentHTML('beforeend',
+        renderColorZoneItem({ from: min, to: max, color: '#ef4444' }, index, '#ef4444'));
 }
 
 function removeZoneField(btn) {
@@ -23567,16 +23326,37 @@ function removeZoneField(btn) {
 let addToDashboardState = {
     sensorName: null,
     sensorLabel: null,
-    selectedType: 'gauge'
+    binding: null,
+    selectedType: 'gauge',
+    cleanupListeners: null,  // вызывается в closeAddToDashboard, отвязывает onChange/onOk
 };
+
+const ADD_TO_DASHBOARD_WIDGET_TYPES = ['gauge', 'level', 'led', 'label', 'divider', 'statusbar', 'bargraph', 'digital'];
+
+function getDashboardBindingFromButton(btn) {
+    const rawSensorId = btn?.dataset?.sensorId;
+    const sensorId = rawSensorId !== undefined && rawSensorId !== ''
+        ? parseIntegerOrDefault(rawSensorId, null)
+        : null;
+    return {
+        serverId: btn?.dataset?.serverId || null,
+        objectName: btn?.dataset?.objectName || null,
+        sensorId,
+    };
+}
 
 function closeAddToDashboard() {
     document.getElementById('add-to-dashboard-overlay')?.classList.add('hidden');
+    if (typeof addToDashboardState.cleanupListeners === 'function') {
+        addToDashboardState.cleanupListeners();
+        addToDashboardState.cleanupListeners = null;
+    }
     addToDashboardState.sensorName = null;
     addToDashboardState.sensorLabel = null;
+    addToDashboardState.binding = null;
 }
 
-function showAddToDashboardDialog(sensorName, sensorLabel = null) {
+function showAddToDashboardDialog(sensorName, sensorLabel = null, binding = null) {
     const overlay = document.getElementById('add-to-dashboard-overlay');
     const sensorNameEl = document.getElementById('add-to-dashboard-sensor-name');
     const selectEl = document.getElementById('add-to-dashboard-select');
@@ -23590,6 +23370,7 @@ function showAddToDashboardDialog(sensorName, sensorLabel = null) {
     // Store sensor info
     addToDashboardState.sensorName = sensorName;
     addToDashboardState.sensorLabel = sensorLabel || sensorName;
+    addToDashboardState.binding = binding;
     addToDashboardState.selectedType = 'gauge';
 
     // Show sensor name
@@ -23598,16 +23379,17 @@ function showAddToDashboardDialog(sensorName, sensorLabel = null) {
     // Populate dashboard select
     selectEl.innerHTML = '<option value="__new__">+ Create New Dashboard</option>';
 
-    // Add user dashboards (editable)
+    // Add user dashboards (editable). Серверные дашборды (config._server) — read-only,
+    // в "Add to Dashboard" не предлагаем.
     for (const [name, dashboard] of dashboardState.dashboards) {
-        // Skip server dashboards (they're read-only)
-        if (!dashboardState.serverDashboards.some(sd => sd.meta?.name === name)) {
-            selectEl.innerHTML += `<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`;
-        }
+        if (dashboard._server) continue;
+        selectEl.innerHTML += `<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`;
     }
 
-    // Handle select change
-    selectEl.onchange = () => {
+    // Handle select change. addEventListener (не onchange) + cleanup в close —
+    // иначе при повторных открытиях диалога старые handlers оставались бы на
+    // overlay-элементах, который не пересоздаётся.
+    const onSelectChange = () => {
         if (selectEl.value === '__new__') {
             newNameField.style.display = 'block';
             newNameInput.focus();
@@ -23615,18 +23397,16 @@ function showAddToDashboardDialog(sensorName, sensorLabel = null) {
             newNameField.style.display = 'none';
         }
     };
+    selectEl.addEventListener('change', onSelectChange);
 
-    // Populate widget types
-    const widgetTypes = [
-        { type: 'gauge', name: 'Gauge', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>' },
-        { type: 'level', name: 'Level', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2"/><rect x="8" y="10" width="8" height="10" fill="currentColor" opacity="0.3"/></svg>' },
-        { type: 'led', name: 'LED', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>' },
-        { type: 'label', name: 'Label', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><text x="12" y="16" text-anchor="middle" font-size="12" fill="currentColor">Aa</text></svg>' },
-        { type: 'divider', name: 'Divider', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="12" x2="20" y2="12"/></svg>' },
-        { type: 'statusbar', name: 'Status Bar', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="3" fill="#22c55e"/><circle cx="12" cy="12" r="3" fill="#ef4444"/><circle cx="19" cy="12" r="3" fill="#6b7280"/></svg>' },
-        { type: 'bargraph', name: 'Bar Graph', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="14" width="4" height="6" fill="currentColor" opacity="0.7"/><rect x="10" y="8" width="4" height="12" fill="currentColor" opacity="0.5"/><rect x="16" y="4" width="4" height="16" fill="currentColor" opacity="0.3"/></svg>' },
-        { type: 'digital', name: 'Digital', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><text x="12" y="15" text-anchor="middle" font-size="8" fill="currentColor">123</text></svg>' }
-    ];
+    const widgetTypes = ADD_TO_DASHBOARD_WIDGET_TYPES
+        .map(type => WIDGET_TYPES[type])
+        .filter(Boolean)
+        .map(WidgetClass => ({
+            type: WidgetClass.type,
+            name: WidgetClass.displayName,
+            icon: WidgetClass.icon,
+        }));
 
     typesEl.innerHTML = widgetTypes.map(w => `
         <div class="add-to-dashboard-type ${w.type === addToDashboardState.selectedType ? 'selected' : ''}"
@@ -23646,7 +23426,7 @@ function showAddToDashboardDialog(sensorName, sensorLabel = null) {
     });
 
     // Handle OK button
-    okBtn.onclick = () => {
+    const onOkClick = () => {
         const dashboardName = selectEl.value === '__new__'
             ? newNameInput.value.trim()
             : selectEl.value;
@@ -23661,10 +23441,17 @@ function showAddToDashboardDialog(sensorName, sensorLabel = null) {
             addToDashboardState.sensorLabel,
             dashboardName,
             addToDashboardState.selectedType,
-            selectEl.value === '__new__'
+            selectEl.value === '__new__',
+            addToDashboardState.binding
         );
 
         closeAddToDashboard();
+    };
+    okBtn.addEventListener('click', onOkClick);
+
+    addToDashboardState.cleanupListeners = () => {
+        selectEl.removeEventListener('change', onSelectChange);
+        okBtn.removeEventListener('click', onOkClick);
     };
 
     // Reset and show
@@ -23673,7 +23460,7 @@ function showAddToDashboardDialog(sensorName, sensorLabel = null) {
     overlay.classList.remove('hidden');
 }
 
-function addSensorToDashboard(sensorName, sensorLabel, dashboardName, widgetType, createNew) {
+function addSensorToDashboard(sensorName, sensorLabel, dashboardName, widgetType, createNew, binding = null) {
     if (!dashboardManager) {
         console.warn('Dashboard manager not initialized');
         return;
@@ -23688,7 +23475,7 @@ function addSensorToDashboard(sensorName, sensorLabel, dashboardName, widgetType
             widgets: []
         };
         dashboardState.dashboards.set(dashboardName, newDashboard);
-        dashboardManager.updateDashboardList();
+        dashboardManager.updateDashboardSelector();
     }
 
     // Get or set current dashboard
@@ -23710,6 +23497,9 @@ function addSensorToDashboard(sensorName, sensorLabel, dashboardName, widgetType
         config: {
             sensor: sensorName,
             label: sensorLabel,
+            ...(binding?.serverId ? { serverId: binding.serverId } : {}),
+            ...(binding?.objectName ? { objectName: binding.objectName } : {}),
+            ...(Number.isFinite(binding?.sensorId) ? { sensorId: binding.sensorId } : {}),
             min: 0,
             max: 100,
             unit: '',
@@ -23738,7 +23528,7 @@ function addSensorToDashboard(sensorName, sensorLabel, dashboardName, widgetType
         dashboardState.currentDashboard = prevDashboard;
     }
 
-    console.log(`Added ${sensorName} as ${widgetType} to dashboard "${dashboardName}"`);
+    debugLog(`Added ${sensorName} as ${widgetType} to dashboard "${dashboardName}"`);
 }
 
 // Global dashboard manager instance (exposed on window for tests)
@@ -23899,13 +23689,13 @@ function initPollIntervalSelector() {
         setActive(savedInterval);
     } else {
         // По умолчанию 1s
-        setActive(1000);
+        setActive(POLL_INTERVAL_SELECTOR_DEFAULT_MS);
     }
 
     // Обработчики кликов
     buttons.forEach(btn => {
         btn.addEventListener('click', async () => {
-            const interval = parseInt(btn.dataset.interval);
+            const interval = parseIntegerOrDefault(btn.dataset.interval, state.sse.pollInterval);
             setActive(interval);
             localStorage.setItem('pollInterval', interval);
 
@@ -23925,7 +23715,7 @@ function initPollIntervalSelector() {
                     body: JSON.stringify({ interval })
                 });
                 if (response.ok) {
-                    console.log(`Poll interval изменён на ${interval}ms`);
+                    debugLog(`Poll interval изменён на ${interval}ms`);
                 } else {
                     console.warn('Не удалось изменить poll interval');
                 }

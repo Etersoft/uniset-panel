@@ -40,11 +40,11 @@ const state = window.state = {
     sse: {
         eventSource: null,
         connected: false,
-        pollInterval: 5000, // будет обновлено с сервера
+        pollInterval: SSE_DEFAULT_POLL_INTERVAL, // будет обновлено с сервера
         reconnectAttempts: 0,
-        maxReconnectAttempts: 10,
-        baseReconnectDelay: 1000,   // начальная задержка (1s)
-        maxReconnectDelay: 30000,   // максимальная задержка (30s)
+        maxReconnectAttempts: SSE_MAX_RECONNECT_ATTEMPTS,
+        baseReconnectDelay: SSE_BASE_RECONNECT_DELAY,
+        maxReconnectDelay: SSE_MAX_RECONNECT_DELAY,
         reconnectTimerId: null,     // ID таймера переподключения (для очистки)
         statusSyncInterval: null    // ID интервала периодической синхронизации статуса серверов
     },
@@ -55,7 +55,7 @@ const state = window.state = {
         token: null,          // текущий токен (из localStorage или URL)
         isController: false,  // я контроллер?
         hasController: false, // есть активный контроллер (кто-то другой)
-        timeoutSec: 60,       // таймаут неактивности
+        timeoutSec: CONTROL_DEFAULT_TIMEOUT_SEC,
         pingIntervalId: null  // ID интервала ping
     }
 };

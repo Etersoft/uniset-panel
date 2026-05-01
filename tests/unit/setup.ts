@@ -10,6 +10,7 @@ function loadSource(filename: string) {
     new Function(src)();
 }
 
+loadSource('00-constants.js');
 loadSource('06-utils.js');
 loadSource('09-sensor-key.js');
 loadSource('60-widget-sensor-binding.js');

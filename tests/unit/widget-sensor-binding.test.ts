@@ -5,6 +5,9 @@ declare const parseSensorBindingFields: any;
 declare const renderSensorBindingFields: any;
 declare const renderSensorItemRow: any;
 declare const parseSensorItemList: any;
+declare const sensorItemMatchesUpdate: any;
+declare const updateSensorItemsByName: any;
+declare const getSensorNamesFromItems: any;
 
 beforeEach(() => {
     const dom = new JSDOM('<!doctype html><html><body></body></html>');
@@ -135,5 +138,38 @@ describe('renderSensorItemRow', () => {
         expect(html).toContain('name="item-5-sensorId"');
         expect(html).toContain('data-idx="5"');
         expect(html).toContain('class="sensor-item"');
+    });
+});
+
+describe('multi-sensor item update helpers', () => {
+    it('matches sensor updates with optional server and object context', () => {
+        const item = { serverId: 'srv-A', objectName: 'SM', sensor: 'Pump1' };
+
+        expect(sensorItemMatchesUpdate(item, 'Pump1', { serverId: 'srv-A', objectName: 'SM' })).toBe(true);
+        expect(sensorItemMatchesUpdate(item, 'Pump1', { serverId: 'srv-B', objectName: 'SM' })).toBe(false);
+        expect(sensorItemMatchesUpdate(item, 'Pump1', { serverId: 'srv-A', objectName: 'Other' })).toBe(false);
+        expect(sensorItemMatchesUpdate(item, 'Other', { serverId: 'srv-A', objectName: 'SM' })).toBe(false);
+    });
+
+    it('updates only matching items by sensor name', () => {
+        const calls: Array<[number, number]> = [];
+        updateSensorItemsByName(
+            [
+                { serverId: 'srv-A', objectName: 'SM', sensor: 'Pump1' },
+                { serverId: 'srv-B', objectName: 'SM', sensor: 'Pump1' },
+            ],
+            'Pump1',
+            { serverId: 'srv-A', objectName: 'SM' },
+            (item: any, idx: number) => calls.push([idx, item.serverId === 'srv-A' ? 1 : 0])
+        );
+
+        expect(calls).toEqual([[0, 1]]);
+    });
+
+    it('matches legacy name fields used by chart configs', () => {
+        const item = { serverId: 'srv-A', objectName: 'SM', name: 'Pump1' };
+
+        expect(sensorItemMatchesUpdate(item, 'Pump1', { serverId: 'srv-A', objectName: 'SM' })).toBe(true);
+        expect(getSensorNamesFromItems([item])).toEqual(['Pump1']);
     });
 });

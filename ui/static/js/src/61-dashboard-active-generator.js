@@ -99,10 +99,14 @@ class GeneratorWidget extends ActiveDashboardWidget {
             this._setWriteState('error', 'Sensor not configured');
             return;
         }
-        const serverId = this._resolveServerId();
+        const serverId = this.config?.serverId ?? this._resolveServerId();
         if (!serverId) {
             this._setWriteState('error', 'No connected server');
             return;
+        }
+        if (!this.config?.serverId && !this._serverIdFallbackWarned) {
+            this._serverIdFallbackWarned = true;
+            console.warn(`Generator widget ${this.id || '<unknown>'}: serverId missing in config, using fallback ${serverId} — config will be migrated on next dashboard load`);
         }
         const objectName = this.config?.objectName || 'SharedMemory';
         // S-3: guard against double-start (rapid double-toggle leak).
@@ -112,8 +116,8 @@ class GeneratorWidget extends ActiveDashboardWidget {
         this._writeSensorId = sensorId;
         this._signalGen = new SignalGenerator({
             type: this.config?.type || 'square',
-            min: this.config?.min ?? 0,
-            max: this.config?.max ?? 100,
+            min: this.config?.min ?? GENERATOR_DEFAULT_MIN,
+            max: this.config?.max ?? GENERATOR_DEFAULT_MAX,
             step: this.config?.step,
             pause: this.config?.pause,
             pulseWidth: this.config?.pulseWidth,
@@ -233,37 +237,37 @@ class GeneratorWidget extends ActiveDashboardWidget {
             <div class="widget-config-row">
                 <div class="widget-config-field">
                     <label>min</label>
-                    <input type="number" class="widget-input" name="min" value="${config.min ?? 0}" data-test="cfg-min">
+                    <input type="number" class="widget-input" name="min" value="${config.min ?? GENERATOR_DEFAULT_MIN}" data-test="cfg-min">
                 </div>
                 <div class="widget-config-field">
                     <label>max</label>
-                    <input type="number" class="widget-input" name="max" value="${config.max ?? 100}" data-test="cfg-max">
+                    <input type="number" class="widget-input" name="max" value="${config.max ?? GENERATOR_DEFAULT_MAX}" data-test="cfg-max">
                 </div>
             </div>
             <div class="widget-config-row gen-cfg-lin-sin-cos" data-test="cfg-row-step-pause" style="display:${showLinSinCos?'flex':'none'}">
                 <div class="widget-config-field">
                     <label>step</label>
-                    <input type="number" class="widget-input" name="step" value="${config.step ?? 10}" data-test="cfg-step">
+                    <input type="number" class="widget-input" name="step" value="${config.step ?? GENERATOR_DEFAULT_STEP}" data-test="cfg-step">
                 </div>
                 <div class="widget-config-field">
                     <label>pause (ms)</label>
-                    <input type="number" class="widget-input" name="pause" value="${config.pause ?? 200}" min="1" data-test="cfg-pause">
+                    <input type="number" class="widget-input" name="pause" value="${config.pause ?? GENERATOR_DEFAULT_PAUSE_MS}" min="${GENERATOR_MIN_PAUSE_MS}" data-test="cfg-pause">
                 </div>
             </div>
             <div class="widget-config-row gen-cfg-square" data-test="cfg-row-square" style="display:${showSquare?'flex':'none'}">
                 <div class="widget-config-field">
                     <label>pulseWidth (ms)</label>
-                    <input type="number" class="widget-input" name="pulseWidth" value="${config.pulseWidth ?? 500}" min="1" data-test="cfg-pulseWidth">
+                    <input type="number" class="widget-input" name="pulseWidth" value="${config.pulseWidth ?? GENERATOR_DEFAULT_PULSE_WIDTH_MS}" min="${GENERATOR_MIN_PULSE_WIDTH_MS}" data-test="cfg-pulseWidth">
                 </div>
                 <div class="widget-config-field">
                     <label>pause (ms)</label>
-                    <input type="number" class="widget-input" name="pause-square" value="${config.pause ?? 500}" min="1" data-test="cfg-pause-square">
+                    <input type="number" class="widget-input" name="pause-square" value="${config.pause ?? GENERATOR_DEFAULT_SQUARE_PAUSE_MS}" min="${GENERATOR_MIN_PAUSE_MS}" data-test="cfg-pause-square">
                 </div>
             </div>
             <div class="widget-config-row gen-cfg-random" data-test="cfg-row-random" style="display:${showRandom?'flex':'none'}">
                 <div class="widget-config-field">
                     <label>period (ms)</label>
-                    <input type="number" class="widget-input" name="period" value="${config.period ?? 1000}" min="100" data-test="cfg-period">
+                    <input type="number" class="widget-input" name="period" value="${config.period ?? GENERATOR_DEFAULT_PERIOD_MS}" min="${GENERATOR_MIN_PERIOD_MS}" data-test="cfg-period">
                 </div>
             </div>
         `;
@@ -295,31 +299,17 @@ class GeneratorWidget extends ActiveDashboardWidget {
 
     static parseActiveConfigFields(form) {
         const type = form.querySelector('[name="type"]')?.value || 'square';
-        const numOrDefault = (name, def) => {
-            const v = Number(form.querySelector(`[name="${name}"]`)?.value);
-            return Number.isFinite(v) ? v : def;
-        };
-        const minRaw = numOrDefault('min', 0);
-        const maxRaw = numOrDefault('max', 100);
-        // Validation: min<max swap; period>=100; pause>0; pulseWidth>0; step≠0
-        const min = Math.min(minRaw, maxRaw);
-        const max = Math.max(minRaw, maxRaw);
-
-        const result = { type, min, max };
-        if (type === 'linear' || type === 'sin' || type === 'cos') {
-            const step = numOrDefault('step', 10);
-            const pause = Math.max(1, numOrDefault('pause', 200));
-            result.step = step !== 0 ? step : 10;
-            result.pause = pause;
-        } else if (type === 'square') {
-            result.pulseWidth = Math.max(1, numOrDefault('pulseWidth', 500));
-            // Note: square pause input has different name 'pause-square' для уникальности
-            const pauseSq = Number(form.querySelector('[name="pause-square"]')?.value);
-            result.pause = Math.max(1, Number.isFinite(pauseSq) ? pauseSq : 500);
-        } else { // random
-            result.period = Math.max(100, numOrDefault('period', 1000));
-        }
-        return result;
+        return normalizeSignalGeneratorConfig({
+            type,
+            min: form.querySelector('[name="min"]')?.value,
+            max: form.querySelector('[name="max"]')?.value,
+            step: form.querySelector('[name="step"]')?.value,
+            pause: type === 'square'
+                ? form.querySelector('[name="pause-square"]')?.value
+                : form.querySelector('[name="pause"]')?.value,
+            pulseWidth: form.querySelector('[name="pulseWidth"]')?.value,
+            period: form.querySelector('[name="period"]')?.value,
+        });
     }
 }
 

@@ -84,7 +84,6 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         this.setupRegistersResize();
         this.setupSimpleInfiniteScroll({
             viewportId: `mbs-registers-viewport-${this.objectName}`,
-            threshold: 100,
         });
         this.initStatusAutoRefresh();
     }
@@ -123,6 +122,13 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             FILTER_DEBOUNCE_DELAY, null,
             () => this.renderRegisters()      // text filter → локальная фильтрация
         );
+
+        // Unpin all (persistent header element — wire'им один раз; в renderRegisters
+        // больше не трогаем).
+        const unpinBtn = this.getEl(`mbs-unpin-${this.objectName}`);
+        if (unpinBtn) {
+            unpinBtn.addEventListener('click', () => this.unpinAll());
+        }
     }
 
 
@@ -269,7 +275,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="info-label">${row.label}</td>
-                <td class="info-value">${formatValue(row.value)}</td>
+                <td class="info-value">${formatValueHtml(row.value)}</td>
             `;
             tbody.appendChild(tr);
         });
@@ -356,9 +362,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         let registersToShow = this.applyFilters(this.allRegisters, 'name', 'iotype', null, ['mbreg'], mbregAccessor);
 
         // Если есть закрепленные и нет фильтра — показываем только их
-        if (hasPinned && !this.filter) {
-            registersToShow = registersToShow.filter(r => pinnedRegisters.has(String(r.id)));
-        }
+        registersToShow = this.filterPinnedOnly(registersToShow, pinnedRegisters);
 
         // Сортировка: pinned всегда вверху, остальные по выбранной колонке
         registersToShow = this.sortItems(registersToShow, pinnedRegisters, this.sortColumnDefs);
@@ -414,13 +418,9 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
 
         // Bind pin toggle events
         tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => this.togglePin(parseInt(toggle.dataset.id)));
+            toggle.addEventListener('click', () => this.togglePin(parseIntegerOrDefault(toggle.dataset.id, null)));
         });
-
-        // Обработчик кнопки "снять все"
-        if (unpinBtn) {
-            unpinBtn.onclick = () => this.unpinAll();
-        }
+        // unpinBtn handler — в bindEvents() (persistent элемент, не пересоздаётся).
     }
 
     // Override to use ModbusSlave SSE subscription
@@ -432,12 +432,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     }
 
     loadRegistersHeight() {
-        return this.loadSectionHeight('uniset-panel-mbs-registers', 320);
-    }
-
-    saveRegistersHeight(value) {
-        this.registersHeight = value;
-        this.saveSectionHeight('uniset-panel-mbs-registers', value);
+        return this.loadSectionHeight('uniset-panel-mbs-registers', DATA_TABLE_DEFAULT_HEIGHT);
     }
 
     setupRegistersResize() {
@@ -446,7 +441,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             `mbs-registers-container-${this.objectName}`,
             'uniset-panel-mbs-registers',
             'registersHeight',
-            { minHeight: 200, maxHeight: 700 }
+            { minHeight: SENSORS_CONTAINER_MIN_HEIGHT, maxHeight: DATA_TABLE_MAX_HEIGHT }
         );
     }
 
@@ -472,13 +467,6 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         // Value
         if (update.value !== undefined) {
             this._animateCellValue(row, '.col-value', String(update.value), 'value-changed');
-        }
-        // Device respond status
-        const deviceCell = row.querySelector('.col-device .mb-respond');
-        if (deviceCell && update.device !== undefined) {
-            const deviceAddr = update.device;
-            const deviceInfo = this.devicesDict ? (this.devicesDict[deviceAddr] || {}) : {};
-            deviceCell.className = `mb-respond ${deviceInfo.respond ? 'ok' : 'fail'}`;
         }
     }
 
@@ -512,4 +500,3 @@ registerRenderer('MBSlave1', ModbusSlaveRenderer);
 
 // OPCUAServerRenderer - рендерер для OPCUAServer extensionType
 // OPCUAServer - это OPC UA сервер, который предоставляет доступ к переменным через OPC UA протокол
-

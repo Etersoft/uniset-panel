@@ -20,7 +20,7 @@ async function loadSidebar() {
         }
         const data = await response.json();
         state.sidebarGroups = Array.isArray(data.groups) ? data.groups : [];
-        console.log(`Sidebar: ${state.sidebarGroups.length} groups loaded`);
+        debugLog(`Sidebar: ${state.sidebarGroups.length} groups loaded`);
     } catch (err) {
         console.warn('Failed to load sidebar config:', err);
         state.sidebarGroups = [];

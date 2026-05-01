@@ -25,7 +25,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         this.selectedAutocompleteIndex = 0;
 
         // Высота секции датчиков
-        this.sensorsHeight = this.loadSectionHeight('uwsgate-sensors-height', 400);
+        this.sensorsHeight = this.loadSectionHeight('uwsgate-sensors-height', UWSGATE_SENSORS_DEFAULT_HEIGHT);
 
         // Инициализация сортировки
         this.initSortProps();
@@ -60,7 +60,9 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
     saveHighlightSetting() {
         try {
             localStorage.setItem(this.highlightKey, this.highlightEnabled.toString());
-        } catch (e) {}
+        } catch (err) {
+            console.warn('UWebSocketGate: failed to save highlight setting:', err);
+        }
     }
 
     loadPinnedSensors() {
@@ -69,13 +71,17 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
             if (saved) {
                 this.pinnedSensors = new Set(JSON.parse(saved));
             }
-        } catch (e) {}
+        } catch (err) {
+            console.warn('UWebSocketGate: failed to load pinned sensors:', err);
+        }
     }
 
     savePinnedSensors() {
         try {
             localStorage.setItem(this.pinnedKey, JSON.stringify(Array.from(this.pinnedSensors)));
-        } catch (e) {}
+        } catch (err) {
+            console.warn('UWebSocketGate: failed to save pinned sensors:', err);
+        }
     }
 
     togglePin(sensorName) {
@@ -229,26 +235,18 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         const container = getElementInTab(this.tabKey, `uwsgate-sensors-container-${this.objectName}`);
         if (!handle || !container) return;
 
-        let startY, startHeight;
-        const onMouseMove = (e) => {
-            const newHeight = startHeight + (e.clientY - startY);
-            if (newHeight >= 100 && newHeight <= 800) {
-                container.style.height = `${newHeight}px`;
-                this.sensorsHeight = newHeight;
-            }
-        };
-        const onMouseUp = () => {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            this.saveSectionHeight('uwsgate-sensors-height', this.sensorsHeight);
-        };
-        handle.addEventListener('mousedown', (e) => {
-            startY = e.clientY;
-            startHeight = container.offsetHeight;
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-            e.preventDefault();
-        });
+        setupResizeHandle(
+            handle,
+            container,
+            MIN_SECTION_HEIGHT,
+            (height) => {
+                this.sensorsHeight = height;
+                this.saveSectionHeight('uwsgate-sensors-height', height);
+            },
+            MAX_SECTION_HEIGHT,
+            (height) => { this.sensorsHeight = height; },
+            { updateMaxHeight: false }
+        );
     }
 
     async loadAllSensors() {
@@ -477,6 +475,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
     }
 
     renderSensorRow(sensor) {
+        const serverId = state.tabs.get(this.tabKey)?.serverId || '';
         const chartOptions = this.getChartOptions();
         const varName = `${chartOptions.prefix}:${sensor.name}`;
         const isOnChart = this.isSensorOnChart(varName);
@@ -511,6 +510,9 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
                     <button class="dashboard-add-btn"
                             data-sensor-name="${escapeAttr(sensor.name)}"
                             data-sensor-label="${escapeAttr(sensor.textname || sensor.name)}"
+                            data-sensor-id="${escapeAttr(sensor.id ?? '')}"
+                            data-server-id="${escapeAttr(serverId)}"
+                            data-object-name="${escapeAttr(this.objectName)}"
                             title="Add to Dashboard">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <rect x="3" y="3" width="7" height="7" rx="1"/>
@@ -520,12 +522,12 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
                         </svg>
                     </button>
                 </td>
-                <td class="col-id">${sensor.id}</td>
+                <td class="col-id">${escapeHtml(sensor.id ?? '')}</td>
                 <td class="col-name" title="${escapeAttr(sensor.textname || sensor.name)}">${escapeHtml(sensor.name)}</td>
-                <td class="col-type"><span class="type-badge type-${sensor.iotype}">${sensor.iotype || '?'}</span></td>
-                <td class="col-value" id="uwsgate-value-${this.objectName}-${escapeAttr(sensor.name)}">${sensor.value}</td>
+                <td class="col-type"><span class="type-badge type-${escapeAttr(sensor.iotype || '')}">${escapeHtml(sensor.iotype || '?')}</span></td>
+                <td class="col-value" id="uwsgate-value-${escapeAttr(this.objectName)}-${escapeAttr(sensor.name)}">${formatValueHtml(sensor.value)}</td>
                 <td class="col-supplier" id="uwsgate-supplier-${this.objectName}-${escapeAttr(sensor.name)}" title="${escapeAttr(sensor.supplier || '')}">${escapeHtml(sensor.supplier || '-')}</td>
-                <td class="col-status">${sensor.error ? `<span class="error-flag">Error: ${sensor.error}</span>` : '-'}</td>
+                <td class="col-status">${sensor.error ? `<span class="error-flag">Error: ${escapeHtml(sensor.error)}</span>` : '-'}</td>
                 <td class="col-actions">
                     <button class="uwsgate-btn-remove" data-name="${escapeAttr(sensor.name)}" title="Remove sensor">✕</button>
                 </td>
@@ -560,7 +562,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
                 e.stopPropagation();
                 const sensorName = btn.dataset.sensorName;
                 const sensorLabel = btn.dataset.sensorLabel;
-                showAddToDashboardDialog(sensorName, sensorLabel);
+                showAddToDashboardDialog(sensorName, sensorLabel, getDashboardBindingFromButton(btn));
             });
         });
     }
@@ -574,13 +576,10 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         const chartOptions = this.getChartOptions();
         const varName = `${chartOptions.prefix}:${sensor.name}`;
         const tabState = state.tabs.get(this.tabKey);
-        console.log('UWebSocketGate: toggleSensorChart', { varName, tabKey: this.tabKey, hasChart: tabState?.charts?.has(varName) });
 
         if (tabState?.charts?.has(varName)) {
-            console.log('UWebSocketGate: Removing chart', varName);
             removeChart(this.tabKey, varName);
         } else {
-            console.log('UWebSocketGate: Adding chart', varName, 'sensorId:', sensor.id);
             addExternalSensorChart(this.tabKey, varName, sensor.id, sensor.textname || sensor.name, chartOptions);
         }
     }
@@ -646,8 +645,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
             });
 
             // Trim old data
-            const maxPoints = 1000;
-            if (chartData.chart.data.datasets[0].data.length > maxPoints) {
+            if (chartData.chart.data.datasets[0].data.length > MAX_CHART_POINTS) {
                 chartData.chart.data.datasets[0].data.shift();
             }
 
@@ -713,7 +711,6 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
             if (sensorsResponse.ok) {
                 const data = await sensorsResponse.json();
                 if (data.sensors && data.sensors.length > 0) {
-                    console.log(`UWebSocketGate: Loading ${data.sensors.length} sensors from server`);
                     // Add sensors with their current values
                     for (const sensor of data.sensors) {
                         if (!this.sensors.has(sensor.name)) {
@@ -743,7 +740,6 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
             const names = JSON.parse(saved);
             if (!Array.isArray(names) || names.length === 0) return;
 
-            console.log(`UWebSocketGate: Loading ${names.length} subscriptions from localStorage`);
             // Restore subscriptions (will re-subscribe to server)
             for (const name of names) {
                 await this.addSensorByName(name);
@@ -785,4 +781,3 @@ applyMixin(UWebSocketGateRenderer, TableSortMixin);
 
 // UWebSocketGate рендерер (по extensionType)
 registerRenderer('UWebSocketGate', UWebSocketGateRenderer);
-

@@ -24,7 +24,8 @@
 //   - 'stepper': '−' [value] '+' (auto-apply on click; inline-edit на value)
 // ============================================================================
 
-const SETPOINT_AUTO_APPLY_DEBOUNCE_MS = 500;
+// SETPOINT_* константы — в 00-constants.js (общие дефолты, могут use'аться
+// тестами и сторонним кодом).
 
 class SetpointWidget extends ActiveDashboardWidget {
     static type = 'setpoint';
@@ -45,6 +46,15 @@ class SetpointWidget extends ActiveDashboardWidget {
         // (иначе после blur значение возвращалось бы на старое feedback).
         // Сбрасывается в _cancel() (Esc) — для resync с актуальным feedback.
         this._userHasEdited = false;
+    }
+
+    // Filter keydown в numeric input'ах: только цифры/знак/точка/запятая, плюс
+    // пропуск Ctrl/Meta/Alt (Ctrl+C/V/A) и многосимвольных ключей (Backspace,
+    // ArrowLeft и т.п.). Используется в _renderInput и в inline-edit (_makeInlineEditable).
+    _filterNumericKey(e) {
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        if (e.key.length !== 1) return;
+        if (!/[0-9.,\-]/.test(e.key)) e.preventDefault();
     }
 
     _currentStyle() {
@@ -138,7 +148,7 @@ class SetpointWidget extends ActiveDashboardWidget {
         });
         input.addEventListener('input', () => {
             this._userHasEdited = true;
-            const num = Number(input.value);
+            const num = parseDecimalInputOrDefault(input.value, NaN);
             if (!Number.isFinite(num)) return;
             this._setCommand(num);
         });
@@ -147,12 +157,7 @@ class SetpointWidget extends ActiveDashboardWidget {
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); commit(); return; }
             if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); input.blur(); this._cancel(); return; }
-            if (e.ctrlKey || e.metaKey || e.altKey) return; // Ctrl+C/V/A и т.п.
-            if (e.key.length === 1) {
-                // Single-char key — фильтруем
-                const allowed = /[0-9.,\-]/;
-                if (!allowed.test(e.key)) { e.preventDefault(); }
-            }
+            this._filterNumericKey(e);
         });
         applyBtn.addEventListener('mousedown', (e) => e.preventDefault());
         cancelBtn.addEventListener('mousedown', (e) => e.preventDefault());
@@ -163,9 +168,9 @@ class SetpointWidget extends ActiveDashboardWidget {
     // ===== Style: slider =====
     _renderSlider() {
         const unit = escapeHtml(this.config?.unit || '');
-        const min = this.config?.min ?? 0;
-        const max = this.config?.max ?? 100;
-        const step = this.config?.step ?? 1;
+        const min = this.config?.min ?? SETPOINT_DEFAULT_MIN;
+        const max = this.config?.max ?? SETPOINT_DEFAULT_MAX;
+        const step = this.config?.step ?? SETPOINT_DEFAULT_STEP;
         this.element.innerHTML = `
             ${this._labelHtml()}
             <div class="setpoint-slider-wrap">
@@ -228,7 +233,7 @@ class SetpointWidget extends ActiveDashboardWidget {
         const stepBy = (delta, ev) => {
             if (ev) { ev.stopPropagation(); ev.preventDefault(); }
             if (!this.isInteractive()) return;
-            const current = this.commandValue ?? this.feedbackValue ?? this.config?.min ?? 0;
+            const current = this.commandValue ?? this.feedbackValue ?? this.config?.min ?? SETPOINT_DEFAULT_MIN;
             const next = this._clamp(current + delta);
             this._setCommand(next);
             // Stepper всегда auto-apply (нет explicit Apply кнопки).
@@ -372,7 +377,7 @@ class SetpointWidget extends ActiveDashboardWidget {
                 if (finished) return;
                 finished = true;
                 if (apply) {
-                    const num = Number(input.value);
+                    const num = parseDecimalInputOrDefault(input.value, NaN);
                     if (Number.isFinite(num)) {
                         this._setCommand(num);
                         // Inline-edit Enter/blur — explicit commit gesture; всегда apply
@@ -388,11 +393,7 @@ class SetpointWidget extends ActiveDashboardWidget {
                 e.stopPropagation();
                 if (e.key === 'Enter') { e.preventDefault(); finish(true); return; }
                 if (e.key === 'Escape') { e.preventDefault(); finish(false); return; }
-                if (e.ctrlKey || e.metaKey || e.altKey) return;
-                if (e.key.length === 1) {
-                    const allowed = /[0-9.,\-]/;
-                    if (!allowed.test(e.key)) { e.preventDefault(); }
-                }
+                this._filterNumericKey(e);
             });
             input.addEventListener('blur', () => finish(true));
             // Stop click propagation, чтобы не открыть widget config dialog
@@ -410,17 +411,17 @@ class SetpointWidget extends ActiveDashboardWidget {
                 <div class="widget-config-field">
                     <label>min</label>
                     <input type="number" class="widget-input" name="min"
-                           value="${config.min ?? 0}" data-test="cfg-min">
+                           value="${config.min ?? SETPOINT_DEFAULT_MIN}" data-test="cfg-min">
                 </div>
                 <div class="widget-config-field">
                     <label>max</label>
                     <input type="number" class="widget-input" name="max"
-                           value="${config.max ?? 100}" data-test="cfg-max">
+                           value="${config.max ?? SETPOINT_DEFAULT_MAX}" data-test="cfg-max">
                 </div>
                 <div class="widget-config-field">
                     <label>step</label>
                     <input type="number" class="widget-input" name="step"
-                           value="${config.step ?? 1}" min="0" data-test="cfg-step">
+                           value="${config.step ?? SETPOINT_DEFAULT_STEP}" min="0" data-test="cfg-step">
                 </div>
             </div>
             <div class="widget-config-row">
@@ -441,11 +442,10 @@ class SetpointWidget extends ActiveDashboardWidget {
     }
 
     static parseActiveConfigFields(form) {
-        const minRaw = (() => { const v = form.querySelector('[name="min"]')?.value; return (v === '' || v === undefined) ? 0 : Number(v); })();
-        const maxRaw = (() => { const v = form.querySelector('[name="max"]')?.value; return (v === '' || v === undefined) ? 100 : Number(v); })();
-        const min = Number.isFinite(minRaw) ? minRaw : 0;
-        const max = Number.isFinite(maxRaw) ? maxRaw : 100;
-        const step = (() => { const v = Number(form.querySelector('[name="step"]')?.value); return (Number.isFinite(v) && v > 0) ? v : 1; })();
+        const min = parseDecimalInputOrDefault(form.querySelector('[name="min"]')?.value, SETPOINT_DEFAULT_MIN);
+        const max = parseDecimalInputOrDefault(form.querySelector('[name="max"]')?.value, SETPOINT_DEFAULT_MAX);
+        const stepRaw = parseDecimalInputOrDefault(form.querySelector('[name="step"]')?.value, SETPOINT_DEFAULT_STEP);
+        const step = stepRaw > 0 ? stepRaw : SETPOINT_DEFAULT_STEP;
         return {
             min: Math.min(min, max),
             max: Math.max(min, max),

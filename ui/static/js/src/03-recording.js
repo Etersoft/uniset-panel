@@ -12,10 +12,8 @@ const recordingState = {
 // Format bytes to human readable
 function formatBytes(bytes) {
     if (bytes === 0) return '0B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + sizes[i];
+    const i = Math.floor(Math.log(bytes) / Math.log(BYTES_PER_KIB));
+    return parseFloat((bytes / Math.pow(BYTES_PER_KIB, i)).toFixed(1)) + BYTE_UNITS[i];
 }
 
 // Format number with abbreviation
@@ -86,19 +84,8 @@ function initRecordingUI() {
         }
 
         if (format) {
-            // Download export file
-            let url;
-            switch (format) {
-                case 'sqlite':
-                    url = '/api/export/database';
-                    break;
-                case 'csv':
-                    url = '/api/export/csv';
-                    break;
-                case 'json':
-                    url = '/api/export/json';
-                    break;
-            }
+            // Download export file (URLs централизованы в 00-constants.js)
+            const url = RECORDING_EXPORT_URLS[format];
             if (url) {
                 window.location.href = url;
             }

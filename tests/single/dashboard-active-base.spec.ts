@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 // Smoke E2E для базового класса ActiveDashboardWidget.
 // Использует test-only TestActiveWidget, регистрируемый через
-// window.__DEBUG_REGISTER_TEST_WIDGET (см. 62-dashboard-manager.js).
+// window.registerDashboardWidgetType из самого теста.
 //
 // BASE_URL берётся из playwright.config.ts (use.baseURL).
 
@@ -28,7 +28,8 @@ test.describe('ActiveDashboardWidget — base class smoke', () => {
             const w = window as any;
             return typeof w.dashboardState !== 'undefined'
                 && typeof w.dashboardManager !== 'undefined'
-                && typeof w.__DEBUG_REGISTER_TEST_WIDGET === 'function';
+                && typeof w.ActiveDashboardWidget === 'function'
+                && typeof w.registerDashboardWidgetType === 'function';
         });
 
         // Принудительно ставим состояние контроля в "isController:true" —
@@ -53,7 +54,48 @@ test.describe('ActiveDashboardWidget — base class smoke', () => {
         }, { timeout: 15000 });
 
         // Регистрируем test-only widget.
-        await page.evaluate(() => (window as any).__DEBUG_REGISTER_TEST_WIDGET());
+        await page.evaluate(() => {
+            const w = window as any;
+            class TestActiveWidget extends w.ActiveDashboardWidget {
+                static type = 'test-active';
+                static displayName = 'TEST Active';
+                static description = 'TEST-ONLY: smoke widget for ActiveDashboardWidget base';
+                static icon = '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16"/></svg>';
+                static defaultSize = { width: 4, height: 2 };
+
+                render() {
+                    this.element = document.createElement('div');
+                    this.element.className = 'widget-content test-active-widget';
+                    this.element.innerHTML = `
+                        <button class="test-active-btn" data-test="write-btn">SET 42</button>
+                        <div class="test-active-feedback" data-test="feedback">--</div>
+                        <div class="test-active-command" data-test="command">--</div>
+                        <div class="test-active-state" data-test="state">idle</div>
+                    `;
+                    this.container.appendChild(this.element);
+
+                    this.element.querySelector('[data-test="write-btn"]')?.addEventListener('click', () => {
+                        this.writeValue(42);
+                    });
+                }
+
+                renderCommand() {
+                    const el = this.element?.querySelector('[data-test="command"]');
+                    if (el) el.textContent = String(this.commandValue ?? '--');
+                    const stateEl = this.element?.querySelector('[data-test="state"]');
+                    if (stateEl) stateEl.textContent = this.writeState;
+                }
+
+                renderFeedback() {
+                    const el = this.element?.querySelector('[data-test="feedback"]');
+                    if (el) el.textContent = String(this.feedbackValue ?? '--');
+                }
+
+                static getActiveConfigFields() { return ''; }
+                static parseActiveConfigFields() { return {}; }
+            }
+            w.registerDashboardWidgetType('test-active', TestActiveWidget);
+        });
 
         // Очищаем пользовательские дашборды для изоляции.
         await page.evaluate(() => {
@@ -116,7 +158,7 @@ test.describe('ActiveDashboardWidget — base class smoke', () => {
         expect(body.sensor_id).toBe(1);
         expect(body.value).toBe(42);
 
-        // State transitions: success eventually appears, затем idle (через WRITE_SUCCESS_DISPLAY_MS=1500).
+        // State transitions: success eventually appears, затем idle (через WRITE_SUCCESS_DISPLAY_MS).
         const stateEl = page.locator('[data-test="state"]').first();
         await expect(stateEl).toHaveText('success', { timeout: 5000 });
         await expect(stateEl).toHaveText('idle', { timeout: 5000 });

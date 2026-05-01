@@ -238,11 +238,7 @@ class ActiveDashboardWidget extends DashboardWidget {
 
     _resolveServerId() {
         // Берём первый подключённый сервер (как делает dashboard для чтения).
-        if (typeof state === 'undefined' || !state.servers) return null;
-        for (const [id, server] of state.servers) {
-            if (server.connected) return id;
-        }
-        return null;
+        return getFirstConnectedServerId();
     }
 
     // ===== Render hooks (override в наследниках) =====

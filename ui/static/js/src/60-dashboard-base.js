@@ -8,8 +8,7 @@ const DASHBOARD_VERSION = 1;
 const dashboardState = window.dashboardState = {
     currentView: 'objects', // 'objects' or 'dashboard'
     currentDashboard: null, // current dashboard name
-    dashboards: new Map(),  // name -> dashboard config
-    serverDashboards: [],   // list of server-side dashboards
+    dashboards: new Map(),  // name -> dashboard config (server dashboards помечены _server: true)
     editMode: false,
     selectedWidgetId: null, // selected widget for keyboard movement
     widgets: new Map(),     // widgetId -> widget instance
@@ -34,7 +33,7 @@ class DashboardWidget {
 
     constructor(id, config, container) {
         this.id = id;
-        this.config = config;
+        this.config = config || {};
         this.container = container;
         this.value = null;
         this.error = null;
@@ -85,12 +84,19 @@ class DashboardWidget {
         }
     }
 
-    getConfig() {
-        return { ...this.config };
+    // Подбирает цвет по значению из настройки zones[]. Используется LevelWidget,
+    // GaugeWidget — везде, где есть цветовые зоны. Static, чтобы можно было
+    // дёрнуть из любого instance без зависимости от подкласса.
+    static getColorForZones(value, zones = []) {
+        if (!zones || zones.length === 0) return 'var(--accent-blue)';
+        for (const zone of zones) {
+            if (value >= zone.from && value <= zone.to) return zone.color;
+        }
+        return 'var(--accent-blue)';
     }
+
 }
 
 // ============================================================================
 // Gauge Widget (SVG)
 // ============================================================================
-
