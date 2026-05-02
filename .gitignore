@@ -24,6 +24,10 @@ Thumbs.db
 .node_modules/
 tests/node_modules/
 tests/unit/node_modules/
+tests/mock-server/node_modules/
+tests/mock-server-2/node_modules/
+tests/mock-server/package-lock.json
+tests/mock-server-2/package-lock.json
 tests/test-results/
 tests/playwright-report/
 coverage.out
