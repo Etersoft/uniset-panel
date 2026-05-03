@@ -237,9 +237,11 @@ make build
 |------|-----------|
 | `00-constants.js` | Все именованные константы (таймауты, лимиты, размеры) |
 | `00-state.js` | Глобальное состояние `state` |
-| `06-utils.js` | Утилиты: `escapeHtml()`, `debounce()` |
-| `10-base-renderer.js` | `BaseObjectRenderer`, все миксины (`FilterMixin`, `PinManagementMixin`, `ParamsManagerMixin` и др.) |
+| `06-utils.js` | Утилиты: `escapeHtml()`, `escapeAttr()`, `debounce()`, `parseIntegerOrDefault()`, `parseDecimalInputOrDefault()`, `parseNumberOrDefault()`, `getFirstConnectedServerId()`, `setupResizeHandle()`, `bindSingleDoubleClick()`, `createLineChartConfig()`, `renderColorZonesEditor()`/`parseColorZones()` |
+| `09-sensor-key.js` | `makeSensorKey()`/`parseSensorKey()` (полный triplet `serverId\|objectName\|sensorName`), `makeGroupKey()`/`parseGroupKey()` (две части — для batch-операций `serverId\|objectName`) |
+| `10-base-renderer.js` | `BaseObjectRenderer`, все миксины (`FilterMixin`, `PinManagementMixin`, `ParamsManagerMixin`, `VirtualScrollMixin`, `BatchRenderMixin` и др.). Содержит `_setupSectionDelegation()` — единый click-handler для всех секций tab-панели (см. ниже) |
 | `08-signal-generator.js` | `SignalGenerator` — общий движок генерации сигналов (square/sin/cos/linear/random). Используется IONC renderer'ом и активным generator-виджетом dashboard'а |
+| `60-dashboard-base.js` | `DashboardWidget` — базовый read-only widget; включает `static getColorForZones(value, zones)` — общий resolver цветовой зоны (используется LevelWidget, GaugeWidget) |
 | `61-dashboard-active-base.js` | `ActiveDashboardWidget extends DashboardWidget` — базовый класс для write-capable виджетов dashboard'а |
 | `61-dashboard-active-toggle.js` | `ToggleWidget` — активный двух-состояный переключатель (DI/DO/AI/AO) |
 | `60-widget-sensor-binding.js` | Общие helpers для config-полей `serverId` + `objectName` + `sensor` + `sensorId`; используются active и read-only dashboard widgets |
@@ -433,6 +435,60 @@ IONC renderer'ом (`20-ionc-renderer.js`) и активным generator-вид�
 - **Новая константа** → добавить в `00-constants.js`
 - **Изменение SSE** → `04-sse.js`
 - **Новый UI компонент** → `5X-ui-name.js`
+
+### Section click handling (event delegation)
+
+Все секции tab-панели (collapse/expand, move-up/move-down, charts pause,
+add-sensor, time-range, IO sequential) обслуживаются **одним делегированным
+click-обработчиком** на корне tab-панели — методом
+`BaseObjectRenderer._setupSectionDelegation()`. Вызывается из `50-ui-tabs.js`
+сразу после `renderer.initialize()`. Idempotent через
+`panel.dataset.sectionDelegationWired`.
+
+**Не пиши `onclick="toggleSection(...)"` / `onclick="moveSectionUp(...)"` /
+`onclick="event.stopPropagation()"` в шаблонах renderer'ов** — добавляй
+data-атрибуты, которые делегация уже знает:
+
+| Контрол | Маркер для делегации |
+|---|---|
+| Move-up button | `<button class="section-move-up" data-move-section="${id}">` |
+| Move-down button | `<button class="section-move-down" data-move-section="${id}">` |
+| Add Sensor | `<button class="add-sensor-btn">` |
+| Charts pause | `<button class="charts-pause-btn">` |
+| Time range button | `<button class="time-range-btn" data-range="${seconds}">` |
+| IO sequential checkbox | `<input id="io-sequential-${objectName}">` (handler ставится прямо в `_setupSectionDelegation` через `getEl`) |
+| Section root | `<div class="collapsible-section" data-section="${id}-${objectName}" data-section-id="${id}">` |
+| Header (toggle) | `<div class="collapsible-header">` (без onclick) |
+
+**ВАЖНО — `data-section-id` vs `data-move-section`:**
+- `data-section-id="${id}"` — на корне `.collapsible-section` (тесты query'ят по нему: `[data-section-id="charts"]`)
+- `data-move-section="${id}"` — на move-кнопках. **НЕ переиспользуй `data-section-id` на кнопках** — селектор `[data-section-id="X"]` начнёт матчить 3 элемента (root + 2 кнопки), сломает strict-mode в Playwright тестах.
+
+**No-toggle zones:** клик внутри `.section-reorder-buttons`, `.filter-bar`,
+`.charts-time-range`, `.io-filter-wrapper`, `.io-sequential-toggle`,
+`.add-sensor-btn`, `.header-indicators`, `.header-channels`,
+`.header-indicator-dot` — НЕ toggle'ит секцию (раньше для этого был inline
+`event.stopPropagation()`, теперь — explicit zone в делегации).
+
+Если в твоей секции появляется новая «no-toggle» область — добавь её
+class в `NO_TOGGLE_ZONE_SELECTOR` в `_setupSectionDelegation`.
+
+### Общие хелперы (избегай дубликатов)
+
+| Хелпер | Где | Когда использовать |
+|---|---|---|
+| `escapeHtml(text)` | `06-utils.js` | Любая динамическая вставка в `innerHTML` (текстовый контекст) |
+| `escapeAttr(text)` | `06-utils.js` | Динамическая вставка в HTML-атрибут (`title="${escapeAttr(x)}"`). `escapeHtml` НЕ покрывает кавычки в attribute-context |
+| `parseIntegerOrDefault(value, fallback)` | `06-utils.js` | Парсинг integer'а из user input / dataset / form. Безопаснее голого `parseInt(x, 10)` (NaN guard) |
+| `parseDecimalInputOrDefault(value, fallback)` | `06-utils.js` | Парсинг float (с поддержкой `,` как разделителя) |
+| `parseNumberOrDefault(value, fallback)` | `06-utils.js` | Парсинг number вообще |
+| `getFirstConnectedServerId()` | `06-utils.js` | Legacy fallback для widget'ов / migrations: первый connected server |
+| `getElementInTab(tabKey, id)` / `getElementsInTab(tabKey, sel)` | `51-ui-render.js` | DOM lookup внутри панели tab (для standalone функций; в renderer'ах — `this.getEl()`/`this.getEls()`) |
+| `makeSensorKey(serverId, objectName, sensorName)` / `parseSensorKey(key)` | `09-sensor-key.js` | Идентификация датчика во frontend (full triplet) |
+| `makeGroupKey(serverId, objectName)` / `parseGroupKey(key)` | `09-sensor-key.js` | Группировка по (server, object) для batch-операций (subscribe, fetch sensors) |
+| `DashboardWidget.getColorForZones(value, zones)` | `60-dashboard-base.js` | Static — выбор цвета по `zones[]` config (Level, Gauge, ...) |
+| `bindSingleDoubleClick(el, single, double, delay)` | `06-utils.js` | Различение single/double click (используется IONC freeze quick-action) |
+| `setupResizeHandle(handle, container, min, save, max, onResize, opts)` | `06-utils.js` | Resize-handle pattern (mousedown→move→up) |
 
 ### Именование JS констант
 
@@ -701,9 +757,15 @@ function setupIOResize(tabKey, objectName, type) {
 - **НЕ** путать форматы `sectionId` - всегда `${prefix}-${objectName}`
 - **НЕ** использовать `id` для varName графиков - использовать `name`
 - **НЕ** использовать разные prefixes для ModbusMaster/Slave - оба используют `mb`
-- **НЕ** использовать `document.getElementById()` для элементов внутри вкладок — в рендерерах `this.getEl()`, в standalone-функциях `getElementInTab(tabKey, id)`
+- **НЕ** использовать `document.getElementById()` для элементов внутри вкладок — в рендерерах `this.getEl()`, в standalone-функциях `getElementInTab(tabKey, id)`. Исключения по CLAUDE.md: глобальные синглтоны (sidebar/tabs-header), Launcher (`nodeId`), Journal (`journalId`), Dashboard, IONC dialogs (`ionc-set-*`, `ionc-freeze-*`, `ionc-gen-*`)
 - **НЕ** использовать `objectName` для ключей localStorage — использовать `tabKey`
 - **НЕ** создавать новые стили для одинаковых элементов - использовать существующие общие классы
+- **НЕ** писать inline `onclick="..."` / `onchange="..."` в шаблонах renderer'ов для секций — добавь data-атрибуты, делегация в `_setupSectionDelegation()` уже их обработает. Inline допустим только для глобальных IONC dialog'ов (Cancel-кнопок) и helper'ов типа `addZoneField(this)` (передача self)
+- **НЕ** использовать `parseInt(x, 10)` напрямую для user input / dataset — `parseIntegerOrDefault(x, fallback)` (защита от NaN). `parseInt(x, 10)` оставлять только для гарантированно валидных id, считанных из самого DOM, который мы рендерили
+- **НЕ** дублировать `_resolveServerId()` логику inline (`for (const [id, srv] of state.servers) if (srv.connected) ...`) — `getFirstConnectedServerId()` из `06-utils.js`
+- **НЕ** дублировать color-zone resolution — `DashboardWidget.getColorForZones(value, zones)` static
+- **НЕ** переиспользовать `data-section-id` атрибут на move-кнопках секций — они должны иметь `data-move-section` (иначе `[data-section-id="X"]` селектор сломает Playwright strict mode)
+- **НЕ** применять regex к escapeHtml'нутой строке для highlight — символы `<`, `>`, `&`, `"`, `'`, `=` после escape не совпадут с поисковым запросом. Сначала split raw → escape каждый фрагмент → wrap match'и (см. `JournalRenderer.highlightText`)
 
 Полная документация: `docs/naming-conventions.md`
 
@@ -713,8 +775,9 @@ function setupIOResize(tabKey, objectName, type) {
 **`sensorKey`** — строка формата `${serverId}|${objectName}|${sensorName}`
 (разделитель `|`, чтобы не путать с `:` в `tabKey`).
 
-Helper: `makeSensorKey(serverId, objectName, sensorName)` /
-`parseSensorKey(key)` в `09-sensor-key.js`.
+Helpers в `09-sensor-key.js`:
+- `makeSensorKey(serverId, objectName, sensorName)` / `parseSensorKey(key)` — full triplet
+- `makeGroupKey(serverId, objectName)` / `parseGroupKey(key)` — две части (для batch-операций над датчиками одного объекта)
 
 **Правила:**
 
@@ -727,7 +790,7 @@ Helper: `makeSensorKey(serverId, objectName, sensorName)` /
 
 **Запрещено:**
 - `Map<sensorName, ...>` для dashboard-wide state (cache, подписки, routing)
-- `_resolveServerId()` как primary source — только legacy fallback с warning
+- `_resolveServerId()` (instance method в `ActiveDashboardWidget`) как primary source — только legacy fallback с warning. Сам метод делегирует в `getFirstConnectedServerId()` из `06-utils.js`.
 - Передавать sensors в dashboard update path без `(serverId, objectName)` контекста
 
 SSE handler `ionc_sensor_batch` уже получает `serverId` и `objectName` в
