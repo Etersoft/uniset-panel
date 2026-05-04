@@ -21567,16 +21567,21 @@ class DashboardManager {
     // не срабатывает (chicken-and-egg, см. docs/review/2026-04-30-pre-existing-flaky-tests.md).
     //
     // Стратегия: для каждого connected server'а — fetch IONC objects, для каждого
-    // (server, object) — fetch sensors list. Один раз на дашборд.
+    // (server, object) — fetch sensors list. Per-server tracking — bool guard ловил
+    // race на первой загрузке (state.servers ещё пуст → bootstrap noop → флаг true →
+    // следующие dashboards без bootstrap). Set отрабатывает каждый новый connected.
     async _bootstrapSensorRegistry() {
-        if (this._bootstrapStarted) return;
         if (typeof state === 'undefined' || !state?.servers || !state.sensorsByKey) return;
-        this._bootstrapStarted = true;
+        if (!this._bootstrappedServers) this._bootstrappedServers = new Set();
 
         const tasks = [];
         for (const [serverId, srv] of state.servers) {
-            if (srv?.connected) tasks.push(this._bootstrapServerSensors(serverId));
+            if (!srv?.connected) continue;
+            if (this._bootstrappedServers.has(serverId)) continue;
+            this._bootstrappedServers.add(serverId);
+            tasks.push(this._bootstrapServerSensors(serverId));
         }
+        if (tasks.length === 0) return;
         await Promise.allSettled(tasks);
         // Re-attempt migration с прогретым registry.
         this.tryResolvePendingMigration();
@@ -21995,7 +22000,7 @@ class DashboardManager {
         this.clearWidgets();
         this.actionsEl?.classList.add('hidden');
         this._pendingMigration = false;
-        this._bootstrapStarted = false;
+        this._bootstrappedServers?.clear();
 
         // Reset selector to empty value
         if (this.selectEl) {
