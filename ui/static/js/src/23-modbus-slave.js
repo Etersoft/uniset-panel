@@ -340,87 +340,48 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     }
 
     renderRegisters() {
-        const tbody = this.getEl(`mbs-registers-tbody-${this.objectName}`);
-        if (!tbody) return;
-
-        // Получаем закрепленные регистры
-        const pinnedRegisters = this.getPinned();
-        const hasPinned = pinnedRegisters.size > 0;
-
-        // Показываем/скрываем кнопку "снять все"
-        const unpinBtn = this.getEl(`mbs-unpin-${this.objectName}`);
-        if (unpinBtn) {
-            unpinBtn.style.display = hasPinned ? 'inline' : 'none';
-        }
-
-        // Фильтруем регистры используя общий метод (по name, id, mbreg)
-        // ModbusSlave: mbreg может быть в r.register.mbreg или r.mbreg
-        const mbregAccessor = (item, field) => {
-            const regInfo = item.register || {};
-            return regInfo[field] !== undefined ? regInfo[field] : item[field];
-        };
-        let registersToShow = this.applyFilters(this.allRegisters, 'name', 'iotype', null, ['mbreg'], mbregAccessor);
-
-        // Если есть закрепленные и нет фильтра — показываем только их
-        registersToShow = this.filterPinnedOnly(registersToShow, pinnedRegisters);
-
-        // Сортировка: pinned всегда вверху, остальные по выбранной колонке
-        registersToShow = this.sortItems(registersToShow, pinnedRegisters, this.sortColumnDefs);
-
-        // Обновляем счётчик с учётом фильтрации
-        this.updateItemCount(`mbs-register-count-${this.objectName}`, registersToShow.length, this.registersTotal);
-
-        // Update registerMap for chart support
-        registersToShow.forEach(reg => {
-            if (reg.id) {
-                this.registerMap.set(reg.id, reg);
-            }
+        // Orchestration (filter/sort/pin/count/listeners) — в base, тут только row-html.
+        this._renderRegistersTable({
+            tbodyId: `mbs-registers-tbody-${this.objectName}`,
+            unpinId: `mbs-unpin-${this.objectName}`,
+            countId: `mbs-register-count-${this.objectName}`,
+            countTotal: this.registersTotal,
+            // ModbusSlave: mbreg может быть в r.register.mbreg или r.mbreg
+            mbregAccessor: (item, field) => {
+                const regInfo = item.register || {};
+                return regInfo[field] !== undefined ? regInfo[field] : item[field];
+            },
+            renderRow: (reg, isPinned) => this._renderRegisterRow(reg, isPinned),
         });
+    }
 
-        // ModbusSlave формат: device - это mbaddr, register содержит mbreg/mbfunc, есть amode
-        const html = registersToShow.map(reg => {
-            const isPinned = pinnedRegisters.has(String(reg.id));
-            const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-            const pinIcon = isPinned ? '📌' : '○';
-            const pinTitle = isPinned ? 'Unpin' : 'Pin';
-
-            const mbAddr = reg.device;
-            const regInfo = reg.register || {};
-            const mbreg = regInfo.mbreg !== undefined ? regInfo.mbreg : reg.mbreg;
-            const mbfunc = regInfo.mbfunc;
-            return `
-                <tr data-sensor-id="${reg.id}">
-                    <td class="col-pin">
-                        <span class="${pinToggleClass}" data-id="${reg.id}" title="${pinTitle}">
-                            ${pinIcon}
-                        </span>
-                    </td>
-                    ${this.renderAddButtonsCell(reg.id, reg.name, 'mbsreg', reg.textname || reg.name)}
-                    <td class="col-id">${reg.id}</td>
-                    <td class="col-name" title="${escapeAttr(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
-                    <td class="col-type">${reg.iotype ? `<span class="type-badge type-${reg.iotype}">${reg.iotype}</span>` : ''}</td>
-                    <td class="col-value">${reg.value !== undefined ? reg.value : ''}</td>
-                    <td class="col-mbaddr">${mbAddr || ''}</td>
-                    <td class="col-register">${mbreg !== undefined ? mbreg : ''}</td>
-                    <td class="col-func">${mbfunc !== undefined ? mbfunc : ''}</td>
-                    <td class="col-access">${reg.amode || ''}</td>
-                </tr>
-            `;
-        }).join('');
-
-        tbody.innerHTML = html;
-
-        // Bind chart toggle events
-        this.attachChartToggleListeners(tbody, this.registerMap);
-
-        // Bind dashboard toggle events
-        this.attachDashboardToggleListeners(tbody);
-
-        // Bind pin toggle events
-        tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => this.togglePin(parseIntegerOrDefault(toggle.dataset.id, null)));
-        });
-        // unpinBtn handler — в bindEvents() (persistent элемент, не пересоздаётся).
+    // ModbusSlave row: device = mbaddr, register содержит mbreg/mbfunc, есть amode.
+    _renderRegisterRow(reg, isPinned) {
+        const pinClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
+        const pinIcon = isPinned ? '📌' : '○';
+        const pinTitle = isPinned ? 'Unpin' : 'Pin';
+        const mbAddr = reg.device;
+        const regInfo = reg.register || {};
+        const mbreg = regInfo.mbreg !== undefined ? regInfo.mbreg : reg.mbreg;
+        const mbfunc = regInfo.mbfunc;
+        return `
+            <tr data-sensor-id="${reg.id}">
+                <td class="col-pin">
+                    <span class="${pinClass}" data-id="${reg.id}" title="${pinTitle}">
+                        ${pinIcon}
+                    </span>
+                </td>
+                ${this.renderAddButtonsCell(reg.id, reg.name, 'mbsreg', reg.textname || reg.name)}
+                <td class="col-id">${reg.id}</td>
+                <td class="col-name" title="${escapeAttr(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
+                <td class="col-type">${reg.iotype ? `<span class="type-badge type-${reg.iotype}">${reg.iotype}</span>` : ''}</td>
+                <td class="col-value">${reg.value !== undefined ? reg.value : ''}</td>
+                <td class="col-mbaddr">${mbAddr || ''}</td>
+                <td class="col-register">${mbreg !== undefined ? mbreg : ''}</td>
+                <td class="col-func">${mbfunc !== undefined ? mbfunc : ''}</td>
+                <td class="col-access">${reg.amode || ''}</td>
+            </tr>
+        `;
     }
 
     // Override to use ModbusSlave SSE subscription

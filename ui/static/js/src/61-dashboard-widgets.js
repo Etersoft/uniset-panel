@@ -1041,55 +1041,48 @@ class DigitalWidget extends DashboardWidget {
     }
 
     renderLCD() {
-        const { digits = 6, unit = '' } = this.config;
-        const totalDigits = digits + (unit ? 2 : 0); // Extra space for unit
-
-        this.element.innerHTML = `
-            <div class="digital-lcd-display" id="digital-lcd-${this.id}">
-                <div class="digital-lcd-screen">
-                    <svg class="digital-lcd-svg" id="digital-svg-${this.id}" viewBox="0 0 ${totalDigits * DIGITAL_DIGIT_SLOT_WIDTH + DIGITAL_VIEWBOX_PADDING} ${DIGITAL_VIEWBOX_HEIGHT}">
-                        <defs>
-                            <linearGradient id="lcd-bg-${this.id}" x1="0%" y1="0%" x2="0%" y2="100%">
-                                <stop offset="0%" style="stop-color:#c8d4c0"/>
-                                <stop offset="50%" style="stop-color:#b8c4b0"/>
-                                <stop offset="100%" style="stop-color:#a8b4a0"/>
-                            </linearGradient>
-                        </defs>
-                        <rect x="0" y="0" width="100%" height="100%" fill="url(#lcd-bg-${this.id})" rx="4"/>
-                        <g id="digital-digits-${this.id}" transform="translate(5, 6)"></g>
-                    </svg>
-                </div>
-            </div>
-        `;
-        this.svgEl = this.element.querySelector(`#digital-svg-${this.id}`);
-        this.digitsGroup = this.element.querySelector(`#digital-digits-${this.id}`);
-        this.updateSegmentDisplay('----');
+        const defs = `
+            <linearGradient id="lcd-bg-${this.id}" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" style="stop-color:#c8d4c0"/>
+                <stop offset="50%" style="stop-color:#b8c4b0"/>
+                <stop offset="100%" style="stop-color:#a8b4a0"/>
+            </linearGradient>`;
+        this._renderSegmentDisplay({ flavor: 'lcd', defs, bgGradientId: `lcd-bg-${this.id}` });
     }
 
     renderLED() {
-        const { digits = 6, unit = '', color = '#ff0000' } = this.config;
+        const defs = `
+            <filter id="led-glow-${this.id}" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="1.5" result="blur"/>
+                <feMerge>
+                    <feMergeNode in="blur"/>
+                    <feMergeNode in="blur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+            </filter>
+            <linearGradient id="led-bg-${this.id}" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" style="stop-color:#2a2a2a"/>
+                <stop offset="50%" style="stop-color:#1a1a1a"/>
+                <stop offset="100%" style="stop-color:#0a0a0a"/>
+            </linearGradient>`;
+        this._renderSegmentDisplay({ flavor: 'led', defs, bgGradientId: `led-bg-${this.id}` });
+    }
+
+    // Общий каркас 7-segment display: SVG с gradient'ом фоновой панели и
+    // <g id="digital-digits-..."> для рендера цифр. Разница LCD vs LED — в
+    // <defs> (flavor-specific filter/gradient) и в CSS-классах wrapper'а.
+    // updateSegmentDisplay (общий метод) рисует цифры в digitsGroup.
+    _renderSegmentDisplay({ flavor, defs, bgGradientId }) {
+        const { digits = 6, unit = '' } = this.config;
         const totalDigits = digits + (unit ? 2 : 0);
+        const viewBoxW = totalDigits * DIGITAL_DIGIT_SLOT_WIDTH + DIGITAL_VIEWBOX_PADDING;
 
         this.element.innerHTML = `
-            <div class="digital-led-display" id="digital-led-${this.id}">
-                <div class="digital-led-screen">
-                    <svg class="digital-led-svg" id="digital-svg-${this.id}" viewBox="0 0 ${totalDigits * DIGITAL_DIGIT_SLOT_WIDTH + DIGITAL_VIEWBOX_PADDING} ${DIGITAL_VIEWBOX_HEIGHT}">
-                        <defs>
-                            <filter id="led-glow-${this.id}" x="-50%" y="-50%" width="200%" height="200%">
-                                <feGaussianBlur stdDeviation="1.5" result="blur"/>
-                                <feMerge>
-                                    <feMergeNode in="blur"/>
-                                    <feMergeNode in="blur"/>
-                                    <feMergeNode in="SourceGraphic"/>
-                                </feMerge>
-                            </filter>
-                            <linearGradient id="led-bg-${this.id}" x1="0%" y1="0%" x2="0%" y2="100%">
-                                <stop offset="0%" style="stop-color:#2a2a2a"/>
-                                <stop offset="50%" style="stop-color:#1a1a1a"/>
-                                <stop offset="100%" style="stop-color:#0a0a0a"/>
-                            </linearGradient>
-                        </defs>
-                        <rect x="0" y="0" width="100%" height="100%" fill="url(#led-bg-${this.id})" rx="4"/>
+            <div class="digital-${flavor}-display" id="digital-${flavor}-${this.id}">
+                <div class="digital-${flavor}-screen">
+                    <svg class="digital-${flavor}-svg" id="digital-svg-${this.id}" viewBox="0 0 ${viewBoxW} ${DIGITAL_VIEWBOX_HEIGHT}">
+                        <defs>${defs}</defs>
+                        <rect x="0" y="0" width="100%" height="100%" fill="url(#${bgGradientId})" rx="4"/>
                         <g id="digital-digits-${this.id}" transform="translate(5, 6)"></g>
                     </svg>
                 </div>
@@ -1299,8 +1292,10 @@ class ChartWidget extends DashboardWidget {
     static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>';
     static defaultSize = { width: 24, height: 12 };
 
-    // Default colors for sensors
-    static COLORS = [
+    // Default colors for sensors внутри ChartWidget. Намеренно отличается от
+    // CHART_COLORS в 40-charts.js (палитра для IONC sensor charts) — у каждого
+    // контекста своя визуальная стилистика. Не сливать.
+    static SENSOR_COLORS = [
         '#3274d9', '#73bf69', '#f2cc0c', '#ff6b6b', '#a855f7',
         '#06b6d4', '#f97316', '#ec4899', '#14b8a6', '#8b5cf6'
     ];
@@ -1415,8 +1410,8 @@ class ChartWidget extends DashboardWidget {
                 return {
                     label,
                     data: [],
-                    borderColor: sensor.color || ChartWidget.COLORS[sensorIdx % ChartWidget.COLORS.length],
-                    backgroundColor: `${sensor.color || ChartWidget.COLORS[sensorIdx % ChartWidget.COLORS.length]}20`,
+                    borderColor: sensor.color || ChartWidget.SENSOR_COLORS[sensorIdx % ChartWidget.SENSOR_COLORS.length],
+                    backgroundColor: `${sensor.color || ChartWidget.SENSOR_COLORS[sensorIdx % ChartWidget.SENSOR_COLORS.length]}20`,
                     fill: sensor.fill !== false,
                     tension: sensor.stepped ? 0 : (sensor.smooth !== false ? CHART_LINE_TENSION : 0),
                     stepped: sensor.stepped ? 'before' : false,
@@ -1465,7 +1460,7 @@ class ChartWidget extends DashboardWidget {
                     zoneIdx,
                     sensorIdx,
                     zoneId: ChartWidget.getZoneId(zone, zoneIdx),
-                    color: sensor.color || ChartWidget.COLORS[sensorIdx % ChartWidget.COLORS.length],
+                    color: sensor.color || ChartWidget.SENSOR_COLORS[sensorIdx % ChartWidget.SENSOR_COLORS.length],
                     iotype: sensorInfo?.iotype || '',
                     textname: sensorInfo?.textname || ''
                 });
@@ -1596,44 +1591,43 @@ class ChartWidget extends DashboardWidget {
     // Called from SSE handler for each sensor update.
     // ctx — { serverId, objectName, sensorName }; используется чтобы не апдейтить
     // sensor в zone, когда у этого имени совпадение пришло с другого (server, object).
+    //
+    // Hot path (срабатывает на каждый ionc_sensor_batch): один проход по zones
+    // для table-update + chart-update вместе. Раньше было два независимых прохода.
     updateSensor(sensorName, value, timestamp = null, ctx = null) {
         // Use timestamp as number for decimation to work with parsing: false
         const ts = timestamp ? new Date(timestamp).getTime() : Date.now();
 
-        // Update table value
         const { zones = [] } = this.config;
-        zones.forEach((zone, zoneIdx) => {
-            (zone.sensors || []).forEach(sensor => {
-                if (!ChartWidget.sensorMatchesUpdate(sensor, sensorName, ctx)) return;
-                const safeId = ChartWidget.getSensorDomKey(sensor);
-                const valueEl = this.element?.querySelector(`#chart-value-${this.id}-${safeId}`);
-                if (valueEl) {
-                    valueEl.textContent = typeof value === 'number' ? value.toFixed(2) : value;
-                }
-            });
-        });
-
-        // Add point to chart
         for (let zoneIdx = 0; zoneIdx < zones.length; zoneIdx++) {
             const zone = zones[zoneIdx];
-            const chartData = this.charts.get(ChartWidget.getZoneId(zone, zoneIdx));
-            if (!chartData) continue;
-
-            const sensorIdx = (zone.sensors || []).findIndex(s => {
-                return ChartWidget.sensorMatchesUpdate(s, sensorName, ctx);
-            });
+            const sensors = zone.sensors || [];
+            const sensorIdx = sensors.findIndex(s =>
+                ChartWidget.sensorMatchesUpdate(s, sensorName, ctx)
+            );
             if (sensorIdx === -1) continue;
 
+            const sensor = sensors[sensorIdx];
+
+            // Table value cell.
+            const safeId = ChartWidget.getSensorDomKey(sensor);
+            const valueEl = this.element?.querySelector(`#chart-value-${this.id}-${safeId}`);
+            if (valueEl) {
+                valueEl.textContent = typeof value === 'number' ? value.toFixed(2) : value;
+            }
+
+            // Chart dataset point.
+            const chartData = this.charts.get(ChartWidget.getZoneId(zone, zoneIdx));
+            if (!chartData) continue;
             const dataset = chartData.chart.data.datasets[sensorIdx];
             if (!dataset) continue;
 
             dataset.data.push({ x: ts, y: value });
-
-            // Limit data points
-            if (dataset.data.length > MAX_CHART_POINTS) {
-                dataset.data.shift();
-            }
+            if (dataset.data.length > MAX_CHART_POINTS) dataset.data.shift();
         }
+        // chart.update() намеренно НЕ вызываем тут — рендер идёт пакетно в
+        // syncTimeRange() каждые CHART_WIDGET_SYNC_INTERVAL_MS (по умолчанию 2с).
+        // Это снижает CPU при частых SSE (200ms poll) ценой 0–2с задержки кадра.
     }
 
     // Called periodically to sync time range and update charts
@@ -1712,7 +1706,7 @@ class ChartWidget extends DashboardWidget {
 
     // === Single sensor row (renders inside chart-zone-sensors-{zoneIdx}) ===
     static _renderChartSensorRow({ zoneIdx, sensorIdx, sensor }) {
-        const color = sensor.color || ChartWidget.COLORS[sensorIdx % ChartWidget.COLORS.length];
+        const color = sensor.color || ChartWidget.SENSOR_COLORS[sensorIdx % ChartWidget.SENSOR_COLORS.length];
         const idx = `${zoneIdx}-${sensorIdx}`; // composite — для unique field names
         const bindingHtml = renderSensorBindingFields(sensor, { fieldPrefix: `chart-${idx}-` });
         return `
@@ -1824,7 +1818,7 @@ class ChartWidget extends DashboardWidget {
                     objectName: last?.objectName || 'SharedMemory',
                     sensor: '', sensorId: null,
                     name: '', // back-compat: runtime читает sensor.name
-                    color: ChartWidget.COLORS[colorIdx % ChartWidget.COLORS.length],
+                    color: ChartWidget.SENSOR_COLORS[colorIdx % ChartWidget.SENSOR_COLORS.length],
                     smooth: true, fill: true, stepped: false,
                 };
                 container.insertAdjacentHTML('beforeend',
@@ -1865,7 +1859,7 @@ class ChartWidget extends DashboardWidget {
                 sensors.push({
                     ...binding,
                     name:    binding.sensor, // back-compat: runtime читает sensor.name
-                    color:   form.querySelector(`[name="chart-${zoneIdx}-${sensorIdx}-color"]`)?.value || ChartWidget.COLORS[sensorIdx % ChartWidget.COLORS.length],
+                    color:   form.querySelector(`[name="chart-${zoneIdx}-${sensorIdx}-color"]`)?.value || ChartWidget.SENSOR_COLORS[sensorIdx % ChartWidget.SENSOR_COLORS.length],
                     smooth:  form.querySelector(`[name="chart-${zoneIdx}-${sensorIdx}-smooth"]`)?.checked !== false,
                     fill:    form.querySelector(`[name="chart-${zoneIdx}-${sensorIdx}-fill"]`)?.checked !== false,
                     stepped: form.querySelector(`[name="chart-${zoneIdx}-${sensorIdx}-stepped"]`)?.checked || false,

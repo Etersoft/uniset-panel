@@ -88,8 +88,8 @@ const { chromium } = require('@playwright/test');
         const result = { tabs: [] };
         for (const [tabKey, tab] of tabs.entries()) {
             const gens = [];
-            if (tab.renderer?.activeGenerators) {
-                for (const [id, gen] of tab.renderer.activeGenerators.entries()) {
+            if (tab.renderer?.activeSensorTestSignals) {
+                for (const [id, gen] of tab.renderer.activeSensorTestSignals.entries()) {
                     gens.push({
                         id,
                         type: gen.type,

@@ -27,8 +27,9 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         this.allSensors = [];
         this.initVirtualScrollProps();
 
-        // Генераторы значений: Map<sensorId, GeneratorState>
-        this.activeGenerators = new Map();
+        // Активные тестовые сигналы (sin/cos/square/...): Map<sensorId, state>.
+        // Methods — в 20-ionc-test-signal.js (mixin).
+        this.activeSensorTestSignals = new Map();
 
         // Инициализация сортировки
         this.initSortProps();
@@ -404,12 +405,12 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         tbody.querySelectorAll('.ionc-btn-consumers').forEach(btn => {
             btn.addEventListener('click', () => this.showConsumersDialog(parseInt(btn.dataset.id, 10)));
         });
-        // Кнопки генератора
+        // Кнопки тестового сигнала (диагностика)
         tbody.querySelectorAll('.ionc-btn-gen').forEach(btn => {
-            btn.addEventListener('click', () => this.showGeneratorDialog(parseInt(btn.dataset.id, 10)));
+            btn.addEventListener('click', () => this.showSensorTestSignalDialog(parseInt(btn.dataset.id, 10)));
         });
         tbody.querySelectorAll('.ionc-btn-gen-stop').forEach(btn => {
-            btn.addEventListener('click', () => this.stopGenerator(parseInt(btn.dataset.id, 10)));
+            btn.addEventListener('click', () => this.stopSensorTestSignal(parseInt(btn.dataset.id, 10)));
         });
         tbody.querySelectorAll('.pin-toggle').forEach(btn => {
             btn.addEventListener('click', () => this.togglePin(parseInt(btn.dataset.id, 10)));
@@ -440,13 +441,13 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         const blockedClass = sensor.blocked ? 'ionc-sensor-blocked' : '';
         const readonlyClass = sensor.readonly ? 'ionc-sensor-readonly' : '';
 
-        // Проверяем активный генератор
-        const hasGenerator = this.activeGenerators.has(sensor.id);
+        // Проверяем активный тестовый сигнал
+        const hasGenerator = this.activeSensorTestSignals.has(sensor.id);
         const generatorClass = hasGenerator ? 'ionc-sensor-generating' : '';
-        const genState = hasGenerator ? this.activeGenerators.get(sensor.id) : null;
+        const genState = hasGenerator ? this.activeSensorTestSignals.get(sensor.id) : null;
 
         const flags = [];
-        if (hasGenerator) flags.push(`<span class="ionc-flag ionc-flag-generator" title="Генератор: ${genState.type} (${genState.min}-${genState.max})">⟳</span>`);
+        if (hasGenerator) flags.push(`<span class="ionc-flag ionc-flag-generator" title="Тестовый сигнал: ${genState.type} (${genState.min}-${genState.max})">⟳</span>`);
         if (sensor.frozen) flags.push('<span class="ionc-flag ionc-flag-frozen" title="Frozen">❄</span>');
         if (sensor.blocked) flags.push('<span class="ionc-flag ionc-flag-blocked" title="Blocked">🔒</span>');
         if (sensor.readonly) flags.push('<span class="ionc-flag ionc-flag-readonly" title="Read only">👁</span>');
@@ -824,441 +825,6 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             'Failed to unfreeze');
     }
 
-    // ===== Генератор значений =====
-
-    // Значения по умолчанию для параметров генератора
-    getDefaultGeneratorParams() {
-        return {
-            sin: {
-                min: GENERATOR_DEFAULT_WAVE_MIN,
-                max: GENERATOR_DEFAULT_WAVE_MAX,
-                pause: GENERATOR_DEFAULT_WAVE_PAUSE_MS,
-                step: GENERATOR_DEFAULT_WAVE_POINTS
-            },
-            cos: {
-                min: GENERATOR_DEFAULT_WAVE_MIN,
-                max: GENERATOR_DEFAULT_WAVE_MAX,
-                pause: GENERATOR_DEFAULT_WAVE_PAUSE_MS,
-                step: GENERATOR_DEFAULT_WAVE_POINTS
-            },
-            linear: {
-                min: GENERATOR_DEFAULT_MIN,
-                max: GENERATOR_DEFAULT_MAX,
-                pause: GENERATOR_DEFAULT_WAVE_PAUSE_MS,
-                step: GENERATOR_DEFAULT_LINEAR_STEP
-            },
-            random: {
-                min: GENERATOR_DEFAULT_MIN,
-                max: GENERATOR_DEFAULT_MAX,
-                period: GENERATOR_DEFAULT_RANDOM_PERIOD_MS
-            },
-            square: {
-                min: GENERATOR_DEFAULT_MIN,
-                max: GENERATOR_DEFAULT_MAX,
-                pulseWidth: GENERATOR_DEFAULT_IONC_SQUARE_PULSE_WIDTH_MS,
-                pause: GENERATOR_DEFAULT_IONC_SQUARE_PAUSE_MS
-            }
-        };
-    }
-
-    // Загрузка preferences из localStorage с миграцией
-    loadGeneratorPreferences() {
-        const newPrefs = localStorage.getItem('ionc-gen-preferences');
-
-        if (newPrefs) {
-            try {
-                return JSON.parse(newPrefs);
-            } catch (e) {
-                console.error('Failed to parse generator preferences:', e);
-            }
-        }
-
-        // Миграция со старого формата
-        const oldType = localStorage.getItem('ionc-gen-last-type');
-        if (oldType) {
-            const prefs = {
-                lastType: oldType,
-                params: this.getDefaultGeneratorParams()
-            };
-            localStorage.setItem('ionc-gen-preferences', JSON.stringify(prefs));
-            localStorage.removeItem('ionc-gen-last-type');
-            return prefs;
-        }
-
-        // Первый запуск - используем defaults
-        return {
-            lastType: 'sin',
-            params: this.getDefaultGeneratorParams()
-        };
-    }
-
-    // Сохранение preferences в localStorage
-    saveGeneratorPreferences(type, params) {
-        const prefs = this.loadGeneratorPreferences();
-        prefs.lastType = type;
-        prefs.params[type] = params;
-        localStorage.setItem('ionc-gen-preferences', JSON.stringify(prefs));
-    }
-
-    // Обновление расчётного периода для sin/cos
-    updateCalculatedPeriod() {
-        const calcPeriodValue = document.getElementById('ionc-gen-calc-period-value');
-        const pauseInput = document.getElementById('ionc-gen-period');
-        const pointsInput = document.getElementById('ionc-gen-step');
-
-        if (!calcPeriodValue || !pauseInput || !pointsInput) return;
-
-        const pause = parseIntegerOrDefault(pauseInput.value, 0);
-        const points = parseIntegerOrDefault(pointsInput.value, 0);
-        const totalPeriod = pause * points;
-
-        if (totalPeriod > 0) {
-            const seconds = (totalPeriod / 1000).toFixed(1);
-            calcPeriodValue.textContent = `${totalPeriod} мс (${seconds} сек)`;
-        } else {
-            calcPeriodValue.textContent = '-';
-        }
-    }
-
-    // Управление видимостью полей формы в зависимости от типа функции
-    updateFormFieldsVisibility(type) {
-        const periodField = document.getElementById('ionc-gen-period-field');
-        const stepField = document.getElementById('ionc-gen-step-field');
-        const pulseFields = document.getElementById('ionc-gen-pulse-fields');
-        const calcPeriodField = document.getElementById('ionc-gen-calc-period');
-        const periodLabel = document.getElementById('ionc-gen-period-label');
-        const periodHint = document.getElementById('ionc-gen-period-hint');
-        const stepLabel = document.getElementById('ionc-gen-step-label');
-        const stepHint = document.getElementById('ionc-gen-step-hint');
-
-        if (!periodField || !stepField || !pulseFields) return;
-
-        // Скрываем все условные поля
-        periodField.style.display = 'none';
-        stepField.style.display = 'none';
-        pulseFields.style.display = 'none';
-        if (calcPeriodField) calcPeriodField.style.display = 'none';
-
-        // Показываем нужные поля в зависимости от типа
-        if (type === 'linear') {
-            // linear: пилообразный с шагом-инкрементом
-            periodField.style.display = 'block';
-            stepField.style.display = 'block';
-            if (periodLabel) periodLabel.textContent = 'Пауза между шагами (мс)';
-            if (periodHint) periodHint.textContent = `Задержка перед следующим шагом. Мин: ${GENERATOR_MIN_WAVE_PAUSE_MS}мс`;
-            if (stepLabel) stepLabel.textContent = 'Шаг';
-            if (stepHint) stepHint.textContent = 'Размер одного шага изменения значения';
-        } else if (type === 'sin' || type === 'cos') {
-            // sin/cos: синусоида с заданным количеством точек
-            periodField.style.display = 'block';
-            stepField.style.display = 'block';
-            if (calcPeriodField) calcPeriodField.style.display = 'block';
-            if (periodLabel) periodLabel.textContent = 'Шаг обновления (мс)';
-            if (periodHint) periodHint.textContent = `Время между обновлениями значения. Мин: ${GENERATOR_MIN_WAVE_PAUSE_MS}мс`;
-            if (stepLabel) stepLabel.textContent = 'Количество точек на период';
-            if (stepHint) stepHint.textContent = 'Сколько точек отрисует синусоида за один полный период';
-            // Обновляем расчётный период
-            this.updateCalculatedPeriod();
-        } else if (type === 'square') {
-            pulseFields.style.display = 'block';
-        } else {
-            // random
-            periodField.style.display = 'block';
-            // Восстанавливаем подпись для периода
-            if (periodLabel) periodLabel.textContent = 'Период (мс)';
-            if (periodHint) periodHint.textContent = 'Длительность полного цикла. Мин: 100мс';
-        }
-    }
-
-    showGeneratorDialog(sensorId) {
-        const sensor = this.sensorMap.get(sensorId);
-        if (!sensor) return;
-
-        const self = this;
-        const existingGen = this.activeGenerators.get(sensorId);
-
-        // Предупреждение если датчик заморожен
-        const frozenWarning = sensor.frozen
-            ? `<div class="ionc-dialog-warning">Датчик заморожен. Значения будут записываться в SM, но не отобразятся до разморозки.</div>`
-            : '';
-
-        const body = `
-            <div class="ionc-dialog-info">
-                Датчик: <strong>${escapeHtml(sensor.name)}</strong> (ID: ${sensorId})<br>
-                Текущее значение: <strong>${sensor.value}</strong>
-            </div>
-            ${frozenWarning}
-            ${existingGen ? (() => {
-                const genInfo = `${existingGen.type} (min: ${existingGen.min}, max: ${existingGen.max}`;
-                const timing = existingGen.type === 'square'
-                    ? `, импульс: ${existingGen.pulseWidth}мс, пауза: ${existingGen.pause}мс)`
-                    : (existingGen.type === 'linear' || existingGen.type === 'sin' || existingGen.type === 'cos')
-                    ? `, пауза: ${existingGen.pause}мс, шаг: ${existingGen.step})`
-                    : `, период: ${existingGen.period}мс)`;
-
-                return `
-                <div class="ionc-dialog-warning ionc-dialog-warning-active">
-                    <strong>Генератор активен:</strong> ${genInfo}${timing}
-                </div>
-            `;
-            })() : (() => {
-                // Загружаем preferences из localStorage
-                const prefs = this.loadGeneratorPreferences();
-                const lastType = prefs.lastType;
-                const params = prefs.params[lastType] || this.getDefaultGeneratorParams()[lastType];
-
-                const options = [
-                    { value: 'sin', label: 'sin(t) - Синусоида' },
-                    { value: 'cos', label: 'cos(t) - Косинусоида' },
-                    { value: 'linear', label: 'linear - Пилообразный' },
-                    { value: 'random', label: 'random - Случайные значения' },
-                    { value: 'square', label: 'square - Прямоугольный' }
-                ];
-                const optionsHtml = options.map(o =>
-                    `<option value="${o.value}"${o.value === lastType ? ' selected' : ''}>${o.label}</option>`
-                ).join('');
-                return `
-                <div class="ionc-dialog-field">
-                    <label for="ionc-gen-type">Тип функции:</label>
-                    <select id="ionc-gen-type" class="ionc-dialog-select">
-                        ${optionsHtml}
-                    </select>
-                </div>
-                <div class="ionc-dialog-field-row">
-                    <div class="ionc-dialog-field ionc-dialog-field-half">
-                        <label for="ionc-gen-min">Min:</label>
-                        <input type="number" id="ionc-gen-min" value="${params.min}">
-                    </div>
-                    <div class="ionc-dialog-field ionc-dialog-field-half">
-                        <label for="ionc-gen-max">Max:</label>
-                        <input type="number" id="ionc-gen-max" value="${params.max}">
-                    </div>
-                </div>
-                <div class="ionc-dialog-field" id="ionc-gen-period-field">
-                    <label for="ionc-gen-period"><span id="ionc-gen-period-label">Период (мс)</span>:</label>
-                    <input type="number" id="ionc-gen-period" value="${params.period || params.pause || GENERATOR_DEFAULT_RANDOM_PERIOD_MS}" step="100">
-                    <div class="ionc-dialog-hint" id="ionc-gen-period-hint">Длительность полного цикла. Мин: ${GENERATOR_MIN_PERIOD_MS}мс</div>
-                </div>
-                <div class="ionc-dialog-field" id="ionc-gen-step-field" style="display: none;">
-                    <label for="ionc-gen-step"><span id="ionc-gen-step-label">Шаг</span>:</label>
-                    <input type="number" id="ionc-gen-step" value="${params.step || GENERATOR_DEFAULT_WAVE_POINTS}" step="1">
-                    <div class="ionc-dialog-hint" id="ionc-gen-step-hint">Размер одного шага изменения значения</div>
-                </div>
-                <div class="ionc-dialog-field" id="ionc-gen-calc-period" style="display: none;">
-                    <div class="ionc-dialog-hint" style="color: #4a9eff; font-weight: 500;">
-                        💡 Полный период: <span id="ionc-gen-calc-period-value">-</span>
-                    </div>
-                </div>
-                <div id="ionc-gen-pulse-fields" style="display: none;">
-                    <div class="ionc-dialog-field-row">
-                        <div class="ionc-dialog-field ionc-dialog-field-half">
-                            <label for="ionc-gen-pulse-width">Ширина импульса (мс):</label>
-                            <input type="number" id="ionc-gen-pulse-width" value="${params.pulseWidth || GENERATOR_DEFAULT_IONC_SQUARE_PULSE_WIDTH_MS}" step="100" min="${GENERATOR_MIN_PULSE_WIDTH_MS}">
-                        </div>
-                        <div class="ionc-dialog-field ionc-dialog-field-half">
-                            <label for="ionc-gen-pause">Пауза (мс):</label>
-                            <input type="number" id="ionc-gen-pause" value="${params.pause || GENERATOR_DEFAULT_IONC_SQUARE_PAUSE_MS}" step="100" min="${GENERATOR_MIN_PAUSE_MS}">
-                        </div>
-                    </div>
-                    <div class="ionc-dialog-hint">Период = Ширина импульса + Пауза</div>
-                </div>
-            `;
-            })()}
-        `;
-
-        const footer = existingGen ? `
-            <button class="ionc-dialog-btn ionc-dialog-btn-cancel" onclick="closeIoncDialog()">Закрыть</button>
-            <button class="ionc-dialog-btn ionc-dialog-btn-danger" id="ionc-gen-stop">Остановить</button>
-        ` : `
-            <button class="ionc-dialog-btn ionc-dialog-btn-cancel" onclick="closeIoncDialog()">Отмена</button>
-            <button class="ionc-dialog-btn ionc-dialog-btn-primary" id="ionc-gen-start">Запустить</button>
-        `;
-
-        openIoncDialog({
-            title: existingGen ? 'Генератор активен' : 'Генератор значений',
-            body,
-            footer,
-            focusInput: !existingGen
-        });
-
-        // Обработчики кнопок
-        if (existingGen) {
-            document.getElementById('ionc-gen-stop')?.addEventListener('click', () => {
-                this.stopGenerator(sensorId);
-                closeIoncDialog();
-            });
-        } else {
-            document.getElementById('ionc-gen-start')?.addEventListener('click', () => {
-                this.startGenerator(sensorId);
-            });
-
-            // Обработчик смены типа функции
-            const typeSelect = document.getElementById('ionc-gen-type');
-            if (typeSelect) {
-                typeSelect.addEventListener('change', (e) => {
-                    this.updateFormFieldsVisibility(e.target.value);
-                });
-
-                // Устанавливаем начальную видимость полей
-                this.updateFormFieldsVisibility(typeSelect.value);
-            }
-
-            // Обработчики для автоматического расчёта периода (sin/cos)
-            const pauseInput = document.getElementById('ionc-gen-period');
-            const pointsInput = document.getElementById('ionc-gen-step');
-            if (pauseInput && pointsInput) {
-                const updateCalc = () => this.updateCalculatedPeriod();
-                pauseInput.addEventListener('input', updateCalc);
-                pointsInput.addEventListener('input', updateCalc);
-            }
-        }
-    }
-
-    startGenerator(sensorId) {
-        const sensor = this.sensorMap.get(sensorId);
-        if (!sensor) return;
-
-        const selectedType = document.getElementById('ionc-gen-type').value;
-        const rawConfig = {
-            type: selectedType,
-            min: document.getElementById('ionc-gen-min').value,
-            max: document.getElementById('ionc-gen-max').value,
-            step: document.getElementById('ionc-gen-step')?.value,
-            pause: selectedType === 'square'
-                ? document.getElementById('ionc-gen-pause')?.value
-                : document.getElementById('ionc-gen-period')?.value,
-            pulseWidth: document.getElementById('ionc-gen-pulse-width')?.value,
-            period: document.getElementById('ionc-gen-period')?.value,
-        };
-        const validationError = validateSignalGeneratorConfig(rawConfig);
-        if (validationError) {
-            showIoncDialogError(validationError);
-            return;
-        }
-
-        const genConfig = normalizeSignalGeneratorConfig(rawConfig);
-        const { type, min, max, step, pause, pulseWidth, period } = genConfig;
-
-        // Останавливаем существующий генератор если есть
-        this.stopGenerator(sensorId);
-
-        const generator = new SignalGenerator({
-            ...genConfig,
-            onTick: (value) => {
-                this.setValueForGenerator(sensorId, value);
-            }
-        });
-
-        // Сохраняем минимальное состояние для UI (тип для setChartStepped,
-        // параметры для отображения в "active generator" баннере и сохранения preferences).
-        const genState = {
-            sensorId,
-            type,
-            min,
-            max,
-            generator,        // ссылка на SignalGenerator — будет stop()'нута в stopGenerator
-        };
-
-        // Тип-специфичные параметры — для отображения и сохранения preferences
-        if (type === 'linear' || type === 'sin' || type === 'cos') {
-            genState.pause = pause;
-            genState.step = step;
-        } else if (type === 'square') {
-            genState.pulseWidth = pulseWidth;
-            genState.pause = pause;
-        } else {
-            genState.period = period;
-        }
-
-        generator.start();
-        this.activeGenerators.set(sensorId, genState);
-
-        // Для square генератора включаем stepped режим на графике (меандр)
-        if (type === 'square') {
-            this.setChartStepped(sensorId, true);
-        }
-
-        // Перерисовываем строку для отображения индикатора
-        this.reRenderSensorRow(sensorId);
-
-        // Сохраняем preferences (разные параметры для разных типов)
-        let params = { min, max };
-        if (type === 'linear' || type === 'sin' || type === 'cos') {
-            params.pause = pause;
-            params.step = step;
-        } else if (type === 'square') {
-            params.pulseWidth = pulseWidth;
-            params.pause = pause;
-        } else {
-            // random
-            params.period = period;
-        }
-        this.saveGeneratorPreferences(type, params);
-
-        closeIoncDialog();
-    }
-
-    async setValueForGenerator(sensorId, value) {
-        try {
-            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/set`);
-            await controlledFetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sensor_id: sensorId, value: value })
-            });
-        } catch (err) {
-            console.error('Generator: ошибка установки значения', err);
-        }
-    }
-
-    stopGenerator(sensorId) {
-        const genState = this.activeGenerators.get(sensorId);
-        if (genState) {
-            if (genState.generator) {
-                genState.generator.stop();
-            }
-
-            // Возвращаем stepped режим к значению по умолчанию (isDiscrete)
-            if (genState.type === 'square') {
-                this.setChartStepped(sensorId, null); // null = вернуть к isDiscrete
-            }
-
-            this.activeGenerators.delete(sensorId);
-            this.reRenderSensorRow(sensorId);
-        }
-    }
-
-    stopAllGenerators() {
-        this.activeGenerators.forEach((genState) => {
-            if (genState.generator) genState.generator.stop();
-        });
-        this.activeGenerators.clear();
-    }
-
-    // Установка stepped режима для графика сенсора
-    // stepped: true = включить, false = выключить, null = вернуть к isDiscrete
-    setChartStepped(sensorId, stepped) {
-        const sensor = this.sensorMap.get(sensorId);
-        if (!sensor) return;
-
-        const tabState = state.tabs.get(this.tabKey);
-        if (!tabState) return;
-
-        const varName = `io:${sensor.name}`;
-        const chartData = tabState.charts.get(varName);
-        if (!chartData) return;
-
-        let newStepped;
-        if (stepped === null) {
-            // Вернуть к значению по умолчанию (isDiscrete)
-            newStepped = chartData.isDiscrete ? 'before' : false;
-        } else {
-            newStepped = stepped ? 'before' : false;
-        }
-
-        chartData.chart.data.datasets[0].stepped = newStepped;
-        chartData.chart.update('none');
-    }
 
     // Перерисовка строки датчика и переподключение обработчиков
     reRenderSensorRow(sensorId) {
@@ -1305,9 +871,9 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         row.querySelector('.ionc-btn-consumers')?.addEventListener('click', () => this.showConsumersDialog(sensorId));
         this.bindFreezeToggleButtons(row);
 
-        // Кнопки генератора
-        row.querySelector('.ionc-btn-gen')?.addEventListener('click', () => this.showGeneratorDialog(sensorId));
-        row.querySelector('.ionc-btn-gen-stop')?.addEventListener('click', () => this.stopGenerator(sensorId));
+        // Кнопки тестового сигнала (диагностика)
+        row.querySelector('.ionc-btn-gen')?.addEventListener('click', () => this.showSensorTestSignalDialog(sensorId));
+        row.querySelector('.ionc-btn-gen-stop')?.addEventListener('click', () => this.stopSensorTestSignal(sensorId));
 
         // Чекбокс графика
         row.querySelector('.ionc-chart-checkbox')?.addEventListener('change', () => this.toggleSensorChartById(sensorId));
@@ -1524,8 +1090,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     destroy() {
-        // Останавливаем все генераторы значений
-        this.stopAllGenerators();
+        // Останавливаем все активные тестовые сигналы
+        this.stopAllSensorTestSignals();
         // Отписываемся от SSE обновлений при закрытии
         this.unsubscribeFromSSE();
         // Уничтожаем LogViewer

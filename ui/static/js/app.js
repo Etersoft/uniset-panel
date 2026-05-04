@@ -3828,6 +3828,140 @@ class BaseObjectRenderer {
 
     // Привязать обработчики событий для checkbox графиков
     // sensorMap - Map с данными датчиков по id
+    // ============================================================================
+    // OPCUA-таблицы (Exchange/Server) — общая paginated-load инфраструктура.
+    //
+    // OPCUAExchange и OPCUAServer почти идентично: reset state → fetchJSON
+    // /opcua/sensors → set allSensors/sensorMap → loadPinned → updateVisible →
+    // updateCount → subscribe → wire sort handlers. Различия:
+    //   - id-префиксы (opcua-* / opcuasrv-*)
+    //   - Exchange имеет UI/server filter mode + statusFilter (post-process)
+    //   - Server — только server-side filter
+    // Subclass передаёт элементы (viewport/table/note id) + два callback'а:
+    //   buildSensorParams() — query string дополнительные `&search=...&iotype=...`
+    //   postProcessSensors(sensors) — local filter (UI mode / status filter)
+    // ============================================================================
+
+    async _loadOpcuaSensorsTable(opts) {
+        const { viewportId, tableId, noteId, buildSensorParams, postProcessSensors } = opts;
+
+        // Reset state for fresh load
+        this.allSensors = [];
+        this.hasMore = true;
+        this.startIndex = 0;
+        this.endIndex = 0;
+
+        const viewport = this.getEl(viewportId);
+        if (viewport) viewport.scrollTop = 0;
+
+        try {
+            const url = this.buildPaginatedSensorsUrl('/opcua', 0) + (buildSensorParams() || '');
+            const data = await this.fetchJSON(url);
+            let sensors = data.sensors || [];
+            this.sensorsTotal = typeof data.total === 'number' ? data.total : sensors.length;
+
+            sensors = postProcessSensors(sensors);
+
+            this.allSensors = sensors;
+            this.sensorMap.clear();
+            sensors.forEach(s => this.sensorMap.set(s.id, s));
+
+            // Если нет фильтра и есть закреплённые — догрузить отдельно.
+            if (!this.hasActiveFilters()) {
+                await this.loadPinnedSensors();
+            }
+
+            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
+            this.updateVisibleRows();
+            this.updateSensorCount();
+            this.setNote(noteId, '');
+
+            this.subscribeToSSE();
+
+            const table = this.getEl(tableId);
+            if (table) {
+                this.attachSortHandlers(table);
+                this.updateSortHeaders();
+            }
+        } catch (err) {
+            this.setNote(noteId, err.message, true);
+        }
+    }
+
+    async _loadMoreOpcuaSensorsTable(opts) {
+        const { buildSensorParams, postProcessSensors } = opts;
+
+        if (this.isLoadingChunk || !this.hasMore) return;
+
+        this.isLoadingChunk = true;
+        this.showLoadingIndicator(true);
+
+        try {
+            const nextOffset = this.allSensors.length;
+            const url = this.buildPaginatedSensorsUrl('/opcua', nextOffset) + (buildSensorParams() || '');
+            const data = await this.fetchJSON(url);
+            let newSensors = data.sensors || [];
+            newSensors = postProcessSensors(newSensors);
+
+            // Дедупликация: добавляем только датчики которых ещё нет.
+            const existingIds = new Set(this.allSensors.map(s => s.id));
+            const uniqueNewSensors = newSensors.filter(s => !existingIds.has(s.id));
+
+            this.allSensors = [...this.allSensors, ...uniqueNewSensors];
+            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
+            this.updateVisibleRows();
+            this.updateSensorCount();
+        } catch (err) {
+            console.error('Failed to load more sensors:', err);
+        } finally {
+            this.isLoadingChunk = false;
+            this.showLoadingIndicator(false);
+        }
+    }
+
+    // Общая инфраструктура render'а Modbus-подобных таблиц регистров.
+    // Берёт всё кроме row-html: фильтрация, sort, pin, count, listeners.
+    // Subclass передаёт свой row-renderer (renderRow(reg, isPinned)) и
+    // mbreg-аксессор (master/slave формат датасета чуть отличается).
+    //
+    // opts:
+    //   tbodyId        — id <tbody> элемента
+    //   unpinId        — id "Unpin all" кнопки (visibility toggle)
+    //   countId        — id badge'а с числом регистров (updateItemCount)
+    //   countTotal     — total count для badge'а (this.registersTotal)
+    //   mbregAccessor  — function(item, field) — для applyFilters(['mbreg'])
+    //   renderRow      — function(reg, isPinned) -> string (HTML <tr>...</tr>)
+    _renderRegistersTable(opts) {
+        const { tbodyId, unpinId, countId, countTotal, mbregAccessor, renderRow } = opts;
+
+        const tbody = this.getEl(tbodyId);
+        if (!tbody) return;
+
+        const pinned = this.getPinned();
+
+        const unpinBtn = this.getEl(unpinId);
+        if (unpinBtn) unpinBtn.style.display = pinned.size > 0 ? 'inline' : 'none';
+
+        let toShow = this.applyFilters(this.allRegisters, 'name', 'iotype', null, ['mbreg'], mbregAccessor);
+        toShow = this.filterPinnedOnly(toShow, pinned);
+        toShow = this.sortItems(toShow, pinned, this.sortColumnDefs);
+
+        this.updateItemCount(countId, toShow.length, countTotal);
+
+        for (const reg of toShow) {
+            if (reg.id) this.registerMap.set(reg.id, reg);
+        }
+
+        tbody.innerHTML = toShow.map(reg => renderRow(reg, pinned.has(String(reg.id)))).join('');
+
+        this.attachChartToggleListeners(tbody, this.registerMap);
+        this.attachDashboardToggleListeners(tbody);
+        tbody.querySelectorAll('.pin-toggle').forEach(t => {
+            t.addEventListener('click', () => this.togglePin(parseIntegerOrDefault(t.dataset.id, null)));
+        });
+        // unpinBtn handler — caller wire'ит один раз в bindEvents (persistent).
+    }
+
     attachChartToggleListeners(container, sensorMap) {
         if (!container) return;
         container.querySelectorAll('.chart-checkbox').forEach(cb => {
@@ -4207,8 +4341,9 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         this.allSensors = [];
         this.initVirtualScrollProps();
 
-        // Генераторы значений: Map<sensorId, GeneratorState>
-        this.activeGenerators = new Map();
+        // Активные тестовые сигналы (sin/cos/square/...): Map<sensorId, state>.
+        // Methods — в 20-ionc-test-signal.js (mixin).
+        this.activeSensorTestSignals = new Map();
 
         // Инициализация сортировки
         this.initSortProps();
@@ -4584,12 +4719,12 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         tbody.querySelectorAll('.ionc-btn-consumers').forEach(btn => {
             btn.addEventListener('click', () => this.showConsumersDialog(parseInt(btn.dataset.id, 10)));
         });
-        // Кнопки генератора
+        // Кнопки тестового сигнала (диагностика)
         tbody.querySelectorAll('.ionc-btn-gen').forEach(btn => {
-            btn.addEventListener('click', () => this.showGeneratorDialog(parseInt(btn.dataset.id, 10)));
+            btn.addEventListener('click', () => this.showSensorTestSignalDialog(parseInt(btn.dataset.id, 10)));
         });
         tbody.querySelectorAll('.ionc-btn-gen-stop').forEach(btn => {
-            btn.addEventListener('click', () => this.stopGenerator(parseInt(btn.dataset.id, 10)));
+            btn.addEventListener('click', () => this.stopSensorTestSignal(parseInt(btn.dataset.id, 10)));
         });
         tbody.querySelectorAll('.pin-toggle').forEach(btn => {
             btn.addEventListener('click', () => this.togglePin(parseInt(btn.dataset.id, 10)));
@@ -4620,13 +4755,13 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         const blockedClass = sensor.blocked ? 'ionc-sensor-blocked' : '';
         const readonlyClass = sensor.readonly ? 'ionc-sensor-readonly' : '';
 
-        // Проверяем активный генератор
-        const hasGenerator = this.activeGenerators.has(sensor.id);
+        // Проверяем активный тестовый сигнал
+        const hasGenerator = this.activeSensorTestSignals.has(sensor.id);
         const generatorClass = hasGenerator ? 'ionc-sensor-generating' : '';
-        const genState = hasGenerator ? this.activeGenerators.get(sensor.id) : null;
+        const genState = hasGenerator ? this.activeSensorTestSignals.get(sensor.id) : null;
 
         const flags = [];
-        if (hasGenerator) flags.push(`<span class="ionc-flag ionc-flag-generator" title="Генератор: ${genState.type} (${genState.min}-${genState.max})">⟳</span>`);
+        if (hasGenerator) flags.push(`<span class="ionc-flag ionc-flag-generator" title="Тестовый сигнал: ${genState.type} (${genState.min}-${genState.max})">⟳</span>`);
         if (sensor.frozen) flags.push('<span class="ionc-flag ionc-flag-frozen" title="Frozen">❄</span>');
         if (sensor.blocked) flags.push('<span class="ionc-flag ionc-flag-blocked" title="Blocked">🔒</span>');
         if (sensor.readonly) flags.push('<span class="ionc-flag ionc-flag-readonly" title="Read only">👁</span>');
@@ -5004,441 +5139,6 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             'Failed to unfreeze');
     }
 
-    // ===== Генератор значений =====
-
-    // Значения по умолчанию для параметров генератора
-    getDefaultGeneratorParams() {
-        return {
-            sin: {
-                min: GENERATOR_DEFAULT_WAVE_MIN,
-                max: GENERATOR_DEFAULT_WAVE_MAX,
-                pause: GENERATOR_DEFAULT_WAVE_PAUSE_MS,
-                step: GENERATOR_DEFAULT_WAVE_POINTS
-            },
-            cos: {
-                min: GENERATOR_DEFAULT_WAVE_MIN,
-                max: GENERATOR_DEFAULT_WAVE_MAX,
-                pause: GENERATOR_DEFAULT_WAVE_PAUSE_MS,
-                step: GENERATOR_DEFAULT_WAVE_POINTS
-            },
-            linear: {
-                min: GENERATOR_DEFAULT_MIN,
-                max: GENERATOR_DEFAULT_MAX,
-                pause: GENERATOR_DEFAULT_WAVE_PAUSE_MS,
-                step: GENERATOR_DEFAULT_LINEAR_STEP
-            },
-            random: {
-                min: GENERATOR_DEFAULT_MIN,
-                max: GENERATOR_DEFAULT_MAX,
-                period: GENERATOR_DEFAULT_RANDOM_PERIOD_MS
-            },
-            square: {
-                min: GENERATOR_DEFAULT_MIN,
-                max: GENERATOR_DEFAULT_MAX,
-                pulseWidth: GENERATOR_DEFAULT_IONC_SQUARE_PULSE_WIDTH_MS,
-                pause: GENERATOR_DEFAULT_IONC_SQUARE_PAUSE_MS
-            }
-        };
-    }
-
-    // Загрузка preferences из localStorage с миграцией
-    loadGeneratorPreferences() {
-        const newPrefs = localStorage.getItem('ionc-gen-preferences');
-
-        if (newPrefs) {
-            try {
-                return JSON.parse(newPrefs);
-            } catch (e) {
-                console.error('Failed to parse generator preferences:', e);
-            }
-        }
-
-        // Миграция со старого формата
-        const oldType = localStorage.getItem('ionc-gen-last-type');
-        if (oldType) {
-            const prefs = {
-                lastType: oldType,
-                params: this.getDefaultGeneratorParams()
-            };
-            localStorage.setItem('ionc-gen-preferences', JSON.stringify(prefs));
-            localStorage.removeItem('ionc-gen-last-type');
-            return prefs;
-        }
-
-        // Первый запуск - используем defaults
-        return {
-            lastType: 'sin',
-            params: this.getDefaultGeneratorParams()
-        };
-    }
-
-    // Сохранение preferences в localStorage
-    saveGeneratorPreferences(type, params) {
-        const prefs = this.loadGeneratorPreferences();
-        prefs.lastType = type;
-        prefs.params[type] = params;
-        localStorage.setItem('ionc-gen-preferences', JSON.stringify(prefs));
-    }
-
-    // Обновление расчётного периода для sin/cos
-    updateCalculatedPeriod() {
-        const calcPeriodValue = document.getElementById('ionc-gen-calc-period-value');
-        const pauseInput = document.getElementById('ionc-gen-period');
-        const pointsInput = document.getElementById('ionc-gen-step');
-
-        if (!calcPeriodValue || !pauseInput || !pointsInput) return;
-
-        const pause = parseIntegerOrDefault(pauseInput.value, 0);
-        const points = parseIntegerOrDefault(pointsInput.value, 0);
-        const totalPeriod = pause * points;
-
-        if (totalPeriod > 0) {
-            const seconds = (totalPeriod / 1000).toFixed(1);
-            calcPeriodValue.textContent = `${totalPeriod} мс (${seconds} сек)`;
-        } else {
-            calcPeriodValue.textContent = '-';
-        }
-    }
-
-    // Управление видимостью полей формы в зависимости от типа функции
-    updateFormFieldsVisibility(type) {
-        const periodField = document.getElementById('ionc-gen-period-field');
-        const stepField = document.getElementById('ionc-gen-step-field');
-        const pulseFields = document.getElementById('ionc-gen-pulse-fields');
-        const calcPeriodField = document.getElementById('ionc-gen-calc-period');
-        const periodLabel = document.getElementById('ionc-gen-period-label');
-        const periodHint = document.getElementById('ionc-gen-period-hint');
-        const stepLabel = document.getElementById('ionc-gen-step-label');
-        const stepHint = document.getElementById('ionc-gen-step-hint');
-
-        if (!periodField || !stepField || !pulseFields) return;
-
-        // Скрываем все условные поля
-        periodField.style.display = 'none';
-        stepField.style.display = 'none';
-        pulseFields.style.display = 'none';
-        if (calcPeriodField) calcPeriodField.style.display = 'none';
-
-        // Показываем нужные поля в зависимости от типа
-        if (type === 'linear') {
-            // linear: пилообразный с шагом-инкрементом
-            periodField.style.display = 'block';
-            stepField.style.display = 'block';
-            if (periodLabel) periodLabel.textContent = 'Пауза между шагами (мс)';
-            if (periodHint) periodHint.textContent = `Задержка перед следующим шагом. Мин: ${GENERATOR_MIN_WAVE_PAUSE_MS}мс`;
-            if (stepLabel) stepLabel.textContent = 'Шаг';
-            if (stepHint) stepHint.textContent = 'Размер одного шага изменения значения';
-        } else if (type === 'sin' || type === 'cos') {
-            // sin/cos: синусоида с заданным количеством точек
-            periodField.style.display = 'block';
-            stepField.style.display = 'block';
-            if (calcPeriodField) calcPeriodField.style.display = 'block';
-            if (periodLabel) periodLabel.textContent = 'Шаг обновления (мс)';
-            if (periodHint) periodHint.textContent = `Время между обновлениями значения. Мин: ${GENERATOR_MIN_WAVE_PAUSE_MS}мс`;
-            if (stepLabel) stepLabel.textContent = 'Количество точек на период';
-            if (stepHint) stepHint.textContent = 'Сколько точек отрисует синусоида за один полный период';
-            // Обновляем расчётный период
-            this.updateCalculatedPeriod();
-        } else if (type === 'square') {
-            pulseFields.style.display = 'block';
-        } else {
-            // random
-            periodField.style.display = 'block';
-            // Восстанавливаем подпись для периода
-            if (periodLabel) periodLabel.textContent = 'Период (мс)';
-            if (periodHint) periodHint.textContent = 'Длительность полного цикла. Мин: 100мс';
-        }
-    }
-
-    showGeneratorDialog(sensorId) {
-        const sensor = this.sensorMap.get(sensorId);
-        if (!sensor) return;
-
-        const self = this;
-        const existingGen = this.activeGenerators.get(sensorId);
-
-        // Предупреждение если датчик заморожен
-        const frozenWarning = sensor.frozen
-            ? `<div class="ionc-dialog-warning">Датчик заморожен. Значения будут записываться в SM, но не отобразятся до разморозки.</div>`
-            : '';
-
-        const body = `
-            <div class="ionc-dialog-info">
-                Датчик: <strong>${escapeHtml(sensor.name)}</strong> (ID: ${sensorId})<br>
-                Текущее значение: <strong>${sensor.value}</strong>
-            </div>
-            ${frozenWarning}
-            ${existingGen ? (() => {
-                const genInfo = `${existingGen.type} (min: ${existingGen.min}, max: ${existingGen.max}`;
-                const timing = existingGen.type === 'square'
-                    ? `, импульс: ${existingGen.pulseWidth}мс, пауза: ${existingGen.pause}мс)`
-                    : (existingGen.type === 'linear' || existingGen.type === 'sin' || existingGen.type === 'cos')
-                    ? `, пауза: ${existingGen.pause}мс, шаг: ${existingGen.step})`
-                    : `, период: ${existingGen.period}мс)`;
-
-                return `
-                <div class="ionc-dialog-warning ionc-dialog-warning-active">
-                    <strong>Генератор активен:</strong> ${genInfo}${timing}
-                </div>
-            `;
-            })() : (() => {
-                // Загружаем preferences из localStorage
-                const prefs = this.loadGeneratorPreferences();
-                const lastType = prefs.lastType;
-                const params = prefs.params[lastType] || this.getDefaultGeneratorParams()[lastType];
-
-                const options = [
-                    { value: 'sin', label: 'sin(t) - Синусоида' },
-                    { value: 'cos', label: 'cos(t) - Косинусоида' },
-                    { value: 'linear', label: 'linear - Пилообразный' },
-                    { value: 'random', label: 'random - Случайные значения' },
-                    { value: 'square', label: 'square - Прямоугольный' }
-                ];
-                const optionsHtml = options.map(o =>
-                    `<option value="${o.value}"${o.value === lastType ? ' selected' : ''}>${o.label}</option>`
-                ).join('');
-                return `
-                <div class="ionc-dialog-field">
-                    <label for="ionc-gen-type">Тип функции:</label>
-                    <select id="ionc-gen-type" class="ionc-dialog-select">
-                        ${optionsHtml}
-                    </select>
-                </div>
-                <div class="ionc-dialog-field-row">
-                    <div class="ionc-dialog-field ionc-dialog-field-half">
-                        <label for="ionc-gen-min">Min:</label>
-                        <input type="number" id="ionc-gen-min" value="${params.min}">
-                    </div>
-                    <div class="ionc-dialog-field ionc-dialog-field-half">
-                        <label for="ionc-gen-max">Max:</label>
-                        <input type="number" id="ionc-gen-max" value="${params.max}">
-                    </div>
-                </div>
-                <div class="ionc-dialog-field" id="ionc-gen-period-field">
-                    <label for="ionc-gen-period"><span id="ionc-gen-period-label">Период (мс)</span>:</label>
-                    <input type="number" id="ionc-gen-period" value="${params.period || params.pause || GENERATOR_DEFAULT_RANDOM_PERIOD_MS}" step="100">
-                    <div class="ionc-dialog-hint" id="ionc-gen-period-hint">Длительность полного цикла. Мин: ${GENERATOR_MIN_PERIOD_MS}мс</div>
-                </div>
-                <div class="ionc-dialog-field" id="ionc-gen-step-field" style="display: none;">
-                    <label for="ionc-gen-step"><span id="ionc-gen-step-label">Шаг</span>:</label>
-                    <input type="number" id="ionc-gen-step" value="${params.step || GENERATOR_DEFAULT_WAVE_POINTS}" step="1">
-                    <div class="ionc-dialog-hint" id="ionc-gen-step-hint">Размер одного шага изменения значения</div>
-                </div>
-                <div class="ionc-dialog-field" id="ionc-gen-calc-period" style="display: none;">
-                    <div class="ionc-dialog-hint" style="color: #4a9eff; font-weight: 500;">
-                        💡 Полный период: <span id="ionc-gen-calc-period-value">-</span>
-                    </div>
-                </div>
-                <div id="ionc-gen-pulse-fields" style="display: none;">
-                    <div class="ionc-dialog-field-row">
-                        <div class="ionc-dialog-field ionc-dialog-field-half">
-                            <label for="ionc-gen-pulse-width">Ширина импульса (мс):</label>
-                            <input type="number" id="ionc-gen-pulse-width" value="${params.pulseWidth || GENERATOR_DEFAULT_IONC_SQUARE_PULSE_WIDTH_MS}" step="100" min="${GENERATOR_MIN_PULSE_WIDTH_MS}">
-                        </div>
-                        <div class="ionc-dialog-field ionc-dialog-field-half">
-                            <label for="ionc-gen-pause">Пауза (мс):</label>
-                            <input type="number" id="ionc-gen-pause" value="${params.pause || GENERATOR_DEFAULT_IONC_SQUARE_PAUSE_MS}" step="100" min="${GENERATOR_MIN_PAUSE_MS}">
-                        </div>
-                    </div>
-                    <div class="ionc-dialog-hint">Период = Ширина импульса + Пауза</div>
-                </div>
-            `;
-            })()}
-        `;
-
-        const footer = existingGen ? `
-            <button class="ionc-dialog-btn ionc-dialog-btn-cancel" onclick="closeIoncDialog()">Закрыть</button>
-            <button class="ionc-dialog-btn ionc-dialog-btn-danger" id="ionc-gen-stop">Остановить</button>
-        ` : `
-            <button class="ionc-dialog-btn ionc-dialog-btn-cancel" onclick="closeIoncDialog()">Отмена</button>
-            <button class="ionc-dialog-btn ionc-dialog-btn-primary" id="ionc-gen-start">Запустить</button>
-        `;
-
-        openIoncDialog({
-            title: existingGen ? 'Генератор активен' : 'Генератор значений',
-            body,
-            footer,
-            focusInput: !existingGen
-        });
-
-        // Обработчики кнопок
-        if (existingGen) {
-            document.getElementById('ionc-gen-stop')?.addEventListener('click', () => {
-                this.stopGenerator(sensorId);
-                closeIoncDialog();
-            });
-        } else {
-            document.getElementById('ionc-gen-start')?.addEventListener('click', () => {
-                this.startGenerator(sensorId);
-            });
-
-            // Обработчик смены типа функции
-            const typeSelect = document.getElementById('ionc-gen-type');
-            if (typeSelect) {
-                typeSelect.addEventListener('change', (e) => {
-                    this.updateFormFieldsVisibility(e.target.value);
-                });
-
-                // Устанавливаем начальную видимость полей
-                this.updateFormFieldsVisibility(typeSelect.value);
-            }
-
-            // Обработчики для автоматического расчёта периода (sin/cos)
-            const pauseInput = document.getElementById('ionc-gen-period');
-            const pointsInput = document.getElementById('ionc-gen-step');
-            if (pauseInput && pointsInput) {
-                const updateCalc = () => this.updateCalculatedPeriod();
-                pauseInput.addEventListener('input', updateCalc);
-                pointsInput.addEventListener('input', updateCalc);
-            }
-        }
-    }
-
-    startGenerator(sensorId) {
-        const sensor = this.sensorMap.get(sensorId);
-        if (!sensor) return;
-
-        const selectedType = document.getElementById('ionc-gen-type').value;
-        const rawConfig = {
-            type: selectedType,
-            min: document.getElementById('ionc-gen-min').value,
-            max: document.getElementById('ionc-gen-max').value,
-            step: document.getElementById('ionc-gen-step')?.value,
-            pause: selectedType === 'square'
-                ? document.getElementById('ionc-gen-pause')?.value
-                : document.getElementById('ionc-gen-period')?.value,
-            pulseWidth: document.getElementById('ionc-gen-pulse-width')?.value,
-            period: document.getElementById('ionc-gen-period')?.value,
-        };
-        const validationError = validateSignalGeneratorConfig(rawConfig);
-        if (validationError) {
-            showIoncDialogError(validationError);
-            return;
-        }
-
-        const genConfig = normalizeSignalGeneratorConfig(rawConfig);
-        const { type, min, max, step, pause, pulseWidth, period } = genConfig;
-
-        // Останавливаем существующий генератор если есть
-        this.stopGenerator(sensorId);
-
-        const generator = new SignalGenerator({
-            ...genConfig,
-            onTick: (value) => {
-                this.setValueForGenerator(sensorId, value);
-            }
-        });
-
-        // Сохраняем минимальное состояние для UI (тип для setChartStepped,
-        // параметры для отображения в "active generator" баннере и сохранения preferences).
-        const genState = {
-            sensorId,
-            type,
-            min,
-            max,
-            generator,        // ссылка на SignalGenerator — будет stop()'нута в stopGenerator
-        };
-
-        // Тип-специфичные параметры — для отображения и сохранения preferences
-        if (type === 'linear' || type === 'sin' || type === 'cos') {
-            genState.pause = pause;
-            genState.step = step;
-        } else if (type === 'square') {
-            genState.pulseWidth = pulseWidth;
-            genState.pause = pause;
-        } else {
-            genState.period = period;
-        }
-
-        generator.start();
-        this.activeGenerators.set(sensorId, genState);
-
-        // Для square генератора включаем stepped режим на графике (меандр)
-        if (type === 'square') {
-            this.setChartStepped(sensorId, true);
-        }
-
-        // Перерисовываем строку для отображения индикатора
-        this.reRenderSensorRow(sensorId);
-
-        // Сохраняем preferences (разные параметры для разных типов)
-        let params = { min, max };
-        if (type === 'linear' || type === 'sin' || type === 'cos') {
-            params.pause = pause;
-            params.step = step;
-        } else if (type === 'square') {
-            params.pulseWidth = pulseWidth;
-            params.pause = pause;
-        } else {
-            // random
-            params.period = period;
-        }
-        this.saveGeneratorPreferences(type, params);
-
-        closeIoncDialog();
-    }
-
-    async setValueForGenerator(sensorId, value) {
-        try {
-            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/set`);
-            await controlledFetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sensor_id: sensorId, value: value })
-            });
-        } catch (err) {
-            console.error('Generator: ошибка установки значения', err);
-        }
-    }
-
-    stopGenerator(sensorId) {
-        const genState = this.activeGenerators.get(sensorId);
-        if (genState) {
-            if (genState.generator) {
-                genState.generator.stop();
-            }
-
-            // Возвращаем stepped режим к значению по умолчанию (isDiscrete)
-            if (genState.type === 'square') {
-                this.setChartStepped(sensorId, null); // null = вернуть к isDiscrete
-            }
-
-            this.activeGenerators.delete(sensorId);
-            this.reRenderSensorRow(sensorId);
-        }
-    }
-
-    stopAllGenerators() {
-        this.activeGenerators.forEach((genState) => {
-            if (genState.generator) genState.generator.stop();
-        });
-        this.activeGenerators.clear();
-    }
-
-    // Установка stepped режима для графика сенсора
-    // stepped: true = включить, false = выключить, null = вернуть к isDiscrete
-    setChartStepped(sensorId, stepped) {
-        const sensor = this.sensorMap.get(sensorId);
-        if (!sensor) return;
-
-        const tabState = state.tabs.get(this.tabKey);
-        if (!tabState) return;
-
-        const varName = `io:${sensor.name}`;
-        const chartData = tabState.charts.get(varName);
-        if (!chartData) return;
-
-        let newStepped;
-        if (stepped === null) {
-            // Вернуть к значению по умолчанию (isDiscrete)
-            newStepped = chartData.isDiscrete ? 'before' : false;
-        } else {
-            newStepped = stepped ? 'before' : false;
-        }
-
-        chartData.chart.data.datasets[0].stepped = newStepped;
-        chartData.chart.update('none');
-    }
 
     // Перерисовка строки датчика и переподключение обработчиков
     reRenderSensorRow(sensorId) {
@@ -5485,9 +5185,9 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         row.querySelector('.ionc-btn-consumers')?.addEventListener('click', () => this.showConsumersDialog(sensorId));
         this.bindFreezeToggleButtons(row);
 
-        // Кнопки генератора
-        row.querySelector('.ionc-btn-gen')?.addEventListener('click', () => this.showGeneratorDialog(sensorId));
-        row.querySelector('.ionc-btn-gen-stop')?.addEventListener('click', () => this.stopGenerator(sensorId));
+        // Кнопки тестового сигнала (диагностика)
+        row.querySelector('.ionc-btn-gen')?.addEventListener('click', () => this.showSensorTestSignalDialog(sensorId));
+        row.querySelector('.ionc-btn-gen-stop')?.addEventListener('click', () => this.stopSensorTestSignal(sensorId));
 
         // Чекбокс графика
         row.querySelector('.ionc-chart-checkbox')?.addEventListener('change', () => this.toggleSensorChartById(sensorId));
@@ -5704,8 +5404,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     destroy() {
-        // Останавливаем все генераторы значений
-        this.stopAllGenerators();
+        // Останавливаем все активные тестовые сигналы
+        this.stopAllSensorTestSignals();
         // Отписываемся от SSE обновлений при закрытии
         this.unsubscribeFromSSE();
         // Уничтожаем LogViewer
@@ -5721,6 +5421,440 @@ applyMixin(IONotifyControllerRenderer, FilterMixin);
 applyMixin(IONotifyControllerRenderer, ItemCounterMixin);
 applyMixin(IONotifyControllerRenderer, PinManagementMixin);
 applyMixin(IONotifyControllerRenderer, TableSortMixin);
+
+
+// === 20-ionc-test-signal.js ===
+// ============================================================================
+// IONC Test-Signal feature — diagnostic UI to inject periodic test signals
+// (sin/cos/square/linear/random) into a SharedMemory sensor through
+// /api/objects/{name}/ionc/set. Используется наладчиками на стенде.
+//
+// Файл — mixin поверх IONotifyControllerRenderer (объявлен в 20-ionc-renderer.js).
+// Лексикографически 20-ionc-test-signal.js идёт ПОСЛЕ 20-ionc-renderer.js,
+// поэтому класс уже определён к моменту вызова applyMixin.
+//
+// Public methods (зовутся из row event handlers и destroy):
+//   - showSensorTestSignalDialog(sensorId)
+//   - startSensorTestSignal(sensorId)         (зовётся внутри dialog OK)
+//   - stopSensorTestSignal(sensorId)
+//   - stopAllSensorTestSignals()              (destroy)
+//   - activeSensorTestSignals                 (Map<sensorId, state>) — UI state
+// ============================================================================
+
+const IoncTestSignalMixin = {
+
+    // ===== Defaults / preferences =====
+
+    getDefaultTestSignalParams() {
+        return {
+            sin: {
+                min:   GENERATOR_DEFAULT_WAVE_MIN,
+                max:   GENERATOR_DEFAULT_WAVE_MAX,
+                pause: GENERATOR_DEFAULT_WAVE_PAUSE_MS,
+                step:  GENERATOR_DEFAULT_WAVE_POINTS,
+            },
+            cos: {
+                min:   GENERATOR_DEFAULT_WAVE_MIN,
+                max:   GENERATOR_DEFAULT_WAVE_MAX,
+                pause: GENERATOR_DEFAULT_WAVE_PAUSE_MS,
+                step:  GENERATOR_DEFAULT_WAVE_POINTS,
+            },
+            linear: {
+                min:   GENERATOR_DEFAULT_MIN,
+                max:   GENERATOR_DEFAULT_MAX,
+                pause: GENERATOR_DEFAULT_WAVE_PAUSE_MS,
+                step:  GENERATOR_DEFAULT_LINEAR_STEP,
+            },
+            random: {
+                min:    GENERATOR_DEFAULT_MIN,
+                max:    GENERATOR_DEFAULT_MAX,
+                period: GENERATOR_DEFAULT_RANDOM_PERIOD_MS,
+            },
+            square: {
+                min:        GENERATOR_DEFAULT_MIN,
+                max:        GENERATOR_DEFAULT_MAX,
+                pulseWidth: GENERATOR_DEFAULT_IONC_SQUARE_PULSE_WIDTH_MS,
+                pause:      GENERATOR_DEFAULT_IONC_SQUARE_PAUSE_MS,
+            },
+        };
+    },
+
+    // localStorage key 'ionc-gen-preferences' оставлен — миграция данных не нужна.
+    loadTestSignalPreferences() {
+        const newPrefs = localStorage.getItem('ionc-gen-preferences');
+        if (newPrefs) {
+            try { return JSON.parse(newPrefs); }
+            catch (e) { console.error('Failed to parse test-signal preferences:', e); }
+        }
+        // Миграция со старого формата
+        const oldType = localStorage.getItem('ionc-gen-last-type');
+        if (oldType) {
+            const prefs = { lastType: oldType, params: this.getDefaultTestSignalParams() };
+            localStorage.setItem('ionc-gen-preferences', JSON.stringify(prefs));
+            localStorage.removeItem('ionc-gen-last-type');
+            return prefs;
+        }
+        return { lastType: 'sin', params: this.getDefaultTestSignalParams() };
+    },
+
+    saveTestSignalPreferences(type, params) {
+        const prefs = this.loadTestSignalPreferences();
+        prefs.lastType = type;
+        prefs.params[type] = params;
+        localStorage.setItem('ionc-gen-preferences', JSON.stringify(prefs));
+    },
+
+    // ===== Form helpers (вызываются из dialog change handlers) =====
+
+    _updateTestSignalCalculatedPeriod() {
+        const calcPeriodValue = document.getElementById('ionc-gen-calc-period-value');
+        const pauseInput = document.getElementById('ionc-gen-period');
+        const pointsInput = document.getElementById('ionc-gen-step');
+        if (!calcPeriodValue || !pauseInput || !pointsInput) return;
+
+        const pause = parseIntegerOrDefault(pauseInput.value, 0);
+        const points = parseIntegerOrDefault(pointsInput.value, 0);
+        const totalPeriod = pause * points;
+        if (totalPeriod > 0) {
+            const seconds = (totalPeriod / 1000).toFixed(1);
+            calcPeriodValue.textContent = `${totalPeriod} мс (${seconds} сек)`;
+        } else {
+            calcPeriodValue.textContent = '-';
+        }
+    },
+
+    _updateTestSignalFormFields(type) {
+        const periodField = document.getElementById('ionc-gen-period-field');
+        const stepField = document.getElementById('ionc-gen-step-field');
+        const pulseFields = document.getElementById('ionc-gen-pulse-fields');
+        const calcPeriodField = document.getElementById('ionc-gen-calc-period');
+        const periodLabel = document.getElementById('ionc-gen-period-label');
+        const periodHint = document.getElementById('ionc-gen-period-hint');
+        const stepLabel = document.getElementById('ionc-gen-step-label');
+        const stepHint = document.getElementById('ionc-gen-step-hint');
+
+        if (!periodField || !stepField || !pulseFields) return;
+
+        // Скрываем все условные поля
+        periodField.style.display = 'none';
+        stepField.style.display = 'none';
+        pulseFields.style.display = 'none';
+        if (calcPeriodField) calcPeriodField.style.display = 'none';
+
+        if (type === 'linear') {
+            // linear: пилообразный с шагом-инкрементом
+            periodField.style.display = 'block';
+            stepField.style.display = 'block';
+            if (periodLabel) periodLabel.textContent = 'Пауза между шагами (мс)';
+            if (periodHint) periodHint.textContent = `Задержка перед следующим шагом. Мин: ${GENERATOR_MIN_WAVE_PAUSE_MS}мс`;
+            if (stepLabel) stepLabel.textContent = 'Шаг';
+            if (stepHint) stepHint.textContent = 'Размер одного шага изменения значения';
+        } else if (type === 'sin' || type === 'cos') {
+            periodField.style.display = 'block';
+            stepField.style.display = 'block';
+            if (calcPeriodField) calcPeriodField.style.display = 'block';
+            if (periodLabel) periodLabel.textContent = 'Пауза между точками (мс)';
+            if (periodHint) periodHint.textContent = `Задержка между точками синусоиды. Мин: ${GENERATOR_MIN_WAVE_PAUSE_MS}мс`;
+            if (stepLabel) stepLabel.textContent = 'Точек в периоде';
+            if (stepHint) stepHint.textContent = `Кол-во точек на полный цикл. Мин: ${GENERATOR_MIN_WAVE_POINTS}`;
+            this._updateTestSignalCalculatedPeriod();
+        } else if (type === 'square') {
+            // square: ширина импульса + пауза
+            pulseFields.style.display = 'block';
+        } else {
+            // random
+            periodField.style.display = 'block';
+            if (periodLabel) periodLabel.textContent = 'Период (мс)';
+            if (periodHint) periodHint.textContent = 'Длительность полного цикла. Мин: 100мс';
+        }
+    },
+
+    // ===== Dialog =====
+
+    showSensorTestSignalDialog(sensorId) {
+        const sensor = this.sensorMap.get(sensorId);
+        if (!sensor) return;
+        const existing = this.activeSensorTestSignals.get(sensorId);
+
+        const body = this._buildTestSignalDialogBody(sensor, sensorId, existing);
+        const footer = this._buildTestSignalDialogFooter(existing);
+
+        openIoncDialog({
+            title: existing ? 'Тестовый сигнал активен' : 'Тестовый сигнал датчика',
+            body,
+            footer,
+            focusInput: !existing,
+        });
+
+        this._wireTestSignalDialogHandlers(sensorId, existing);
+    },
+
+    _buildTestSignalDialogBody(sensor, sensorId, existing) {
+        const frozenWarning = sensor.frozen
+            ? `<div class="ionc-dialog-warning">Датчик заморожен. Значения будут записываться в SM, но не отобразятся до разморозки.</div>`
+            : '';
+        const sensorInfo = `
+            <div class="ionc-dialog-info">
+                Датчик: <strong>${escapeHtml(sensor.name)}</strong> (ID: ${sensorId})<br>
+                Текущее значение: <strong>${sensor.value}</strong>
+            </div>
+        `;
+        const main = existing
+            ? this._renderActiveTestSignalBlock(existing)
+            : this._renderTestSignalSetupForm();
+        return `${sensorInfo}${frozenWarning}${main}`;
+    },
+
+    _renderActiveTestSignalBlock(existing) {
+        const info = `${existing.type} (min: ${existing.min}, max: ${existing.max}`;
+        const timing = existing.type === 'square'
+            ? `, импульс: ${existing.pulseWidth}мс, пауза: ${existing.pause}мс)`
+            : (existing.type === 'linear' || existing.type === 'sin' || existing.type === 'cos')
+                ? `, пауза: ${existing.pause}мс, шаг: ${existing.step})`
+                : `, период: ${existing.period}мс)`;
+        return `
+            <div class="ionc-dialog-warning ionc-dialog-warning-active">
+                <strong>Тестовый сигнал активен:</strong> ${info}${timing}
+            </div>
+        `;
+    },
+
+    _renderTestSignalSetupForm() {
+        const prefs = this.loadTestSignalPreferences();
+        const lastType = prefs.lastType;
+        const params = prefs.params[lastType] || this.getDefaultTestSignalParams()[lastType];
+
+        const typeOptions = [
+            { value: 'sin',    label: 'sin(t) - Синусоида' },
+            { value: 'cos',    label: 'cos(t) - Косинусоида' },
+            { value: 'linear', label: 'linear - Пилообразный' },
+            { value: 'random', label: 'random - Случайные значения' },
+            { value: 'square', label: 'square - Прямоугольный' },
+        ];
+        const optionsHtml = typeOptions.map(o =>
+            `<option value="${o.value}"${o.value === lastType ? ' selected' : ''}>${o.label}</option>`
+        ).join('');
+
+        return `
+            <div class="ionc-dialog-field">
+                <label for="ionc-gen-type">Тип функции:</label>
+                <select id="ionc-gen-type" class="ionc-dialog-select">
+                    ${optionsHtml}
+                </select>
+            </div>
+            <div class="ionc-dialog-field-row">
+                <div class="ionc-dialog-field ionc-dialog-field-half">
+                    <label for="ionc-gen-min">Min:</label>
+                    <input type="number" id="ionc-gen-min" value="${params.min}">
+                </div>
+                <div class="ionc-dialog-field ionc-dialog-field-half">
+                    <label for="ionc-gen-max">Max:</label>
+                    <input type="number" id="ionc-gen-max" value="${params.max}">
+                </div>
+            </div>
+            <div class="ionc-dialog-field" id="ionc-gen-period-field">
+                <label for="ionc-gen-period"><span id="ionc-gen-period-label">Период (мс)</span>:</label>
+                <input type="number" id="ionc-gen-period" value="${params.period || params.pause || GENERATOR_DEFAULT_RANDOM_PERIOD_MS}" step="100">
+                <div class="ionc-dialog-hint" id="ionc-gen-period-hint">Длительность полного цикла. Мин: ${GENERATOR_MIN_PERIOD_MS}мс</div>
+            </div>
+            <div class="ionc-dialog-field" id="ionc-gen-step-field" style="display: none;">
+                <label for="ionc-gen-step"><span id="ionc-gen-step-label">Шаг</span>:</label>
+                <input type="number" id="ionc-gen-step" value="${params.step || GENERATOR_DEFAULT_WAVE_POINTS}" step="1">
+                <div class="ionc-dialog-hint" id="ionc-gen-step-hint">Размер одного шага изменения значения</div>
+            </div>
+            <div class="ionc-dialog-field" id="ionc-gen-calc-period" style="display: none;">
+                <div class="ionc-dialog-hint" style="color: #4a9eff; font-weight: 500;">
+                    💡 Полный период: <span id="ionc-gen-calc-period-value">-</span>
+                </div>
+            </div>
+            <div id="ionc-gen-pulse-fields" style="display: none;">
+                <div class="ionc-dialog-field-row">
+                    <div class="ionc-dialog-field ionc-dialog-field-half">
+                        <label for="ionc-gen-pulse-width">Ширина импульса (мс):</label>
+                        <input type="number" id="ionc-gen-pulse-width" value="${params.pulseWidth || GENERATOR_DEFAULT_IONC_SQUARE_PULSE_WIDTH_MS}" step="100" min="${GENERATOR_MIN_PULSE_WIDTH_MS}">
+                    </div>
+                    <div class="ionc-dialog-field ionc-dialog-field-half">
+                        <label for="ionc-gen-pause">Пауза (мс):</label>
+                        <input type="number" id="ionc-gen-pause" value="${params.pause || GENERATOR_DEFAULT_IONC_SQUARE_PAUSE_MS}" step="100" min="${GENERATOR_MIN_PAUSE_MS}">
+                    </div>
+                </div>
+                <div class="ionc-dialog-hint">Период = Ширина импульса + Пауза</div>
+            </div>
+        `;
+    },
+
+    _buildTestSignalDialogFooter(existing) {
+        return existing ? `
+            <button class="ionc-dialog-btn ionc-dialog-btn-cancel" onclick="closeIoncDialog()">Закрыть</button>
+            <button class="ionc-dialog-btn ionc-dialog-btn-danger" id="ionc-gen-stop">Остановить</button>
+        ` : `
+            <button class="ionc-dialog-btn ionc-dialog-btn-cancel" onclick="closeIoncDialog()">Отмена</button>
+            <button class="ionc-dialog-btn ionc-dialog-btn-primary" id="ionc-gen-start">Запустить</button>
+        `;
+    },
+
+    _wireTestSignalDialogHandlers(sensorId, existing) {
+        if (existing) {
+            document.getElementById('ionc-gen-stop')?.addEventListener('click', () => {
+                this.stopSensorTestSignal(sensorId);
+                closeIoncDialog();
+            });
+            return;
+        }
+
+        document.getElementById('ionc-gen-start')?.addEventListener('click', () => {
+            this.startSensorTestSignal(sensorId);
+        });
+
+        const typeSelect = document.getElementById('ionc-gen-type');
+        if (typeSelect) {
+            typeSelect.addEventListener('change', (e) => {
+                this._updateTestSignalFormFields(e.target.value);
+            });
+            this._updateTestSignalFormFields(typeSelect.value);
+        }
+
+        // Автоматический расчёт периода для sin/cos
+        const pauseInput = document.getElementById('ionc-gen-period');
+        const pointsInput = document.getElementById('ionc-gen-step');
+        if (pauseInput && pointsInput) {
+            const updateCalc = () => this._updateTestSignalCalculatedPeriod();
+            pauseInput.addEventListener('input', updateCalc);
+            pointsInput.addEventListener('input', updateCalc);
+        }
+    },
+
+    // ===== Start/stop =====
+
+    startSensorTestSignal(sensorId) {
+        const sensor = this.sensorMap.get(sensorId);
+        if (!sensor) return;
+
+        const selectedType = document.getElementById('ionc-gen-type').value;
+        const rawConfig = {
+            type: selectedType,
+            min: document.getElementById('ionc-gen-min').value,
+            max: document.getElementById('ionc-gen-max').value,
+            step: document.getElementById('ionc-gen-step')?.value,
+            pause: selectedType === 'square'
+                ? document.getElementById('ionc-gen-pause')?.value
+                : document.getElementById('ionc-gen-period')?.value,
+            pulseWidth: document.getElementById('ionc-gen-pulse-width')?.value,
+            period: document.getElementById('ionc-gen-period')?.value,
+        };
+        const validationError = validateSignalGeneratorConfig(rawConfig);
+        if (validationError) {
+            showIoncDialogError(validationError);
+            return;
+        }
+
+        const genConfig = normalizeSignalGeneratorConfig(rawConfig);
+        const { type, min, max, step, pause, pulseWidth, period } = genConfig;
+
+        // Останавливаем существующий test signal если есть
+        this.stopSensorTestSignal(sensorId);
+
+        const generator = new SignalGenerator({
+            ...genConfig,
+            onTick: (value) => this._writeTestSignalValue(sensorId, value),
+        });
+
+        // Минимальное состояние для UI: тип (для setChartStepped), min/max +
+        // тип-специфичные параметры (для отображения "active" баннера и
+        // сохранения preferences).
+        const state = { sensorId, type, min, max, generator };
+        if (type === 'linear' || type === 'sin' || type === 'cos') {
+            state.pause = pause;
+            state.step = step;
+        } else if (type === 'square') {
+            state.pulseWidth = pulseWidth;
+            state.pause = pause;
+        } else {
+            state.period = period;
+        }
+
+        generator.start();
+        this.activeSensorTestSignals.set(sensorId, state);
+
+        // Square = меандр → stepped chart.
+        if (type === 'square') this._setChartSteppedForTestSignal(sensorId, true);
+
+        this.reRenderSensorRow(sensorId);
+
+        // Save preferences (params без `generator` ссылки).
+        let params = { min, max };
+        if (type === 'linear' || type === 'sin' || type === 'cos') {
+            params.pause = pause;
+            params.step = step;
+        } else if (type === 'square') {
+            params.pulseWidth = pulseWidth;
+            params.pause = pause;
+        } else {
+            params.period = period;
+        }
+        this.saveTestSignalPreferences(type, params);
+
+        closeIoncDialog();
+    },
+
+    async _writeTestSignalValue(sensorId, value) {
+        try {
+            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/set`);
+            await controlledFetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sensor_id: sensorId, value }),
+            });
+        } catch (err) {
+            console.error('TestSignal: ошибка установки значения', err);
+        }
+    },
+
+    stopSensorTestSignal(sensorId) {
+        const state = this.activeSensorTestSignals.get(sensorId);
+        if (!state) return;
+        if (state.generator) state.generator.stop();
+        if (state.type === 'square') {
+            this._setChartSteppedForTestSignal(sensorId, null); // вернуть к isDiscrete
+        }
+        this.activeSensorTestSignals.delete(sensorId);
+        this.reRenderSensorRow(sensorId);
+    },
+
+    stopAllSensorTestSignals() {
+        this.activeSensorTestSignals.forEach((state) => {
+            if (state.generator) state.generator.stop();
+        });
+        this.activeSensorTestSignals.clear();
+    },
+
+    // Установка stepped режима для графика сенсора (для square test signal).
+    // stepped: true=включить, false=выключить, null=вернуть к isDiscrete.
+    _setChartSteppedForTestSignal(sensorId, stepped) {
+        const sensor = this.sensorMap.get(sensorId);
+        if (!sensor) return;
+        const tabState = state.tabs.get(this.tabKey);
+        if (!tabState) return;
+        const varName = `io:${sensor.name}`;
+        const chartData = tabState.charts.get(varName);
+        if (!chartData) return;
+
+        let newStepped;
+        if (stepped === null) {
+            newStepped = chartData.isDiscrete ? 'before' : false;
+        } else {
+            newStepped = stepped ? 'before' : false;
+        }
+        chartData.chart.data.datasets[0].stepped = newStepped;
+        chartData.chart.update('none');
+    },
+};
+
+// Apply mixin к IONotifyControllerRenderer (объявлен в 20-ionc-renderer.js;
+// этот файл загружается лексикографически после).
+if (typeof IONotifyControllerRenderer !== 'undefined') {
+    applyMixin(IONotifyControllerRenderer, IoncTestSignalMixin);
+}
 
 
 // === 21-opcua-exchange.js ===
@@ -6224,72 +6358,35 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     async loadSensors() {
-        // Reset state for fresh load
-        this.allSensors = [];
-        this.hasMore = true;
-        this.startIndex = 0;
-        this.endIndex = 0;
+        return this._loadOpcuaSensorsTable({
+            viewportId: `opcua-sensors-viewport-${this.objectName}`,
+            tableId:    `opcua-sensors-table-${this.objectName}`,
+            noteId:     `opcua-sensors-note-${this.objectName}`,
+            buildSensorParams:   () => this._buildSensorQueryParams(),
+            postProcessSensors:  (s) => this._postProcessSensors(s),
+        });
+    }
 
-        // Reset viewport scroll position
-        const viewport = this.getEl(`opcua-sensors-viewport-${this.objectName}`);
-        if (viewport) viewport.scrollTop = 0;
-
-        // Проверяем режим фильтрации: false = серверная (default), true = UI
+    // Server-side query params (search/iotype) — только если UI-фильтр выключен.
+    _buildSensorQueryParams() {
         const useUIFilter = state.config.opcuaUISensorsFilter;
+        if (useUIFilter) return '';
+        let params = '';
+        if (this.filter) params += `&search=${encodeURIComponent(this.filter)}`;
+        if (this.typeFilter && this.typeFilter !== 'all') params += `&iotype=${this.typeFilter}`;
+        return params;
+    }
 
-        try {
-            let url = this.buildPaginatedSensorsUrl('/opcua', 0);
-
-            // Серверная фильтрация (если не включена UI фильтрация)
-            if (!useUIFilter) {
-                if (this.filter) {
-                    url += `&search=${encodeURIComponent(this.filter)}`;
-                }
-                if (this.typeFilter && this.typeFilter !== 'all') {
-                    url += `&iotype=${this.typeFilter}`;
-                }
-            }
-
-            const data = await this.fetchJSON(url);
-            let sensors = data.sensors || [];
-            this.sensorsTotal = typeof data.total === 'number' ? data.total : sensors.length;
-
-            // UI фильтрация (если включена)
-            if (useUIFilter) {
-                sensors = this.applyLocalFilters(sensors);
-            } else if (this.statusFilter && this.statusFilter !== 'all') {
-                // Status filter применяем локально (сервер не поддерживает)
-                sensors = sensors.filter(s =>
-                    (s.status || '').toLowerCase() === this.statusFilter.toLowerCase()
-                );
-            }
-
-            this.allSensors = sensors;
-            this.sensorMap.clear();
-            sensors.forEach(s => this.sensorMap.set(s.id, s));
-
-            // Если нет фильтра и есть закреплённые датчики - загрузить их отдельно
-            if (!this.hasActiveFilters()) {
-                await this.loadPinnedSensors();
-            }
-
-            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
-            this.updateVisibleRows();
-            this.updateSensorCount();
-            this.setNote(`opcua-sensors-note-${this.objectName}`, '');
-
-            // Подписываемся на SSE обновления после загрузки
-            this.subscribeToSSE();
-
-            // Обработчики сортировки
-            const table = this.getEl(`opcua-sensors-table-${this.objectName}`);
-            if (table) {
-                this.attachSortHandlers(table);
-                this.updateSortHeaders();
-            }
-        } catch (err) {
-            this.setNote(`opcua-sensors-note-${this.objectName}`, err.message, true);
+    // Local post-processing: UI-mode filter ИЛИ status filter (server не поддерживает).
+    _postProcessSensors(sensors) {
+        const useUIFilter = state.config.opcuaUISensorsFilter;
+        if (useUIFilter) return this.applyLocalFilters(sensors);
+        if (this.statusFilter && this.statusFilter !== 'all') {
+            return sensors.filter(s =>
+                (s.status || '').toLowerCase() === this.statusFilter.toLowerCase()
+            );
         }
+        return sensors;
     }
 
     // Загружает закреплённые датчики, если они не в текущем списке
@@ -6318,55 +6415,10 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     async loadMoreSensors() {
-        if (this.isLoadingChunk || !this.hasMore) return;
-
-        this.isLoadingChunk = true;
-        this.showLoadingIndicator(true);
-
-        // Проверяем режим фильтрации: false = серверная (default), true = UI
-        const useUIFilter = state.config.opcuaUISensorsFilter;
-
-        try {
-            const nextOffset = this.allSensors.length;
-            let url = this.buildPaginatedSensorsUrl('/opcua', nextOffset);
-
-            // Серверная фильтрация (если не включена UI фильтрация)
-            if (!useUIFilter) {
-                if (this.filter) {
-                    url += `&search=${encodeURIComponent(this.filter)}`;
-                }
-                if (this.typeFilter && this.typeFilter !== 'all') {
-                    url += `&iotype=${this.typeFilter}`;
-                }
-            }
-
-            const data = await this.fetchJSON(url);
-            let newSensors = data.sensors || [];
-
-            // UI фильтрация (если включена)
-            if (useUIFilter) {
-                newSensors = this.applyLocalFilters(newSensors);
-            } else if (this.statusFilter && this.statusFilter !== 'all') {
-                // Status filter применяем локально (сервер не поддерживает)
-                newSensors = newSensors.filter(s =>
-                    (s.status || '').toLowerCase() === this.statusFilter.toLowerCase()
-                );
-            }
-
-            // Дедупликация: добавляем только датчики которых еще нет
-            const existingIds = new Set(this.allSensors.map(s => s.id));
-            const uniqueNewSensors = newSensors.filter(s => !existingIds.has(s.id));
-
-            this.allSensors = [...this.allSensors, ...uniqueNewSensors];
-            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
-            this.updateVisibleRows();
-            this.updateSensorCount();
-        } catch (err) {
-            console.error('Failed to load more sensors:', err);
-        } finally {
-            this.isLoadingChunk = false;
-            this.showLoadingIndicator(false);
-        }
+        return this._loadMoreOpcuaSensorsTable({
+            buildSensorParams:   () => this._buildSensorQueryParams(),
+            postProcessSensors:  (s) => this._postProcessSensors(s),
+        });
     }
 
     renderVisibleSensors() {
@@ -7145,82 +7197,43 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     }
 
     renderRegisters() {
-        const tbody = this.getEl(`mb-registers-tbody-${this.objectName}`);
-        if (!tbody) return;
-
-        // Получаем закрепленные регистры
-        const pinnedRegisters = this.getPinned();
-        const hasPinned = pinnedRegisters.size > 0;
-
-        // Показываем/скрываем кнопку "снять все"
-        const unpinBtn = this.getEl(`mb-unpin-${this.objectName}`);
-        if (unpinBtn) {
-            unpinBtn.style.display = hasPinned ? 'inline' : 'none';
-        }
-
-        // Фильтруем регистры используя общий метод (по name, id, mbreg)
-        const mbregAccessor = (item, field) => (item.register || {})[field];
-        let registersToShow = this.applyFilters(this.allRegisters, 'name', 'iotype', null, ['mbreg'], mbregAccessor);
-
-        // Если есть закрепленные и нет фильтра — показываем только их
-        registersToShow = this.filterPinnedOnly(registersToShow, pinnedRegisters);
-
-        // Сортировка: pinned всегда вверху, остальные по выбранной колонке
-        registersToShow = this.sortItems(registersToShow, pinnedRegisters, this.sortColumnDefs);
-
-        // Обновляем счётчик с учётом фильтрации
-        this.updateItemCount(`mb-register-count-${this.objectName}`, registersToShow.length, this.registersTotal);
-
-        // Update registerMap for chart support
-        registersToShow.forEach(reg => {
-            if (reg.id) {
-                this.registerMap.set(reg.id, reg);
-            }
+        // Orchestration (filter/sort/pin/count/listeners) — в base, тут только row-html.
+        this._renderRegistersTable({
+            tbodyId: `mb-registers-tbody-${this.objectName}`,
+            unpinId: `mb-unpin-${this.objectName}`,
+            countId: `mb-register-count-${this.objectName}`,
+            countTotal: this.registersTotal,
+            mbregAccessor: (item, field) => (item.register || {})[field],
+            renderRow: (reg, isPinned) => this._renderRegisterRow(reg, isPinned),
         });
+    }
 
-        const html = registersToShow.map(reg => {
-            const isPinned = pinnedRegisters.has(String(reg.id));
-            const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-            const pinIcon = isPinned ? '📌' : '○';
-            const pinTitle = isPinned ? 'Unpin' : 'Pin';
-
-            const deviceAddr = reg.device;
-            const deviceInfo = this.devicesDict[deviceAddr] || {};
-            const regInfo = reg.register || {};
-            const respondClass = deviceInfo.respond ? 'ok' : 'fail';
-            return `
-                <tr data-sensor-id="${reg.id}">
-                    <td class="col-pin">
-                        <span class="${pinToggleClass}" data-id="${reg.id}" title="${pinTitle}">
-                            ${pinIcon}
-                        </span>
-                    </td>
-                    ${this.renderAddButtonsCell(reg.id, reg.name, 'mbreg', reg.textname || reg.name)}
-                    <td class="col-id">${reg.id}</td>
-                    <td class="col-name" title="${escapeAttr(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
-                    <td class="col-type">${reg.iotype ? `<span class="type-badge type-${reg.iotype}">${reg.iotype}</span>` : ''}</td>
-                    <td class="col-value">${reg.value !== undefined ? reg.value : ''}</td>
-                    <td class="col-device"><span class="mb-respond ${respondClass}">${deviceAddr || ''}</span></td>
-                    <td class="col-register">${regInfo.mbreg || ''}</td>
-                    <td class="col-func">${regInfo.mbfunc || ''}</td>
-                    <td class="col-mbval">${regInfo.mbval !== undefined ? regInfo.mbval : ''}</td>
-                </tr>
-            `;
-        }).join('');
-
-        tbody.innerHTML = html;
-
-        // Bind chart toggle events
-        this.attachChartToggleListeners(tbody, this.registerMap);
-
-        // Bind dashboard button events
-        this.attachDashboardToggleListeners(tbody);
-
-        // Bind pin toggle events
-        tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => this.togglePin(parseIntegerOrDefault(toggle.dataset.id, null)));
-        });
-        // unpinBtn handler — в bindEvents() (persistent элемент, не пересоздаётся).
+    _renderRegisterRow(reg, isPinned) {
+        const pinClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
+        const pinIcon = isPinned ? '📌' : '○';
+        const pinTitle = isPinned ? 'Unpin' : 'Pin';
+        const deviceAddr = reg.device;
+        const deviceInfo = this.devicesDict[deviceAddr] || {};
+        const regInfo = reg.register || {};
+        const respondClass = deviceInfo.respond ? 'ok' : 'fail';
+        return `
+            <tr data-sensor-id="${reg.id}">
+                <td class="col-pin">
+                    <span class="${pinClass}" data-id="${reg.id}" title="${pinTitle}">
+                        ${pinIcon}
+                    </span>
+                </td>
+                ${this.renderAddButtonsCell(reg.id, reg.name, 'mbreg', reg.textname || reg.name)}
+                <td class="col-id">${reg.id}</td>
+                <td class="col-name" title="${escapeAttr(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
+                <td class="col-type">${reg.iotype ? `<span class="type-badge type-${reg.iotype}">${reg.iotype}</span>` : ''}</td>
+                <td class="col-value">${reg.value !== undefined ? reg.value : ''}</td>
+                <td class="col-device"><span class="mb-respond ${respondClass}">${deviceAddr || ''}</span></td>
+                <td class="col-register">${regInfo.mbreg || ''}</td>
+                <td class="col-func">${regInfo.mbfunc || ''}</td>
+                <td class="col-mbval">${regInfo.mbval !== undefined ? regInfo.mbval : ''}</td>
+            </tr>
+        `;
     }
 
     // Override to use Modbus SSE subscription
@@ -7665,87 +7678,48 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     }
 
     renderRegisters() {
-        const tbody = this.getEl(`mbs-registers-tbody-${this.objectName}`);
-        if (!tbody) return;
-
-        // Получаем закрепленные регистры
-        const pinnedRegisters = this.getPinned();
-        const hasPinned = pinnedRegisters.size > 0;
-
-        // Показываем/скрываем кнопку "снять все"
-        const unpinBtn = this.getEl(`mbs-unpin-${this.objectName}`);
-        if (unpinBtn) {
-            unpinBtn.style.display = hasPinned ? 'inline' : 'none';
-        }
-
-        // Фильтруем регистры используя общий метод (по name, id, mbreg)
-        // ModbusSlave: mbreg может быть в r.register.mbreg или r.mbreg
-        const mbregAccessor = (item, field) => {
-            const regInfo = item.register || {};
-            return regInfo[field] !== undefined ? regInfo[field] : item[field];
-        };
-        let registersToShow = this.applyFilters(this.allRegisters, 'name', 'iotype', null, ['mbreg'], mbregAccessor);
-
-        // Если есть закрепленные и нет фильтра — показываем только их
-        registersToShow = this.filterPinnedOnly(registersToShow, pinnedRegisters);
-
-        // Сортировка: pinned всегда вверху, остальные по выбранной колонке
-        registersToShow = this.sortItems(registersToShow, pinnedRegisters, this.sortColumnDefs);
-
-        // Обновляем счётчик с учётом фильтрации
-        this.updateItemCount(`mbs-register-count-${this.objectName}`, registersToShow.length, this.registersTotal);
-
-        // Update registerMap for chart support
-        registersToShow.forEach(reg => {
-            if (reg.id) {
-                this.registerMap.set(reg.id, reg);
-            }
+        // Orchestration (filter/sort/pin/count/listeners) — в base, тут только row-html.
+        this._renderRegistersTable({
+            tbodyId: `mbs-registers-tbody-${this.objectName}`,
+            unpinId: `mbs-unpin-${this.objectName}`,
+            countId: `mbs-register-count-${this.objectName}`,
+            countTotal: this.registersTotal,
+            // ModbusSlave: mbreg может быть в r.register.mbreg или r.mbreg
+            mbregAccessor: (item, field) => {
+                const regInfo = item.register || {};
+                return regInfo[field] !== undefined ? regInfo[field] : item[field];
+            },
+            renderRow: (reg, isPinned) => this._renderRegisterRow(reg, isPinned),
         });
+    }
 
-        // ModbusSlave формат: device - это mbaddr, register содержит mbreg/mbfunc, есть amode
-        const html = registersToShow.map(reg => {
-            const isPinned = pinnedRegisters.has(String(reg.id));
-            const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-            const pinIcon = isPinned ? '📌' : '○';
-            const pinTitle = isPinned ? 'Unpin' : 'Pin';
-
-            const mbAddr = reg.device;
-            const regInfo = reg.register || {};
-            const mbreg = regInfo.mbreg !== undefined ? regInfo.mbreg : reg.mbreg;
-            const mbfunc = regInfo.mbfunc;
-            return `
-                <tr data-sensor-id="${reg.id}">
-                    <td class="col-pin">
-                        <span class="${pinToggleClass}" data-id="${reg.id}" title="${pinTitle}">
-                            ${pinIcon}
-                        </span>
-                    </td>
-                    ${this.renderAddButtonsCell(reg.id, reg.name, 'mbsreg', reg.textname || reg.name)}
-                    <td class="col-id">${reg.id}</td>
-                    <td class="col-name" title="${escapeAttr(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
-                    <td class="col-type">${reg.iotype ? `<span class="type-badge type-${reg.iotype}">${reg.iotype}</span>` : ''}</td>
-                    <td class="col-value">${reg.value !== undefined ? reg.value : ''}</td>
-                    <td class="col-mbaddr">${mbAddr || ''}</td>
-                    <td class="col-register">${mbreg !== undefined ? mbreg : ''}</td>
-                    <td class="col-func">${mbfunc !== undefined ? mbfunc : ''}</td>
-                    <td class="col-access">${reg.amode || ''}</td>
-                </tr>
-            `;
-        }).join('');
-
-        tbody.innerHTML = html;
-
-        // Bind chart toggle events
-        this.attachChartToggleListeners(tbody, this.registerMap);
-
-        // Bind dashboard toggle events
-        this.attachDashboardToggleListeners(tbody);
-
-        // Bind pin toggle events
-        tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => this.togglePin(parseIntegerOrDefault(toggle.dataset.id, null)));
-        });
-        // unpinBtn handler — в bindEvents() (persistent элемент, не пересоздаётся).
+    // ModbusSlave row: device = mbaddr, register содержит mbreg/mbfunc, есть amode.
+    _renderRegisterRow(reg, isPinned) {
+        const pinClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
+        const pinIcon = isPinned ? '📌' : '○';
+        const pinTitle = isPinned ? 'Unpin' : 'Pin';
+        const mbAddr = reg.device;
+        const regInfo = reg.register || {};
+        const mbreg = regInfo.mbreg !== undefined ? regInfo.mbreg : reg.mbreg;
+        const mbfunc = regInfo.mbfunc;
+        return `
+            <tr data-sensor-id="${reg.id}">
+                <td class="col-pin">
+                    <span class="${pinClass}" data-id="${reg.id}" title="${pinTitle}">
+                        ${pinIcon}
+                    </span>
+                </td>
+                ${this.renderAddButtonsCell(reg.id, reg.name, 'mbsreg', reg.textname || reg.name)}
+                <td class="col-id">${reg.id}</td>
+                <td class="col-name" title="${escapeAttr(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
+                <td class="col-type">${reg.iotype ? `<span class="type-badge type-${reg.iotype}">${reg.iotype}</span>` : ''}</td>
+                <td class="col-value">${reg.value !== undefined ? reg.value : ''}</td>
+                <td class="col-mbaddr">${mbAddr || ''}</td>
+                <td class="col-register">${mbreg !== undefined ? mbreg : ''}</td>
+                <td class="col-func">${mbfunc !== undefined ? mbfunc : ''}</td>
+                <td class="col-access">${reg.amode || ''}</td>
+            </tr>
+        `;
     }
 
     // Override to use ModbusSlave SSE subscription
@@ -8144,56 +8118,21 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     async loadSensors() {
-        // Reset state for fresh load
-        this.allSensors = [];
-        this.hasMore = true;
-        this.startIndex = 0;
-        this.endIndex = 0;
+        return this._loadOpcuaSensorsTable({
+            viewportId: `opcuasrv-sensors-viewport-${this.objectName}`,
+            tableId:    `opcuasrv-sensors-table-${this.objectName}`,
+            noteId:     `opcuasrv-sensors-note-${this.objectName}`,
+            buildSensorParams:   () => this._buildSensorQueryParams(),
+            postProcessSensors:  (s) => s,  // OPCUAServer не имеет UI/status post-filter
+        });
+    }
 
-        // Reset viewport scroll position
-        const viewport = this.getEl(`opcuasrv-sensors-viewport-${this.objectName}`);
-        if (viewport) viewport.scrollTop = 0;
-
-        try {
-            let url = this.buildPaginatedSensorsUrl('/opcua', 0);
-
-            if (this.filter) {
-                url += `&search=${encodeURIComponent(this.filter)}`;
-            }
-            if (this.typeFilter && this.typeFilter !== 'all') {
-                url += `&iotype=${this.typeFilter}`;
-            }
-
-            const data = await this.fetchJSON(url);
-            let sensors = data.sensors || [];
-            this.sensorsTotal = typeof data.total === 'number' ? data.total : sensors.length;
-
-            this.allSensors = sensors;
-            this.sensorMap.clear();
-            sensors.forEach(s => this.sensorMap.set(s.id, s));
-
-            // Если нет фильтра и есть закреплённые датчики - загрузить их отдельно
-            if (!this.hasActiveFilters()) {
-                await this.loadPinnedSensors();
-            }
-
-            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
-            this.updateVisibleRows();
-            this.updateSensorCount();
-            this.setNote(`opcuasrv-sensors-note-${this.objectName}`, '');
-
-            // Подписываемся на SSE обновления после загрузки
-            this.subscribeToSSE();
-
-            // Обработчики сортировки
-            const table = this.getEl(`opcuasrv-sensors-table-${this.objectName}`);
-            if (table) {
-                this.attachSortHandlers(table);
-                this.updateSortHeaders();
-            }
-        } catch (err) {
-            this.setNote(`opcuasrv-sensors-note-${this.objectName}`, err.message, true);
-        }
+    // OPCUAServer: только server-side search/iotype (нет UI-mode и status filter).
+    _buildSensorQueryParams() {
+        let params = '';
+        if (this.filter) params += `&search=${encodeURIComponent(this.filter)}`;
+        if (this.typeFilter && this.typeFilter !== 'all') params += `&iotype=${this.typeFilter}`;
+        return params;
     }
 
     // Загружает закреплённые датчики, если они не в текущем списке
@@ -8202,39 +8141,10 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     async loadMoreSensors() {
-        if (this.isLoadingChunk || !this.hasMore) return;
-
-        this.isLoadingChunk = true;
-        this.showLoadingIndicator(true);
-
-        try {
-            const nextOffset = this.allSensors.length;
-            let url = this.buildPaginatedSensorsUrl('/opcua', nextOffset);
-
-            if (this.filter) {
-                url += `&search=${encodeURIComponent(this.filter)}`;
-            }
-            if (this.typeFilter && this.typeFilter !== 'all') {
-                url += `&iotype=${this.typeFilter}`;
-            }
-
-            const data = await this.fetchJSON(url);
-            let newSensors = data.sensors || [];
-
-            // Дедупликация: добавляем только датчики которых еще нет
-            const existingIds = new Set(this.allSensors.map(s => s.id));
-            const uniqueNewSensors = newSensors.filter(s => !existingIds.has(s.id));
-
-            this.allSensors = [...this.allSensors, ...uniqueNewSensors];
-            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
-            this.updateVisibleRows();
-            this.updateSensorCount();
-        } catch (err) {
-            console.error('Failed to load more sensors:', err);
-        } finally {
-            this.isLoadingChunk = false;
-            this.showLoadingIndicator(false);
-        }
+        return this._loadMoreOpcuaSensorsTable({
+            buildSensorParams:   () => this._buildSensorQueryParams(),
+            postProcessSensors:  (s) => s,
+        });
     }
 
     renderVisibleSensors() {
@@ -20435,55 +20345,48 @@ class DigitalWidget extends DashboardWidget {
     }
 
     renderLCD() {
-        const { digits = 6, unit = '' } = this.config;
-        const totalDigits = digits + (unit ? 2 : 0); // Extra space for unit
-
-        this.element.innerHTML = `
-            <div class="digital-lcd-display" id="digital-lcd-${this.id}">
-                <div class="digital-lcd-screen">
-                    <svg class="digital-lcd-svg" id="digital-svg-${this.id}" viewBox="0 0 ${totalDigits * DIGITAL_DIGIT_SLOT_WIDTH + DIGITAL_VIEWBOX_PADDING} ${DIGITAL_VIEWBOX_HEIGHT}">
-                        <defs>
-                            <linearGradient id="lcd-bg-${this.id}" x1="0%" y1="0%" x2="0%" y2="100%">
-                                <stop offset="0%" style="stop-color:#c8d4c0"/>
-                                <stop offset="50%" style="stop-color:#b8c4b0"/>
-                                <stop offset="100%" style="stop-color:#a8b4a0"/>
-                            </linearGradient>
-                        </defs>
-                        <rect x="0" y="0" width="100%" height="100%" fill="url(#lcd-bg-${this.id})" rx="4"/>
-                        <g id="digital-digits-${this.id}" transform="translate(5, 6)"></g>
-                    </svg>
-                </div>
-            </div>
-        `;
-        this.svgEl = this.element.querySelector(`#digital-svg-${this.id}`);
-        this.digitsGroup = this.element.querySelector(`#digital-digits-${this.id}`);
-        this.updateSegmentDisplay('----');
+        const defs = `
+            <linearGradient id="lcd-bg-${this.id}" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" style="stop-color:#c8d4c0"/>
+                <stop offset="50%" style="stop-color:#b8c4b0"/>
+                <stop offset="100%" style="stop-color:#a8b4a0"/>
+            </linearGradient>`;
+        this._renderSegmentDisplay({ flavor: 'lcd', defs, bgGradientId: `lcd-bg-${this.id}` });
     }
 
     renderLED() {
-        const { digits = 6, unit = '', color = '#ff0000' } = this.config;
+        const defs = `
+            <filter id="led-glow-${this.id}" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="1.5" result="blur"/>
+                <feMerge>
+                    <feMergeNode in="blur"/>
+                    <feMergeNode in="blur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+            </filter>
+            <linearGradient id="led-bg-${this.id}" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" style="stop-color:#2a2a2a"/>
+                <stop offset="50%" style="stop-color:#1a1a1a"/>
+                <stop offset="100%" style="stop-color:#0a0a0a"/>
+            </linearGradient>`;
+        this._renderSegmentDisplay({ flavor: 'led', defs, bgGradientId: `led-bg-${this.id}` });
+    }
+
+    // Общий каркас 7-segment display: SVG с gradient'ом фоновой панели и
+    // <g id="digital-digits-..."> для рендера цифр. Разница LCD vs LED — в
+    // <defs> (flavor-specific filter/gradient) и в CSS-классах wrapper'а.
+    // updateSegmentDisplay (общий метод) рисует цифры в digitsGroup.
+    _renderSegmentDisplay({ flavor, defs, bgGradientId }) {
+        const { digits = 6, unit = '' } = this.config;
         const totalDigits = digits + (unit ? 2 : 0);
+        const viewBoxW = totalDigits * DIGITAL_DIGIT_SLOT_WIDTH + DIGITAL_VIEWBOX_PADDING;
 
         this.element.innerHTML = `
-            <div class="digital-led-display" id="digital-led-${this.id}">
-                <div class="digital-led-screen">
-                    <svg class="digital-led-svg" id="digital-svg-${this.id}" viewBox="0 0 ${totalDigits * DIGITAL_DIGIT_SLOT_WIDTH + DIGITAL_VIEWBOX_PADDING} ${DIGITAL_VIEWBOX_HEIGHT}">
-                        <defs>
-                            <filter id="led-glow-${this.id}" x="-50%" y="-50%" width="200%" height="200%">
-                                <feGaussianBlur stdDeviation="1.5" result="blur"/>
-                                <feMerge>
-                                    <feMergeNode in="blur"/>
-                                    <feMergeNode in="blur"/>
-                                    <feMergeNode in="SourceGraphic"/>
-                                </feMerge>
-                            </filter>
-                            <linearGradient id="led-bg-${this.id}" x1="0%" y1="0%" x2="0%" y2="100%">
-                                <stop offset="0%" style="stop-color:#2a2a2a"/>
-                                <stop offset="50%" style="stop-color:#1a1a1a"/>
-                                <stop offset="100%" style="stop-color:#0a0a0a"/>
-                            </linearGradient>
-                        </defs>
-                        <rect x="0" y="0" width="100%" height="100%" fill="url(#led-bg-${this.id})" rx="4"/>
+            <div class="digital-${flavor}-display" id="digital-${flavor}-${this.id}">
+                <div class="digital-${flavor}-screen">
+                    <svg class="digital-${flavor}-svg" id="digital-svg-${this.id}" viewBox="0 0 ${viewBoxW} ${DIGITAL_VIEWBOX_HEIGHT}">
+                        <defs>${defs}</defs>
+                        <rect x="0" y="0" width="100%" height="100%" fill="url(#${bgGradientId})" rx="4"/>
                         <g id="digital-digits-${this.id}" transform="translate(5, 6)"></g>
                     </svg>
                 </div>
@@ -20693,8 +20596,10 @@ class ChartWidget extends DashboardWidget {
     static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>';
     static defaultSize = { width: 24, height: 12 };
 
-    // Default colors for sensors
-    static COLORS = [
+    // Default colors for sensors внутри ChartWidget. Намеренно отличается от
+    // CHART_COLORS в 40-charts.js (палитра для IONC sensor charts) — у каждого
+    // контекста своя визуальная стилистика. Не сливать.
+    static SENSOR_COLORS = [
         '#3274d9', '#73bf69', '#f2cc0c', '#ff6b6b', '#a855f7',
         '#06b6d4', '#f97316', '#ec4899', '#14b8a6', '#8b5cf6'
     ];
@@ -20809,8 +20714,8 @@ class ChartWidget extends DashboardWidget {
                 return {
                     label,
                     data: [],
-                    borderColor: sensor.color || ChartWidget.COLORS[sensorIdx % ChartWidget.COLORS.length],
-                    backgroundColor: `${sensor.color || ChartWidget.COLORS[sensorIdx % ChartWidget.COLORS.length]}20`,
+                    borderColor: sensor.color || ChartWidget.SENSOR_COLORS[sensorIdx % ChartWidget.SENSOR_COLORS.length],
+                    backgroundColor: `${sensor.color || ChartWidget.SENSOR_COLORS[sensorIdx % ChartWidget.SENSOR_COLORS.length]}20`,
                     fill: sensor.fill !== false,
                     tension: sensor.stepped ? 0 : (sensor.smooth !== false ? CHART_LINE_TENSION : 0),
                     stepped: sensor.stepped ? 'before' : false,
@@ -20859,7 +20764,7 @@ class ChartWidget extends DashboardWidget {
                     zoneIdx,
                     sensorIdx,
                     zoneId: ChartWidget.getZoneId(zone, zoneIdx),
-                    color: sensor.color || ChartWidget.COLORS[sensorIdx % ChartWidget.COLORS.length],
+                    color: sensor.color || ChartWidget.SENSOR_COLORS[sensorIdx % ChartWidget.SENSOR_COLORS.length],
                     iotype: sensorInfo?.iotype || '',
                     textname: sensorInfo?.textname || ''
                 });
@@ -20990,44 +20895,43 @@ class ChartWidget extends DashboardWidget {
     // Called from SSE handler for each sensor update.
     // ctx — { serverId, objectName, sensorName }; используется чтобы не апдейтить
     // sensor в zone, когда у этого имени совпадение пришло с другого (server, object).
+    //
+    // Hot path (срабатывает на каждый ionc_sensor_batch): один проход по zones
+    // для table-update + chart-update вместе. Раньше было два независимых прохода.
     updateSensor(sensorName, value, timestamp = null, ctx = null) {
         // Use timestamp as number for decimation to work with parsing: false
         const ts = timestamp ? new Date(timestamp).getTime() : Date.now();
 
-        // Update table value
         const { zones = [] } = this.config;
-        zones.forEach((zone, zoneIdx) => {
-            (zone.sensors || []).forEach(sensor => {
-                if (!ChartWidget.sensorMatchesUpdate(sensor, sensorName, ctx)) return;
-                const safeId = ChartWidget.getSensorDomKey(sensor);
-                const valueEl = this.element?.querySelector(`#chart-value-${this.id}-${safeId}`);
-                if (valueEl) {
-                    valueEl.textContent = typeof value === 'number' ? value.toFixed(2) : value;
-                }
-            });
-        });
-
-        // Add point to chart
         for (let zoneIdx = 0; zoneIdx < zones.length; zoneIdx++) {
             const zone = zones[zoneIdx];
-            const chartData = this.charts.get(ChartWidget.getZoneId(zone, zoneIdx));
-            if (!chartData) continue;
-
-            const sensorIdx = (zone.sensors || []).findIndex(s => {
-                return ChartWidget.sensorMatchesUpdate(s, sensorName, ctx);
-            });
+            const sensors = zone.sensors || [];
+            const sensorIdx = sensors.findIndex(s =>
+                ChartWidget.sensorMatchesUpdate(s, sensorName, ctx)
+            );
             if (sensorIdx === -1) continue;
 
+            const sensor = sensors[sensorIdx];
+
+            // Table value cell.
+            const safeId = ChartWidget.getSensorDomKey(sensor);
+            const valueEl = this.element?.querySelector(`#chart-value-${this.id}-${safeId}`);
+            if (valueEl) {
+                valueEl.textContent = typeof value === 'number' ? value.toFixed(2) : value;
+            }
+
+            // Chart dataset point.
+            const chartData = this.charts.get(ChartWidget.getZoneId(zone, zoneIdx));
+            if (!chartData) continue;
             const dataset = chartData.chart.data.datasets[sensorIdx];
             if (!dataset) continue;
 
             dataset.data.push({ x: ts, y: value });
-
-            // Limit data points
-            if (dataset.data.length > MAX_CHART_POINTS) {
-                dataset.data.shift();
-            }
+            if (dataset.data.length > MAX_CHART_POINTS) dataset.data.shift();
         }
+        // chart.update() намеренно НЕ вызываем тут — рендер идёт пакетно в
+        // syncTimeRange() каждые CHART_WIDGET_SYNC_INTERVAL_MS (по умолчанию 2с).
+        // Это снижает CPU при частых SSE (200ms poll) ценой 0–2с задержки кадра.
     }
 
     // Called periodically to sync time range and update charts
@@ -21106,7 +21010,7 @@ class ChartWidget extends DashboardWidget {
 
     // === Single sensor row (renders inside chart-zone-sensors-{zoneIdx}) ===
     static _renderChartSensorRow({ zoneIdx, sensorIdx, sensor }) {
-        const color = sensor.color || ChartWidget.COLORS[sensorIdx % ChartWidget.COLORS.length];
+        const color = sensor.color || ChartWidget.SENSOR_COLORS[sensorIdx % ChartWidget.SENSOR_COLORS.length];
         const idx = `${zoneIdx}-${sensorIdx}`; // composite — для unique field names
         const bindingHtml = renderSensorBindingFields(sensor, { fieldPrefix: `chart-${idx}-` });
         return `
@@ -21218,7 +21122,7 @@ class ChartWidget extends DashboardWidget {
                     objectName: last?.objectName || 'SharedMemory',
                     sensor: '', sensorId: null,
                     name: '', // back-compat: runtime читает sensor.name
-                    color: ChartWidget.COLORS[colorIdx % ChartWidget.COLORS.length],
+                    color: ChartWidget.SENSOR_COLORS[colorIdx % ChartWidget.SENSOR_COLORS.length],
                     smooth: true, fill: true, stepped: false,
                 };
                 container.insertAdjacentHTML('beforeend',
@@ -21259,7 +21163,7 @@ class ChartWidget extends DashboardWidget {
                 sensors.push({
                     ...binding,
                     name:    binding.sensor, // back-compat: runtime читает sensor.name
-                    color:   form.querySelector(`[name="chart-${zoneIdx}-${sensorIdx}-color"]`)?.value || ChartWidget.COLORS[sensorIdx % ChartWidget.COLORS.length],
+                    color:   form.querySelector(`[name="chart-${zoneIdx}-${sensorIdx}-color"]`)?.value || ChartWidget.SENSOR_COLORS[sensorIdx % ChartWidget.SENSOR_COLORS.length],
                     smooth:  form.querySelector(`[name="chart-${zoneIdx}-${sensorIdx}-smooth"]`)?.checked !== false,
                     fill:    form.querySelector(`[name="chart-${zoneIdx}-${sensorIdx}-fill"]`)?.checked !== false,
                     stepped: form.querySelector(`[name="chart-${zoneIdx}-${sensorIdx}-stepped"]`)?.checked || false,
@@ -21404,9 +21308,19 @@ class DashboardManager {
         this.saveDashboardSettings();
     }
 
-    // Обновить все виджеты с их текущими значениями
+    // Обновить все виджеты с их текущими значениями. Используется после
+    // reconnect / при возврате на dashboard view.
+    //
+    // Multi-sensor widget'ы (StatusBar, BarGraph, ChartWidget) переопределяют
+    // update() так, что он принимает объект {sensorName: value}, а не scalar.
+    // Они роутятся через updateBySensor()/updateSensor() и не кешируют scalar
+    // в widget.value. Передавать им (widget.value, widget.error) бесполезно —
+    // skip и подождём следующего ionc_sensor_batch (max задержка = poll interval).
     refreshAllWidgets() {
         dashboardState.widgets.forEach((widget) => {
+            if (typeof widget.updateBySensor === 'function' || typeof widget.updateSensor === 'function') {
+                return; // multi-sensor — refresh не применим, придёт через SSE
+            }
             if (widget.value !== null) {
                 widget.update(widget.value, widget.error);
             }
@@ -23059,10 +22973,15 @@ class DashboardManager {
 
                 dashboardState.pendingImport = migrated;
 
-                // Update UI
+                // Update UI. Optional chain на classList выше прятал null, но
+                // следующая строка всё равно дереференсила — TypeError при
+                // отсутствии dropzone'а. Объединяем под одним guard'ом.
                 const dropzone = document.getElementById('import-dropzone');
-                dropzone?.classList.add('has-file');
-                dropzone.querySelector('p').textContent = `${file.name} (${config.widgets.length} widgets)`;
+                if (dropzone) {
+                    dropzone.classList.add('has-file');
+                    const p = dropzone.querySelector('p');
+                    if (p) p.textContent = `${file.name} (${config.widgets.length} widgets)`;
+                }
 
                 const nameInput = document.getElementById('import-name-input');
                 if (nameInput) {

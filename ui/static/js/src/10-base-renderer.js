@@ -1612,6 +1612,140 @@ class BaseObjectRenderer {
 
     // Привязать обработчики событий для checkbox графиков
     // sensorMap - Map с данными датчиков по id
+    // ============================================================================
+    // OPCUA-таблицы (Exchange/Server) — общая paginated-load инфраструктура.
+    //
+    // OPCUAExchange и OPCUAServer почти идентично: reset state → fetchJSON
+    // /opcua/sensors → set allSensors/sensorMap → loadPinned → updateVisible →
+    // updateCount → subscribe → wire sort handlers. Различия:
+    //   - id-префиксы (opcua-* / opcuasrv-*)
+    //   - Exchange имеет UI/server filter mode + statusFilter (post-process)
+    //   - Server — только server-side filter
+    // Subclass передаёт элементы (viewport/table/note id) + два callback'а:
+    //   buildSensorParams() — query string дополнительные `&search=...&iotype=...`
+    //   postProcessSensors(sensors) — local filter (UI mode / status filter)
+    // ============================================================================
+
+    async _loadOpcuaSensorsTable(opts) {
+        const { viewportId, tableId, noteId, buildSensorParams, postProcessSensors } = opts;
+
+        // Reset state for fresh load
+        this.allSensors = [];
+        this.hasMore = true;
+        this.startIndex = 0;
+        this.endIndex = 0;
+
+        const viewport = this.getEl(viewportId);
+        if (viewport) viewport.scrollTop = 0;
+
+        try {
+            const url = this.buildPaginatedSensorsUrl('/opcua', 0) + (buildSensorParams() || '');
+            const data = await this.fetchJSON(url);
+            let sensors = data.sensors || [];
+            this.sensorsTotal = typeof data.total === 'number' ? data.total : sensors.length;
+
+            sensors = postProcessSensors(sensors);
+
+            this.allSensors = sensors;
+            this.sensorMap.clear();
+            sensors.forEach(s => this.sensorMap.set(s.id, s));
+
+            // Если нет фильтра и есть закреплённые — догрузить отдельно.
+            if (!this.hasActiveFilters()) {
+                await this.loadPinnedSensors();
+            }
+
+            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
+            this.updateVisibleRows();
+            this.updateSensorCount();
+            this.setNote(noteId, '');
+
+            this.subscribeToSSE();
+
+            const table = this.getEl(tableId);
+            if (table) {
+                this.attachSortHandlers(table);
+                this.updateSortHeaders();
+            }
+        } catch (err) {
+            this.setNote(noteId, err.message, true);
+        }
+    }
+
+    async _loadMoreOpcuaSensorsTable(opts) {
+        const { buildSensorParams, postProcessSensors } = opts;
+
+        if (this.isLoadingChunk || !this.hasMore) return;
+
+        this.isLoadingChunk = true;
+        this.showLoadingIndicator(true);
+
+        try {
+            const nextOffset = this.allSensors.length;
+            const url = this.buildPaginatedSensorsUrl('/opcua', nextOffset) + (buildSensorParams() || '');
+            const data = await this.fetchJSON(url);
+            let newSensors = data.sensors || [];
+            newSensors = postProcessSensors(newSensors);
+
+            // Дедупликация: добавляем только датчики которых ещё нет.
+            const existingIds = new Set(this.allSensors.map(s => s.id));
+            const uniqueNewSensors = newSensors.filter(s => !existingIds.has(s.id));
+
+            this.allSensors = [...this.allSensors, ...uniqueNewSensors];
+            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
+            this.updateVisibleRows();
+            this.updateSensorCount();
+        } catch (err) {
+            console.error('Failed to load more sensors:', err);
+        } finally {
+            this.isLoadingChunk = false;
+            this.showLoadingIndicator(false);
+        }
+    }
+
+    // Общая инфраструктура render'а Modbus-подобных таблиц регистров.
+    // Берёт всё кроме row-html: фильтрация, sort, pin, count, listeners.
+    // Subclass передаёт свой row-renderer (renderRow(reg, isPinned)) и
+    // mbreg-аксессор (master/slave формат датасета чуть отличается).
+    //
+    // opts:
+    //   tbodyId        — id <tbody> элемента
+    //   unpinId        — id "Unpin all" кнопки (visibility toggle)
+    //   countId        — id badge'а с числом регистров (updateItemCount)
+    //   countTotal     — total count для badge'а (this.registersTotal)
+    //   mbregAccessor  — function(item, field) — для applyFilters(['mbreg'])
+    //   renderRow      — function(reg, isPinned) -> string (HTML <tr>...</tr>)
+    _renderRegistersTable(opts) {
+        const { tbodyId, unpinId, countId, countTotal, mbregAccessor, renderRow } = opts;
+
+        const tbody = this.getEl(tbodyId);
+        if (!tbody) return;
+
+        const pinned = this.getPinned();
+
+        const unpinBtn = this.getEl(unpinId);
+        if (unpinBtn) unpinBtn.style.display = pinned.size > 0 ? 'inline' : 'none';
+
+        let toShow = this.applyFilters(this.allRegisters, 'name', 'iotype', null, ['mbreg'], mbregAccessor);
+        toShow = this.filterPinnedOnly(toShow, pinned);
+        toShow = this.sortItems(toShow, pinned, this.sortColumnDefs);
+
+        this.updateItemCount(countId, toShow.length, countTotal);
+
+        for (const reg of toShow) {
+            if (reg.id) this.registerMap.set(reg.id, reg);
+        }
+
+        tbody.innerHTML = toShow.map(reg => renderRow(reg, pinned.has(String(reg.id)))).join('');
+
+        this.attachChartToggleListeners(tbody, this.registerMap);
+        this.attachDashboardToggleListeners(tbody);
+        tbody.querySelectorAll('.pin-toggle').forEach(t => {
+            t.addEventListener('click', () => this.togglePin(parseIntegerOrDefault(t.dataset.id, null)));
+        });
+        // unpinBtn handler — caller wire'ит один раз в bindEvents (persistent).
+    }
+
     attachChartToggleListeners(container, sensorMap) {
         if (!container) return;
         container.querySelectorAll('.chart-checkbox').forEach(cb => {

@@ -112,9 +112,19 @@ class DashboardManager {
         this.saveDashboardSettings();
     }
 
-    // Обновить все виджеты с их текущими значениями
+    // Обновить все виджеты с их текущими значениями. Используется после
+    // reconnect / при возврате на dashboard view.
+    //
+    // Multi-sensor widget'ы (StatusBar, BarGraph, ChartWidget) переопределяют
+    // update() так, что он принимает объект {sensorName: value}, а не scalar.
+    // Они роутятся через updateBySensor()/updateSensor() и не кешируют scalar
+    // в widget.value. Передавать им (widget.value, widget.error) бесполезно —
+    // skip и подождём следующего ionc_sensor_batch (max задержка = poll interval).
     refreshAllWidgets() {
         dashboardState.widgets.forEach((widget) => {
+            if (typeof widget.updateBySensor === 'function' || typeof widget.updateSensor === 'function') {
+                return; // multi-sensor — refresh не применим, придёт через SSE
+            }
             if (widget.value !== null) {
                 widget.update(widget.value, widget.error);
             }
@@ -1767,10 +1777,15 @@ class DashboardManager {
 
                 dashboardState.pendingImport = migrated;
 
-                // Update UI
+                // Update UI. Optional chain на classList выше прятал null, но
+                // следующая строка всё равно дереференсила — TypeError при
+                // отсутствии dropzone'а. Объединяем под одним guard'ом.
                 const dropzone = document.getElementById('import-dropzone');
-                dropzone?.classList.add('has-file');
-                dropzone.querySelector('p').textContent = `${file.name} (${config.widgets.length} widgets)`;
+                if (dropzone) {
+                    dropzone.classList.add('has-file');
+                    const p = dropzone.querySelector('p');
+                    if (p) p.textContent = `${file.name} (${config.widgets.length} widgets)`;
+                }
 
                 const nameInput = document.getElementById('import-name-input');
                 if (nameInput) {

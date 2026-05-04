@@ -314,56 +314,21 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     async loadSensors() {
-        // Reset state for fresh load
-        this.allSensors = [];
-        this.hasMore = true;
-        this.startIndex = 0;
-        this.endIndex = 0;
+        return this._loadOpcuaSensorsTable({
+            viewportId: `opcuasrv-sensors-viewport-${this.objectName}`,
+            tableId:    `opcuasrv-sensors-table-${this.objectName}`,
+            noteId:     `opcuasrv-sensors-note-${this.objectName}`,
+            buildSensorParams:   () => this._buildSensorQueryParams(),
+            postProcessSensors:  (s) => s,  // OPCUAServer не имеет UI/status post-filter
+        });
+    }
 
-        // Reset viewport scroll position
-        const viewport = this.getEl(`opcuasrv-sensors-viewport-${this.objectName}`);
-        if (viewport) viewport.scrollTop = 0;
-
-        try {
-            let url = this.buildPaginatedSensorsUrl('/opcua', 0);
-
-            if (this.filter) {
-                url += `&search=${encodeURIComponent(this.filter)}`;
-            }
-            if (this.typeFilter && this.typeFilter !== 'all') {
-                url += `&iotype=${this.typeFilter}`;
-            }
-
-            const data = await this.fetchJSON(url);
-            let sensors = data.sensors || [];
-            this.sensorsTotal = typeof data.total === 'number' ? data.total : sensors.length;
-
-            this.allSensors = sensors;
-            this.sensorMap.clear();
-            sensors.forEach(s => this.sensorMap.set(s.id, s));
-
-            // Если нет фильтра и есть закреплённые датчики - загрузить их отдельно
-            if (!this.hasActiveFilters()) {
-                await this.loadPinnedSensors();
-            }
-
-            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
-            this.updateVisibleRows();
-            this.updateSensorCount();
-            this.setNote(`opcuasrv-sensors-note-${this.objectName}`, '');
-
-            // Подписываемся на SSE обновления после загрузки
-            this.subscribeToSSE();
-
-            // Обработчики сортировки
-            const table = this.getEl(`opcuasrv-sensors-table-${this.objectName}`);
-            if (table) {
-                this.attachSortHandlers(table);
-                this.updateSortHeaders();
-            }
-        } catch (err) {
-            this.setNote(`opcuasrv-sensors-note-${this.objectName}`, err.message, true);
-        }
+    // OPCUAServer: только server-side search/iotype (нет UI-mode и status filter).
+    _buildSensorQueryParams() {
+        let params = '';
+        if (this.filter) params += `&search=${encodeURIComponent(this.filter)}`;
+        if (this.typeFilter && this.typeFilter !== 'all') params += `&iotype=${this.typeFilter}`;
+        return params;
     }
 
     // Загружает закреплённые датчики, если они не в текущем списке
@@ -372,39 +337,10 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     }
 
     async loadMoreSensors() {
-        if (this.isLoadingChunk || !this.hasMore) return;
-
-        this.isLoadingChunk = true;
-        this.showLoadingIndicator(true);
-
-        try {
-            const nextOffset = this.allSensors.length;
-            let url = this.buildPaginatedSensorsUrl('/opcua', nextOffset);
-
-            if (this.filter) {
-                url += `&search=${encodeURIComponent(this.filter)}`;
-            }
-            if (this.typeFilter && this.typeFilter !== 'all') {
-                url += `&iotype=${this.typeFilter}`;
-            }
-
-            const data = await this.fetchJSON(url);
-            let newSensors = data.sensors || [];
-
-            // Дедупликация: добавляем только датчики которых еще нет
-            const existingIds = new Set(this.allSensors.map(s => s.id));
-            const uniqueNewSensors = newSensors.filter(s => !existingIds.has(s.id));
-
-            this.allSensors = [...this.allSensors, ...uniqueNewSensors];
-            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
-            this.updateVisibleRows();
-            this.updateSensorCount();
-        } catch (err) {
-            console.error('Failed to load more sensors:', err);
-        } finally {
-            this.isLoadingChunk = false;
-            this.showLoadingIndicator(false);
-        }
+        return this._loadMoreOpcuaSensorsTable({
+            buildSensorParams:   () => this._buildSensorQueryParams(),
+            postProcessSensors:  (s) => s,
+        });
     }
 
     renderVisibleSensors() {

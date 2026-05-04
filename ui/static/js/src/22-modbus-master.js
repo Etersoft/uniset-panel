@@ -458,82 +458,43 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     }
 
     renderRegisters() {
-        const tbody = this.getEl(`mb-registers-tbody-${this.objectName}`);
-        if (!tbody) return;
-
-        // Получаем закрепленные регистры
-        const pinnedRegisters = this.getPinned();
-        const hasPinned = pinnedRegisters.size > 0;
-
-        // Показываем/скрываем кнопку "снять все"
-        const unpinBtn = this.getEl(`mb-unpin-${this.objectName}`);
-        if (unpinBtn) {
-            unpinBtn.style.display = hasPinned ? 'inline' : 'none';
-        }
-
-        // Фильтруем регистры используя общий метод (по name, id, mbreg)
-        const mbregAccessor = (item, field) => (item.register || {})[field];
-        let registersToShow = this.applyFilters(this.allRegisters, 'name', 'iotype', null, ['mbreg'], mbregAccessor);
-
-        // Если есть закрепленные и нет фильтра — показываем только их
-        registersToShow = this.filterPinnedOnly(registersToShow, pinnedRegisters);
-
-        // Сортировка: pinned всегда вверху, остальные по выбранной колонке
-        registersToShow = this.sortItems(registersToShow, pinnedRegisters, this.sortColumnDefs);
-
-        // Обновляем счётчик с учётом фильтрации
-        this.updateItemCount(`mb-register-count-${this.objectName}`, registersToShow.length, this.registersTotal);
-
-        // Update registerMap for chart support
-        registersToShow.forEach(reg => {
-            if (reg.id) {
-                this.registerMap.set(reg.id, reg);
-            }
+        // Orchestration (filter/sort/pin/count/listeners) — в base, тут только row-html.
+        this._renderRegistersTable({
+            tbodyId: `mb-registers-tbody-${this.objectName}`,
+            unpinId: `mb-unpin-${this.objectName}`,
+            countId: `mb-register-count-${this.objectName}`,
+            countTotal: this.registersTotal,
+            mbregAccessor: (item, field) => (item.register || {})[field],
+            renderRow: (reg, isPinned) => this._renderRegisterRow(reg, isPinned),
         });
+    }
 
-        const html = registersToShow.map(reg => {
-            const isPinned = pinnedRegisters.has(String(reg.id));
-            const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-            const pinIcon = isPinned ? '📌' : '○';
-            const pinTitle = isPinned ? 'Unpin' : 'Pin';
-
-            const deviceAddr = reg.device;
-            const deviceInfo = this.devicesDict[deviceAddr] || {};
-            const regInfo = reg.register || {};
-            const respondClass = deviceInfo.respond ? 'ok' : 'fail';
-            return `
-                <tr data-sensor-id="${reg.id}">
-                    <td class="col-pin">
-                        <span class="${pinToggleClass}" data-id="${reg.id}" title="${pinTitle}">
-                            ${pinIcon}
-                        </span>
-                    </td>
-                    ${this.renderAddButtonsCell(reg.id, reg.name, 'mbreg', reg.textname || reg.name)}
-                    <td class="col-id">${reg.id}</td>
-                    <td class="col-name" title="${escapeAttr(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
-                    <td class="col-type">${reg.iotype ? `<span class="type-badge type-${reg.iotype}">${reg.iotype}</span>` : ''}</td>
-                    <td class="col-value">${reg.value !== undefined ? reg.value : ''}</td>
-                    <td class="col-device"><span class="mb-respond ${respondClass}">${deviceAddr || ''}</span></td>
-                    <td class="col-register">${regInfo.mbreg || ''}</td>
-                    <td class="col-func">${regInfo.mbfunc || ''}</td>
-                    <td class="col-mbval">${regInfo.mbval !== undefined ? regInfo.mbval : ''}</td>
-                </tr>
-            `;
-        }).join('');
-
-        tbody.innerHTML = html;
-
-        // Bind chart toggle events
-        this.attachChartToggleListeners(tbody, this.registerMap);
-
-        // Bind dashboard button events
-        this.attachDashboardToggleListeners(tbody);
-
-        // Bind pin toggle events
-        tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => this.togglePin(parseIntegerOrDefault(toggle.dataset.id, null)));
-        });
-        // unpinBtn handler — в bindEvents() (persistent элемент, не пересоздаётся).
+    _renderRegisterRow(reg, isPinned) {
+        const pinClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
+        const pinIcon = isPinned ? '📌' : '○';
+        const pinTitle = isPinned ? 'Unpin' : 'Pin';
+        const deviceAddr = reg.device;
+        const deviceInfo = this.devicesDict[deviceAddr] || {};
+        const regInfo = reg.register || {};
+        const respondClass = deviceInfo.respond ? 'ok' : 'fail';
+        return `
+            <tr data-sensor-id="${reg.id}">
+                <td class="col-pin">
+                    <span class="${pinClass}" data-id="${reg.id}" title="${pinTitle}">
+                        ${pinIcon}
+                    </span>
+                </td>
+                ${this.renderAddButtonsCell(reg.id, reg.name, 'mbreg', reg.textname || reg.name)}
+                <td class="col-id">${reg.id}</td>
+                <td class="col-name" title="${escapeAttr(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
+                <td class="col-type">${reg.iotype ? `<span class="type-badge type-${reg.iotype}">${reg.iotype}</span>` : ''}</td>
+                <td class="col-value">${reg.value !== undefined ? reg.value : ''}</td>
+                <td class="col-device"><span class="mb-respond ${respondClass}">${deviceAddr || ''}</span></td>
+                <td class="col-register">${regInfo.mbreg || ''}</td>
+                <td class="col-func">${regInfo.mbfunc || ''}</td>
+                <td class="col-mbval">${regInfo.mbval !== undefined ? regInfo.mbval : ''}</td>
+            </tr>
+        `;
     }
 
     // Override to use Modbus SSE subscription

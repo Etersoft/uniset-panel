@@ -81,7 +81,7 @@ test.describe('IONC Value Generator', () => {
 
         // Check dialog title
         const title = page.locator('.ionc-dialog-title');
-        await expect(title).toHaveText('Генератор значений');
+        await expect(title).toHaveText('Тестовый сигнал датчика');
 
         // Check form elements exist
         await expect(page.locator('#ionc-gen-type')).toBeVisible();

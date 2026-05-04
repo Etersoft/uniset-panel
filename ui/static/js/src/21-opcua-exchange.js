@@ -498,72 +498,35 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     async loadSensors() {
-        // Reset state for fresh load
-        this.allSensors = [];
-        this.hasMore = true;
-        this.startIndex = 0;
-        this.endIndex = 0;
+        return this._loadOpcuaSensorsTable({
+            viewportId: `opcua-sensors-viewport-${this.objectName}`,
+            tableId:    `opcua-sensors-table-${this.objectName}`,
+            noteId:     `opcua-sensors-note-${this.objectName}`,
+            buildSensorParams:   () => this._buildSensorQueryParams(),
+            postProcessSensors:  (s) => this._postProcessSensors(s),
+        });
+    }
 
-        // Reset viewport scroll position
-        const viewport = this.getEl(`opcua-sensors-viewport-${this.objectName}`);
-        if (viewport) viewport.scrollTop = 0;
-
-        // Проверяем режим фильтрации: false = серверная (default), true = UI
+    // Server-side query params (search/iotype) — только если UI-фильтр выключен.
+    _buildSensorQueryParams() {
         const useUIFilter = state.config.opcuaUISensorsFilter;
+        if (useUIFilter) return '';
+        let params = '';
+        if (this.filter) params += `&search=${encodeURIComponent(this.filter)}`;
+        if (this.typeFilter && this.typeFilter !== 'all') params += `&iotype=${this.typeFilter}`;
+        return params;
+    }
 
-        try {
-            let url = this.buildPaginatedSensorsUrl('/opcua', 0);
-
-            // Серверная фильтрация (если не включена UI фильтрация)
-            if (!useUIFilter) {
-                if (this.filter) {
-                    url += `&search=${encodeURIComponent(this.filter)}`;
-                }
-                if (this.typeFilter && this.typeFilter !== 'all') {
-                    url += `&iotype=${this.typeFilter}`;
-                }
-            }
-
-            const data = await this.fetchJSON(url);
-            let sensors = data.sensors || [];
-            this.sensorsTotal = typeof data.total === 'number' ? data.total : sensors.length;
-
-            // UI фильтрация (если включена)
-            if (useUIFilter) {
-                sensors = this.applyLocalFilters(sensors);
-            } else if (this.statusFilter && this.statusFilter !== 'all') {
-                // Status filter применяем локально (сервер не поддерживает)
-                sensors = sensors.filter(s =>
-                    (s.status || '').toLowerCase() === this.statusFilter.toLowerCase()
-                );
-            }
-
-            this.allSensors = sensors;
-            this.sensorMap.clear();
-            sensors.forEach(s => this.sensorMap.set(s.id, s));
-
-            // Если нет фильтра и есть закреплённые датчики - загрузить их отдельно
-            if (!this.hasActiveFilters()) {
-                await this.loadPinnedSensors();
-            }
-
-            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
-            this.updateVisibleRows();
-            this.updateSensorCount();
-            this.setNote(`opcua-sensors-note-${this.objectName}`, '');
-
-            // Подписываемся на SSE обновления после загрузки
-            this.subscribeToSSE();
-
-            // Обработчики сортировки
-            const table = this.getEl(`opcua-sensors-table-${this.objectName}`);
-            if (table) {
-                this.attachSortHandlers(table);
-                this.updateSortHeaders();
-            }
-        } catch (err) {
-            this.setNote(`opcua-sensors-note-${this.objectName}`, err.message, true);
+    // Local post-processing: UI-mode filter ИЛИ status filter (server не поддерживает).
+    _postProcessSensors(sensors) {
+        const useUIFilter = state.config.opcuaUISensorsFilter;
+        if (useUIFilter) return this.applyLocalFilters(sensors);
+        if (this.statusFilter && this.statusFilter !== 'all') {
+            return sensors.filter(s =>
+                (s.status || '').toLowerCase() === this.statusFilter.toLowerCase()
+            );
         }
+        return sensors;
     }
 
     // Загружает закреплённые датчики, если они не в текущем списке
@@ -592,55 +555,10 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     async loadMoreSensors() {
-        if (this.isLoadingChunk || !this.hasMore) return;
-
-        this.isLoadingChunk = true;
-        this.showLoadingIndicator(true);
-
-        // Проверяем режим фильтрации: false = серверная (default), true = UI
-        const useUIFilter = state.config.opcuaUISensorsFilter;
-
-        try {
-            const nextOffset = this.allSensors.length;
-            let url = this.buildPaginatedSensorsUrl('/opcua', nextOffset);
-
-            // Серверная фильтрация (если не включена UI фильтрация)
-            if (!useUIFilter) {
-                if (this.filter) {
-                    url += `&search=${encodeURIComponent(this.filter)}`;
-                }
-                if (this.typeFilter && this.typeFilter !== 'all') {
-                    url += `&iotype=${this.typeFilter}`;
-                }
-            }
-
-            const data = await this.fetchJSON(url);
-            let newSensors = data.sensors || [];
-
-            // UI фильтрация (если включена)
-            if (useUIFilter) {
-                newSensors = this.applyLocalFilters(newSensors);
-            } else if (this.statusFilter && this.statusFilter !== 'all') {
-                // Status filter применяем локально (сервер не поддерживает)
-                newSensors = newSensors.filter(s =>
-                    (s.status || '').toLowerCase() === this.statusFilter.toLowerCase()
-                );
-            }
-
-            // Дедупликация: добавляем только датчики которых еще нет
-            const existingIds = new Set(this.allSensors.map(s => s.id));
-            const uniqueNewSensors = newSensors.filter(s => !existingIds.has(s.id));
-
-            this.allSensors = [...this.allSensors, ...uniqueNewSensors];
-            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
-            this.updateVisibleRows();
-            this.updateSensorCount();
-        } catch (err) {
-            console.error('Failed to load more sensors:', err);
-        } finally {
-            this.isLoadingChunk = false;
-            this.showLoadingIndicator(false);
-        }
+        return this._loadMoreOpcuaSensorsTable({
+            buildSensorParams:   () => this._buildSensorQueryParams(),
+            postProcessSensors:  (s) => this._postProcessSensors(s),
+        });
     }
 
     renderVisibleSensors() {
