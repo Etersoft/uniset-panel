@@ -6,6 +6,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     static getTypeName() {
         return 'IONotifyController';
     }
+    static loadingIdPrefix = 'ionc';
 
     constructor(objectName, tabKey = null) {
         super(objectName, tabKey);
@@ -346,11 +347,6 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         }
     }
 
-    showLoadingIndicator(show) {
-        const el = this.getEl(`ionc-loading-more-${this.objectName}`);
-        if (el) el.style.display = show ? 'block' : 'none';
-    }
-
     renderVisibleSensors() {
         const tbody = this.getEl(`ionc-sensors-tbody-${this.objectName}`);
         const spacer = this.getEl(`ionc-sensors-spacer-${this.objectName}`);
@@ -467,11 +463,6 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             ? `<button class="ionc-btn ionc-btn-gen-stop" data-id="${sensor.id}" title="${ctrlTitle || 'Остановить генератор'}" ${ctrlDisabled}>⏹</button>`
             : `<button class="ionc-btn ionc-btn-gen" data-id="${sensor.id}" title="${ctrlTitle || 'Генератор значений'}" ${sensor.readonly || !canCtrl ? 'disabled' : ''}>⟳</button>`;
 
-        // Кнопка закрепления (pin)
-        const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-        const pinIcon = isPinned ? '📌' : '○';
-        const pinTitle = isPinned ? 'Unpin' : 'Pin';
-
         // Checkbox для графика
         const isOnChart = this.isSensorOnChart(sensor.name);
         const varName = `ionc-${sensor.id}`;
@@ -481,11 +472,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         return `
             <tr class="ionc-sensor-row ${frozenClass} ${blockedClass} ${readonlyClass} ${generatorClass}" data-sensor-id="${sensor.id}">
-                <td class="ionc-col-pin">
-                    <span class="${pinToggleClass}" data-id="${sensor.id}" title="${pinTitle}">
-                        ${pinIcon}
-                    </span>
-                </td>
+                ${this.renderPinToggleCell({ id: sensor.id, isPinned, cellClass: 'ionc-col-pin' })}
                 <td class="ionc-col-add-buttons add-buttons-col">
                     <span class="chart-toggle">
                         <input type="checkbox"
@@ -588,41 +575,23 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         const doSetValue = async () => {
             const input = document.getElementById('ionc-set-value');
-            const value = parseInt(input.value, 10);
+            const value = parseIntegerOrDefault(input.value, NaN);
 
-            if (isNaN(value)) {
+            if (Number.isNaN(value)) {
                 showIoncDialogError('Enter an integer');
                 input.classList.add('error');
                 return;
             }
 
-            try {
-                const url = self.buildUrl(`/api/objects/${encodeURIComponent(objectName)}/ionc/set`);
-                const response = await controlledFetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sensor_id: sensorId, value: value })
-                });
-
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.error || 'Failed to set value');
-                }
-
-                // Обновляем локально
-                if (sensor.frozen) {
-                    // Если заморожен - обновляем real_value (значение SM), value остаётся замороженным
-                    sensor.real_value = value;
-                } else {
-                    sensor.value = value;
-                }
-                // Перерисовываем строку для корректного отображения формата
-                self.reRenderSensorRow(sensorId);
-
-                closeIoncDialog();
-            } catch (err) {
-                showIoncDialogError(`Error: ${err.message}`);
-            }
+            await self._ioncSensorAction(
+                sensorId, 'set', { value },
+                (s, body) => {
+                    // Если заморожен — обновляем real_value (значение SM), value остаётся замороженным.
+                    if (s.frozen) s.real_value = body.value;
+                    else          s.value      = body.value;
+                },
+                { errorPrefix: 'Failed to set value', autoCloseDialog: true }
+            );
         };
 
         openIoncDialog({
@@ -664,37 +633,25 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         const doFreeze = async () => {
             const input = document.getElementById('ionc-freeze-value');
-            const value = parseInt(input.value, 10);
+            const value = parseIntegerOrDefault(input.value, NaN);
 
-            if (isNaN(value)) {
+            if (Number.isNaN(value)) {
                 showIoncDialogError('Enter an integer');
                 input.classList.add('error');
                 return;
             }
 
-            try {
-                const url = self.buildUrl(`/api/objects/${encodeURIComponent(objectName)}/ionc/freeze`);
-                const response = await controlledFetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sensor_id: sensorId, value: value })
-                });
-
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.error || 'Failed to freeze');
-                }
-
-                // Локальное обновление для мгновенной обратной связи
-                // SSE обновления подтвердят состояние из API
-                sensor.real_value = sensor.value;
-                sensor.frozen = true;
-                sensor.value = value;
-                self.reRenderSensorRow(sensorId);
-                closeIoncDialog();
-            } catch (err) {
-                showIoncDialogError(`Error: ${err.message}`);
-            }
+            await self._ioncSensorAction(
+                sensorId, 'freeze', { value },
+                (s, body) => {
+                    // Локальное обновление для мгновенной обратной связи —
+                    // SSE update подтвердит state из API.
+                    s.real_value = s.value;
+                    s.frozen = true;
+                    s.value = body.value;
+                },
+                { errorPrefix: 'Failed to freeze', autoCloseDialog: true }
+            );
         };
 
         openIoncDialog({
@@ -709,11 +666,12 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     // Internal: общий POST к ionc-эндпоинту с локальным sensor mutate + перерисовкой.
-    // endpoint: 'freeze' | 'unfreeze'
-    // body: payload для POST (sensor_id обязателен)
-    // mutateSensor(sensor): функция локального обновления sensor для мгновенной FB
-    // onError (optional): дефолтный msg если err.error пустой
-    async _ioncSensorAction(sensorId, endpoint, body, mutateSensor, onError) {
+    // endpoint: 'set' | 'freeze' | 'unfreeze'
+    // body: payload для POST (sensor_id будет добавлен)
+    // mutateSensor(sensor, body): функция локального обновления sensor для мгновенной FB
+    // opts.errorPrefix — дефолтный msg если err.error пустой (по умолчанию `Failed to ${endpoint}`)
+    // opts.autoCloseDialog — закрыть IONC dialog после успеха (для dialog-driven actions).
+    async _ioncSensorAction(sensorId, endpoint, body, mutateSensor, opts = {}) {
         const sensor = this.sensorMap.get(sensorId);
         if (!sensor) return;
         try {
@@ -725,10 +683,11 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             });
             if (!response.ok) {
                 const err = await response.json();
-                throw new Error(err.error || onError || `Failed to ${endpoint}`);
+                throw new Error(err.error || opts.errorPrefix || `Failed to ${endpoint}`);
             }
-            mutateSensor(sensor);
+            mutateSensor(sensor, body);
             this.reRenderSensorRow(sensorId);
+            if (opts.autoCloseDialog) closeIoncDialog();
         } catch (err) {
             showIoncDialogError(`Error: ${err.message}`);
         }
@@ -741,7 +700,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         await this._ioncSensorAction(sensorId, 'freeze',
             { value: sensor.value },
             (s) => { s.real_value = s.value; s.frozen = true; },
-            'Failed to freeze');
+            { errorPrefix: 'Failed to freeze' });
     }
 
     // Показать диалог разморозки (клик на 🔥)
@@ -778,29 +737,14 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         `;
 
         const doUnfreeze = async () => {
-            try {
-                const url = self.buildUrl(`/api/objects/${encodeURIComponent(objectName)}/ionc/unfreeze`);
-                const response = await controlledFetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sensor_id: sensorId })
-                });
-
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.error || 'Failed to unfreeze');
-                }
-
-                // Локальное обновление для мгновенной обратной связи
-                sensor.frozen = false;
-                if (sensor.real_value !== undefined) {
-                    sensor.value = sensor.real_value;
-                }
-                self.reRenderSensorRow(sensorId);
-                closeIoncDialog();
-            } catch (err) {
-                showIoncDialogError(`Error: ${err.message}`);
-            }
+            await self._ioncSensorAction(
+                sensorId, 'unfreeze', {},
+                (s) => {
+                    s.frozen = false;
+                    if (s.real_value !== undefined) s.value = s.real_value;
+                },
+                { errorPrefix: 'Failed to unfreeze', autoCloseDialog: true }
+            );
         };
 
         openIoncDialog({

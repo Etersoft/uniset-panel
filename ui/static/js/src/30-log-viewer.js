@@ -80,7 +80,7 @@ class LogViewer {
                         <path d="M6 9l6 6 6-6"/>
                     </svg>
                     <span class="logviewer-title">Logs</span>
-                    <div class="logviewer-controls" onclick="event.stopPropagation()">
+                    <div class="logviewer-controls">
                         <div class="log-level-wrapper" id="log-level-wrapper-${this.objectName}">
                             <button class="log-level-btn" id="log-level-btn-${this.objectName}" title="Select log levels">
                                 Levels ▼
@@ -298,65 +298,46 @@ class LogViewer {
     }
 
     saveFilterOptions() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-filter-options') || '{}');
+        updateStorageMap('uniset-panel-filter-options', (saved) => {
             saved[this.tabKey] = {
                 regex: this.filterRegex,
                 case: this.filterCase,
                 only: this.filterOnlyMatches
             };
-            localStorage.setItem('uniset-panel-filter-options', JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save filter options:', err);
-        }
+        });
     }
 
     loadFilterOptions() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-filter-options') || '{}');
-            const opts = saved[this.tabKey] || saved[this.objectName];
-            if (opts) {
-                this.filterRegex = opts.regex !== undefined ? opts.regex : true;
-                this.filterCase = opts.case !== undefined ? opts.case : false;
-                this.filterOnlyMatches = opts.only !== undefined ? opts.only : false;
+        const saved = loadStorageMap('uniset-panel-filter-options');
+        const opts = saved[this.tabKey] || saved[this.objectName];
+        if (!opts) return;
 
-                // Update checkboxes
-                const regexCheckbox = this.getEl(`log-filter-regex-${this.objectName}`);
-                const caseCheckbox = this.getEl(`log-filter-case-${this.objectName}`);
-                const onlyCheckbox = this.getEl(`log-filter-only-${this.objectName}`);
+        this.filterRegex = opts.regex !== undefined ? opts.regex : true;
+        this.filterCase = opts.case !== undefined ? opts.case : false;
+        this.filterOnlyMatches = opts.only !== undefined ? opts.only : false;
 
-                if (regexCheckbox) regexCheckbox.checked = this.filterRegex;
-                if (caseCheckbox) caseCheckbox.checked = this.filterCase;
-                if (onlyCheckbox) onlyCheckbox.checked = this.filterOnlyMatches;
-            }
-        } catch (err) {
-            console.warn('Failed to load filter options:', err);
-        }
+        const regexCheckbox = this.getEl(`log-filter-regex-${this.objectName}`);
+        const caseCheckbox = this.getEl(`log-filter-case-${this.objectName}`);
+        const onlyCheckbox = this.getEl(`log-filter-only-${this.objectName}`);
+
+        if (regexCheckbox) regexCheckbox.checked = this.filterRegex;
+        if (caseCheckbox) caseCheckbox.checked = this.filterCase;
+        if (onlyCheckbox) onlyCheckbox.checked = this.filterOnlyMatches;
     }
 
     saveBufferSize() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-buffersize') || '{}');
-            saved[this.tabKey] = this.maxLines;
-            localStorage.setItem('uniset-panel-buffersize', JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save buffer size:', err);
-        }
+        updateStorageMap('uniset-panel-buffersize', (saved) => { saved[this.tabKey] = this.maxLines; });
     }
 
     loadSavedBufferSize() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-buffersize') || '{}');
-            const bufSize = saved[this.tabKey] ?? saved[this.objectName];
-            if (bufSize) {
-                this.maxLines = bufSize;
-                const bufferSelect = this.getEl(`log-buffer-${this.objectName}`);
-                if (bufferSelect) {
-                    bufferSelect.value = this.maxLines;
-                }
+        const saved = loadStorageMap('uniset-panel-buffersize');
+        const bufSize = saved[this.tabKey] ?? saved[this.objectName];
+        if (bufSize) {
+            this.maxLines = bufSize;
+            const bufferSelect = this.getEl(`log-buffer-${this.objectName}`);
+            if (bufferSelect) {
+                bufferSelect.value = this.maxLines;
             }
-        } catch (err) {
-            console.warn('Failed to load buffer size:', err);
         }
     }
 
@@ -487,38 +468,30 @@ class LogViewer {
     }
 
     saveLevels() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-loglevels') || '{}');
+        updateStorageMap('uniset-panel-loglevels', (saved) => {
             saved[this.tabKey] = Array.from(this.selectedLevels);
-            localStorage.setItem('uniset-panel-loglevels', JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save log levels:', err);
-        }
+        });
     }
 
     loadSavedLevels() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-loglevels') || '{}');
-            const levels = saved[this.tabKey] || saved[this.objectName];
-            if (levels) {
-                this.selectedLevels = new Set(levels);
-                this.updatePillsUI();
-                // Calculate mask for currentLevel
-                let mask = 0;
-                if (this.selectedLevels.has('ANY')) {
-                    mask = LOG_LEVELS.ANY;
-                } else {
-                    this.selectedLevels.forEach(level => {
-                        if (LOG_LEVELS[level]) {
-                            mask |= LOG_LEVELS[level];
-                        }
-                    });
+        const saved = loadStorageMap('uniset-panel-loglevels');
+        const levels = saved[this.tabKey] || saved[this.objectName];
+        if (!levels) return;
+
+        this.selectedLevels = new Set(levels);
+        this.updatePillsUI();
+        // Calculate mask for currentLevel
+        let mask = 0;
+        if (this.selectedLevels.has('ANY')) {
+            mask = LOG_LEVELS.ANY;
+        } else {
+            this.selectedLevels.forEach(level => {
+                if (LOG_LEVELS[level]) {
+                    mask |= LOG_LEVELS[level];
                 }
-                this.currentLevel = mask;
-            }
-        } catch (err) {
-            console.warn('Failed to load log levels:', err);
+            });
         }
+        this.currentLevel = mask;
     }
 
     setupResize() {
@@ -856,9 +829,8 @@ class LogViewer {
                 const flags = this.filterCase ? 'g' : 'gi';
                 regex = new RegExp(`(${this.filter})`, flags);
             } else {
-                const escaped = this.filter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 const flags = this.filterCase ? 'g' : 'gi';
-                regex = new RegExp(`(${escaped})`, flags);
+                regex = new RegExp(`(${escapeRegex(this.filter)})`, flags);
             }
 
             if (regex.test(text)) {
@@ -1080,28 +1052,18 @@ class LogViewer {
     }
 
     saveHeight() {
-        try {
-            const heights = JSON.parse(localStorage.getItem('uniset-panel-logheights') || '{}');
-            heights[this.tabKey] = this.height;
-            localStorage.setItem('uniset-panel-logheights', JSON.stringify(heights));
-        } catch (err) {
-            console.warn('Failed to save log height:', err);
-        }
+        updateStorageMap('uniset-panel-logheights', (heights) => { heights[this.tabKey] = this.height; });
     }
 
     loadSavedHeight() {
-        try {
-            const heights = JSON.parse(localStorage.getItem('uniset-panel-logheights') || '{}');
-            const h = heights[this.tabKey] ?? heights[this.objectName];
-            if (h) {
-                this.height = h;
-                const container = this.getEl(`log-container-${this.objectName}`);
-                if (container) {
-                    container.style.height = `${this.height}px`;
-                }
+        const heights = loadStorageMap('uniset-panel-logheights');
+        const h = heights[this.tabKey] ?? heights[this.objectName];
+        if (h) {
+            this.height = h;
+            const container = this.getEl(`log-container-${this.objectName}`);
+            if (container) {
+                container.style.height = `${this.height}px`;
             }
-        } catch (err) {
-            console.warn('Failed to load log height:', err);
         }
     }
 

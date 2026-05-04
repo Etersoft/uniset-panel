@@ -428,13 +428,9 @@ function renderStatisticsSensors(tabKey, filterText = '') {
 
 // Восстановление состояния спойлеров из localStorage
 function restoreCollapsedSections(objectName) {
-    try {
-        const saved = localStorage.getItem('uniset-panel-collapsed');
-        if (saved) {
-            state.collapsedSections = JSON.parse(saved);
-        }
-    } catch (err) {
-        console.warn('Error загрузки состояния спойлеров:', err);
+    const saved = loadJSON('uniset-panel-collapsed', null);
+    if (saved && typeof saved === 'object') {
+        state.collapsedSections = saved;
     }
 
     // Apply сохранённые состояния к секциям этого объекта
@@ -459,12 +455,7 @@ function saveCollapsedSections() {
     });
 
     state.collapsedSections = collapsed;
-
-    try {
-        localStorage.setItem('uniset-panel-collapsed', JSON.stringify(collapsed));
-    } catch (err) {
-        console.warn('Error сохранения состояния спойлеров:', err);
-    }
+    saveJSON('uniset-panel-collapsed', collapsed);
 }
 
 // Color picker для изменения цвета графика
@@ -653,13 +644,7 @@ function setupChartsResize(tabKey) {
 }
 
 function saveChartsHeight(tabKey, height) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-charts-height') || '{}');
-        saved[tabKey] = height;
-        localStorage.setItem('uniset-panel-charts-height', JSON.stringify(saved));
-    } catch (err) {
-        console.warn('Failed to save charts height:', err);
-    }
+    updateStorageMap('uniset-panel-charts-height', (saved) => { saved[tabKey] = height; });
 }
 
 function loadChartsHeight(tabKey) {
@@ -667,18 +652,13 @@ function loadChartsHeight(tabKey) {
     if (!tabState) return;
 
     const displayName = tabState.displayName || tabKey;
-
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-charts-height') || '{}');
-        if (saved[tabKey]) {
-            const chartsContainer = getElementInTab(tabKey, `charts-container-${displayName}`);
-            if (chartsContainer) {
-                chartsContainer.style.height = `${saved[tabKey]}px`;
-                chartsContainer.style.maxHeight = `${saved[tabKey]}px`;
-            }
+    const saved = loadStorageMap('uniset-panel-charts-height');
+    if (saved[tabKey]) {
+        const chartsContainer = getElementInTab(tabKey, `charts-container-${displayName}`);
+        if (chartsContainer) {
+            chartsContainer.style.height = `${saved[tabKey]}px`;
+            chartsContainer.style.maxHeight = `${saved[tabKey]}px`;
         }
-    } catch (err) {
-        console.warn('Failed to load charts height:', err);
     }
 }
 
@@ -695,13 +675,7 @@ function setupIONCSensorsResize(tabKey, objectName) {
 }
 
 function saveIONCSensorsHeight(tabKey, height) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-ionc-height') || '{}');
-        saved[tabKey] = height;
-        localStorage.setItem('uniset-panel-ionc-height', JSON.stringify(saved));
-    } catch (err) {
-        console.warn('Failed to save IONC sensors height:', err);
-    }
+    updateStorageMap('uniset-panel-ionc-height', (saved) => { saved[tabKey] = height; });
 }
 
 function loadIONCSensorsHeight(tabKey, objectName) {

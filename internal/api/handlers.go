@@ -293,9 +293,8 @@ func (h *Handlers) GetObjects(w http.ResponseWriter, r *http.Request) {
 // GetObjectData возвращает текущие данные объекта
 // GET /api/objects/{name}?server=serverID
 func (h *Handlers) GetObjectData(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
@@ -350,9 +349,8 @@ func (h *Handlers) GetObjectData(w http.ResponseWriter, r *http.Request) {
 // WatchObject добавляет объект в список наблюдения
 // POST /api/objects/{name}/watch?server=serverID
 func (h *Handlers) WatchObject(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
@@ -373,9 +371,8 @@ func (h *Handlers) WatchObject(w http.ResponseWriter, r *http.Request) {
 // UnwatchObject удаляет объект из списка наблюдения
 // DELETE /api/objects/{name}/watch?server=serverID
 func (h *Handlers) UnwatchObject(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
@@ -559,9 +556,8 @@ type ExternalSensorsRequest struct {
 // SubscribeExternalSensors подписывает объект на внешние датчики из SM
 // POST /api/objects/{name}/external-sensors
 func (h *Handlers) SubscribeExternalSensors(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
@@ -571,8 +567,7 @@ func (h *Handlers) SubscribeExternalSensors(w http.ResponseWriter, r *http.Reque
 	}
 
 	var req ExternalSensorsRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, http.StatusBadRequest, "invalid request body")
+	if !h.decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -615,9 +610,8 @@ func (h *Handlers) UnsubscribeExternalSensor(w http.ResponseWriter, r *http.Requ
 // GetExternalSensors возвращает список подписанных внешних датчиков для объекта
 // GET /api/objects/{name}/external-sensors
 func (h *Handlers) GetExternalSensors(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 

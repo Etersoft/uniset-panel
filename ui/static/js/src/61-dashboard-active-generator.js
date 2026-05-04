@@ -2,7 +2,7 @@
 // GeneratorWidget — обёртка вокруг SignalGenerator engine для dashboard.
 //
 // Запускает математический генератор (square/sin/cos/linear/random),
-// каждый тик пишет в датчик через _writeRaw (fire-and-forget). Параметры
+// каждый тик пишет в датчик через _doWriteSilent (fire-and-forget). Параметры
 // настраиваются только через config dialog, на widget'е — Start/Stop toggle
 // + текущее значение.
 //
@@ -38,9 +38,6 @@ class GeneratorWidget extends ActiveDashboardWidget {
     constructor(id, config, container) {
         super(id, config, container);
         this._signalGen = null;
-        this._lastTickValue = null;
-        this._writeUrl = null;
-        this._writeSensorId = undefined;
     }
 
     // === Render ===
@@ -73,7 +70,8 @@ class GeneratorWidget extends ActiveDashboardWidget {
         this.feedbackValue = value;
         this.value = value;
         this.error = error;
-        // НЕ вызываем renderFeedback — UI показывает _lastTickValue от генератора.
+        // НЕ вызываем renderFeedback — UI показывает значение от генератора
+        // через _updateValueDisplay в _onTick.
     }
 
     // === Toggle handler ===
@@ -93,27 +91,8 @@ class GeneratorWidget extends ActiveDashboardWidget {
 
     // === Start/Stop ===
     _start() {
-        // Resolve all params and validate at start.
-        const sensorId = this.config?.sensorId ?? this.config?.sensor;
-        if (sensorId === undefined || sensorId === null || sensorId === '') {
-            this._setWriteState('error', 'Sensor not configured');
-            return;
-        }
-        const serverId = this.config?.serverId ?? this._resolveServerId();
-        if (!serverId) {
-            this._setWriteState('error', 'No connected server');
-            return;
-        }
-        if (!this.config?.serverId && !this._serverIdFallbackWarned) {
-            this._serverIdFallbackWarned = true;
-            console.warn(`Generator widget ${this.id || '<unknown>'}: serverId missing in config, using fallback ${serverId} — config will be migrated on next dashboard load`);
-        }
-        const objectName = this.config?.objectName || 'SharedMemory';
         // S-3: guard against double-start (rapid double-toggle leak).
         if (this._signalGen) return;
-        // I-1: cache write target — avoid re-resolving every tick.
-        this._writeUrl = `/api/objects/${encodeURIComponent(objectName)}/ionc/set?server=${encodeURIComponent(serverId)}`;
-        this._writeSensorId = sensorId;
         this._signalGen = new SignalGenerator({
             type: this.config?.type || 'square',
             min: this.config?.min ?? GENERATOR_DEFAULT_MIN,
@@ -133,9 +112,6 @@ class GeneratorWidget extends ActiveDashboardWidget {
             this._signalGen.stop();
             this._signalGen = null;
         }
-        this._lastTickValue = null;
-        this._writeUrl = null;
-        this._writeSensorId = undefined;
         this._updateValueDisplay(null);
         this._updateRunningUI(false);
     }
@@ -144,36 +120,15 @@ class GeneratorWidget extends ActiveDashboardWidget {
         return !!this._signalGen?.isRunning();
     }
 
-    _onTick(value) {
-        this._lastTickValue = value;
+    async _onTick(value) {
         this._updateValueDisplay(value);
-        this._writeRaw(value);
-    }
-
-    // _writeRaw — fire-and-forget POST на ionc/set, без per-tick confirm/state.
-    // Errors → _stop + setWriteState('error') → UI: purple border + tooltip.
-    async _writeRaw(value) {
-        if (!this._writeUrl || this._writeSensorId === undefined) {
-            // Should not happen if _start succeeded, defensive
+        // Fire-and-forget: per-tick без UI flash. На ошибке — стоп с error state.
+        // Validation (sensorId/serverId/objectName) происходит внутри _doWriteSilent.
+        const result = await this._doWriteSilent(value);
+        if (!result.ok) {
+            console.warn('Generator write failed:', result.error);
             this._stop();
-            return;
-        }
-        try {
-            const resp = await controlledFetch(this._writeUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sensor_id: this._writeSensorId, value }),
-            });
-            if (!resp.ok) {
-                const data = await resp.json().catch(() => ({}));
-                console.warn('Generator write failed:', resp.status, data.error);
-                this._stop();
-                this._setWriteState('error', data.error || `HTTP ${resp.status}`);
-            }
-        } catch (e) {
-            console.warn('Generator write exception:', e);
-            this._stop();
-            this._setWriteState('error', e.message);
+            this._setWriteState('error', result.error);
         }
     }
 

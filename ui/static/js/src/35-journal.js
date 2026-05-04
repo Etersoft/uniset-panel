@@ -406,17 +406,13 @@ class JournalRenderer {
         // Сплитим raw по совпадениям, escapeHtml каждый фрагмент. Раньше regex
         // применялся к escaped-строке — поиск по '<', '>', '&', '"', '=' в тексте
         // вроде "value >= 5" не находил совпадение, потому что ищем в "value &gt;= 5".
-        const regex = new RegExp(`(${this.escapeRegex(searchTerm)})`, 'gi');
+        const regex = new RegExp(`(${escapeRegex(searchTerm)})`, 'gi');
         const parts = raw.split(regex);
         return parts.map((part, i) =>
             i % 2 === 1
                 ? `<mark class="journal-highlight">${escapeHtml(part)}</mark>`
                 : escapeHtml(part)
         ).join('');
-    }
-
-    escapeRegex(str) {
-        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
     getMTypeClass(mtype) {

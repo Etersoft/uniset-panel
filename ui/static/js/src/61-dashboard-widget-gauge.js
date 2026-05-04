@@ -76,7 +76,7 @@ class GaugeWidget extends DashboardWidget {
 
     // === Default style (current design) ===
     renderDefault() {
-        const { min = 0, max = 100, unit = '' } = this.config;
+        const { min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX, unit = '' } = this.config;
 
         this.element.innerHTML = `
             <svg class="gauge-svg" viewBox="0 0 100 60">
@@ -110,7 +110,7 @@ class GaugeWidget extends DashboardWidget {
 
     // === Classic style (chrome rim, trading style) ===
     renderClassic() {
-        const { min = 0, max = 100, unit = '', zones = [] } = this.config;
+        const { min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX, unit = '', zones = [] } = this.config;
         const ticks = this.generateTicks(min, max, 5);
 
         // Semicircular gauge with value below on dark background
@@ -218,7 +218,7 @@ class GaugeWidget extends DashboardWidget {
 
     // === Modern style (Lada dashboard style) ===
     renderModern() {
-        const { min = 0, max = 100, unit = '', zones = [] } = this.config;
+        const { min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX, unit = '', zones = [] } = this.config;
         const ticks = this.generateTicks(min, max, 5);
 
         // Match speedometer outer diameter with thicker bezel
@@ -335,7 +335,7 @@ class GaugeWidget extends DashboardWidget {
 
     // === Speedometer style (realistic automotive gauge) ===
     renderSpeedometer() {
-        const { min = 0, max = 4000, unit = 'RPM', zones = [] } = this.config;
+        const { min = WIDGET_DEFAULT_MIN, max = SPEEDOMETER_DEFAULT_MAX_RPM, unit = 'RPM', zones = [] } = this.config;
         const majorStep = this.calculateMajorStep(min, max);
         const ticks = this.generateSpeedoTicks(min, max, majorStep);
 
@@ -441,7 +441,7 @@ class GaugeWidget extends DashboardWidget {
 
     // === Dual Scale style (main value + target indicator) ===
     renderDualScale() {
-        const { min = 0, max = 100, unit = '', zones = [], sensor2 = '' } = this.config;
+        const { min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX, unit = '', zones = [], sensor2 = '' } = this.config;
         const hasSensor2 = sensor2 && sensor2.trim() !== '';
 
         const { cx, cy, r } = GaugeWidget.layoutForStyle('dual');
@@ -709,7 +709,7 @@ class GaugeWidget extends DashboardWidget {
     update(value, error = null) {
         super.update(value, error);
 
-        const { min = 0, max = 100, decimals = 1, style = 'default' } = this.config;
+        const { min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX, decimals = 1, style = 'default' } = this.config;
 
         // For speedometer/dual, check digitalEl; for others, check valueEl
         const hasDisplay = (style === 'speedometer' || style === 'dual') ? this.digitalEl : this.valueEl;
@@ -767,7 +767,7 @@ class GaugeWidget extends DashboardWidget {
     updateSetpoint(value, error = null) {
         if (!this.targetEl) return;
 
-        const { min = 0, max = 100, style = 'default', decimals = 1 } = this.config;
+        const { min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX, style = 'default', decimals = 1 } = this.config;
 
         // Only for dual style
         if (style !== 'dual') return;
@@ -933,11 +933,7 @@ class GaugeWidget extends DashboardWidget {
                     sensorId:   config.sensorId2 ?? null,
                 }, { fieldPrefix: 'sensor2-', sensorLabel: 'Target/Setpoint Sensor' })}
             </div>
-            <div class="widget-config-field">
-                <label>Label</label>
-                <input type="text" class="widget-input" name="label"
-                       value="${escapeAttr(config.label || '')}" placeholder="Display label">
-            </div>
+            ${renderLabelField(config)}
             <div class="widget-config-field">
                 <label>Style</label>
                 <select class="widget-select" name="style">
@@ -1028,8 +1024,6 @@ class GaugeWidget extends DashboardWidget {
         // Если юзер переключит style → dual после открытия диалога, sensor2 поля
         // станут видны (toggleDualScaleFields), но без wiring останутся пустыми.
         // Listener wire'ит их при первом переходе в dual; helper idempotent.
-        // Также явно дёргаем toggleDualScaleFields — раньше это делал inline
-        // onchange="toggleDualScaleFields(this)" в HTML (убран как двойной binding).
         const styleSel = form.querySelector('[name="style"]');
         styleSel?.addEventListener('change', () => {
             toggleDualScaleFields(styleSel);

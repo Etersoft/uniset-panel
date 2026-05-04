@@ -2,6 +2,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     static getTypeName() {
         return 'OPCUAServer';
     }
+    static loadingIdPrefix = 'opcuasrv';
 
     constructor(objectName, tabKey = null) {
         super(objectName, tabKey);
@@ -390,19 +391,11 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         // Render visible rows with type badges and chart toggle
         tbody.innerHTML = visibleSensors.map(sensor => {
             const isPinned = pinnedSensors.has(String(sensor.id));
-            const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-            const pinIcon = isPinned ? '📌' : '○';
-            const pinTitle = isPinned ? 'Unpin' : 'Pin';
-
             const iotype = sensor.iotype || sensor.type || '';
             const typeBadgeClass = iotype ? `type-badge type-${iotype}` : '';
             return `
             <tr data-sensor-id="${sensor.id || ''}">
-                <td class="col-pin">
-                    <span class="${pinToggleClass}" data-id="${sensor.id}" title="${pinTitle}">
-                        ${pinIcon}
-                    </span>
-                </td>
+                ${this.renderPinToggleCell({ id: sensor.id, isPinned })}
                 ${this.renderAddButtonsCell(sensor.id, sensor.name, 'opcuasrv', sensor.textname || sensor.name)}
                 <td>${sensor.id || ''}</td>
                 <td class="sensor-name" title="${escapeAttr(sensor.textname || sensor.comment || '')}">${escapeHtml(sensor.name || '')}</td>
@@ -431,20 +424,11 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         }
     }
 
-    // Override to use OPCUAServer SSE subscription
+    // OPCUAServer sensors are already subscribed through main SSE
     subscribeToChartSensor(sensorId) {
-        // OPCUAServer sensors are already subscribed through main SSE
-        if (!this.subscribedSensorIds.has(sensorId)) {
-            this.subscribedSensorIds.add(sensorId);
-        }
+        this.subscribeToChartSensorLocal(sensorId);
     }
 
-    showLoadingIndicator(show) {
-        const indicator = this.getEl(`opcuasrv-loading-more-${this.objectName}`);
-        if (indicator) {
-            indicator.style.display = show ? 'block' : 'none';
-        }
-    }
 
     updateSensorCount() {
         this.updateItemCount(`opcuasrv-sensor-count-${this.objectName}`, this.allSensors.length, this.sensorsTotal);

@@ -25,6 +25,7 @@ const CONTROL_PING_INTERVAL = 30000;
 const CONTROL_DEFAULT_TIMEOUT_SEC = 60;
 const SETTINGS_FILTER_DEBOUNCE_DELAY = 200;
 const SENSOR_AUTOCOMPLETE_BLUR_DELAY_MS = 150;
+const IONC_DIALOG_FOCUS_DELAY_MS = 50;
 const UI_DEBUG_LOG_STORAGE_KEY = 'uniset-ui-debug-log';
 
 // === SSE ===
@@ -60,6 +61,8 @@ const SENSOR_AUTOCOMPLETE_LIMIT = 20;
 const SENSOR_AUTOCOMPLETE_FOCUS_LIMIT = 10;
 const DASHBOARD_SENSOR_REGISTRY_FETCH_LIMIT = 10000;
 const DASHBOARD_SENSOR_CACHE_TTL_MS = 60000;
+const DEFAULT_VARIABLE_HISTORY_COUNT = 100;
+const OPCUA_ERROR_HISTORY_DEFAULT_MAX = 100;
 const BYTES_PER_KIB = 1024;
 const BYTE_UNITS = ['B', 'KB', 'MB', 'GB'];
 
@@ -220,6 +223,31 @@ const DIGITAL_SPECIAL_CHAR_ADVANCE = 8;
 const DIGITAL_DIGIT_ADVANCE = 22;
 const DIGITAL_VIEWBOX_PADDING = 10;
 const DIGITAL_VIEWBOX_HEIGHT = 48;
+const SPEEDOMETER_DEFAULT_MAX_RPM = 4000;
+
+// === Widget config defaults (диапазон значений по умолчанию для UI-полей min/max) ===
+// Используется во всех widget'ах, где пользователь задаёт диапазон значений
+// (Gauge, Level, Bar, Speedometer, RangeBars, BarGraph, Setpoint).
+const WIDGET_DEFAULT_MIN = 0;
+const WIDGET_DEFAULT_MAX = 100;
+
+// Преднастроенные углы поворота, доступные через quick-buttons в widget config dialog.
+const ROTATE_QUICK_ANGLES = [0, 90, 180, 270];
+
+// === Chart theme (Chart.js) ===
+// 8-цветная палитра для серий (циклически назначается через colorIndex).
+const CHART_COLORS = [
+    '#3274d9', '#73bf69', '#ff9830', '#f2495c',
+    '#b877d9', '#5794f2', '#fade2a', '#ff6eb4'
+];
+
+// Единая dark-тема для tooltip / grid / ticks. Используется в createLineChartConfig().
+const CHART_THEME = {
+    tooltipBg:   '#22252a',
+    tooltipText: '#d8dce2',
+    gridLine:    '#333840',
+    tickColor:   '#8a9099',
+};
 
 if (typeof globalThis !== 'undefined') {
     Object.assign(globalThis, {
@@ -911,6 +939,266 @@ function sanitizeEventSourceUrlForLog(url) {
     return String(url).replace(/([?&]token=)[^&]*/g, '$1[redacted]');
 }
 
+// Lookup-таблица обработчиков SSE событий. Каждый handler получает уже
+// распарсенный payload (event) и работает с ним. JSON.parse + try/catch +
+// console.warn boilerplate унесён в _attachSseHandlers ниже — раньше эти
+// 14 строк повторялись на каждый listener, а unified obrabotka позволяет
+// единообразно фильтровать debug log / отправлять метрики.
+//
+// `connected` обработчик НЕ здесь — он делает много setup'а (resubscribe /
+// polling fallback / sidebar refresh) и завязан на eventSource lifecycle.
+const _sseHandlers = {
+    object_data: (event) => {
+        const { objectName, serverId, data, timestamp } = event;
+
+        // Обновляем время последнего обновления в индикаторе
+        updateSSEStatus('connected', new Date());
+
+        const tabKey = `${serverId}:${objectName}`;
+        const tabState = state.tabs.get(tabKey);
+        if (!tabState) return;
+
+        // Обновляем рендерер (таблицы, статистика и т.д.)
+        if (tabState.renderer) {
+            tabState.renderer.update(data);
+        }
+
+        // Обновляем графики напрямую из SSE данных (данные копятся всегда, отрисовка — если не на паузе)
+        const eventTimestamp = new Date(timestamp);
+        tabState.charts.forEach((chartData, varName) => {
+            // Пропускаем внешние датчики (ext:) - они обновляются через sensor_data
+            if (varName.startsWith('ext:')) return;
+
+            // Извлекаем значение из data в зависимости от типа переменной
+            let value = undefined;
+            if (varName.startsWith('io.in.')) {
+                const ioKey = varName.substring('io.in.'.length);
+                if (data.io?.in?.[ioKey]) value = data.io.in[ioKey].value;
+            } else if (varName.startsWith('io.out.')) {
+                const ioKey = varName.substring('io.out.'.length);
+                if (data.io?.out?.[ioKey]) value = data.io.out[ioKey].value;
+            }
+
+            if (value !== undefined) {
+                chartData.chart.data.datasets[0].data.push({ x: eventTimestamp, y: value });
+                if (chartData.chart.data.datasets[0].data.length > MAX_CHART_POINTS) {
+                    chartData.chart.data.datasets[0].data.shift();
+                }
+            }
+        });
+
+        // Пропускаем отрисовку если на паузе (данные уже накоплены выше)
+        if (tabState.chartsPaused) return;
+
+        syncAllChartsTimeRange(tabKey);
+
+        tabState.charts.forEach((chartData, varName) => {
+            if (!varName.startsWith('ext:')) {
+                chartData.chart.update('none');
+            }
+        });
+    },
+
+    // Backend отправляет serverId="sm" для SM событий
+    sensor_data: (event) => {
+        const { objectName, serverId } = event;
+        const sensor = event.data;
+        const tabKey = serverId
+            ? `${serverId}:${objectName}`
+            : findTabKeyByDisplayName(objectName); // fallback для legacy
+        if (!tabKey) return;
+        // Одиночный сенсор — оборачиваем в массив для общего batch-helper'а.
+        updateChartsFromBatch(tabKey, [sensor], 'ext', event.timestamp);
+    },
+
+    ionc_sensor_batch: (event) => {
+        const { objectName, serverId } = event;
+        const sensors = event.data;
+
+        // Cache sensor values for dashboard initialization (по sensorKey).
+        const now = Date.now();
+        for (const sensor of sensors) {
+            const key = makeSensorKey(serverId, objectName, sensor.name);
+            state.sensorValuesCache.set(key, {
+                value: sensor.value,
+                error: sensor.error || null,
+                timestamp: now
+            });
+        }
+
+        // Обновляем виджеты на dashboard (с контекстом для построения sensorKey).
+        updateDashboardWidgets(sensors, { serverId, objectName, timestamp: event.timestamp || null });
+
+        const tabKey = `${serverId}:${objectName}`;
+        const tabState = state.tabs.get(tabKey);
+        if (!tabState) return;
+
+        for (const sensor of sensors) {
+            if (tabState.renderer?.handleIONCSensorUpdate) {
+                tabState.renderer.handleIONCSensorUpdate(sensor);
+            }
+        }
+
+        updateChartsFromBatch(tabKey, sensors, 'io', event.timestamp, { showSupplier: true });
+    },
+
+    modbus_register_batch: (event) => {
+        const { objectName, serverId } = event;
+        const registers = event.data;
+
+        updateDashboardWidgets(registers, { serverId, objectName, timestamp: event.timestamp || null });
+
+        const tabKey = `${serverId}:${objectName}`;
+        const tabState = state.tabs.get(tabKey);
+        if (!tabState) return;
+
+        const renderer = tabState.renderer;
+        if (!renderer) return;
+        const isMaster = renderer.constructor.name === 'ModbusMasterRenderer';
+        const isSlave = renderer.constructor.name === 'ModbusSlaveRenderer';
+        if (!isMaster && !isSlave) return;
+
+        if (typeof renderer.handleModbusRegisterUpdates === 'function') {
+            renderer.handleModbusRegisterUpdates(registers);
+        }
+
+        updateChartsFromBatch(tabKey, registers, 'mb', event.timestamp);
+    },
+
+    opcua_sensor_batch: (event) => {
+        const { objectName, serverId } = event;
+        const sensors = event.data;
+
+        updateDashboardWidgets(sensors, { serverId, objectName, timestamp: event.timestamp || null });
+
+        const tabKey = `${serverId}:${objectName}`;
+        const tabState = state.tabs.get(tabKey);
+        if (!tabState) return;
+
+        const renderer = tabState.renderer;
+        const isExchange = renderer && renderer.constructor.name === 'OPCUAExchangeRenderer';
+        const isServer   = renderer && renderer.constructor.name === 'OPCUAServerRenderer';
+        if (!isExchange && !isServer) return;
+
+        if (typeof renderer.handleOPCUASensorUpdates === 'function') {
+            renderer.handleOPCUASensorUpdates(sensors);
+        }
+
+        updateChartsFromBatch(tabKey, sensors, 'ext', event.timestamp);
+    },
+
+    uwsgate_sensor_batch: (event) => {
+        const { objectName, serverId } = event;
+        const sensors = event.data;
+
+        updateDashboardWidgets(sensors, { serverId, objectName, timestamp: event.timestamp || null });
+
+        const tabKey = `${serverId}:${objectName}`;
+        const tabState = state.tabs.get(tabKey);
+        if (!tabState) return;
+
+        const renderer = tabState.renderer;
+        if (!renderer || renderer.constructor.name !== 'UWebSocketGateRenderer') return;
+
+        if (typeof renderer.handleSSEUpdate === 'function') {
+            renderer.handleSSEUpdate(sensors);
+        }
+
+        updateChartsFromBatch(tabKey, sensors, 'ws', event.timestamp, { showSupplier: true });
+    },
+
+    server_status: (event) => {
+        const serverId = event.serverId;
+        const connected = event.data?.connected ?? false;
+        debugLog(`SSE: server ${serverId} ${connected ? 'connected' : 'disconnected'}`);
+        updateServerStatus(serverId, connected);
+    },
+
+    objects_list: (event) => {
+        const serverId = event.serverId;
+        const objects = event.data?.objects ?? [];
+        debugLog(`SSE: server ${serverId} restored connection, objects: ${objects.length}`);
+        updateServerStatus(serverId, true);
+        refreshObjectsList();
+        if (typeof refreshSidebarGroups === 'function') {
+            refreshSidebarGroups();
+        }
+    },
+
+    control_status: async (event) => {
+        debugLog('SSE: control status changed:', event.data);
+        const status = event.data;
+        // Сохраняем isController если мы были контроллером — сервер не знает чей это токен.
+        status.isController = state.control.token &&
+            status.hasController &&
+            state.control.isController;
+        try {
+            const resp = await fetch('/api/control/status', {
+                headers: { 'X-Control-Token': state.control.token || '' }
+            });
+            const data = await resp.json();
+            updateControlStatus(data);
+        } catch (err) {
+            console.warn('Failed to refresh control status:', err);
+            updateControlStatus(status);
+        }
+    },
+
+    launcher_status: (event) => {
+        const tabKey = `launcher:${event.serverId}`;
+        const tabState = state.tabs.get(tabKey);
+        if (tabState?.renderer?.updateStatus) {
+            tabState.renderer.updateStatus(event.data);
+        }
+        updateLauncherNodeStatus(event.serverId, true);
+    },
+
+    launcher_connection: (event) => {
+        const connected = event.data?.connected ?? false;
+        updateLauncherNodeStatus(event.serverId, connected);
+        const tabKey = `launcher:${event.serverId}`;
+        const tabState = state.tabs.get(tabKey);
+        if (tabState?.renderer?.updateConnectionStatus) {
+            tabState.renderer.updateConnectionStatus(connected);
+        }
+    },
+
+    journal_connection: (event) => {
+        const journalId = event.data?.journalId;
+        const connected = event.data?.connected ?? false;
+        if (journalId && typeof updateJournalConnectionStatus === 'function') {
+            updateJournalConnectionStatus(journalId, connected);
+        }
+    },
+
+    journal_messages: (event) => {
+        const data = event.data;
+        if (data && journalManager) {
+            journalManager.handleSSEMessage(data);
+        }
+    },
+};
+
+// Подписаться на все события из _sseHandlers с единым try/catch + JSON.parse boilerplate'ом.
+function _attachSseHandlers(eventSource) {
+    for (const [evtName, handler] of Object.entries(_sseHandlers)) {
+        eventSource.addEventListener(evtName, async (e) => {
+            let payload;
+            try {
+                payload = JSON.parse(e.data);
+            } catch (err) {
+                console.warn(`SSE: failed to parse ${evtName} payload:`, err);
+                return;
+            }
+            try {
+                await handler(payload);
+            } catch (err) {
+                console.warn(`SSE: error handling ${evtName}:`, err);
+            }
+        });
+    }
+}
+
 function initSSE() {
     // Очищаем таймер переподключения (если есть)
     if (state.sse.reconnectTimerId) {
@@ -977,361 +1265,15 @@ function initSSE() {
                 applySidebarStatuses();
             }
         } catch (err) {
-            console.warn('SSE: Error парсинга connected:', err);
+            console.warn('SSE: error handling connected:', err);
         }
     });
 
-    eventSource.addEventListener('object_data', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const { objectName, serverId, data, timestamp } = event;
-
-            // Обновляем время последнего обновления в индикаторе
-            updateSSEStatus('connected', new Date());
-
-            // Формируем ключ вкладки: serverId:objectName
-            const tabKey = `${serverId}:${objectName}`;
-
-            // Обновляем UI только для открытых вкладок
-            const tabState = state.tabs.get(tabKey);
-            if (tabState) {
-                // Обновляем рендерер (таблицы, статистика и т.д.)
-                if (tabState.renderer) {
-                    tabState.renderer.update(data);
-                }
-
-                // Обновляем графики напрямую из SSE данных (данные копятся всегда, отрисовка — если не на паузе)
-                const eventTimestamp = new Date(timestamp);
-                tabState.charts.forEach((chartData, varName) => {
-                    // Пропускаем внешние датчики (ext:) - они обновляются через sensor_data
-                    if (varName.startsWith('ext:')) {
-                        return;
-                    }
-
-                    // Извлекаем значение из data в зависимости от типа переменной
-                    let value = undefined;
-
-                    // Проверяем io.in.* переменные
-                    if (varName.startsWith('io.in.')) {
-                        const ioKey = varName.substring('io.in.'.length);
-                        if (data.io?.in?.[ioKey]) {
-                            value = data.io.in[ioKey].value;
-                        }
-                    }
-                    // Проверяем io.out.* переменные
-                    else if (varName.startsWith('io.out.')) {
-                        const ioKey = varName.substring('io.out.'.length);
-                        if (data.io?.out?.[ioKey]) {
-                            value = data.io.out[ioKey].value;
-                        }
-                    }
-
-                    // Если нашли значение - добавляем точку на график
-                    if (value !== undefined) {
-                        const dataPoint = { x: eventTimestamp, y: value };
-                        chartData.chart.data.datasets[0].data.push(dataPoint);
-
-                        // Ограничиваем количество точек
-                        if (chartData.chart.data.datasets[0].data.length > MAX_CHART_POINTS) {
-                            chartData.chart.data.datasets[0].data.shift();
-                        }
-                    }
-                });
-
-                // Пропускаем отрисовку если на паузе (данные уже накоплены выше)
-                if (tabState.chartsPaused) return;
-
-                // Синхронизируем временную шкалу для всех графиков объекта
-                syncAllChartsTimeRange(tabKey);
-
-                // Обновляем все графики одним batch update
-                tabState.charts.forEach((chartData, varName) => {
-                    if (!varName.startsWith('ext:')) {
-                        chartData.chart.update('none');
-                    }
-                });
-            }
-        } catch (err) {
-            console.warn('SSE: Error обработки object_data:', err);
-        }
-    });
-
-    // Обработка обновлений внешних датчиков из SM (SharedMemory)
-    // Backend отправляет serverId="sm" для SM событий
-    eventSource.addEventListener('sensor_data', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const { objectName, serverId } = event;
-            const sensor = event.data;
-
-            // Формируем tabKey из serverId и objectName
-            const tabKey = serverId
-                ? `${serverId}:${objectName}`
-                : findTabKeyByDisplayName(objectName); // fallback для legacy
-            if (!tabKey) return;
-
-            // Обновляем график (одиночный сенсор — оборачиваем в массив)
-            updateChartsFromBatch(tabKey, [sensor], 'ext', event.timestamp);
-        } catch (err) {
-            console.warn('SSE: Error обработки sensor_data:', err);
-        }
-    });
-
-    // Обработка батча обновлений IONC датчиков (SharedMemory и подобные)
-    eventSource.addEventListener('ionc_sensor_batch', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const { objectName, serverId } = event;
-            const sensors = event.data;
-
-            // Cache sensor values for dashboard initialization (по sensorKey).
-            const now = Date.now();
-            for (const sensor of sensors) {
-                const key = makeSensorKey(serverId, objectName, sensor.name);
-                state.sensorValuesCache.set(key, {
-                    value: sensor.value,
-                    error: sensor.error || null,
-                    timestamp: now
-                });
-            }
-
-            // Обновляем виджеты на dashboard (с контекстом для построения sensorKey).
-            updateDashboardWidgets(sensors, { serverId, objectName, timestamp: event.timestamp || null });
-
-            const tabKey = `${serverId}:${objectName}`;
-            const tabState = state.tabs.get(tabKey);
-            if (!tabState) return;
-
-            // Обновляем таблицу датчиков
-            for (const sensor of sensors) {
-                if (tabState.renderer?.handleIONCSensorUpdate) {
-                    tabState.renderer.handleIONCSensorUpdate(sensor);
-                }
-            }
-
-            // Обновляем графики
-            updateChartsFromBatch(tabKey, sensors, 'io', event.timestamp, { showSupplier: true });
-        } catch (err) {
-            console.warn('SSE: Error обработки ionc_sensor_batch:', err);
-        }
-    });
-
-    // Обработка батча обновлений Modbus регистров (ModbusMaster, ModbusSlave)
-    eventSource.addEventListener('modbus_register_batch', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const { objectName, serverId } = event;
-            const registers = event.data;
-
-            updateDashboardWidgets(registers, { serverId, objectName, timestamp: event.timestamp || null });
-
-            const tabKey = `${serverId}:${objectName}`;
-            const tabState = state.tabs.get(tabKey);
-            if (!tabState) return;
-
-            const renderer = tabState.renderer;
-            if (!renderer) return;
-            const isMaster = renderer.constructor.name === 'ModbusMasterRenderer';
-            const isSlave = renderer.constructor.name === 'ModbusSlaveRenderer';
-            if (!isMaster && !isSlave) return;
-
-            // Обновляем таблицу регистров
-            if (typeof renderer.handleModbusRegisterUpdates === 'function') {
-                renderer.handleModbusRegisterUpdates(registers);
-            }
-
-            // Обновляем графики
-            updateChartsFromBatch(tabKey, registers, 'mb', event.timestamp);
-        } catch (err) {
-            console.warn('SSE: Error обработки modbus_register_batch:', err);
-        }
-    });
-
-    // Обработка батча обновлений OPCUA датчиков (OPCUAExchange, OPCUAServer)
-    eventSource.addEventListener('opcua_sensor_batch', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const { objectName, serverId } = event;
-            const sensors = event.data;
-
-            updateDashboardWidgets(sensors, { serverId, objectName, timestamp: event.timestamp || null });
-
-            const tabKey = `${serverId}:${objectName}`;
-            const tabState = state.tabs.get(tabKey);
-            if (!tabState) return;
-
-            const renderer = tabState.renderer;
-            const isExchange = renderer && renderer.constructor.name === 'OPCUAExchangeRenderer';
-            const isServer = renderer && renderer.constructor.name === 'OPCUAServerRenderer';
-            if (!isExchange && !isServer) return;
-
-            // Обновляем таблицу датчиков
-            if (typeof renderer.handleOPCUASensorUpdates === 'function') {
-                renderer.handleOPCUASensorUpdates(sensors);
-            }
-
-            // Обновляем графики
-            updateChartsFromBatch(tabKey, sensors, 'ext', event.timestamp);
-        } catch (err) {
-            console.warn('SSE: Error обработки opcua_sensor_batch:', err);
-        }
-    });
-
-    // Обработка батча обновлений UWebSocketGate датчиков
-    eventSource.addEventListener('uwsgate_sensor_batch', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const { objectName, serverId } = event;
-            const sensors = event.data;
-
-            updateDashboardWidgets(sensors, { serverId, objectName, timestamp: event.timestamp || null });
-
-            const tabKey = `${serverId}:${objectName}`;
-            const tabState = state.tabs.get(tabKey);
-            if (!tabState) return;
-
-            const renderer = tabState.renderer;
-            if (!renderer || renderer.constructor.name !== 'UWebSocketGateRenderer') return;
-
-            // Обновляем таблицу датчиков
-            if (typeof renderer.handleSSEUpdate === 'function') {
-                renderer.handleSSEUpdate(sensors);
-            }
-
-            // Обновляем графики
-            updateChartsFromBatch(tabKey, sensors, 'ws', event.timestamp, { showSupplier: true });
-        } catch (err) {
-            console.warn('SSE: Error обработки uwsgate_sensor_batch:', err);
-        }
-    });
-
-    // Обработка изменений статуса серверов
-    eventSource.addEventListener('server_status', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const serverId = event.serverId;
-            const connected = event.data?.connected ?? false;
-            debugLog(`SSE: Сервер ${serverId} ${connected ? 'подключен' : 'отключен'}`);
-            updateServerStatus(serverId, connected);
-        } catch (err) {
-            console.warn('SSE: Error обработки server_status:', err);
-        }
-    });
-
-    // Обработка обновления списка объектов (при восстановлении связи)
-    eventSource.addEventListener('objects_list', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const serverId = event.serverId;
-            const objects = event.data?.objects ?? [];
-            debugLog(`SSE: Сервер ${serverId} восстановил связь, объектов: ${objects.length}`);
-
-            // Обновляем статус сервера
-            updateServerStatus(serverId, true);
-
-            // Обновляем список объектов в sidebar
-            refreshObjectsList();
-
-            // Обновляем sidebar группы (могли появиться новые объекты)
-            if (typeof refreshSidebarGroups === 'function') {
-                refreshSidebarGroups();
-            }
-        } catch (err) {
-            console.warn('SSE: Error обработки objects_list:', err);
-        }
-    });
-
-    // Обработка изменения статуса контроля
-    eventSource.addEventListener('control_status', async (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            debugLog('SSE: Control status changed:', event.data);
-            // Обновляем isController на основе нашего токена
-            const status = event.data;
-            status.isController = state.control.token &&
-                status.hasController &&
-                state.control.isController; // сохраняем если мы были контроллером
-
-            // Сервер не знает чей это токен, нужно запросить статус
-            try {
-                const resp = await fetch('/api/control/status', {
-                    headers: { 'X-Control-Token': state.control.token || '' }
-                });
-                const data = await resp.json();
-                updateControlStatus(data);
-            } catch (err) {
-                console.warn('Failed to refresh control status:', err);
-                // Fallback: используем данные из события
-                updateControlStatus(status);
-            }
-        } catch (err) {
-            console.warn('SSE: Error обработки control_status:', err);
-        }
-    });
-
-    // Обработка статуса Launcher'а
-    eventSource.addEventListener('launcher_status', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const tabKey = `launcher:${event.serverId}`;
-            const tabState = state.tabs.get(tabKey);
-            if (tabState?.renderer?.updateStatus) {
-                tabState.renderer.updateStatus(event.data);
-            }
-            // Обновляем индикатор в sidebar
-            updateLauncherNodeStatus(event.serverId, true);
-        } catch (err) {
-            console.warn('SSE: Error обработки launcher_status:', err);
-        }
-    });
-
-    // Обработка connectivity Launcher'а
-    eventSource.addEventListener('launcher_connection', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const connected = event.data?.connected ?? false;
-            updateLauncherNodeStatus(event.serverId, connected);
-
-            // Обновляем renderer если вкладка открыта
-            const tabKey = `launcher:${event.serverId}`;
-            const tabState = state.tabs.get(tabKey);
-            if (tabState?.renderer?.updateConnectionStatus) {
-                tabState.renderer.updateConnectionStatus(connected);
-            }
-        } catch (err) {
-            console.warn('SSE: Error обработки launcher_connection:', err);
-        }
-    });
-
-    // Обработка изменения connectivity журнала
-    eventSource.addEventListener('journal_connection', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const journalId = event.data?.journalId;
-            const connected = event.data?.connected ?? false;
-            if (journalId && typeof updateJournalConnectionStatus === 'function') {
-                updateJournalConnectionStatus(journalId, connected);
-            }
-        } catch (err) {
-            console.warn('SSE: Error обработки journal_connection:', err);
-        }
-    });
-
-    // Обработка сообщений журнала
-    eventSource.addEventListener('journal_messages', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const data = event.data;
-            if (data && journalManager) {
-                journalManager.handleSSEMessage(data);
-            }
-        } catch (err) {
-            console.warn('SSE: Error обработки journal_messages:', err);
-        }
-    });
+    // Все остальные SSE события — единый attach через _sseHandlers lookup.
+    _attachSseHandlers(eventSource);
 
     eventSource.onerror = (e) => {
-        console.warn('SSE: Error соединения');
+        console.warn('SSE: connection error');
         state.sse.connected = false;
         stopServerStatusSync();
 
@@ -1637,6 +1579,81 @@ function getFirstConnectedServerId() {
     return null;
 }
 
+// Возвращает массив id всех connected серверов в порядке state.servers.
+// Используется для bootstrap-обходов (загрузка sensors per server, IONC objects).
+function getConnectedServerIds() {
+    if (typeof state === 'undefined' || !state.servers) return [];
+    const ids = [];
+    for (const [id, server] of state.servers) {
+        if (server?.connected) ids.push(id);
+    }
+    return ids;
+}
+
+// === localStorage helpers ===
+//
+// Каждый из этих helpers глотает SyntaxError/SecurityError и логирует через
+// console.warn — в SCADA-UI lost-write для пользовательской настройки лучше
+// тихого падения, но не должен валить остальной flow.
+
+// Прочитать JSON-объект из localStorage. Возвращает fallback при отсутствии
+// ключа, broken-JSON или недоступности storage (private mode).
+function loadJSON(key, fallback = null) {
+    try {
+        const raw = localStorage.getItem(key);
+        if (raw === null) return fallback;
+        return JSON.parse(raw);
+    } catch (err) {
+        console.warn(`loadJSON("${key}") failed:`, err);
+        return fallback;
+    }
+}
+
+// Записать JSON-объект в localStorage. true при успехе, false при ошибке.
+function saveJSON(key, value) {
+    try {
+        localStorage.setItem(key, JSON.stringify(value));
+        return true;
+    } catch (err) {
+        console.warn(`saveJSON("${key}") failed:`, err);
+        return false;
+    }
+}
+
+// Прочитать map-объект `{[k]: v}` из localStorage. Если значение есть, но не
+// объект (массив/число/строка) — вернёт defaults (это защита от старого
+// несовместимого формата).
+function loadStorageMap(key, defaults = {}) {
+    const v = loadJSON(key, defaults);
+    if (v === null || typeof v !== 'object' || Array.isArray(v)) return { ...defaults };
+    return v;
+}
+
+// Прочитать map-объект, передать его в mutator(map) для in-place мутации,
+// записать обратно. Удобно для save-merge паттерна (saved[key] = value).
+// Возвращает true при успехе.
+function updateStorageMap(key, mutator) {
+    const map = loadStorageMap(key);
+    mutator(map);
+    return saveJSON(key, map);
+}
+
+// Regex-escape: спрятать в literal-строке метасимволы regex'а.
+// Используется при построении динамического pattern из user input
+// (журнал highlight, log-viewer search).
+function escapeRegex(str) {
+    return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Универсальный fetch с проверкой ok и парсингом JSON.
+// Бросает Error('errPrefix: <details>') при HTTP-ошибке или сетевом сбое.
+// Используется тонким обёртом в helpers модулях (40-charts.js, base-renderer fetchJSON).
+async function fetchJSONOrThrow(url, opts = {}, errPrefix = 'Request') {
+    const response = await fetch(url, opts);
+    if (!response.ok) throw new Error(`${errPrefix}: HTTP ${response.status}`);
+    return response.json();
+}
+
 function parseNumberOrDefault(value, fallback) {
     if (value === null || value === undefined || String(value).trim() === '') return fallback;
     const n = Number(value);
@@ -1688,10 +1705,10 @@ function createLineChartConfig({ datasets = [], timeRange = {}, options = {} }) 
         : datasets.length === 1 && Boolean(datasets[0]?.isDiscrete);
 
     const tooltip = {
-        backgroundColor: '#22252a',
-        titleColor: '#d8dce2',
-        bodyColor: '#d8dce2',
-        borderColor: '#333840',
+        backgroundColor: CHART_THEME.tooltipBg,
+        titleColor: CHART_THEME.tooltipText,
+        bodyColor: CHART_THEME.tooltipText,
+        borderColor: CHART_THEME.gridLine,
         borderWidth: 1
     };
     if (options.tooltipEnabled !== undefined) {
@@ -1722,11 +1739,11 @@ function createLineChartConfig({ datasets = [], timeRange = {}, options = {} }) 
                 type: 'time',
                 display: true,
                 grid: {
-                    color: '#333840',
+                    color: CHART_THEME.gridLine,
                     drawBorder: false
                 },
                 ticks: {
-                    color: '#8a9099',
+                    color: CHART_THEME.tickColor,
                     maxTicksLimit: options.xMaxTicksLimit ?? 10,
                     display: options.xTicksDisplay ?? true
                 },
@@ -1747,11 +1764,11 @@ function createLineChartConfig({ datasets = [], timeRange = {}, options = {} }) 
                 suggestedMin: discreteYAxis ? 0 : undefined,
                 suggestedMax: discreteYAxis ? 1.1 : undefined,
                 grid: {
-                    color: '#333840',
+                    color: CHART_THEME.gridLine,
                     drawBorder: false
                 },
                 ticks: {
-                    color: '#8a9099',
+                    color: CHART_THEME.tickColor,
                     stepSize: discreteYAxis ? 1 : undefined
                 }
             }
@@ -1825,9 +1842,9 @@ function renderColorZoneItem(zone = {}, index = 0, defaultColor = '#ef4444') {
         <div class="zone-item">
             <input type="color" class="zone-color" name="zone-color-${index}" value="${escapeAttr(zone.color || defaultColor)}">
             <div class="zone-inputs">
-                <input type="number" class="zone-input" name="zone-from-${index}" value="${escapeAttr(zone.from ?? 0)}" placeholder="From">
+                <input type="number" class="zone-input" name="zone-from-${index}" value="${escapeAttr(zone.from ?? WIDGET_DEFAULT_MIN)}" placeholder="From">
                 <span class="zone-separator">→</span>
-                <input type="number" class="zone-input" name="zone-to-${index}" value="${escapeAttr(zone.to ?? 100)}" placeholder="To">
+                <input type="number" class="zone-input" name="zone-to-${index}" value="${escapeAttr(zone.to ?? WIDGET_DEFAULT_MAX)}" placeholder="To">
             </div>
             <button type="button" class="zone-remove-btn" onclick="removeZoneField(this)">×</button>
         </div>
@@ -1871,6 +1888,13 @@ if (typeof globalThis !== 'undefined') {
     globalThis.renderColorZonesEditor = renderColorZonesEditor;
     globalThis.parseColorZones = parseColorZones;
     globalThis.getFirstConnectedServerId = getFirstConnectedServerId;
+    globalThis.getConnectedServerIds = getConnectedServerIds;
+    globalThis.loadJSON = loadJSON;
+    globalThis.saveJSON = saveJSON;
+    globalThis.loadStorageMap = loadStorageMap;
+    globalThis.updateStorageMap = updateStorageMap;
+    globalThis.escapeRegex = escapeRegex;
+    globalThis.fetchJSONOrThrow = fetchJSONOrThrow;
 }
 
 
@@ -2330,12 +2354,6 @@ const VirtualScrollMixin = {
                 this.vscrollLoadMore();
             }
         }
-    },
-
-    // Показать/скрыть индикатор загрузки
-    showVScrollLoadingIndicator(loadingId, show) {
-        const el = this.getEl(loadingId);
-        if (el) el.style.display = show ? 'block' : 'none';
     }
 };
 
@@ -2417,27 +2435,14 @@ const SSESubscriptionMixin = {
 const ResizableSectionMixin = {
     // Loading сохранённой высоты
     loadSectionHeight(storageKey, defaultHeight = DEFAULT_SECTION_HEIGHT) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            const value = saved[this.tabKey] ?? saved[this.objectName];
-            if (typeof value === 'number' && value > 0) {
-                return value;
-            }
-        } catch (err) {
-            console.warn('Failed to load section height:', err);
-        }
-        return defaultHeight;
+        const saved = loadStorageMap(storageKey);
+        const value = saved[this.tabKey] ?? saved[this.objectName];
+        return typeof value === 'number' && value > 0 ? value : defaultHeight;
     },
 
     // Сохранение высоты
     saveSectionHeight(storageKey, value) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            saved[this.tabKey] = value;
-            localStorage.setItem(storageKey, JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save section height:', err);
-        }
+        updateStorageMap(storageKey, (saved) => { saved[this.tabKey] = value; });
     },
 
     // Настройка resize для секции
@@ -2777,12 +2782,8 @@ const PinManagementMixin = {
      * @returns {Set<string>}
      */
     getPinnedItems(storageKey) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            return new Set(saved[this.tabKey] || saved[this.objectName] || []);
-        } catch (err) {
-            return new Set();
-        }
+        const saved = loadStorageMap(storageKey);
+        return new Set(saved[this.tabKey] || saved[this.objectName] || []);
     },
 
     /**
@@ -2791,13 +2792,7 @@ const PinManagementMixin = {
      * @param {Set<string>} pinnedSet - Множество ID закрепленных элементов
      */
     savePinnedItems(storageKey, pinnedSet) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            saved[this.tabKey] = Array.from(pinnedSet);
-            localStorage.setItem(storageKey, JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save pinned items:', err);
-        }
+        updateStorageMap(storageKey, (saved) => { saved[this.tabKey] = Array.from(pinnedSet); });
     },
 
     /**
@@ -2900,15 +2895,11 @@ const TableSortMixin = {
      */
     loadSortState(storageKey) {
         this.sortStorageKey = storageKey;
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            const sortState = saved[this.tabKey] || saved[this.objectName];
-            if (sortState) {
-                this.sortColumn = sortState.column || 'name';
-                this.sortDirection = sortState.direction || 'asc';
-            }
-        } catch (err) {
-            console.warn('Failed to load sort state:', err);
+        const saved = loadStorageMap(storageKey);
+        const sortState = saved[this.tabKey] || saved[this.objectName];
+        if (sortState) {
+            this.sortColumn = sortState.column || 'name';
+            this.sortDirection = sortState.direction || 'asc';
         }
     },
 
@@ -2917,16 +2908,12 @@ const TableSortMixin = {
      */
     saveSortState() {
         if (!this.sortStorageKey) return;
-        try {
-            const saved = JSON.parse(localStorage.getItem(this.sortStorageKey) || '{}');
+        updateStorageMap(this.sortStorageKey, (saved) => {
             saved[this.tabKey] = {
                 column: this.sortColumn,
                 direction: this.sortDirection
             };
-            localStorage.setItem(this.sortStorageKey, JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save sort state:', err);
-        }
+        });
     },
 
     /**
@@ -3785,6 +3772,43 @@ class BaseObjectRenderer {
         subscribeToIONCSensor(this.tabKey, sensorId);
     }
 
+    // Helper для renderer'ов, чьи sensor'ы уже подписаны через batch SSE
+    // (modbus_register_batch / opcua_sensor_batch и т.п.) — отдельная подписка
+    // не нужна, достаточно отметить sensorId в локальном Set'е, чтобы
+    // BaseObjectRenderer.unsubscribeFromChart знал что снимать.
+    subscribeToChartSensorLocal(sensorId) {
+        if (!this.subscribedSensorIds.has(sensorId)) {
+            this.subscribedSensorIds.add(sensorId);
+        }
+    }
+
+    // Generic show/hide индикатора загрузки. Имя элемента —
+    // `${loadingIdPrefix}-loading-more-${objectName}` (уникальный по renderer'у).
+    // Renderer задаёт префикс через static loadingIdPrefix (или instance field).
+    // Если префикс не задан — silent no-op (renderer не использует loading indicator).
+    showLoadingIndicator(show) {
+        const prefix = this.loadingIdPrefix || this.constructor.loadingIdPrefix;
+        if (!prefix) return;
+        const el = this.getEl(`${prefix}-loading-more-${this.objectName}`);
+        if (el) el.style.display = show ? 'block' : 'none';
+    }
+
+    // Стандартная ячейка пин-индикатора в IO-таблицах. Шесть row-renderer'ов
+    // (IONC/Modbus×2/OPCUA×2/UWSGate) рендерили один и тот же `<td>` с микро-
+    // расхождениями: IONC использует `ionc-col-pin` (исторически), UWSGate
+    // — `data-name=` вместо `data-id=`. cellClass / dataAttr параметризуют
+    // эти расхождения, остальной markup общий.
+    renderPinToggleCell({ id, isPinned, dataAttr = 'data-id', cellClass = 'col-pin' }) {
+        const cls = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
+        const icon = isPinned ? '📌' : '○';
+        const title = isPinned ? 'Unpin' : 'Pin';
+        return `
+            <td class="${cellClass}">
+                <span class="${cls}" ${dataAttr}="${escapeAttr(id)}" title="${title}">${icon}</span>
+            </td>
+        `;
+    }
+
     // Сгенерировать HTML для объединённой ячейки кнопок (Chart + Dashboard)
     renderAddButtonsCell(sensorId, sensorName, prefix = 'sensor', sensorLabel = null) {
         const isOnChart = this.isSensorOnChart(sensorName);
@@ -4320,6 +4344,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     static getTypeName() {
         return 'IONotifyController';
     }
+    static loadingIdPrefix = 'ionc';
 
     constructor(objectName, tabKey = null) {
         super(objectName, tabKey);
@@ -4660,11 +4685,6 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         }
     }
 
-    showLoadingIndicator(show) {
-        const el = this.getEl(`ionc-loading-more-${this.objectName}`);
-        if (el) el.style.display = show ? 'block' : 'none';
-    }
-
     renderVisibleSensors() {
         const tbody = this.getEl(`ionc-sensors-tbody-${this.objectName}`);
         const spacer = this.getEl(`ionc-sensors-spacer-${this.objectName}`);
@@ -4781,11 +4801,6 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             ? `<button class="ionc-btn ionc-btn-gen-stop" data-id="${sensor.id}" title="${ctrlTitle || 'Остановить генератор'}" ${ctrlDisabled}>⏹</button>`
             : `<button class="ionc-btn ionc-btn-gen" data-id="${sensor.id}" title="${ctrlTitle || 'Генератор значений'}" ${sensor.readonly || !canCtrl ? 'disabled' : ''}>⟳</button>`;
 
-        // Кнопка закрепления (pin)
-        const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-        const pinIcon = isPinned ? '📌' : '○';
-        const pinTitle = isPinned ? 'Unpin' : 'Pin';
-
         // Checkbox для графика
         const isOnChart = this.isSensorOnChart(sensor.name);
         const varName = `ionc-${sensor.id}`;
@@ -4795,11 +4810,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         return `
             <tr class="ionc-sensor-row ${frozenClass} ${blockedClass} ${readonlyClass} ${generatorClass}" data-sensor-id="${sensor.id}">
-                <td class="ionc-col-pin">
-                    <span class="${pinToggleClass}" data-id="${sensor.id}" title="${pinTitle}">
-                        ${pinIcon}
-                    </span>
-                </td>
+                ${this.renderPinToggleCell({ id: sensor.id, isPinned, cellClass: 'ionc-col-pin' })}
                 <td class="ionc-col-add-buttons add-buttons-col">
                     <span class="chart-toggle">
                         <input type="checkbox"
@@ -4902,41 +4913,23 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         const doSetValue = async () => {
             const input = document.getElementById('ionc-set-value');
-            const value = parseInt(input.value, 10);
+            const value = parseIntegerOrDefault(input.value, NaN);
 
-            if (isNaN(value)) {
+            if (Number.isNaN(value)) {
                 showIoncDialogError('Enter an integer');
                 input.classList.add('error');
                 return;
             }
 
-            try {
-                const url = self.buildUrl(`/api/objects/${encodeURIComponent(objectName)}/ionc/set`);
-                const response = await controlledFetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sensor_id: sensorId, value: value })
-                });
-
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.error || 'Failed to set value');
-                }
-
-                // Обновляем локально
-                if (sensor.frozen) {
-                    // Если заморожен - обновляем real_value (значение SM), value остаётся замороженным
-                    sensor.real_value = value;
-                } else {
-                    sensor.value = value;
-                }
-                // Перерисовываем строку для корректного отображения формата
-                self.reRenderSensorRow(sensorId);
-
-                closeIoncDialog();
-            } catch (err) {
-                showIoncDialogError(`Error: ${err.message}`);
-            }
+            await self._ioncSensorAction(
+                sensorId, 'set', { value },
+                (s, body) => {
+                    // Если заморожен — обновляем real_value (значение SM), value остаётся замороженным.
+                    if (s.frozen) s.real_value = body.value;
+                    else          s.value      = body.value;
+                },
+                { errorPrefix: 'Failed to set value', autoCloseDialog: true }
+            );
         };
 
         openIoncDialog({
@@ -4978,37 +4971,25 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         const doFreeze = async () => {
             const input = document.getElementById('ionc-freeze-value');
-            const value = parseInt(input.value, 10);
+            const value = parseIntegerOrDefault(input.value, NaN);
 
-            if (isNaN(value)) {
+            if (Number.isNaN(value)) {
                 showIoncDialogError('Enter an integer');
                 input.classList.add('error');
                 return;
             }
 
-            try {
-                const url = self.buildUrl(`/api/objects/${encodeURIComponent(objectName)}/ionc/freeze`);
-                const response = await controlledFetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sensor_id: sensorId, value: value })
-                });
-
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.error || 'Failed to freeze');
-                }
-
-                // Локальное обновление для мгновенной обратной связи
-                // SSE обновления подтвердят состояние из API
-                sensor.real_value = sensor.value;
-                sensor.frozen = true;
-                sensor.value = value;
-                self.reRenderSensorRow(sensorId);
-                closeIoncDialog();
-            } catch (err) {
-                showIoncDialogError(`Error: ${err.message}`);
-            }
+            await self._ioncSensorAction(
+                sensorId, 'freeze', { value },
+                (s, body) => {
+                    // Локальное обновление для мгновенной обратной связи —
+                    // SSE update подтвердит state из API.
+                    s.real_value = s.value;
+                    s.frozen = true;
+                    s.value = body.value;
+                },
+                { errorPrefix: 'Failed to freeze', autoCloseDialog: true }
+            );
         };
 
         openIoncDialog({
@@ -5023,11 +5004,12 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     // Internal: общий POST к ionc-эндпоинту с локальным sensor mutate + перерисовкой.
-    // endpoint: 'freeze' | 'unfreeze'
-    // body: payload для POST (sensor_id обязателен)
-    // mutateSensor(sensor): функция локального обновления sensor для мгновенной FB
-    // onError (optional): дефолтный msg если err.error пустой
-    async _ioncSensorAction(sensorId, endpoint, body, mutateSensor, onError) {
+    // endpoint: 'set' | 'freeze' | 'unfreeze'
+    // body: payload для POST (sensor_id будет добавлен)
+    // mutateSensor(sensor, body): функция локального обновления sensor для мгновенной FB
+    // opts.errorPrefix — дефолтный msg если err.error пустой (по умолчанию `Failed to ${endpoint}`)
+    // opts.autoCloseDialog — закрыть IONC dialog после успеха (для dialog-driven actions).
+    async _ioncSensorAction(sensorId, endpoint, body, mutateSensor, opts = {}) {
         const sensor = this.sensorMap.get(sensorId);
         if (!sensor) return;
         try {
@@ -5039,10 +5021,11 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             });
             if (!response.ok) {
                 const err = await response.json();
-                throw new Error(err.error || onError || `Failed to ${endpoint}`);
+                throw new Error(err.error || opts.errorPrefix || `Failed to ${endpoint}`);
             }
-            mutateSensor(sensor);
+            mutateSensor(sensor, body);
             this.reRenderSensorRow(sensorId);
+            if (opts.autoCloseDialog) closeIoncDialog();
         } catch (err) {
             showIoncDialogError(`Error: ${err.message}`);
         }
@@ -5055,7 +5038,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         await this._ioncSensorAction(sensorId, 'freeze',
             { value: sensor.value },
             (s) => { s.real_value = s.value; s.frozen = true; },
-            'Failed to freeze');
+            { errorPrefix: 'Failed to freeze' });
     }
 
     // Показать диалог разморозки (клик на 🔥)
@@ -5092,29 +5075,14 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         `;
 
         const doUnfreeze = async () => {
-            try {
-                const url = self.buildUrl(`/api/objects/${encodeURIComponent(objectName)}/ionc/unfreeze`);
-                const response = await controlledFetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sensor_id: sensorId })
-                });
-
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.error || 'Failed to unfreeze');
-                }
-
-                // Локальное обновление для мгновенной обратной связи
-                sensor.frozen = false;
-                if (sensor.real_value !== undefined) {
-                    sensor.value = sensor.real_value;
-                }
-                self.reRenderSensorRow(sensorId);
-                closeIoncDialog();
-            } catch (err) {
-                showIoncDialogError(`Error: ${err.message}`);
-            }
+            await self._ioncSensorAction(
+                sensorId, 'unfreeze', {},
+                (s) => {
+                    s.frozen = false;
+                    if (s.real_value !== undefined) s.value = s.real_value;
+                },
+                { errorPrefix: 'Failed to unfreeze', autoCloseDialog: true }
+            );
         };
 
         openIoncDialog({
@@ -5866,6 +5834,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     static getTypeName() {
         return 'OPCUAExchange';
     }
+    static loadingIdPrefix = 'opcua';
 
     constructor(objectName, tabKey = null) {
         super(objectName, tabKey);
@@ -6181,7 +6150,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         // Компактная строка статистики
         const ioSize = status.iolist_size ?? status.iolistSize ?? '—';
         const errCount = status.errorHistorySize ?? 0;
-        const errMax = status.errorHistoryMax ?? 100;
+        const errMax = status.errorHistoryMax ?? OPCUA_ERROR_HISTORY_DEFAULT_MAX;
 
         // Определяем класс индикатора ошибок
         const errDotClass = errCount >= errMax ? 'fail' : (errCount > 0 ? 'warn' : 'ok');
@@ -6465,19 +6434,11 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         // Render visible rows with type badges and chart toggle
         tbody.innerHTML = visibleSensors.map(sensor => {
             const isPinned = pinnedSensors.has(String(sensor.id));
-            const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-            const pinIcon = isPinned ? '📌' : '○';
-            const pinTitle = isPinned ? 'Unpin' : 'Pin';
-
             const iotype = sensor.iotype || sensor.type || '';
             const typeBadgeClass = iotype ? `type-badge type-${iotype}` : '';
             return `
             <tr data-sensor-id="${sensor.id || ''}">
-                <td class="col-pin">
-                    <span class="${pinToggleClass}" data-id="${sensor.id}" title="${pinTitle}">
-                        ${pinIcon}
-                    </span>
-                </td>
+                ${this.renderPinToggleCell({ id: sensor.id, isPinned })}
                 ${this.renderAddButtonsCell(sensor.id, sensor.name, 'opcua', sensor.textname || sensor.name)}
                 <td class="col-id">${sensor.id ?? '—'}</td>
                 <td class="col-name" title="${escapeAttr(sensor.textname || sensor.comment || '')}">${escapeHtml(sensor.name || '')}</td>
@@ -6517,25 +6478,15 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         });
     }
 
-    // Override to use OPC UA SSE subscription
+    // OPCUAExchange sensors are already subscribed through main SSE
     subscribeToChartSensor(sensorId) {
-        // OPCUAExchange sensors are already subscribed through main SSE
-        // Just ensure the sensor is in our subscription list
-        if (!this.subscribedSensorIds.has(sensorId)) {
-            this.subscribedSensorIds.add(sensorId);
-        }
+        this.subscribeToChartSensorLocal(sensorId);
     }
 
     updateSensorCount() {
         this.updateItemCount(`opcua-sensor-count-${this.objectName}`, this.allSensors.length, this.sensorsTotal);
     }
 
-    showLoadingIndicator(show) {
-        const el = this.getEl(`opcua-loading-more-${this.objectName}`);
-        if (el) {
-            el.style.display = show ? 'block' : 'none';
-        }
-    }
 
     async loadSensorDetails(id) {
         try {
@@ -7209,20 +7160,13 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     }
 
     _renderRegisterRow(reg, isPinned) {
-        const pinClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-        const pinIcon = isPinned ? '📌' : '○';
-        const pinTitle = isPinned ? 'Unpin' : 'Pin';
         const deviceAddr = reg.device;
         const deviceInfo = this.devicesDict[deviceAddr] || {};
         const regInfo = reg.register || {};
         const respondClass = deviceInfo.respond ? 'ok' : 'fail';
         return `
             <tr data-sensor-id="${reg.id}">
-                <td class="col-pin">
-                    <span class="${pinClass}" data-id="${reg.id}" title="${pinTitle}">
-                        ${pinIcon}
-                    </span>
-                </td>
+                ${this.renderPinToggleCell({ id: reg.id, isPinned })}
                 ${this.renderAddButtonsCell(reg.id, reg.name, 'mbreg', reg.textname || reg.name)}
                 <td class="col-id">${reg.id}</td>
                 <td class="col-name" title="${escapeAttr(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
@@ -7236,12 +7180,9 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         `;
     }
 
-    // Override to use Modbus SSE subscription
+    // ModbusMaster registers are already subscribed through main SSE
     subscribeToChartSensor(sensorId) {
-        // ModbusMaster registers are already subscribed through main SSE
-        if (!this.subscribedSensorIds.has(sensorId)) {
-            this.subscribedSensorIds.add(sensorId);
-        }
+        this.subscribeToChartSensorLocal(sensorId);
     }
 
     loadRegistersHeight() {
@@ -7695,20 +7636,13 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
 
     // ModbusSlave row: device = mbaddr, register содержит mbreg/mbfunc, есть amode.
     _renderRegisterRow(reg, isPinned) {
-        const pinClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-        const pinIcon = isPinned ? '📌' : '○';
-        const pinTitle = isPinned ? 'Unpin' : 'Pin';
         const mbAddr = reg.device;
         const regInfo = reg.register || {};
         const mbreg = regInfo.mbreg !== undefined ? regInfo.mbreg : reg.mbreg;
         const mbfunc = regInfo.mbfunc;
         return `
             <tr data-sensor-id="${reg.id}">
-                <td class="col-pin">
-                    <span class="${pinClass}" data-id="${reg.id}" title="${pinTitle}">
-                        ${pinIcon}
-                    </span>
-                </td>
+                ${this.renderPinToggleCell({ id: reg.id, isPinned })}
                 ${this.renderAddButtonsCell(reg.id, reg.name, 'mbsreg', reg.textname || reg.name)}
                 <td class="col-id">${reg.id}</td>
                 <td class="col-name" title="${escapeAttr(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
@@ -7722,12 +7656,9 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         `;
     }
 
-    // Override to use ModbusSlave SSE subscription
+    // ModbusSlave registers are already subscribed through main SSE
     subscribeToChartSensor(sensorId) {
-        // ModbusSlave registers are already subscribed through main SSE
-        if (!this.subscribedSensorIds.has(sensorId)) {
-            this.subscribedSensorIds.add(sensorId);
-        }
+        this.subscribeToChartSensorLocal(sensorId);
     }
 
     loadRegistersHeight() {
@@ -7806,6 +7737,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     static getTypeName() {
         return 'OPCUAServer';
     }
+    static loadingIdPrefix = 'opcuasrv';
 
     constructor(objectName, tabKey = null) {
         super(objectName, tabKey);
@@ -8194,19 +8126,11 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         // Render visible rows with type badges and chart toggle
         tbody.innerHTML = visibleSensors.map(sensor => {
             const isPinned = pinnedSensors.has(String(sensor.id));
-            const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-            const pinIcon = isPinned ? '📌' : '○';
-            const pinTitle = isPinned ? 'Unpin' : 'Pin';
-
             const iotype = sensor.iotype || sensor.type || '';
             const typeBadgeClass = iotype ? `type-badge type-${iotype}` : '';
             return `
             <tr data-sensor-id="${sensor.id || ''}">
-                <td class="col-pin">
-                    <span class="${pinToggleClass}" data-id="${sensor.id}" title="${pinTitle}">
-                        ${pinIcon}
-                    </span>
-                </td>
+                ${this.renderPinToggleCell({ id: sensor.id, isPinned })}
                 ${this.renderAddButtonsCell(sensor.id, sensor.name, 'opcuasrv', sensor.textname || sensor.name)}
                 <td>${sensor.id || ''}</td>
                 <td class="sensor-name" title="${escapeAttr(sensor.textname || sensor.comment || '')}">${escapeHtml(sensor.name || '')}</td>
@@ -8235,20 +8159,11 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         }
     }
 
-    // Override to use OPCUAServer SSE subscription
+    // OPCUAServer sensors are already subscribed through main SSE
     subscribeToChartSensor(sensorId) {
-        // OPCUAServer sensors are already subscribed through main SSE
-        if (!this.subscribedSensorIds.has(sensorId)) {
-            this.subscribedSensorIds.add(sensorId);
-        }
+        this.subscribeToChartSensorLocal(sensorId);
     }
 
-    showLoadingIndicator(show) {
-        const indicator = this.getEl(`opcuasrv-loading-more-${this.objectName}`);
-        if (indicator) {
-            indicator.style.display = show ? 'block' : 'none';
-        }
-    }
 
     updateSensorCount() {
         this.updateItemCount(`opcuasrv-sensor-count-${this.objectName}`, this.allSensors.length, this.sensorsTotal);
@@ -8368,38 +8283,22 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
     }
 
     loadHighlightSetting() {
-        try {
-            return localStorage.getItem(this.highlightKey) === 'true';
-        } catch (e) {
-            return false;
-        }
+        // Highlight setting — boolean. Хранится не в map, а напрямую как JSON
+        // (true/false), потому что ключ per-tab и нет смысла оборачивать в объект.
+        return loadJSON(this.highlightKey, false) === true;
     }
 
     saveHighlightSetting() {
-        try {
-            localStorage.setItem(this.highlightKey, this.highlightEnabled.toString());
-        } catch (err) {
-            console.warn('UWebSocketGate: failed to save highlight setting:', err);
-        }
+        saveJSON(this.highlightKey, this.highlightEnabled);
     }
 
     loadPinnedSensors() {
-        try {
-            const saved = localStorage.getItem(this.pinnedKey);
-            if (saved) {
-                this.pinnedSensors = new Set(JSON.parse(saved));
-            }
-        } catch (err) {
-            console.warn('UWebSocketGate: failed to load pinned sensors:', err);
-        }
+        const arr = loadJSON(this.pinnedKey, []);
+        if (Array.isArray(arr)) this.pinnedSensors = new Set(arr);
     }
 
     savePinnedSensors() {
-        try {
-            localStorage.setItem(this.pinnedKey, JSON.stringify(Array.from(this.pinnedSensors)));
-        } catch (err) {
-            console.warn('UWebSocketGate: failed to save pinned sensors:', err);
-        }
+        saveJSON(this.pinnedKey, Array.from(this.pinnedSensors));
     }
 
     togglePin(sensorName) {
@@ -8802,16 +8701,9 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         const pinnedClass = isPinned ? 'uwsgate-sensor-pinned' : '';
 
         const checkboxId = `uwsgate-chart-${this.objectName}-${sensor.name}`;
-        const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-        const pinIcon = isPinned ? '📌' : '○';
-        const pinTitle = isPinned ? 'Unpin' : 'Pin';
         return `
             <tr class="uwsgate-sensor-row ${errorClass} ${pinnedClass}" data-sensor-name="${escapeAttr(sensor.name)}">
-                <td class="col-pin">
-                    <span class="${pinToggleClass}" data-name="${escapeAttr(sensor.name)}" title="${pinTitle}">
-                        ${pinIcon}
-                    </span>
-                </td>
+                ${this.renderPinToggleCell({ id: sensor.name, isPinned, dataAttr: 'data-name' })}
                 <td class="col-add-buttons add-buttons-col">
                     <span class="chart-toggle">
                         <input type="checkbox"
@@ -9017,8 +8909,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
 
     // localStorage persistence
     saveSubscriptions() {
-        const names = Array.from(this.sensors.keys());
-        localStorage.setItem(this.subscriptionsKey, JSON.stringify(names));
+        saveJSON(this.subscriptionsKey, Array.from(this.sensors.keys()));
     }
 
     async loadSavedSubscriptions() {
@@ -9052,10 +8943,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
             }
 
             // Fallback to localStorage if server has no subscriptions
-            const saved = localStorage.getItem(this.subscriptionsKey);
-            if (!saved) return;
-
-            const names = JSON.parse(saved);
+            const names = loadJSON(this.subscriptionsKey, []);
             if (!Array.isArray(names) || names.length === 0) return;
 
             // Restore subscriptions (will re-subscribe to server)
@@ -10289,7 +10177,7 @@ class LogViewer {
                         <path d="M6 9l6 6 6-6"/>
                     </svg>
                     <span class="logviewer-title">Logs</span>
-                    <div class="logviewer-controls" onclick="event.stopPropagation()">
+                    <div class="logviewer-controls">
                         <div class="log-level-wrapper" id="log-level-wrapper-${this.objectName}">
                             <button class="log-level-btn" id="log-level-btn-${this.objectName}" title="Select log levels">
                                 Levels ▼
@@ -10507,65 +10395,46 @@ class LogViewer {
     }
 
     saveFilterOptions() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-filter-options') || '{}');
+        updateStorageMap('uniset-panel-filter-options', (saved) => {
             saved[this.tabKey] = {
                 regex: this.filterRegex,
                 case: this.filterCase,
                 only: this.filterOnlyMatches
             };
-            localStorage.setItem('uniset-panel-filter-options', JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save filter options:', err);
-        }
+        });
     }
 
     loadFilterOptions() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-filter-options') || '{}');
-            const opts = saved[this.tabKey] || saved[this.objectName];
-            if (opts) {
-                this.filterRegex = opts.regex !== undefined ? opts.regex : true;
-                this.filterCase = opts.case !== undefined ? opts.case : false;
-                this.filterOnlyMatches = opts.only !== undefined ? opts.only : false;
+        const saved = loadStorageMap('uniset-panel-filter-options');
+        const opts = saved[this.tabKey] || saved[this.objectName];
+        if (!opts) return;
 
-                // Update checkboxes
-                const regexCheckbox = this.getEl(`log-filter-regex-${this.objectName}`);
-                const caseCheckbox = this.getEl(`log-filter-case-${this.objectName}`);
-                const onlyCheckbox = this.getEl(`log-filter-only-${this.objectName}`);
+        this.filterRegex = opts.regex !== undefined ? opts.regex : true;
+        this.filterCase = opts.case !== undefined ? opts.case : false;
+        this.filterOnlyMatches = opts.only !== undefined ? opts.only : false;
 
-                if (regexCheckbox) regexCheckbox.checked = this.filterRegex;
-                if (caseCheckbox) caseCheckbox.checked = this.filterCase;
-                if (onlyCheckbox) onlyCheckbox.checked = this.filterOnlyMatches;
-            }
-        } catch (err) {
-            console.warn('Failed to load filter options:', err);
-        }
+        const regexCheckbox = this.getEl(`log-filter-regex-${this.objectName}`);
+        const caseCheckbox = this.getEl(`log-filter-case-${this.objectName}`);
+        const onlyCheckbox = this.getEl(`log-filter-only-${this.objectName}`);
+
+        if (regexCheckbox) regexCheckbox.checked = this.filterRegex;
+        if (caseCheckbox) caseCheckbox.checked = this.filterCase;
+        if (onlyCheckbox) onlyCheckbox.checked = this.filterOnlyMatches;
     }
 
     saveBufferSize() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-buffersize') || '{}');
-            saved[this.tabKey] = this.maxLines;
-            localStorage.setItem('uniset-panel-buffersize', JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save buffer size:', err);
-        }
+        updateStorageMap('uniset-panel-buffersize', (saved) => { saved[this.tabKey] = this.maxLines; });
     }
 
     loadSavedBufferSize() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-buffersize') || '{}');
-            const bufSize = saved[this.tabKey] ?? saved[this.objectName];
-            if (bufSize) {
-                this.maxLines = bufSize;
-                const bufferSelect = this.getEl(`log-buffer-${this.objectName}`);
-                if (bufferSelect) {
-                    bufferSelect.value = this.maxLines;
-                }
+        const saved = loadStorageMap('uniset-panel-buffersize');
+        const bufSize = saved[this.tabKey] ?? saved[this.objectName];
+        if (bufSize) {
+            this.maxLines = bufSize;
+            const bufferSelect = this.getEl(`log-buffer-${this.objectName}`);
+            if (bufferSelect) {
+                bufferSelect.value = this.maxLines;
             }
-        } catch (err) {
-            console.warn('Failed to load buffer size:', err);
         }
     }
 
@@ -10696,38 +10565,30 @@ class LogViewer {
     }
 
     saveLevels() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-loglevels') || '{}');
+        updateStorageMap('uniset-panel-loglevels', (saved) => {
             saved[this.tabKey] = Array.from(this.selectedLevels);
-            localStorage.setItem('uniset-panel-loglevels', JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save log levels:', err);
-        }
+        });
     }
 
     loadSavedLevels() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-loglevels') || '{}');
-            const levels = saved[this.tabKey] || saved[this.objectName];
-            if (levels) {
-                this.selectedLevels = new Set(levels);
-                this.updatePillsUI();
-                // Calculate mask for currentLevel
-                let mask = 0;
-                if (this.selectedLevels.has('ANY')) {
-                    mask = LOG_LEVELS.ANY;
-                } else {
-                    this.selectedLevels.forEach(level => {
-                        if (LOG_LEVELS[level]) {
-                            mask |= LOG_LEVELS[level];
-                        }
-                    });
+        const saved = loadStorageMap('uniset-panel-loglevels');
+        const levels = saved[this.tabKey] || saved[this.objectName];
+        if (!levels) return;
+
+        this.selectedLevels = new Set(levels);
+        this.updatePillsUI();
+        // Calculate mask for currentLevel
+        let mask = 0;
+        if (this.selectedLevels.has('ANY')) {
+            mask = LOG_LEVELS.ANY;
+        } else {
+            this.selectedLevels.forEach(level => {
+                if (LOG_LEVELS[level]) {
+                    mask |= LOG_LEVELS[level];
                 }
-                this.currentLevel = mask;
-            }
-        } catch (err) {
-            console.warn('Failed to load log levels:', err);
+            });
         }
+        this.currentLevel = mask;
     }
 
     setupResize() {
@@ -11065,9 +10926,8 @@ class LogViewer {
                 const flags = this.filterCase ? 'g' : 'gi';
                 regex = new RegExp(`(${this.filter})`, flags);
             } else {
-                const escaped = this.filter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 const flags = this.filterCase ? 'g' : 'gi';
-                regex = new RegExp(`(${escaped})`, flags);
+                regex = new RegExp(`(${escapeRegex(this.filter)})`, flags);
             }
 
             if (regex.test(text)) {
@@ -11289,28 +11149,18 @@ class LogViewer {
     }
 
     saveHeight() {
-        try {
-            const heights = JSON.parse(localStorage.getItem('uniset-panel-logheights') || '{}');
-            heights[this.tabKey] = this.height;
-            localStorage.setItem('uniset-panel-logheights', JSON.stringify(heights));
-        } catch (err) {
-            console.warn('Failed to save log height:', err);
-        }
+        updateStorageMap('uniset-panel-logheights', (heights) => { heights[this.tabKey] = this.height; });
     }
 
     loadSavedHeight() {
-        try {
-            const heights = JSON.parse(localStorage.getItem('uniset-panel-logheights') || '{}');
-            const h = heights[this.tabKey] ?? heights[this.objectName];
-            if (h) {
-                this.height = h;
-                const container = this.getEl(`log-container-${this.objectName}`);
-                if (container) {
-                    container.style.height = `${this.height}px`;
-                }
+        const heights = loadStorageMap('uniset-panel-logheights');
+        const h = heights[this.tabKey] ?? heights[this.objectName];
+        if (h) {
+            this.height = h;
+            const container = this.getEl(`log-container-${this.objectName}`);
+            if (container) {
+                container.style.height = `${this.height}px`;
             }
-        } catch (err) {
-            console.warn('Failed to load log height:', err);
         }
     }
 
@@ -11747,17 +11597,13 @@ class JournalRenderer {
         // Сплитим raw по совпадениям, escapeHtml каждый фрагмент. Раньше regex
         // применялся к escaped-строке — поиск по '<', '>', '&', '"', '=' в тексте
         // вроде "value >= 5" не находил совпадение, потому что ищем в "value &gt;= 5".
-        const regex = new RegExp(`(${this.escapeRegex(searchTerm)})`, 'gi');
+        const regex = new RegExp(`(${escapeRegex(searchTerm)})`, 'gi');
         const parts = raw.split(regex);
         return parts.map((part, i) =>
             i % 2 === 1
                 ? `<mark class="journal-highlight">${escapeHtml(part)}</mark>`
                 : escapeHtml(part)
         ).join('');
-    }
-
-    escapeRegex(str) {
-        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
     getMTypeClass(mtype) {
@@ -12124,11 +11970,7 @@ async function initJournals() {
 // Конец LogViewer
 // ============================================================================
 
-// Цвета для графиков
-const CHART_COLORS = [
-    '#3274d9', '#73bf69', '#ff9830', '#f2495c',
-    '#b877d9', '#5794f2', '#fade2a', '#ff6eb4'
-];
+// Цвета для графиков — палитра в 00-constants.js (CHART_COLORS).
 let colorIndex = 0;
 
 function getNextColor() {
@@ -12198,7 +12040,7 @@ async function refreshObjectsList() {
         renderObjectsList(data);
         debugLog('Список объектов обновлён');
     } catch (err) {
-        console.error('Error обновления списка объектов:', err);
+        console.error('Failed to refresh objects list:', err);
     } finally {
         _refreshObjectsInProgress = false;
         if (_refreshObjectsPending) {
@@ -12209,27 +12051,18 @@ async function refreshObjectsList() {
 }
 
 async function fetchObjectData(name, serverId = null) {
-    const url = buildObjectUrl(name, '', serverId);
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to load object data');
-    return response.json();
+    return fetchJSONOrThrow(buildObjectUrl(name, '', serverId), {}, 'Failed to load object data');
 }
 
 async function watchObject(name, serverId = null) {
-    const url = buildObjectUrl(name, '/watch', serverId);
-    const response = await fetch(url, { method: 'POST' });
-    if (!response.ok) throw new Error('Failed to start watching');
-    return response.json();
+    return fetchJSONOrThrow(buildObjectUrl(name, '/watch', serverId), { method: 'POST' }, 'Failed to start watching');
 }
 
 async function unwatchObject(name, serverId = null) {
-    const url = buildObjectUrl(name, '/watch', serverId);
-    const response = await fetch(url, { method: 'DELETE' });
-    if (!response.ok) throw new Error('Failed to stop watching');
-    return response.json();
+    return fetchJSONOrThrow(buildObjectUrl(name, '/watch', serverId), { method: 'DELETE' }, 'Failed to stop watching');
 }
 
-function buildVariableHistoryUrl(objectName, variableName, count = 100, serverId = null) {
+function buildVariableHistoryUrl(objectName, variableName, count = DEFAULT_VARIABLE_HISTORY_COUNT, serverId = null) {
     return buildObjectUrl(
         objectName,
         `/variables/${encodeURIComponent(variableName)}/history`,
@@ -12238,11 +12071,12 @@ function buildVariableHistoryUrl(objectName, variableName, count = 100, serverId
     );
 }
 
-async function fetchVariableHistory(objectName, variableName, count = 100, serverId = null) {
-    const url = buildVariableHistoryUrl(objectName, variableName, count, serverId);
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to load history');
-    return response.json();
+async function fetchVariableHistory(objectName, variableName, count = DEFAULT_VARIABLE_HISTORY_COUNT, serverId = null) {
+    return fetchJSONOrThrow(
+        buildVariableHistoryUrl(objectName, variableName, count, serverId),
+        {},
+        'Failed to load history'
+    );
 }
 
 async function fetchSensors(serverId) {
@@ -12301,7 +12135,7 @@ async function loadSensorsConfig() {
 
         debugLog(`Загружено ${state.sensors.size} сенсоров`);
     } catch (err) {
-        console.error('Error загрузки конфигурации сенсоров:', err);
+        console.error('Failed to load sensors config:', err);
     }
 }
 
@@ -12380,7 +12214,7 @@ function openIoncDialog(options) {
                 input.focus();
                 input.select();
             }
-        }, 50);
+        }, IONC_DIALOG_FOCUS_DELAY_MS);
     }
 
     // Add ESC handler (remove old one first to prevent duplicates)
@@ -12646,7 +12480,7 @@ async function subscribeToExternalSensors(tabKey, sensorNames) {
             await warnObjectApiError(response, 'Error подписки на датчики:');
         }
     } catch (err) {
-        console.warn('Error подписки на датчики:', err);
+        console.warn('Failed to subscribe to sensors:', err);
     }
 }
 
@@ -12663,7 +12497,7 @@ async function unsubscribeFromExternalSensor(tabKey, sensorName) {
             await warnObjectApiError(response, 'Error отписки от датчика:');
         }
     } catch (err) {
-        console.warn('Error отписки от датчика:', err);
+        console.warn('Failed to unsubscribe from sensor:', err);
     }
 }
 
@@ -12686,7 +12520,7 @@ async function subscribeToIONCSensor(tabKey, sensorId) {
             debugLog(`IONC: Подписка на датчик ${sensorId} для ${objectName} (server: ${serverId})`);
         }
     } catch (err) {
-        console.warn('Error подписки на IONC датчик:', err);
+        console.warn('Failed to subscribe to IONC sensor:', err);
     }
 }
 
@@ -12709,7 +12543,7 @@ async function unsubscribeFromIONCSensor(tabKey, sensorId) {
             debugLog(`IONC: Отписка от датчика ${sensorId} для ${objectName} (server: ${serverId})`);
         }
     } catch (err) {
-        console.warn('Error отписки от IONC датчика:', err);
+        console.warn('Failed to unsubscribe from IONC sensor:', err);
     }
 }
 
@@ -13033,44 +12867,29 @@ function removeExternalSensor(tabKey, sensorName, options = {}) {
 // Загрузить внешние датчики из localStorage
 // Возвращает Map<sensorName, sensorData> для обратной совместимости с Set API (.has, .add, .delete)
 function getExternalSensorsFromStorage(tabKey, objectName) {
-    try {
-        // Пробуем по tabKey, потом fallback на objectName (обратная совместимость)
-        const keyByTab = `uniset-panel-external-sensors-${tabKey}`;
-        const keyByObj = `uniset-panel-external-sensors-${objectName}`;
-        const data = localStorage.getItem(keyByTab) || (objectName ? localStorage.getItem(keyByObj) : null);
-        if (data) {
-            const parsed = JSON.parse(data);
-            // Обратная совместимость: если это массив строк (старый формат), конвертируем
-            if (Array.isArray(parsed)) {
-                const map = new Map();
-                parsed.forEach(item => {
-                    if (typeof item === 'string') {
-                        // Старый формат: только имя
-                        map.set(item, { name: item });
-                    } else if (item && item.name) {
-                        // Новый формат: объект с данными
-                        map.set(item.name, item);
-                    }
-                });
-                return map;
+    // Пробуем по tabKey, потом fallback на objectName (обратная совместимость).
+    const parsed = loadJSON(`uniset-panel-external-sensors-${tabKey}`, null)
+        ?? (objectName ? loadJSON(`uniset-panel-external-sensors-${objectName}`, null) : null);
+
+    const map = new Map();
+    if (Array.isArray(parsed)) {
+        parsed.forEach(item => {
+            if (typeof item === 'string') {
+                // Старый формат: только имя
+                map.set(item, { name: item });
+            } else if (item && item.name) {
+                // Новый формат: объект с данными
+                map.set(item.name, item);
             }
-        }
-    } catch (err) {
-        console.warn('Error загрузки внешних датчиков:', err);
+        });
     }
-    return new Map();
+    return map;
 }
 
 // Save внешние датчики в localStorage
 function saveExternalSensorsToStorage(tabKey, sensors) {
-    try {
-        const key = `uniset-panel-external-sensors-${tabKey}`;
-        // sensors - это Map<name, sensorData>
-        const arr = [...sensors.values()];
-        localStorage.setItem(key, JSON.stringify(arr));
-    } catch (err) {
-        console.warn('Error сохранения внешних датчиков:', err);
-    }
+    // sensors - это Map<name, sensorData>
+    saveJSON(`uniset-panel-external-sensors-${tabKey}`, [...sensors.values()]);
 }
 
 // Восстановить внешние датчики при открытии вкладки
@@ -13167,7 +12986,7 @@ function restoreExternalSensors(tabKey, displayName) {
                         });
                     }
                 }).catch(err => {
-                    console.warn('Error восстановления подписок:', err);
+                    console.warn('Failed to restore subscriptions:', err);
                 });
             }
         }
@@ -13201,6 +13020,20 @@ async function fetchSensorsForServer(serverId) {
 // числовой id в hidden input. Стрелки ↑↓ — навигация. Esc — закрыть.
 // При смене objectName (через resetOnObjectChange()) — очищает выбор.
 // ============================================================================
+
+// URL builder для IONC sensors endpoint — единая точка композиции query
+// (autocomplete, dashboard bootstrap, dashboard cold-resolve).
+function buildIONCSensorsUrl({ objectName, serverId = '', search = '', limit = SENSOR_AUTOCOMPLETE_LIMIT, offset = null } = {}) {
+    let url = `/api/objects/${encodeURIComponent(objectName)}/ionc/sensors?limit=${limit}`;
+    if (serverId)        url += `&server=${encodeURIComponent(serverId)}`;
+    if (search)          url += `&search=${encodeURIComponent(search)}`;
+    if (offset !== null) url += `&offset=${offset}`;
+    return url;
+}
+
+if (typeof globalThis !== 'undefined') {
+    globalThis.buildIONCSensorsUrl = buildIONCSensorsUrl;
+}
 
 function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId) {
     if (!inputEl) return null;
@@ -13275,11 +13108,7 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
             return;
         }
         try {
-            const url = `/api/objects/${encodeURIComponent(objectName)}/ionc/sensors`
-                + `?server=${encodeURIComponent(serverId)}`
-                + (searchText ? `&search=${encodeURIComponent(searchText)}` : '')
-                + `&limit=${limit}`;
-            const resp = await fetch(url);
+            const resp = await fetch(buildIONCSensorsUrl({ objectName, serverId, search: searchText, limit }));
             if (!resp.ok) {
                 buildDropdown();
                 renderItems([]);
@@ -14573,11 +14402,6 @@ function removeChart(tabKey, varName) {
     updateXAxisVisibility(tabKey);
 }
 
-// Глобальная функция для кнопки закрытия графика
-window.removeChartByButton = function(objectName, varName) {
-    removeChart(objectName, varName);
-};
-
 // Глобальная функция для сворачивания/разворачивания секций
 window.toggleSection = function(sectionId) {
     const section = document.querySelector(`[data-section="${sectionId}"]`);
@@ -15028,13 +14852,9 @@ function renderStatisticsSensors(tabKey, filterText = '') {
 
 // Восстановление состояния спойлеров из localStorage
 function restoreCollapsedSections(objectName) {
-    try {
-        const saved = localStorage.getItem('uniset-panel-collapsed');
-        if (saved) {
-            state.collapsedSections = JSON.parse(saved);
-        }
-    } catch (err) {
-        console.warn('Error загрузки состояния спойлеров:', err);
+    const saved = loadJSON('uniset-panel-collapsed', null);
+    if (saved && typeof saved === 'object') {
+        state.collapsedSections = saved;
     }
 
     // Apply сохранённые состояния к секциям этого объекта
@@ -15059,12 +14879,7 @@ function saveCollapsedSections() {
     });
 
     state.collapsedSections = collapsed;
-
-    try {
-        localStorage.setItem('uniset-panel-collapsed', JSON.stringify(collapsed));
-    } catch (err) {
-        console.warn('Error сохранения состояния спойлеров:', err);
-    }
+    saveJSON('uniset-panel-collapsed', collapsed);
 }
 
 // Color picker для изменения цвета графика
@@ -15253,13 +15068,7 @@ function setupChartsResize(tabKey) {
 }
 
 function saveChartsHeight(tabKey, height) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-charts-height') || '{}');
-        saved[tabKey] = height;
-        localStorage.setItem('uniset-panel-charts-height', JSON.stringify(saved));
-    } catch (err) {
-        console.warn('Failed to save charts height:', err);
-    }
+    updateStorageMap('uniset-panel-charts-height', (saved) => { saved[tabKey] = height; });
 }
 
 function loadChartsHeight(tabKey) {
@@ -15267,18 +15076,13 @@ function loadChartsHeight(tabKey) {
     if (!tabState) return;
 
     const displayName = tabState.displayName || tabKey;
-
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-charts-height') || '{}');
-        if (saved[tabKey]) {
-            const chartsContainer = getElementInTab(tabKey, `charts-container-${displayName}`);
-            if (chartsContainer) {
-                chartsContainer.style.height = `${saved[tabKey]}px`;
-                chartsContainer.style.maxHeight = `${saved[tabKey]}px`;
-            }
+    const saved = loadStorageMap('uniset-panel-charts-height');
+    if (saved[tabKey]) {
+        const chartsContainer = getElementInTab(tabKey, `charts-container-${displayName}`);
+        if (chartsContainer) {
+            chartsContainer.style.height = `${saved[tabKey]}px`;
+            chartsContainer.style.maxHeight = `${saved[tabKey]}px`;
         }
-    } catch (err) {
-        console.warn('Failed to load charts height:', err);
     }
 }
 
@@ -15295,31 +15099,21 @@ function setupIONCSensorsResize(tabKey, objectName) {
 }
 
 function saveIONCSensorsHeight(tabKey, height) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-ionc-height') || '{}');
-        saved[tabKey] = height;
-        localStorage.setItem('uniset-panel-ionc-height', JSON.stringify(saved));
-    } catch (err) {
-        console.warn('Failed to save IONC sensors height:', err);
-    }
+    updateStorageMap('uniset-panel-ionc-height', (saved) => { saved[tabKey] = height; });
 }
 
 function loadIONCSensorsHeight(tabKey, objectName) {
 
 
 // === 53-ui-settings.js ===
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-ionc-height') || '{}');
-        const height = saved[tabKey] ?? saved[objectName];
-        if (height) {
-            const sensorsContainer = getElementInTab(tabKey, `ionc-sensors-container-${objectName}`);
-            if (sensorsContainer) {
-                sensorsContainer.style.height = `${height}px`;
-                sensorsContainer.style.maxHeight = `${height}px`;
-            }
+    const saved = loadStorageMap('uniset-panel-ionc-height');
+    const height = saved[tabKey] ?? saved[objectName];
+    if (height) {
+        const sensorsContainer = getElementInTab(tabKey, `ionc-sensors-container-${objectName}`);
+        if (sensorsContainer) {
+            sensorsContainer.style.height = `${height}px`;
+            sensorsContainer.style.maxHeight = `${height}px`;
         }
-    } catch (err) {
-        console.warn('Failed to load IONC sensors height:', err);
     }
 }
 
@@ -15341,28 +15135,18 @@ function toggleIOLayout(tabKey, objectName) {
 }
 
 function saveIOLayoutState(tabKey, isSequential) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-io-layout') || '{}');
-        saved[tabKey] = isSequential;
-        localStorage.setItem('uniset-panel-io-layout', JSON.stringify(saved));
-    } catch (err) {
-        console.warn('Failed to save IO layout state:', err);
-    }
+    updateStorageMap('uniset-panel-io-layout', (saved) => { saved[tabKey] = isSequential; });
 }
 
 function loadIOLayoutState(tabKey, objectName) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-io-layout') || '{}');
-        if (saved[tabKey] ?? saved[objectName]) {
-            const checkbox = getElementInTab(tabKey, `io-sequential-${objectName}`);
-            const ioGrid = getElementInTab(tabKey, `io-grid-${objectName}`);
-            if (checkbox && ioGrid) {
-                checkbox.checked = true;
-                ioGrid.classList.add('io-sequential');
-            }
+    const saved = loadStorageMap('uniset-panel-io-layout');
+    if (saved[tabKey] ?? saved[objectName]) {
+        const checkbox = getElementInTab(tabKey, `io-sequential-${objectName}`);
+        const ioGrid = getElementInTab(tabKey, `io-grid-${objectName}`);
+        if (checkbox && ioGrid) {
+            checkbox.checked = true;
+            ioGrid.classList.add('io-sequential');
         }
-    } catch (err) {
-        console.warn('Failed to load IO layout state:', err);
     }
 }
 
@@ -15425,30 +15209,23 @@ function getNextReorderableSection(element) {
 
 // tabKey - ключ вкладки (serverId:objectName)
 function saveSectionOrder(tabKey) {
-    try {
-        const panel = getTabPanel(tabKey);
-        if (!panel) return;
+    const panel = getTabPanel(tabKey);
+    if (!panel) return;
 
-        const sections = panel.querySelectorAll('.reorderable-section[data-section-id]');
-        const order = Array.from(sections).map(s => s.dataset.sectionId);
+    const sections = panel.querySelectorAll('.reorderable-section[data-section-id]');
+    const order = Array.from(sections).map(s => s.dataset.sectionId);
 
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-section-order') || '{}');
-        saved[tabKey] = order;
-        localStorage.setItem('uniset-panel-section-order', JSON.stringify(saved));
-    } catch (err) {
-        console.warn('Failed to save section order:', err);
-    }
+    updateStorageMap('uniset-panel-section-order', (saved) => { saved[tabKey] = order; });
 }
 
 // tabKey - ключ вкладки (serverId:objectName)
 function loadSectionOrder(tabKey) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-section-order') || '{}');
-        const order = saved[tabKey];
-        if (!order || !Array.isArray(order)) return;
+    const saved = loadStorageMap('uniset-panel-section-order');
+    const order = saved[tabKey];
+    if (!order || !Array.isArray(order)) return;
 
-        const panel = getTabPanel(tabKey);
-        if (!panel) return;
+    const panel = getTabPanel(tabKey);
+    if (!panel) return;
 
         // Собираем все reorderable секции в Map
         const sections = new Map();
@@ -15479,10 +15256,7 @@ function loadSectionOrder(tabKey) {
             anchor = orderedSections[i];
         }
 
-        updateReorderButtons(tabKey);
-    } catch (err) {
-        console.warn('Failed to load section order:', err);
-    }
+    updateReorderButtons(tabKey);
 }
 
 // tabKey - ключ вкладки (serverId:objectName)
@@ -15546,25 +15320,14 @@ function setupIOCollapse(tabKey, objectName, type) {
 }
 
 function saveIOCollapseState(tabKey, type, collapsed) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-io-collapse') || '{}');
-        const key = `${tabKey}-${type}`;
-        saved[key] = collapsed ? 'collapsed' : 'expanded';
-        localStorage.setItem('uniset-panel-io-collapse', JSON.stringify(saved));
-    } catch (err) {
-        console.warn('Failed to save IO collapse state:', err);
-    }
+    updateStorageMap('uniset-panel-io-collapse', (saved) => {
+        saved[`${tabKey}-${type}`] = collapsed ? 'collapsed' : 'expanded';
+    });
 }
 
 function loadIOCollapseState(tabKey, type) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-io-collapse') || '{}');
-        const key = `${tabKey}-${type}`;
-        return saved[key] || 'expanded';
-    } catch (err) {
-        console.warn('Failed to load IO collapse state:', err);
-        return 'expanded';
-    }
+    const saved = loadStorageMap('uniset-panel-io-collapse');
+    return saved[`${tabKey}-${type}`] || 'expanded';
 }
 
 function setupIOResize(tabKey, objectName, type) {
@@ -15579,29 +15342,20 @@ function setupIOResize(tabKey, objectName, type) {
 }
 
 function saveIOHeight(tabKey, type, height) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-io-heights') || '{}');
-        const key = `${tabKey}-${type}`;
-        saved[key] = height;
-        localStorage.setItem('uniset-panel-io-heights', JSON.stringify(saved));
-    } catch (err) {
-        console.warn('Failed to save IO height:', err);
-    }
+    updateStorageMap('uniset-panel-io-heights', (saved) => {
+        saved[`${tabKey}-${type}`] = height;
+    });
 }
 
 function loadIOHeight(tabKey, objectName, type) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-io-heights') || '{}');
-        const key = `${tabKey}-${type}`;
-        if (saved[key]) {
-            const container = getElementInTab(tabKey, `io-container-${type}-${objectName}`);
-            if (container) {
-                container.style.height = `${saved[key]}px`;
-                container.style.maxHeight = `${saved[key]}px`;
-            }
+    const saved = loadStorageMap('uniset-panel-io-heights');
+    const height = saved[`${tabKey}-${type}`];
+    if (height) {
+        const container = getElementInTab(tabKey, `io-container-${type}-${objectName}`);
+        if (container) {
+            container.style.height = `${height}px`;
+            container.style.maxHeight = `${height}px`;
         }
-    } catch (err) {
-        console.warn('Failed to load IO height:', err);
     }
 }
 
@@ -15665,24 +15419,14 @@ function setupIOUnpinAll(tabKey, objectName, type) {
 
 // Pinned rows management
 function getIOPinnedRows(tabKey, type) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-io-pinned') || '{}');
-        const key = `${tabKey}-${type}`;
-        return new Set(saved[key] || []);
-    } catch (err) {
-        return new Set();
-    }
+    const saved = loadStorageMap('uniset-panel-io-pinned');
+    return new Set(saved[`${tabKey}-${type}`] || []);
 }
 
 function saveIOPinnedRows(tabKey, type, pinnedSet) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-io-pinned') || '{}');
-        const key = `${tabKey}-${type}`;
-        saved[key] = Array.from(pinnedSet);
-        localStorage.setItem('uniset-panel-io-pinned', JSON.stringify(saved));
-    } catch (err) {
-        console.warn('Failed to save pinned rows:', err);
-    }
+    updateStorageMap('uniset-panel-io-pinned', (saved) => {
+        saved[`${tabKey}-${type}`] = Array.from(pinnedSet);
+    });
 }
 
 function toggleIOPin(tabKey, type, rowKey) {
@@ -15728,54 +15472,51 @@ function setTimeRange(range) {
 
 // Сохранение настроек в localStorage
 function saveSettings() {
-    const settings = {
+    saveJSON('uniset-panel-settings', {
         timeRange: state.timeRange,
         sidebarCollapsed: state.sidebarCollapsed,
         collapsedServerGroups: Array.from(state.collapsedServerGroups),
         serversSectionCollapsed: state.serversSectionCollapsed,
         launchersSectionCollapsed: state.launchersSectionCollapsed
-    };
-    localStorage.setItem('uniset-panel-settings', JSON.stringify(settings));
+    });
 }
 
 // Loading настроек из localStorage
 function loadSettings() {
+    const settings = loadJSON('uniset-panel-settings', null);
+    if (!settings || typeof settings !== 'object') return;
+
     try {
-        const saved = localStorage.getItem('uniset-panel-settings');
-        if (saved) {
-            const settings = JSON.parse(saved);
+        // Восстановить timeRange
+        if (settings.timeRange) {
+            state.timeRange = settings.timeRange;
+            document.querySelectorAll('.time-range-btn').forEach(btn => {
+                btn.classList.toggle('active', parseInt(btn.dataset.range, 10) === state.timeRange);
+            });
+        }
 
-            // Восстановить timeRange
-            if (settings.timeRange) {
-                state.timeRange = settings.timeRange;
-                document.querySelectorAll('.time-range-btn').forEach(btn => {
-                    btn.classList.toggle('active', parseInt(btn.dataset.range, 10) === state.timeRange);
-                });
-            }
+        // Восстановить состояние sidebar
+        if (settings.sidebarCollapsed) {
+            state.sidebarCollapsed = settings.sidebarCollapsed;
+            document.getElementById('sidebar').classList.add('collapsed');
+        }
 
-            // Восстановить состояние sidebar
-            if (settings.sidebarCollapsed) {
-                state.sidebarCollapsed = settings.sidebarCollapsed;
-                document.getElementById('sidebar').classList.add('collapsed');
-            }
+        // Восстановить свёрнутые группы серверов
+        if (settings.collapsedServerGroups && Array.isArray(settings.collapsedServerGroups)) {
+            state.collapsedServerGroups = new Set(settings.collapsedServerGroups);
+        }
 
-            // Восстановить свёрнутые группы серверов
-            if (settings.collapsedServerGroups && Array.isArray(settings.collapsedServerGroups)) {
-                state.collapsedServerGroups = new Set(settings.collapsedServerGroups);
-            }
+        // Восстановить состояние секции "Servers"
+        if (settings.serversSectionCollapsed !== undefined) {
+            state.serversSectionCollapsed = settings.serversSectionCollapsed;
+        }
 
-            // Восстановить состояние секции "Servers"
-            if (settings.serversSectionCollapsed !== undefined) {
-                state.serversSectionCollapsed = settings.serversSectionCollapsed;
-            }
-
-            // Восстановить состояние секции "Launchers"
-            if (settings.launchersSectionCollapsed !== undefined) {
-                state.launchersSectionCollapsed = settings.launchersSectionCollapsed;
-            }
+        // Восстановить состояние секции "Launchers"
+        if (settings.launchersSectionCollapsed !== undefined) {
+            state.launchersSectionCollapsed = settings.launchersSectionCollapsed;
         }
     } catch (err) {
-        console.warn('Error загрузки настроек:', err);
+        console.warn('Failed to apply settings:', err);
     }
 }
 
@@ -15826,23 +15567,12 @@ async function loadSidebar() {
 
 // Загрузка collapse состояния групп из localStorage
 function loadGroupCollapseState() {
-    try {
-        const saved = localStorage.getItem('uniset-panel-group-collapse');
-        if (saved) {
-            state.groupCollapseState = JSON.parse(saved);
-        }
-    } catch (err) {
-        state.groupCollapseState = {};
-    }
+    state.groupCollapseState = loadJSON('uniset-panel-group-collapse', {}) || {};
 }
 
 // Сохранение collapse состояния групп в localStorage
 function saveGroupCollapseState() {
-    try {
-        localStorage.setItem('uniset-panel-group-collapse', JSON.stringify(state.groupCollapseState));
-    } catch (err) {
-        // ignore
-    }
+    saveJSON('uniset-panel-group-collapse', state.groupCollapseState);
 }
 
 // Основная функция рендеринга всех групп
@@ -16051,25 +15781,11 @@ function applySidebarStatuses() {
 
 // Рендеринг пользовательских dashboard'ов в отдельную группу
 function renderUserDashboardsGroup(container) {
-    try {
-        const saved = localStorage.getItem('user-dashboards');
-        if (!saved) return;
+    const userDashboards = loadJSON('user-dashboards', []);
+    if (!Array.isArray(userDashboards) || userDashboards.length === 0) return;
 
-        const userDashboards = JSON.parse(saved);
-        if (!Array.isArray(userDashboards) || userDashboards.length === 0) return;
-
-        const items = userDashboards.map(name => ({
-            type: 'dashboard',
-            name: name
-        }));
-
-        renderSidebarGroup({
-            name: 'Custom',
-            items: items
-        }, container);
-    } catch (err) {
-        // ignore
-    }
+    const items = userDashboards.map(name => ({ type: 'dashboard', name }));
+    renderSidebarGroup({ name: 'Custom', items }, container);
 }
 
 
@@ -16238,6 +15954,24 @@ function renderSensorBindingFields(config = {}, opts = {}) {
     `;
 }
 
+// Стандартный label-field, который в widget config dialog'е почти везде одинаковый:
+// `<label>Label</label> + <input name="label">`. Используется в passive widget'ах
+// (gauge, level, digital, ...). Active widget'ы рендерят свой через base.getConfigForm.
+function renderLabelField(config = {}, placeholder = 'Display label') {
+    return `
+        <div class="widget-config-field">
+            <label>Label</label>
+            <input type="text" class="widget-input" name="label"
+                   value="${escapeAttr(config.label || '')}" placeholder="${escapeAttr(placeholder)}">
+        </div>
+    `;
+}
+
+// Парсит значение label-поля. Возвращает строку или ''.
+function parseLabelField(form) {
+    return form.querySelector('[name="label"]')?.value || '';
+}
+
 function parseSensorBindingFields(form, opts = {}) {
     const prefix = opts.fieldPrefix || '';
     const rawId = form.querySelector(`[name="${prefix}sensorId"]`)?.value;
@@ -16323,31 +16057,32 @@ function initSensorBindingHandlers(form, config = {}, opts = {}) {
     if (!serverSelect || !objectSelect || !sensorInput || !hiddenIdInput) return null;
 
     let loadToken = 0;
-    const loadIONCObjects = (serverId) => {
+    const loadIONCObjects = async (serverId) => {
         const myToken = ++loadToken;
         if (!serverId) {
             objectSelect.innerHTML = '<option value="" disabled selected>(выберите Server)</option>';
             return;
         }
-        fetch(`/api/objects?server=${encodeURIComponent(serverId)}&type=IONotifyController`)
-            .then(r => r.ok ? r.json() : { objects: [] })
-            .then(data => {
-                if (myToken !== loadToken) return;
-                const objs = data.objects || [];
-                const currentValue = objectSelect.value || config.objectName || (opts.objectNameDefault || 'SharedMemory');
-                objectSelect.innerHTML = objs.map(o => {
-                    const name = typeof o === 'string' ? o : o.name;
-                    return `<option value="${escapeAttr(name)}" ${name === currentValue ? 'selected' : ''}>${escapeHtml(name)}</option>`;
-                }).join('');
-                if (!objs.some(o => (typeof o === 'string' ? o : o.name) === currentValue)) {
-                    const opt = document.createElement('option');
-                    opt.value = currentValue;
-                    opt.textContent = `${currentValue} (текущий, не найден)`;
-                    opt.selected = true;
-                    objectSelect.prepend(opt);
-                }
-            })
-            .catch(e => console.warn('Failed to load IONC objects:', e));
+        try {
+            const r = await fetch(`/api/objects?server=${encodeURIComponent(serverId)}&type=IONotifyController`);
+            const data = r.ok ? await r.json() : { objects: [] };
+            if (myToken !== loadToken) return;
+            const objs = data.objects || [];
+            const currentValue = objectSelect.value || config.objectName || (opts.objectNameDefault || 'SharedMemory');
+            objectSelect.innerHTML = objs.map(o => {
+                const name = typeof o === 'string' ? o : o.name;
+                return `<option value="${escapeAttr(name)}" ${name === currentValue ? 'selected' : ''}>${escapeHtml(name)}</option>`;
+            }).join('');
+            if (!objs.some(o => (typeof o === 'string' ? o : o.name) === currentValue)) {
+                const opt = document.createElement('option');
+                opt.value = currentValue;
+                opt.textContent = `${currentValue} (текущий, не найден)`;
+                opt.selected = true;
+                objectSelect.prepend(opt);
+            }
+        } catch (err) {
+            console.warn('Failed to load IONC objects:', err);
+        }
     };
 
     loadIONCObjects(serverSelect.value);
@@ -16530,6 +16265,8 @@ function _migrateBindingPure(cfg, sensorRegistry) {
 if (typeof globalThis !== 'undefined') {
     globalThis.renderSensorBindingFields = renderSensorBindingFields;
     globalThis.parseSensorBindingFields  = parseSensorBindingFields;
+    globalThis.renderLabelField          = renderLabelField;
+    globalThis.parseLabelField           = parseLabelField;
     globalThis.renderSensorItemRow       = renderSensorItemRow;
     globalThis.parseSensorItemList       = parseSensorItemList;
     globalThis.sensorItemMatchesUpdate   = sensorItemMatchesUpdate;
@@ -16637,19 +16374,37 @@ class ActiveDashboardWidget extends DashboardWidget {
     async _doWrite(value) {
         this.commandValue = value;
         this._setWriteState('pending');
+        const result = await this._postIoncSet(value);
+        if (result.ok) {
+            this._setWriteState('success');
+            return true;
+        }
+        this._setWriteState('error', result.error);
+        return false;
+    }
 
+    // Silent write — POST на ionc/set без _setWriteState/commandValue логики.
+    // Используется генератором (per-tick) и подобными fire-and-forget сценариями,
+    // где визуальный pending/success flash не нужен (или мешает). Caller сам
+    // решает что делать с результатом (`{ ok, error }`).
+    // Все sensorId/serverId/objectName проверки — те же, что в _doWrite.
+    async _doWriteSilent(value) {
+        return this._postIoncSet(value);
+    }
+
+    // Internal: чистый POST + validation (без UI side effects).
+    // Возвращает `{ ok: true }` или `{ ok: false, error: string }`.
+    async _postIoncSet(value) {
         // sensorId — числовой ID, должен быть резолвлен заранее (autocomplete сохраняет
         // его в config). config.sensor (имя) — fallback для smoke TestActiveWidget'а.
         const sensorId = this.config?.sensorId ?? this.config?.sensor;
         if (sensorId === undefined || sensorId === null || sensorId === '') {
-            this._setWriteState('error', 'Sensor not configured');
-            return false;
+            return { ok: false, error: 'Sensor not configured' };
         }
 
         const serverId = this.config?.serverId ?? this._resolveServerId();
         if (!serverId) {
-            this._setWriteState('error', 'No server configured');
-            return false;
+            return { ok: false, error: 'No server configured' };
         }
         // Warn один раз на widget lifetime — legacy widget'ы могут писать N раз/сек
         // (generator) или сериями (push-button pulse), spam в console не нужен.
@@ -16668,14 +16423,11 @@ class ActiveDashboardWidget extends DashboardWidget {
             });
             if (!resp.ok) {
                 const data = await resp.json().catch(() => ({}));
-                this._setWriteState('error', data.error || `HTTP ${resp.status}`);
-                return false;
+                return { ok: false, error: data.error || `HTTP ${resp.status}` };
             }
-            this._setWriteState('success');
-            return true;
+            return { ok: true };
         } catch (e) {
-            this._setWriteState('error', e.message);
-            return false;
+            return { ok: false, error: e.message };
         }
     }
 
@@ -17117,7 +16869,7 @@ window.PushButtonWidget = PushButtonWidget;
 // GeneratorWidget — обёртка вокруг SignalGenerator engine для dashboard.
 //
 // Запускает математический генератор (square/sin/cos/linear/random),
-// каждый тик пишет в датчик через _writeRaw (fire-and-forget). Параметры
+// каждый тик пишет в датчик через _doWriteSilent (fire-and-forget). Параметры
 // настраиваются только через config dialog, на widget'е — Start/Stop toggle
 // + текущее значение.
 //
@@ -17153,9 +16905,6 @@ class GeneratorWidget extends ActiveDashboardWidget {
     constructor(id, config, container) {
         super(id, config, container);
         this._signalGen = null;
-        this._lastTickValue = null;
-        this._writeUrl = null;
-        this._writeSensorId = undefined;
     }
 
     // === Render ===
@@ -17188,7 +16937,8 @@ class GeneratorWidget extends ActiveDashboardWidget {
         this.feedbackValue = value;
         this.value = value;
         this.error = error;
-        // НЕ вызываем renderFeedback — UI показывает _lastTickValue от генератора.
+        // НЕ вызываем renderFeedback — UI показывает значение от генератора
+        // через _updateValueDisplay в _onTick.
     }
 
     // === Toggle handler ===
@@ -17208,27 +16958,8 @@ class GeneratorWidget extends ActiveDashboardWidget {
 
     // === Start/Stop ===
     _start() {
-        // Resolve all params and validate at start.
-        const sensorId = this.config?.sensorId ?? this.config?.sensor;
-        if (sensorId === undefined || sensorId === null || sensorId === '') {
-            this._setWriteState('error', 'Sensor not configured');
-            return;
-        }
-        const serverId = this.config?.serverId ?? this._resolveServerId();
-        if (!serverId) {
-            this._setWriteState('error', 'No connected server');
-            return;
-        }
-        if (!this.config?.serverId && !this._serverIdFallbackWarned) {
-            this._serverIdFallbackWarned = true;
-            console.warn(`Generator widget ${this.id || '<unknown>'}: serverId missing in config, using fallback ${serverId} — config will be migrated on next dashboard load`);
-        }
-        const objectName = this.config?.objectName || 'SharedMemory';
         // S-3: guard against double-start (rapid double-toggle leak).
         if (this._signalGen) return;
-        // I-1: cache write target — avoid re-resolving every tick.
-        this._writeUrl = `/api/objects/${encodeURIComponent(objectName)}/ionc/set?server=${encodeURIComponent(serverId)}`;
-        this._writeSensorId = sensorId;
         this._signalGen = new SignalGenerator({
             type: this.config?.type || 'square',
             min: this.config?.min ?? GENERATOR_DEFAULT_MIN,
@@ -17248,9 +16979,6 @@ class GeneratorWidget extends ActiveDashboardWidget {
             this._signalGen.stop();
             this._signalGen = null;
         }
-        this._lastTickValue = null;
-        this._writeUrl = null;
-        this._writeSensorId = undefined;
         this._updateValueDisplay(null);
         this._updateRunningUI(false);
     }
@@ -17259,36 +16987,15 @@ class GeneratorWidget extends ActiveDashboardWidget {
         return !!this._signalGen?.isRunning();
     }
 
-    _onTick(value) {
-        this._lastTickValue = value;
+    async _onTick(value) {
         this._updateValueDisplay(value);
-        this._writeRaw(value);
-    }
-
-    // _writeRaw — fire-and-forget POST на ionc/set, без per-tick confirm/state.
-    // Errors → _stop + setWriteState('error') → UI: purple border + tooltip.
-    async _writeRaw(value) {
-        if (!this._writeUrl || this._writeSensorId === undefined) {
-            // Should not happen if _start succeeded, defensive
+        // Fire-and-forget: per-tick без UI flash. На ошибке — стоп с error state.
+        // Validation (sensorId/serverId/objectName) происходит внутри _doWriteSilent.
+        const result = await this._doWriteSilent(value);
+        if (!result.ok) {
+            console.warn('Generator write failed:', result.error);
             this._stop();
-            return;
-        }
-        try {
-            const resp = await controlledFetch(this._writeUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sensor_id: this._writeSensorId, value }),
-            });
-            if (!resp.ok) {
-                const data = await resp.json().catch(() => ({}));
-                console.warn('Generator write failed:', resp.status, data.error);
-                this._stop();
-                this._setWriteState('error', data.error || `HTTP ${resp.status}`);
-            }
-        } catch (e) {
-            console.warn('Generator write exception:', e);
-            this._stop();
-            this._setWriteState('error', e.message);
+            this._setWriteState('error', result.error);
         }
     }
 
@@ -18338,7 +18045,7 @@ class GaugeWidget extends DashboardWidget {
 
     // === Default style (current design) ===
     renderDefault() {
-        const { min = 0, max = 100, unit = '' } = this.config;
+        const { min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX, unit = '' } = this.config;
 
         this.element.innerHTML = `
             <svg class="gauge-svg" viewBox="0 0 100 60">
@@ -18372,7 +18079,7 @@ class GaugeWidget extends DashboardWidget {
 
     // === Classic style (chrome rim, trading style) ===
     renderClassic() {
-        const { min = 0, max = 100, unit = '', zones = [] } = this.config;
+        const { min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX, unit = '', zones = [] } = this.config;
         const ticks = this.generateTicks(min, max, 5);
 
         // Semicircular gauge with value below on dark background
@@ -18480,7 +18187,7 @@ class GaugeWidget extends DashboardWidget {
 
     // === Modern style (Lada dashboard style) ===
     renderModern() {
-        const { min = 0, max = 100, unit = '', zones = [] } = this.config;
+        const { min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX, unit = '', zones = [] } = this.config;
         const ticks = this.generateTicks(min, max, 5);
 
         // Match speedometer outer diameter with thicker bezel
@@ -18597,7 +18304,7 @@ class GaugeWidget extends DashboardWidget {
 
     // === Speedometer style (realistic automotive gauge) ===
     renderSpeedometer() {
-        const { min = 0, max = 4000, unit = 'RPM', zones = [] } = this.config;
+        const { min = WIDGET_DEFAULT_MIN, max = SPEEDOMETER_DEFAULT_MAX_RPM, unit = 'RPM', zones = [] } = this.config;
         const majorStep = this.calculateMajorStep(min, max);
         const ticks = this.generateSpeedoTicks(min, max, majorStep);
 
@@ -18703,7 +18410,7 @@ class GaugeWidget extends DashboardWidget {
 
     // === Dual Scale style (main value + target indicator) ===
     renderDualScale() {
-        const { min = 0, max = 100, unit = '', zones = [], sensor2 = '' } = this.config;
+        const { min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX, unit = '', zones = [], sensor2 = '' } = this.config;
         const hasSensor2 = sensor2 && sensor2.trim() !== '';
 
         const { cx, cy, r } = GaugeWidget.layoutForStyle('dual');
@@ -18971,7 +18678,7 @@ class GaugeWidget extends DashboardWidget {
     update(value, error = null) {
         super.update(value, error);
 
-        const { min = 0, max = 100, decimals = 1, style = 'default' } = this.config;
+        const { min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX, decimals = 1, style = 'default' } = this.config;
 
         // For speedometer/dual, check digitalEl; for others, check valueEl
         const hasDisplay = (style === 'speedometer' || style === 'dual') ? this.digitalEl : this.valueEl;
@@ -19029,7 +18736,7 @@ class GaugeWidget extends DashboardWidget {
     updateSetpoint(value, error = null) {
         if (!this.targetEl) return;
 
-        const { min = 0, max = 100, style = 'default', decimals = 1 } = this.config;
+        const { min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX, style = 'default', decimals = 1 } = this.config;
 
         // Only for dual style
         if (style !== 'dual') return;
@@ -19195,11 +18902,7 @@ class GaugeWidget extends DashboardWidget {
                     sensorId:   config.sensorId2 ?? null,
                 }, { fieldPrefix: 'sensor2-', sensorLabel: 'Target/Setpoint Sensor' })}
             </div>
-            <div class="widget-config-field">
-                <label>Label</label>
-                <input type="text" class="widget-input" name="label"
-                       value="${escapeAttr(config.label || '')}" placeholder="Display label">
-            </div>
+            ${renderLabelField(config)}
             <div class="widget-config-field">
                 <label>Style</label>
                 <select class="widget-select" name="style">
@@ -19290,8 +18993,6 @@ class GaugeWidget extends DashboardWidget {
         // Если юзер переключит style → dual после открытия диалога, sensor2 поля
         // станут видны (toggleDualScaleFields), но без wiring останутся пустыми.
         // Listener wire'ит их при первом переходе в dual; helper idempotent.
-        // Также явно дёргаем toggleDualScaleFields — раньше это делал inline
-        // onchange="toggleDualScaleFields(this)" в HTML (убран как двойной binding).
         const styleSel = form.querySelector('[name="style"]');
         styleSel?.addEventListener('change', () => {
             toggleDualScaleFields(styleSel);
@@ -19348,7 +19049,7 @@ class LevelWidget extends DashboardWidget {
             return;
         }
 
-        const { min = 0, max = 100, orientation = 'vertical', unit = '%', decimals = 0 } = this.config;
+        const { min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX, orientation = 'vertical', unit = '%', decimals = 0 } = this.config;
         const numValue = parseNumberOrDefault(value, 0);
         const percent = percentInRange(numValue, min, max, 100);
 
@@ -19367,19 +19068,15 @@ class LevelWidget extends DashboardWidget {
         const zones = config.zones || [];
         return `
             ${renderSensorBindingFields(config, { fieldPrefix: '' })}
-            <div class="widget-config-field">
-                <label>Label</label>
-                <input type="text" class="widget-input" name="label"
-                       value="${escapeAttr(config.label || '')}" placeholder="Display label">
-            </div>
+            ${renderLabelField(config)}
             <div class="widget-config-row">
                 <div class="widget-config-field">
                     <label>Min</label>
-                    <input type="number" class="widget-input" name="min" value="${config.min ?? 0}">
+                    <input type="number" class="widget-input" name="min" value="${config.min ?? WIDGET_DEFAULT_MIN}">
                 </div>
                 <div class="widget-config-field">
                     <label>Max</label>
-                    <input type="number" class="widget-input" name="max" value="${config.max ?? 100}">
+                    <input type="number" class="widget-input" name="max" value="${config.max ?? WIDGET_DEFAULT_MAX}">
                 </div>
             </div>
             <div class="widget-config-row">
@@ -19407,8 +19104,8 @@ class LevelWidget extends DashboardWidget {
         return {
             ...parseSensorBindingFields(form, { fieldPrefix: '' }),
             label: form.querySelector('[name="label"]')?.value || '',
-            min: parseNumberOrDefault(form.querySelector('[name="min"]')?.value, 0),
-            max: parseNumberOrDefault(form.querySelector('[name="max"]')?.value, 100),
+            min: parseNumberOrDefault(form.querySelector('[name="min"]')?.value, WIDGET_DEFAULT_MIN),
+            max: parseNumberOrDefault(form.querySelector('[name="max"]')?.value, WIDGET_DEFAULT_MAX),
             orientation: form.querySelector('[name="orientation"]')?.value || 'vertical',
             unit: form.querySelector('[name="unit"]')?.value || '%',
             zones
@@ -19480,11 +19177,7 @@ class LedWidget extends DashboardWidget {
     static getConfigForm(config = {}) {
         return `
             ${renderSensorBindingFields(config, { fieldPrefix: '' })}
-            <div class="widget-config-field">
-                <label>Label</label>
-                <input type="text" class="widget-input" name="label"
-                       value="${escapeAttr(config.label || '')}" placeholder="Display label">
-            </div>
+            ${renderLabelField(config)}
             <div class="widget-config-field">
                 <label>Threshold (value > threshold = ON)</label>
                 <input type="number" class="widget-input" name="threshold"
@@ -20000,11 +19693,6 @@ class StatusBarWidget extends DashboardWidget {
             items
         };
     }
-
-    // Get list of sensors this widget uses (for SSE subscription)
-    getSensors() {
-        return getSensorNamesFromItems(this.config.items || []);
-    }
 }
 
 // ============================================================================
@@ -20049,7 +19737,7 @@ class BarGraphWidget extends DashboardWidget {
     }
 
     createBar(item, idx, orientation, showValues, showLabels) {
-        const { label = `Bar ${idx + 1}`, color = '#3b82f6', min = 0, max = 100 } = item;
+        const { label = `Bar ${idx + 1}`, color = '#3b82f6', min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX } = item;
         const isVertical = orientation === 'vertical';
 
         const barContainer = document.createElement('div');
@@ -20128,7 +19816,7 @@ class BarGraphWidget extends DashboardWidget {
         if (!bar) return;
 
         const { item, fill, valueEl } = bar;
-        const { min = 0, max = 100, unit = '', decimals = 0 } = item;
+        const { min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX, unit = '', decimals = 0 } = item;
         const orientation = this.config.orientation || 'vertical';
         const isVertical = orientation === 'vertical';
 
@@ -20183,11 +19871,11 @@ class BarGraphWidget extends DashboardWidget {
                 </div>
                 <div class="widget-config-field">
                     <label>Min</label>
-                    <input type="number" class="widget-input" name="item-${idx}-min" value="${item.min ?? 0}">
+                    <input type="number" class="widget-input" name="item-${idx}-min" value="${item.min ?? WIDGET_DEFAULT_MIN}">
                 </div>
                 <div class="widget-config-field">
                     <label>Max</label>
-                    <input type="number" class="widget-input" name="item-${idx}-max" value="${item.max ?? 100}">
+                    <input type="number" class="widget-input" name="item-${idx}-max" value="${item.max ?? WIDGET_DEFAULT_MAX}">
                 </div>
                 <div class="widget-config-field">
                     <label>Unit</label>
@@ -20205,7 +19893,7 @@ class BarGraphWidget extends DashboardWidget {
     }
 
     static getConfigForm(config = {}) {
-        const items = config.items || [{ label: 'Bar 1', min: 0, max: 100, color: '#3b82f6' }];
+        const items = config.items || [{ label: 'Bar 1', min: WIDGET_DEFAULT_MIN, max: WIDGET_DEFAULT_MAX, color: '#3b82f6' }];
         const itemsHtml = items.map((item, idx) => BarGraphWidget._renderItemRow({ idx, item })).join('');
         return `
             <div class="widget-config-row">
@@ -20247,7 +19935,7 @@ class BarGraphWidget extends DashboardWidget {
             containerSelector: '#bargraph-items-container',
             rowClass: 'bargraph-item',
             defaultExtras: () => ({
-                label: '', min: 0, max: 100, unit: '',
+                label: '', min: WIDGET_DEFAULT_MIN, max: WIDGET_DEFAULT_MAX, unit: '',
                 color: colors[(colorIdx++) % colors.length],
             }),
             renderRow: BarGraphWidget._renderItemRow,
@@ -20258,8 +19946,8 @@ class BarGraphWidget extends DashboardWidget {
     static parseItemExtraFields(form, idx) {
         return {
             label: form.querySelector(`[name="item-${idx}-label"]`)?.value || '',
-            min: parseNumberOrDefault(form.querySelector(`[name="item-${idx}-min"]`)?.value, 0),
-            max: parseNumberOrDefault(form.querySelector(`[name="item-${idx}-max"]`)?.value, 100),
+            min: parseNumberOrDefault(form.querySelector(`[name="item-${idx}-min"]`)?.value, WIDGET_DEFAULT_MIN),
+            max: parseNumberOrDefault(form.querySelector(`[name="item-${idx}-max"]`)?.value, WIDGET_DEFAULT_MAX),
             unit: form.querySelector(`[name="item-${idx}-unit"]`)?.value || '',
             color: form.querySelector(`[name="item-${idx}-color"]`)?.value || '#3b82f6',
         };
@@ -20276,10 +19964,6 @@ class BarGraphWidget extends DashboardWidget {
             showLabels: form.querySelector('[name="showLabels"]')?.checked !== false,
             items
         };
-    }
-
-    getSensors() {
-        return getSensorNamesFromItems(this.config.items || []);
     }
 }
 
@@ -20527,11 +20211,7 @@ class DigitalWidget extends DashboardWidget {
     static getConfigForm(config = {}) {
         return `
             ${renderSensorBindingFields(config, { fieldPrefix: '' })}
-            <div class="widget-config-field">
-                <label>Label</label>
-                <input type="text" class="widget-input" name="label"
-                       value="${escapeAttr(config.label || '')}" placeholder="Display label">
-            </div>
+            ${renderLabelField(config)}
             <div class="widget-config-field">
                 <label>Style</label>
                 <select class="widget-select" name="style">
@@ -21050,11 +20730,7 @@ class ChartWidget extends DashboardWidget {
         return `
             <input type="hidden" name="tableHeight" value="${config.tableHeight ?? CHART_WIDGET_DEFAULT_TABLE_HEIGHT}">
             <input type="hidden" name="zonesHeight" value="${config.zonesHeight ?? CHART_WIDGET_DEFAULT_ZONES_HEIGHT}">
-            <div class="widget-config-field">
-                <label>Label</label>
-                <input type="text" class="widget-input" name="label"
-                       value="${escapeAttr(config.label || '')}" placeholder="Chart title">
-            </div>
+            ${renderLabelField(config, 'Chart title')}
             <div class="widget-config-field">
                 <label>Time Range</label>
                 <div class="time-range-selector">
@@ -21355,16 +21031,14 @@ class DashboardManager {
 
     loadDashboards() {
         // Load from localStorage
-        try {
-            const userDashboards = JSON.parse(localStorage.getItem('user-dashboards') || '[]');
+        const userDashboards = loadJSON('user-dashboards', []);
+        if (Array.isArray(userDashboards)) {
             userDashboards.forEach(name => {
-                const config = localStorage.getItem(`dashboard:${name}`);
+                const config = loadJSON(`dashboard:${name}`, null);
                 if (config) {
-                    dashboardState.dashboards.set(name, JSON.parse(config));
+                    dashboardState.dashboards.set(name, config);
                 }
             });
-        } catch (err) {
-            console.warn('Failed to load dashboards from localStorage:', err);
         }
 
         // Load server dashboards
@@ -21575,8 +21249,7 @@ class DashboardManager {
         if (!this._bootstrappedServers) this._bootstrappedServers = new Set();
 
         const tasks = [];
-        for (const [serverId, srv] of state.servers) {
-            if (!srv?.connected) continue;
+        for (const serverId of getConnectedServerIds()) {
             if (this._bootstrappedServers.has(serverId)) continue;
             this._bootstrappedServers.add(serverId);
             tasks.push(this._bootstrapServerSensors(serverId));
@@ -21599,10 +21272,11 @@ class DashboardManager {
             // Параллельно fetch'аем sensors per object — server'ам обычно ОК с десятком
             // одновременных запросов.
             await Promise.allSettled(objects.map(async (objectName) => {
-                const sensorsResp = await fetch(
-                    `/api/objects/${encodeURIComponent(objectName)}/ionc/sensors`
-                    + `?server=${encodeURIComponent(serverId)}&limit=${DASHBOARD_SENSOR_REGISTRY_FETCH_LIMIT}`
-                );
+                const sensorsResp = await fetch(buildIONCSensorsUrl({
+                    objectName,
+                    serverId,
+                    limit: DASHBOARD_SENSOR_REGISTRY_FETCH_LIMIT,
+                }));
                 if (!sensorsResp.ok) return;
                 const data = await sensorsResp.json();
                 for (const s of (data?.sensors || [])) {
@@ -21785,10 +21459,12 @@ class DashboardManager {
             const { serverId, objectName } = parseGroupKey(grpKey);
             for (const [sensorName, sensorKey] of nameToKey) {
                 try {
-                    const url = `/api/objects/${encodeURIComponent(objectName)}/ionc/sensors`
-                        + `?server=${encodeURIComponent(serverId)}`
-                        + `&search=${encodeURIComponent(sensorName)}&limit=1`;
-                    const response = await fetch(url);
+                    const response = await fetch(buildIONCSensorsUrl({
+                        objectName,
+                        serverId,
+                        search: sensorName,
+                        limit: 1,
+                    }));
                     if (!response.ok) continue;
                     const data = await response.json();
                     if (!data.sensors || data.sensors.length === 0) continue;
@@ -22210,10 +21886,9 @@ class DashboardManager {
                         <input type="number" name="rotate" value="${currentRotate}" min="0" max="360" step="1">
                         <span class="rotate-unit">°</span>
                         <div class="rotate-quick-buttons">
-                            <button type="button" class="rotate-quick-btn" data-angle="0">0°</button>
-                            <button type="button" class="rotate-quick-btn" data-angle="90">90°</button>
-                            <button type="button" class="rotate-quick-btn" data-angle="180">180°</button>
-                            <button type="button" class="rotate-quick-btn" data-angle="270">270°</button>
+                            ${ROTATE_QUICK_ANGLES.map(angle =>
+                                `<button type="button" class="rotate-quick-btn" data-angle="${angle}">${angle}°</button>`
+                            ).join('')}
                         </div>
                     </div>
                 </div>
@@ -22924,7 +22599,15 @@ class DashboardManager {
 
         if (!dropzone || !fileInput) return;
 
-        dropzone.addEventListener('click', () => fileInput.click());
+        // Guard against double-trigger: <input type="file"> лежит ВНУТРИ dropzone,
+        // поэтому programmatic fileInput.click() bubbles обратно к этому handler'у
+        // и зовёт fileInput.click() ещё раз. Браузер при этом сначала открывает
+        // file picker, а второй вызов мгновенно его dismiss'ит → user видит мигание
+        // и не успевает выбрать файл.
+        dropzone.addEventListener('click', (e) => {
+            if (e.target === fileInput) return;
+            fileInput.click();
+        });
 
         dropzone.addEventListener('dragover', (e) => {
             e.preventDefault();
@@ -23424,8 +23107,8 @@ function addSensorToDashboard(sensorName, sensorLabel, dashboardName, widgetType
             ...(binding?.serverId ? { serverId: binding.serverId } : {}),
             ...(binding?.objectName ? { objectName: binding.objectName } : {}),
             ...(Number.isFinite(binding?.sensorId) ? { sensorId: binding.sensorId } : {}),
-            min: 0,
-            max: 100,
+            min: WIDGET_DEFAULT_MIN,
+            max: WIDGET_DEFAULT_MAX,
             unit: '',
             decimals: 1
         }
@@ -23520,26 +23203,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Загружаем sidebar конфигурацию (группы)
     await loadSidebar();
 
-    // Загружаем список объектов (заполняет state.servers)
+    // Загружаем список объектов (fire-and-forget — НЕ блокируем DOMContentLoaded
+    // init: dashboardManager и прочие должны быть готовы сразу. Тесты опираются
+    // на быструю инициализацию window.dashboardManager независимо от fetch).
     fetchObjects()
         .then(data => {
             renderObjectsList(data);
-            // Загружаем конфигурацию сенсоров per-server (после того как state.servers заполнен)
-            loadSensorsConfig().catch(err => {
-                console.warn('Не удалось загрузить конфигурацию сенсоров:', err);
-            });
+            // Per-server конфигурация сенсоров — после заполнения state.servers
+            return loadSensorsConfig();
         })
         .catch(err => {
-            console.error('Error загрузки объектов:', err);
-            document.getElementById('objects-list').innerHTML =
-                '<li class="alert alert-error">Error loading objects</li>';
+            console.error('Failed to load objects:', err);
+            const list = document.getElementById('objects-list');
+            if (list) list.innerHTML = '<li class="alert alert-error">Error loading objects</li>';
         });
 
     // Кнопка обновления
-    document.getElementById('refresh-objects').addEventListener('click', () => {
-        fetchObjects()
-            .then(renderObjectsList)
-            .catch(console.error);
+    document.getElementById('refresh-objects').addEventListener('click', async () => {
+        try {
+            renderObjectsList(await fetchObjects());
+        } catch (err) {
+            console.error('Failed to refresh objects:', err);
+        }
     });
 
     // Кнопка очистки кэша
@@ -23570,14 +23255,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Инициализация Dashboard Manager
     dashboardManager = window.dashboardManager = new DashboardManager();
 
-    // Загрузка Launcher нод (не блокируем)
-    loadLauncherNodes().catch(err => {
-        console.warn('Failed to load launcher nodes:', err);
-    });
-
-    // Инициализация Journals (не блокируем)
-    initJournals().catch(err => {
-        console.warn('Failed to initialize journals:', err);
+    // Загрузка Launcher нод и инициализация Journals — fire-and-forget,
+    // не ждём (Promise rejection логируем).
+    Promise.allSettled([
+        loadLauncherNodes(),
+        initJournals(),
+    ]).then(([lr, jr]) => {
+        if (lr.status === 'rejected') console.warn('Failed to load launcher nodes:', lr.reason);
+        if (jr.status === 'rejected') console.warn('Failed to initialize journals:', jr.reason);
     });
 
     // Показываем sidebar группы, скрываем hardcoded секции
@@ -23644,7 +23329,7 @@ function initPollIntervalSelector() {
                     console.warn('Не удалось изменить poll interval');
                 }
             } catch (err) {
-                console.error('Error изменения poll interval:', err);
+                console.error('Failed to change poll interval:', err);
             }
         });
     });

@@ -57,6 +57,24 @@ function renderSensorBindingFields(config = {}, opts = {}) {
     `;
 }
 
+// Стандартный label-field, который в widget config dialog'е почти везде одинаковый:
+// `<label>Label</label> + <input name="label">`. Используется в passive widget'ах
+// (gauge, level, digital, ...). Active widget'ы рендерят свой через base.getConfigForm.
+function renderLabelField(config = {}, placeholder = 'Display label') {
+    return `
+        <div class="widget-config-field">
+            <label>Label</label>
+            <input type="text" class="widget-input" name="label"
+                   value="${escapeAttr(config.label || '')}" placeholder="${escapeAttr(placeholder)}">
+        </div>
+    `;
+}
+
+// Парсит значение label-поля. Возвращает строку или ''.
+function parseLabelField(form) {
+    return form.querySelector('[name="label"]')?.value || '';
+}
+
 function parseSensorBindingFields(form, opts = {}) {
     const prefix = opts.fieldPrefix || '';
     const rawId = form.querySelector(`[name="${prefix}sensorId"]`)?.value;
@@ -142,31 +160,32 @@ function initSensorBindingHandlers(form, config = {}, opts = {}) {
     if (!serverSelect || !objectSelect || !sensorInput || !hiddenIdInput) return null;
 
     let loadToken = 0;
-    const loadIONCObjects = (serverId) => {
+    const loadIONCObjects = async (serverId) => {
         const myToken = ++loadToken;
         if (!serverId) {
             objectSelect.innerHTML = '<option value="" disabled selected>(выберите Server)</option>';
             return;
         }
-        fetch(`/api/objects?server=${encodeURIComponent(serverId)}&type=IONotifyController`)
-            .then(r => r.ok ? r.json() : { objects: [] })
-            .then(data => {
-                if (myToken !== loadToken) return;
-                const objs = data.objects || [];
-                const currentValue = objectSelect.value || config.objectName || (opts.objectNameDefault || 'SharedMemory');
-                objectSelect.innerHTML = objs.map(o => {
-                    const name = typeof o === 'string' ? o : o.name;
-                    return `<option value="${escapeAttr(name)}" ${name === currentValue ? 'selected' : ''}>${escapeHtml(name)}</option>`;
-                }).join('');
-                if (!objs.some(o => (typeof o === 'string' ? o : o.name) === currentValue)) {
-                    const opt = document.createElement('option');
-                    opt.value = currentValue;
-                    opt.textContent = `${currentValue} (текущий, не найден)`;
-                    opt.selected = true;
-                    objectSelect.prepend(opt);
-                }
-            })
-            .catch(e => console.warn('Failed to load IONC objects:', e));
+        try {
+            const r = await fetch(`/api/objects?server=${encodeURIComponent(serverId)}&type=IONotifyController`);
+            const data = r.ok ? await r.json() : { objects: [] };
+            if (myToken !== loadToken) return;
+            const objs = data.objects || [];
+            const currentValue = objectSelect.value || config.objectName || (opts.objectNameDefault || 'SharedMemory');
+            objectSelect.innerHTML = objs.map(o => {
+                const name = typeof o === 'string' ? o : o.name;
+                return `<option value="${escapeAttr(name)}" ${name === currentValue ? 'selected' : ''}>${escapeHtml(name)}</option>`;
+            }).join('');
+            if (!objs.some(o => (typeof o === 'string' ? o : o.name) === currentValue)) {
+                const opt = document.createElement('option');
+                opt.value = currentValue;
+                opt.textContent = `${currentValue} (текущий, не найден)`;
+                opt.selected = true;
+                objectSelect.prepend(opt);
+            }
+        } catch (err) {
+            console.warn('Failed to load IONC objects:', err);
+        }
     };
 
     loadIONCObjects(serverSelect.value);
@@ -349,6 +368,8 @@ function _migrateBindingPure(cfg, sensorRegistry) {
 if (typeof globalThis !== 'undefined') {
     globalThis.renderSensorBindingFields = renderSensorBindingFields;
     globalThis.parseSensorBindingFields  = parseSensorBindingFields;
+    globalThis.renderLabelField          = renderLabelField;
+    globalThis.parseLabelField           = parseLabelField;
     globalThis.renderSensorItemRow       = renderSensorItemRow;
     globalThis.parseSensorItemList       = parseSensorItemList;
     globalThis.sensorItemMatchesUpdate   = sensorItemMatchesUpdate;

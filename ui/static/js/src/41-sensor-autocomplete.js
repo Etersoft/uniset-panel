@@ -8,6 +8,20 @@
 // При смене objectName (через resetOnObjectChange()) — очищает выбор.
 // ============================================================================
 
+// URL builder для IONC sensors endpoint — единая точка композиции query
+// (autocomplete, dashboard bootstrap, dashboard cold-resolve).
+function buildIONCSensorsUrl({ objectName, serverId = '', search = '', limit = SENSOR_AUTOCOMPLETE_LIMIT, offset = null } = {}) {
+    let url = `/api/objects/${encodeURIComponent(objectName)}/ionc/sensors?limit=${limit}`;
+    if (serverId)        url += `&server=${encodeURIComponent(serverId)}`;
+    if (search)          url += `&search=${encodeURIComponent(search)}`;
+    if (offset !== null) url += `&offset=${offset}`;
+    return url;
+}
+
+if (typeof globalThis !== 'undefined') {
+    globalThis.buildIONCSensorsUrl = buildIONCSensorsUrl;
+}
+
 function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId) {
     if (!inputEl) return null;
 
@@ -81,11 +95,7 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
             return;
         }
         try {
-            const url = `/api/objects/${encodeURIComponent(objectName)}/ionc/sensors`
-                + `?server=${encodeURIComponent(serverId)}`
-                + (searchText ? `&search=${encodeURIComponent(searchText)}` : '')
-                + `&limit=${limit}`;
-            const resp = await fetch(url);
+            const resp = await fetch(buildIONCSensorsUrl({ objectName, serverId, search: searchText, limit }));
             if (!resp.ok) {
                 buildDropdown();
                 renderItems([]);

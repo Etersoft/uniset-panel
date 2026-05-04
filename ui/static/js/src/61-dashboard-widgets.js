@@ -44,7 +44,7 @@ class LevelWidget extends DashboardWidget {
             return;
         }
 
-        const { min = 0, max = 100, orientation = 'vertical', unit = '%', decimals = 0 } = this.config;
+        const { min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX, orientation = 'vertical', unit = '%', decimals = 0 } = this.config;
         const numValue = parseNumberOrDefault(value, 0);
         const percent = percentInRange(numValue, min, max, 100);
 
@@ -63,19 +63,15 @@ class LevelWidget extends DashboardWidget {
         const zones = config.zones || [];
         return `
             ${renderSensorBindingFields(config, { fieldPrefix: '' })}
-            <div class="widget-config-field">
-                <label>Label</label>
-                <input type="text" class="widget-input" name="label"
-                       value="${escapeAttr(config.label || '')}" placeholder="Display label">
-            </div>
+            ${renderLabelField(config)}
             <div class="widget-config-row">
                 <div class="widget-config-field">
                     <label>Min</label>
-                    <input type="number" class="widget-input" name="min" value="${config.min ?? 0}">
+                    <input type="number" class="widget-input" name="min" value="${config.min ?? WIDGET_DEFAULT_MIN}">
                 </div>
                 <div class="widget-config-field">
                     <label>Max</label>
-                    <input type="number" class="widget-input" name="max" value="${config.max ?? 100}">
+                    <input type="number" class="widget-input" name="max" value="${config.max ?? WIDGET_DEFAULT_MAX}">
                 </div>
             </div>
             <div class="widget-config-row">
@@ -103,8 +99,8 @@ class LevelWidget extends DashboardWidget {
         return {
             ...parseSensorBindingFields(form, { fieldPrefix: '' }),
             label: form.querySelector('[name="label"]')?.value || '',
-            min: parseNumberOrDefault(form.querySelector('[name="min"]')?.value, 0),
-            max: parseNumberOrDefault(form.querySelector('[name="max"]')?.value, 100),
+            min: parseNumberOrDefault(form.querySelector('[name="min"]')?.value, WIDGET_DEFAULT_MIN),
+            max: parseNumberOrDefault(form.querySelector('[name="max"]')?.value, WIDGET_DEFAULT_MAX),
             orientation: form.querySelector('[name="orientation"]')?.value || 'vertical',
             unit: form.querySelector('[name="unit"]')?.value || '%',
             zones
@@ -176,11 +172,7 @@ class LedWidget extends DashboardWidget {
     static getConfigForm(config = {}) {
         return `
             ${renderSensorBindingFields(config, { fieldPrefix: '' })}
-            <div class="widget-config-field">
-                <label>Label</label>
-                <input type="text" class="widget-input" name="label"
-                       value="${escapeAttr(config.label || '')}" placeholder="Display label">
-            </div>
+            ${renderLabelField(config)}
             <div class="widget-config-field">
                 <label>Threshold (value > threshold = ON)</label>
                 <input type="number" class="widget-input" name="threshold"
@@ -696,11 +688,6 @@ class StatusBarWidget extends DashboardWidget {
             items
         };
     }
-
-    // Get list of sensors this widget uses (for SSE subscription)
-    getSensors() {
-        return getSensorNamesFromItems(this.config.items || []);
-    }
 }
 
 // ============================================================================
@@ -745,7 +732,7 @@ class BarGraphWidget extends DashboardWidget {
     }
 
     createBar(item, idx, orientation, showValues, showLabels) {
-        const { label = `Bar ${idx + 1}`, color = '#3b82f6', min = 0, max = 100 } = item;
+        const { label = `Bar ${idx + 1}`, color = '#3b82f6', min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX } = item;
         const isVertical = orientation === 'vertical';
 
         const barContainer = document.createElement('div');
@@ -824,7 +811,7 @@ class BarGraphWidget extends DashboardWidget {
         if (!bar) return;
 
         const { item, fill, valueEl } = bar;
-        const { min = 0, max = 100, unit = '', decimals = 0 } = item;
+        const { min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX, unit = '', decimals = 0 } = item;
         const orientation = this.config.orientation || 'vertical';
         const isVertical = orientation === 'vertical';
 
@@ -879,11 +866,11 @@ class BarGraphWidget extends DashboardWidget {
                 </div>
                 <div class="widget-config-field">
                     <label>Min</label>
-                    <input type="number" class="widget-input" name="item-${idx}-min" value="${item.min ?? 0}">
+                    <input type="number" class="widget-input" name="item-${idx}-min" value="${item.min ?? WIDGET_DEFAULT_MIN}">
                 </div>
                 <div class="widget-config-field">
                     <label>Max</label>
-                    <input type="number" class="widget-input" name="item-${idx}-max" value="${item.max ?? 100}">
+                    <input type="number" class="widget-input" name="item-${idx}-max" value="${item.max ?? WIDGET_DEFAULT_MAX}">
                 </div>
                 <div class="widget-config-field">
                     <label>Unit</label>
@@ -901,7 +888,7 @@ class BarGraphWidget extends DashboardWidget {
     }
 
     static getConfigForm(config = {}) {
-        const items = config.items || [{ label: 'Bar 1', min: 0, max: 100, color: '#3b82f6' }];
+        const items = config.items || [{ label: 'Bar 1', min: WIDGET_DEFAULT_MIN, max: WIDGET_DEFAULT_MAX, color: '#3b82f6' }];
         const itemsHtml = items.map((item, idx) => BarGraphWidget._renderItemRow({ idx, item })).join('');
         return `
             <div class="widget-config-row">
@@ -943,7 +930,7 @@ class BarGraphWidget extends DashboardWidget {
             containerSelector: '#bargraph-items-container',
             rowClass: 'bargraph-item',
             defaultExtras: () => ({
-                label: '', min: 0, max: 100, unit: '',
+                label: '', min: WIDGET_DEFAULT_MIN, max: WIDGET_DEFAULT_MAX, unit: '',
                 color: colors[(colorIdx++) % colors.length],
             }),
             renderRow: BarGraphWidget._renderItemRow,
@@ -954,8 +941,8 @@ class BarGraphWidget extends DashboardWidget {
     static parseItemExtraFields(form, idx) {
         return {
             label: form.querySelector(`[name="item-${idx}-label"]`)?.value || '',
-            min: parseNumberOrDefault(form.querySelector(`[name="item-${idx}-min"]`)?.value, 0),
-            max: parseNumberOrDefault(form.querySelector(`[name="item-${idx}-max"]`)?.value, 100),
+            min: parseNumberOrDefault(form.querySelector(`[name="item-${idx}-min"]`)?.value, WIDGET_DEFAULT_MIN),
+            max: parseNumberOrDefault(form.querySelector(`[name="item-${idx}-max"]`)?.value, WIDGET_DEFAULT_MAX),
             unit: form.querySelector(`[name="item-${idx}-unit"]`)?.value || '',
             color: form.querySelector(`[name="item-${idx}-color"]`)?.value || '#3b82f6',
         };
@@ -972,10 +959,6 @@ class BarGraphWidget extends DashboardWidget {
             showLabels: form.querySelector('[name="showLabels"]')?.checked !== false,
             items
         };
-    }
-
-    getSensors() {
-        return getSensorNamesFromItems(this.config.items || []);
     }
 }
 
@@ -1223,11 +1206,7 @@ class DigitalWidget extends DashboardWidget {
     static getConfigForm(config = {}) {
         return `
             ${renderSensorBindingFields(config, { fieldPrefix: '' })}
-            <div class="widget-config-field">
-                <label>Label</label>
-                <input type="text" class="widget-input" name="label"
-                       value="${escapeAttr(config.label || '')}" placeholder="Display label">
-            </div>
+            ${renderLabelField(config)}
             <div class="widget-config-field">
                 <label>Style</label>
                 <select class="widget-select" name="style">
@@ -1746,11 +1725,7 @@ class ChartWidget extends DashboardWidget {
         return `
             <input type="hidden" name="tableHeight" value="${config.tableHeight ?? CHART_WIDGET_DEFAULT_TABLE_HEIGHT}">
             <input type="hidden" name="zonesHeight" value="${config.zonesHeight ?? CHART_WIDGET_DEFAULT_ZONES_HEIGHT}">
-            <div class="widget-config-field">
-                <label>Label</label>
-                <input type="text" class="widget-input" name="label"
-                       value="${escapeAttr(config.label || '')}" placeholder="Chart title">
-            </div>
+            ${renderLabelField(config, 'Chart title')}
             <div class="widget-config-field">
                 <label>Time Range</label>
                 <div class="time-range-selector">

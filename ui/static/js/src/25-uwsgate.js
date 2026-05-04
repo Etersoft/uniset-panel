@@ -50,38 +50,22 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
     }
 
     loadHighlightSetting() {
-        try {
-            return localStorage.getItem(this.highlightKey) === 'true';
-        } catch (e) {
-            return false;
-        }
+        // Highlight setting — boolean. Хранится не в map, а напрямую как JSON
+        // (true/false), потому что ключ per-tab и нет смысла оборачивать в объект.
+        return loadJSON(this.highlightKey, false) === true;
     }
 
     saveHighlightSetting() {
-        try {
-            localStorage.setItem(this.highlightKey, this.highlightEnabled.toString());
-        } catch (err) {
-            console.warn('UWebSocketGate: failed to save highlight setting:', err);
-        }
+        saveJSON(this.highlightKey, this.highlightEnabled);
     }
 
     loadPinnedSensors() {
-        try {
-            const saved = localStorage.getItem(this.pinnedKey);
-            if (saved) {
-                this.pinnedSensors = new Set(JSON.parse(saved));
-            }
-        } catch (err) {
-            console.warn('UWebSocketGate: failed to load pinned sensors:', err);
-        }
+        const arr = loadJSON(this.pinnedKey, []);
+        if (Array.isArray(arr)) this.pinnedSensors = new Set(arr);
     }
 
     savePinnedSensors() {
-        try {
-            localStorage.setItem(this.pinnedKey, JSON.stringify(Array.from(this.pinnedSensors)));
-        } catch (err) {
-            console.warn('UWebSocketGate: failed to save pinned sensors:', err);
-        }
+        saveJSON(this.pinnedKey, Array.from(this.pinnedSensors));
     }
 
     togglePin(sensorName) {
@@ -484,16 +468,9 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         const pinnedClass = isPinned ? 'uwsgate-sensor-pinned' : '';
 
         const checkboxId = `uwsgate-chart-${this.objectName}-${sensor.name}`;
-        const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-        const pinIcon = isPinned ? '📌' : '○';
-        const pinTitle = isPinned ? 'Unpin' : 'Pin';
         return `
             <tr class="uwsgate-sensor-row ${errorClass} ${pinnedClass}" data-sensor-name="${escapeAttr(sensor.name)}">
-                <td class="col-pin">
-                    <span class="${pinToggleClass}" data-name="${escapeAttr(sensor.name)}" title="${pinTitle}">
-                        ${pinIcon}
-                    </span>
-                </td>
+                ${this.renderPinToggleCell({ id: sensor.name, isPinned, dataAttr: 'data-name' })}
                 <td class="col-add-buttons add-buttons-col">
                     <span class="chart-toggle">
                         <input type="checkbox"
@@ -699,8 +676,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
 
     // localStorage persistence
     saveSubscriptions() {
-        const names = Array.from(this.sensors.keys());
-        localStorage.setItem(this.subscriptionsKey, JSON.stringify(names));
+        saveJSON(this.subscriptionsKey, Array.from(this.sensors.keys()));
     }
 
     async loadSavedSubscriptions() {
@@ -734,10 +710,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
             }
 
             // Fallback to localStorage if server has no subscriptions
-            const saved = localStorage.getItem(this.subscriptionsKey);
-            if (!saved) return;
-
-            const names = JSON.parse(saved);
+            const names = loadJSON(this.subscriptionsKey, []);
             if (!Array.isArray(names) || names.length === 0) return;
 
             // Restore subscriptions (will re-subscribe to server)

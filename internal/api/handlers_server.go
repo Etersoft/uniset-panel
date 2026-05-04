@@ -190,8 +190,7 @@ func (h *Handlers) SetPollInterval(w http.ResponseWriter, r *http.Request) {
 		Interval int64 `json:"interval"` // миллисекунды
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, http.StatusBadRequest, "invalid request body")
+	if !h.decodeJSONBody(w, r, &req) {
 		return
 	}
 

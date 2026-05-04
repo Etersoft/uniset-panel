@@ -34,7 +34,7 @@ function openIoncDialog(options) {
                 input.focus();
                 input.select();
             }
-        }, 50);
+        }, IONC_DIALOG_FOCUS_DELAY_MS);
     }
 
     // Add ESC handler (remove old one first to prevent duplicates)
@@ -300,7 +300,7 @@ async function subscribeToExternalSensors(tabKey, sensorNames) {
             await warnObjectApiError(response, 'Error подписки на датчики:');
         }
     } catch (err) {
-        console.warn('Error подписки на датчики:', err);
+        console.warn('Failed to subscribe to sensors:', err);
     }
 }
 
@@ -317,7 +317,7 @@ async function unsubscribeFromExternalSensor(tabKey, sensorName) {
             await warnObjectApiError(response, 'Error отписки от датчика:');
         }
     } catch (err) {
-        console.warn('Error отписки от датчика:', err);
+        console.warn('Failed to unsubscribe from sensor:', err);
     }
 }
 
@@ -340,7 +340,7 @@ async function subscribeToIONCSensor(tabKey, sensorId) {
             debugLog(`IONC: Подписка на датчик ${sensorId} для ${objectName} (server: ${serverId})`);
         }
     } catch (err) {
-        console.warn('Error подписки на IONC датчик:', err);
+        console.warn('Failed to subscribe to IONC sensor:', err);
     }
 }
 
@@ -363,7 +363,7 @@ async function unsubscribeFromIONCSensor(tabKey, sensorId) {
             debugLog(`IONC: Отписка от датчика ${sensorId} для ${objectName} (server: ${serverId})`);
         }
     } catch (err) {
-        console.warn('Error отписки от IONC датчика:', err);
+        console.warn('Failed to unsubscribe from IONC sensor:', err);
     }
 }
 
@@ -687,44 +687,29 @@ function removeExternalSensor(tabKey, sensorName, options = {}) {
 // Загрузить внешние датчики из localStorage
 // Возвращает Map<sensorName, sensorData> для обратной совместимости с Set API (.has, .add, .delete)
 function getExternalSensorsFromStorage(tabKey, objectName) {
-    try {
-        // Пробуем по tabKey, потом fallback на objectName (обратная совместимость)
-        const keyByTab = `uniset-panel-external-sensors-${tabKey}`;
-        const keyByObj = `uniset-panel-external-sensors-${objectName}`;
-        const data = localStorage.getItem(keyByTab) || (objectName ? localStorage.getItem(keyByObj) : null);
-        if (data) {
-            const parsed = JSON.parse(data);
-            // Обратная совместимость: если это массив строк (старый формат), конвертируем
-            if (Array.isArray(parsed)) {
-                const map = new Map();
-                parsed.forEach(item => {
-                    if (typeof item === 'string') {
-                        // Старый формат: только имя
-                        map.set(item, { name: item });
-                    } else if (item && item.name) {
-                        // Новый формат: объект с данными
-                        map.set(item.name, item);
-                    }
-                });
-                return map;
+    // Пробуем по tabKey, потом fallback на objectName (обратная совместимость).
+    const parsed = loadJSON(`uniset-panel-external-sensors-${tabKey}`, null)
+        ?? (objectName ? loadJSON(`uniset-panel-external-sensors-${objectName}`, null) : null);
+
+    const map = new Map();
+    if (Array.isArray(parsed)) {
+        parsed.forEach(item => {
+            if (typeof item === 'string') {
+                // Старый формат: только имя
+                map.set(item, { name: item });
+            } else if (item && item.name) {
+                // Новый формат: объект с данными
+                map.set(item.name, item);
             }
-        }
-    } catch (err) {
-        console.warn('Error загрузки внешних датчиков:', err);
+        });
     }
-    return new Map();
+    return map;
 }
 
 // Save внешние датчики в localStorage
 function saveExternalSensorsToStorage(tabKey, sensors) {
-    try {
-        const key = `uniset-panel-external-sensors-${tabKey}`;
-        // sensors - это Map<name, sensorData>
-        const arr = [...sensors.values()];
-        localStorage.setItem(key, JSON.stringify(arr));
-    } catch (err) {
-        console.warn('Error сохранения внешних датчиков:', err);
-    }
+    // sensors - это Map<name, sensorData>
+    saveJSON(`uniset-panel-external-sensors-${tabKey}`, [...sensors.values()]);
 }
 
 // Восстановить внешние датчики при открытии вкладки
@@ -821,7 +806,7 @@ function restoreExternalSensors(tabKey, displayName) {
                         });
                     }
                 }).catch(err => {
-                    console.warn('Error восстановления подписок:', err);
+                    console.warn('Failed to restore subscriptions:', err);
                 });
             }
         }

@@ -327,8 +327,8 @@ function addSensorToDashboard(sensorName, sensorLabel, dashboardName, widgetType
             ...(binding?.serverId ? { serverId: binding.serverId } : {}),
             ...(binding?.objectName ? { objectName: binding.objectName } : {}),
             ...(Number.isFinite(binding?.sensorId) ? { sensorId: binding.sensorId } : {}),
-            min: 0,
-            max: 100,
+            min: WIDGET_DEFAULT_MIN,
+            max: WIDGET_DEFAULT_MAX,
             unit: '',
             decimals: 1
         }

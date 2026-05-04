@@ -546,11 +546,6 @@ function removeChart(tabKey, varName) {
     updateXAxisVisibility(tabKey);
 }
 
-// Глобальная функция для кнопки закрытия графика
-window.removeChartByButton = function(objectName, varName) {
-    removeChart(objectName, varName);
-};
-
 // Глобальная функция для сворачивания/разворачивания секций
 window.toggleSection = function(sectionId) {
     const section = document.querySelector(`[data-section="${sectionId}"]`);

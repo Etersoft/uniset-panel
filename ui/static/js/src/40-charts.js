@@ -2,11 +2,7 @@
 // Конец LogViewer
 // ============================================================================
 
-// Цвета для графиков
-const CHART_COLORS = [
-    '#3274d9', '#73bf69', '#ff9830', '#f2495c',
-    '#b877d9', '#5794f2', '#fade2a', '#ff6eb4'
-];
+// Цвета для графиков — палитра в 00-constants.js (CHART_COLORS).
 let colorIndex = 0;
 
 function getNextColor() {
@@ -76,7 +72,7 @@ async function refreshObjectsList() {
         renderObjectsList(data);
         debugLog('Список объектов обновлён');
     } catch (err) {
-        console.error('Error обновления списка объектов:', err);
+        console.error('Failed to refresh objects list:', err);
     } finally {
         _refreshObjectsInProgress = false;
         if (_refreshObjectsPending) {
@@ -87,27 +83,18 @@ async function refreshObjectsList() {
 }
 
 async function fetchObjectData(name, serverId = null) {
-    const url = buildObjectUrl(name, '', serverId);
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to load object data');
-    return response.json();
+    return fetchJSONOrThrow(buildObjectUrl(name, '', serverId), {}, 'Failed to load object data');
 }
 
 async function watchObject(name, serverId = null) {
-    const url = buildObjectUrl(name, '/watch', serverId);
-    const response = await fetch(url, { method: 'POST' });
-    if (!response.ok) throw new Error('Failed to start watching');
-    return response.json();
+    return fetchJSONOrThrow(buildObjectUrl(name, '/watch', serverId), { method: 'POST' }, 'Failed to start watching');
 }
 
 async function unwatchObject(name, serverId = null) {
-    const url = buildObjectUrl(name, '/watch', serverId);
-    const response = await fetch(url, { method: 'DELETE' });
-    if (!response.ok) throw new Error('Failed to stop watching');
-    return response.json();
+    return fetchJSONOrThrow(buildObjectUrl(name, '/watch', serverId), { method: 'DELETE' }, 'Failed to stop watching');
 }
 
-function buildVariableHistoryUrl(objectName, variableName, count = 100, serverId = null) {
+function buildVariableHistoryUrl(objectName, variableName, count = DEFAULT_VARIABLE_HISTORY_COUNT, serverId = null) {
     return buildObjectUrl(
         objectName,
         `/variables/${encodeURIComponent(variableName)}/history`,
@@ -116,11 +103,12 @@ function buildVariableHistoryUrl(objectName, variableName, count = 100, serverId
     );
 }
 
-async function fetchVariableHistory(objectName, variableName, count = 100, serverId = null) {
-    const url = buildVariableHistoryUrl(objectName, variableName, count, serverId);
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to load history');
-    return response.json();
+async function fetchVariableHistory(objectName, variableName, count = DEFAULT_VARIABLE_HISTORY_COUNT, serverId = null) {
+    return fetchJSONOrThrow(
+        buildVariableHistoryUrl(objectName, variableName, count, serverId),
+        {},
+        'Failed to load history'
+    );
 }
 
 async function fetchSensors(serverId) {
@@ -179,7 +167,7 @@ async function loadSensorsConfig() {
 
         debugLog(`Загружено ${state.sensors.size} сенсоров`);
     } catch (err) {
-        console.error('Error загрузки конфигурации сенсоров:', err);
+        console.error('Failed to load sensors config:', err);
     }
 }
 

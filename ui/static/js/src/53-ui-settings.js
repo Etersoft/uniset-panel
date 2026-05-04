@@ -1,15 +1,11 @@
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-ionc-height') || '{}');
-        const height = saved[tabKey] ?? saved[objectName];
-        if (height) {
-            const sensorsContainer = getElementInTab(tabKey, `ionc-sensors-container-${objectName}`);
-            if (sensorsContainer) {
-                sensorsContainer.style.height = `${height}px`;
-                sensorsContainer.style.maxHeight = `${height}px`;
-            }
+    const saved = loadStorageMap('uniset-panel-ionc-height');
+    const height = saved[tabKey] ?? saved[objectName];
+    if (height) {
+        const sensorsContainer = getElementInTab(tabKey, `ionc-sensors-container-${objectName}`);
+        if (sensorsContainer) {
+            sensorsContainer.style.height = `${height}px`;
+            sensorsContainer.style.maxHeight = `${height}px`;
         }
-    } catch (err) {
-        console.warn('Failed to load IONC sensors height:', err);
     }
 }
 
@@ -31,28 +27,18 @@ function toggleIOLayout(tabKey, objectName) {
 }
 
 function saveIOLayoutState(tabKey, isSequential) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-io-layout') || '{}');
-        saved[tabKey] = isSequential;
-        localStorage.setItem('uniset-panel-io-layout', JSON.stringify(saved));
-    } catch (err) {
-        console.warn('Failed to save IO layout state:', err);
-    }
+    updateStorageMap('uniset-panel-io-layout', (saved) => { saved[tabKey] = isSequential; });
 }
 
 function loadIOLayoutState(tabKey, objectName) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-io-layout') || '{}');
-        if (saved[tabKey] ?? saved[objectName]) {
-            const checkbox = getElementInTab(tabKey, `io-sequential-${objectName}`);
-            const ioGrid = getElementInTab(tabKey, `io-grid-${objectName}`);
-            if (checkbox && ioGrid) {
-                checkbox.checked = true;
-                ioGrid.classList.add('io-sequential');
-            }
+    const saved = loadStorageMap('uniset-panel-io-layout');
+    if (saved[tabKey] ?? saved[objectName]) {
+        const checkbox = getElementInTab(tabKey, `io-sequential-${objectName}`);
+        const ioGrid = getElementInTab(tabKey, `io-grid-${objectName}`);
+        if (checkbox && ioGrid) {
+            checkbox.checked = true;
+            ioGrid.classList.add('io-sequential');
         }
-    } catch (err) {
-        console.warn('Failed to load IO layout state:', err);
     }
 }
 
@@ -115,30 +101,23 @@ function getNextReorderableSection(element) {
 
 // tabKey - ключ вкладки (serverId:objectName)
 function saveSectionOrder(tabKey) {
-    try {
-        const panel = getTabPanel(tabKey);
-        if (!panel) return;
+    const panel = getTabPanel(tabKey);
+    if (!panel) return;
 
-        const sections = panel.querySelectorAll('.reorderable-section[data-section-id]');
-        const order = Array.from(sections).map(s => s.dataset.sectionId);
+    const sections = panel.querySelectorAll('.reorderable-section[data-section-id]');
+    const order = Array.from(sections).map(s => s.dataset.sectionId);
 
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-section-order') || '{}');
-        saved[tabKey] = order;
-        localStorage.setItem('uniset-panel-section-order', JSON.stringify(saved));
-    } catch (err) {
-        console.warn('Failed to save section order:', err);
-    }
+    updateStorageMap('uniset-panel-section-order', (saved) => { saved[tabKey] = order; });
 }
 
 // tabKey - ключ вкладки (serverId:objectName)
 function loadSectionOrder(tabKey) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-section-order') || '{}');
-        const order = saved[tabKey];
-        if (!order || !Array.isArray(order)) return;
+    const saved = loadStorageMap('uniset-panel-section-order');
+    const order = saved[tabKey];
+    if (!order || !Array.isArray(order)) return;
 
-        const panel = getTabPanel(tabKey);
-        if (!panel) return;
+    const panel = getTabPanel(tabKey);
+    if (!panel) return;
 
         // Собираем все reorderable секции в Map
         const sections = new Map();
@@ -169,10 +148,7 @@ function loadSectionOrder(tabKey) {
             anchor = orderedSections[i];
         }
 
-        updateReorderButtons(tabKey);
-    } catch (err) {
-        console.warn('Failed to load section order:', err);
-    }
+    updateReorderButtons(tabKey);
 }
 
 // tabKey - ключ вкладки (serverId:objectName)
@@ -236,25 +212,14 @@ function setupIOCollapse(tabKey, objectName, type) {
 }
 
 function saveIOCollapseState(tabKey, type, collapsed) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-io-collapse') || '{}');
-        const key = `${tabKey}-${type}`;
-        saved[key] = collapsed ? 'collapsed' : 'expanded';
-        localStorage.setItem('uniset-panel-io-collapse', JSON.stringify(saved));
-    } catch (err) {
-        console.warn('Failed to save IO collapse state:', err);
-    }
+    updateStorageMap('uniset-panel-io-collapse', (saved) => {
+        saved[`${tabKey}-${type}`] = collapsed ? 'collapsed' : 'expanded';
+    });
 }
 
 function loadIOCollapseState(tabKey, type) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-io-collapse') || '{}');
-        const key = `${tabKey}-${type}`;
-        return saved[key] || 'expanded';
-    } catch (err) {
-        console.warn('Failed to load IO collapse state:', err);
-        return 'expanded';
-    }
+    const saved = loadStorageMap('uniset-panel-io-collapse');
+    return saved[`${tabKey}-${type}`] || 'expanded';
 }
 
 function setupIOResize(tabKey, objectName, type) {
@@ -269,29 +234,20 @@ function setupIOResize(tabKey, objectName, type) {
 }
 
 function saveIOHeight(tabKey, type, height) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-io-heights') || '{}');
-        const key = `${tabKey}-${type}`;
-        saved[key] = height;
-        localStorage.setItem('uniset-panel-io-heights', JSON.stringify(saved));
-    } catch (err) {
-        console.warn('Failed to save IO height:', err);
-    }
+    updateStorageMap('uniset-panel-io-heights', (saved) => {
+        saved[`${tabKey}-${type}`] = height;
+    });
 }
 
 function loadIOHeight(tabKey, objectName, type) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-io-heights') || '{}');
-        const key = `${tabKey}-${type}`;
-        if (saved[key]) {
-            const container = getElementInTab(tabKey, `io-container-${type}-${objectName}`);
-            if (container) {
-                container.style.height = `${saved[key]}px`;
-                container.style.maxHeight = `${saved[key]}px`;
-            }
+    const saved = loadStorageMap('uniset-panel-io-heights');
+    const height = saved[`${tabKey}-${type}`];
+    if (height) {
+        const container = getElementInTab(tabKey, `io-container-${type}-${objectName}`);
+        if (container) {
+            container.style.height = `${height}px`;
+            container.style.maxHeight = `${height}px`;
         }
-    } catch (err) {
-        console.warn('Failed to load IO height:', err);
     }
 }
 
@@ -355,24 +311,14 @@ function setupIOUnpinAll(tabKey, objectName, type) {
 
 // Pinned rows management
 function getIOPinnedRows(tabKey, type) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-io-pinned') || '{}');
-        const key = `${tabKey}-${type}`;
-        return new Set(saved[key] || []);
-    } catch (err) {
-        return new Set();
-    }
+    const saved = loadStorageMap('uniset-panel-io-pinned');
+    return new Set(saved[`${tabKey}-${type}`] || []);
 }
 
 function saveIOPinnedRows(tabKey, type, pinnedSet) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-io-pinned') || '{}');
-        const key = `${tabKey}-${type}`;
-        saved[key] = Array.from(pinnedSet);
-        localStorage.setItem('uniset-panel-io-pinned', JSON.stringify(saved));
-    } catch (err) {
-        console.warn('Failed to save pinned rows:', err);
-    }
+    updateStorageMap('uniset-panel-io-pinned', (saved) => {
+        saved[`${tabKey}-${type}`] = Array.from(pinnedSet);
+    });
 }
 
 function toggleIOPin(tabKey, type, rowKey) {
@@ -418,54 +364,51 @@ function setTimeRange(range) {
 
 // Сохранение настроек в localStorage
 function saveSettings() {
-    const settings = {
+    saveJSON('uniset-panel-settings', {
         timeRange: state.timeRange,
         sidebarCollapsed: state.sidebarCollapsed,
         collapsedServerGroups: Array.from(state.collapsedServerGroups),
         serversSectionCollapsed: state.serversSectionCollapsed,
         launchersSectionCollapsed: state.launchersSectionCollapsed
-    };
-    localStorage.setItem('uniset-panel-settings', JSON.stringify(settings));
+    });
 }
 
 // Loading настроек из localStorage
 function loadSettings() {
+    const settings = loadJSON('uniset-panel-settings', null);
+    if (!settings || typeof settings !== 'object') return;
+
     try {
-        const saved = localStorage.getItem('uniset-panel-settings');
-        if (saved) {
-            const settings = JSON.parse(saved);
+        // Восстановить timeRange
+        if (settings.timeRange) {
+            state.timeRange = settings.timeRange;
+            document.querySelectorAll('.time-range-btn').forEach(btn => {
+                btn.classList.toggle('active', parseInt(btn.dataset.range, 10) === state.timeRange);
+            });
+        }
 
-            // Восстановить timeRange
-            if (settings.timeRange) {
-                state.timeRange = settings.timeRange;
-                document.querySelectorAll('.time-range-btn').forEach(btn => {
-                    btn.classList.toggle('active', parseInt(btn.dataset.range, 10) === state.timeRange);
-                });
-            }
+        // Восстановить состояние sidebar
+        if (settings.sidebarCollapsed) {
+            state.sidebarCollapsed = settings.sidebarCollapsed;
+            document.getElementById('sidebar').classList.add('collapsed');
+        }
 
-            // Восстановить состояние sidebar
-            if (settings.sidebarCollapsed) {
-                state.sidebarCollapsed = settings.sidebarCollapsed;
-                document.getElementById('sidebar').classList.add('collapsed');
-            }
+        // Восстановить свёрнутые группы серверов
+        if (settings.collapsedServerGroups && Array.isArray(settings.collapsedServerGroups)) {
+            state.collapsedServerGroups = new Set(settings.collapsedServerGroups);
+        }
 
-            // Восстановить свёрнутые группы серверов
-            if (settings.collapsedServerGroups && Array.isArray(settings.collapsedServerGroups)) {
-                state.collapsedServerGroups = new Set(settings.collapsedServerGroups);
-            }
+        // Восстановить состояние секции "Servers"
+        if (settings.serversSectionCollapsed !== undefined) {
+            state.serversSectionCollapsed = settings.serversSectionCollapsed;
+        }
 
-            // Восстановить состояние секции "Servers"
-            if (settings.serversSectionCollapsed !== undefined) {
-                state.serversSectionCollapsed = settings.serversSectionCollapsed;
-            }
-
-            // Восстановить состояние секции "Launchers"
-            if (settings.launchersSectionCollapsed !== undefined) {
-                state.launchersSectionCollapsed = settings.launchersSectionCollapsed;
-            }
+        // Восстановить состояние секции "Launchers"
+        if (settings.launchersSectionCollapsed !== undefined) {
+            state.launchersSectionCollapsed = settings.launchersSectionCollapsed;
         }
     } catch (err) {
-        console.warn('Error загрузки настроек:', err);
+        console.warn('Failed to apply settings:', err);
     }
 }
 

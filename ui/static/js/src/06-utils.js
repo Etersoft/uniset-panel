@@ -105,6 +105,81 @@ function getFirstConnectedServerId() {
     return null;
 }
 
+// Возвращает массив id всех connected серверов в порядке state.servers.
+// Используется для bootstrap-обходов (загрузка sensors per server, IONC objects).
+function getConnectedServerIds() {
+    if (typeof state === 'undefined' || !state.servers) return [];
+    const ids = [];
+    for (const [id, server] of state.servers) {
+        if (server?.connected) ids.push(id);
+    }
+    return ids;
+}
+
+// === localStorage helpers ===
+//
+// Каждый из этих helpers глотает SyntaxError/SecurityError и логирует через
+// console.warn — в SCADA-UI lost-write для пользовательской настройки лучше
+// тихого падения, но не должен валить остальной flow.
+
+// Прочитать JSON-объект из localStorage. Возвращает fallback при отсутствии
+// ключа, broken-JSON или недоступности storage (private mode).
+function loadJSON(key, fallback = null) {
+    try {
+        const raw = localStorage.getItem(key);
+        if (raw === null) return fallback;
+        return JSON.parse(raw);
+    } catch (err) {
+        console.warn(`loadJSON("${key}") failed:`, err);
+        return fallback;
+    }
+}
+
+// Записать JSON-объект в localStorage. true при успехе, false при ошибке.
+function saveJSON(key, value) {
+    try {
+        localStorage.setItem(key, JSON.stringify(value));
+        return true;
+    } catch (err) {
+        console.warn(`saveJSON("${key}") failed:`, err);
+        return false;
+    }
+}
+
+// Прочитать map-объект `{[k]: v}` из localStorage. Если значение есть, но не
+// объект (массив/число/строка) — вернёт defaults (это защита от старого
+// несовместимого формата).
+function loadStorageMap(key, defaults = {}) {
+    const v = loadJSON(key, defaults);
+    if (v === null || typeof v !== 'object' || Array.isArray(v)) return { ...defaults };
+    return v;
+}
+
+// Прочитать map-объект, передать его в mutator(map) для in-place мутации,
+// записать обратно. Удобно для save-merge паттерна (saved[key] = value).
+// Возвращает true при успехе.
+function updateStorageMap(key, mutator) {
+    const map = loadStorageMap(key);
+    mutator(map);
+    return saveJSON(key, map);
+}
+
+// Regex-escape: спрятать в literal-строке метасимволы regex'а.
+// Используется при построении динамического pattern из user input
+// (журнал highlight, log-viewer search).
+function escapeRegex(str) {
+    return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Универсальный fetch с проверкой ok и парсингом JSON.
+// Бросает Error('errPrefix: <details>') при HTTP-ошибке или сетевом сбое.
+// Используется тонким обёртом в helpers модулях (40-charts.js, base-renderer fetchJSON).
+async function fetchJSONOrThrow(url, opts = {}, errPrefix = 'Request') {
+    const response = await fetch(url, opts);
+    if (!response.ok) throw new Error(`${errPrefix}: HTTP ${response.status}`);
+    return response.json();
+}
+
 function parseNumberOrDefault(value, fallback) {
     if (value === null || value === undefined || String(value).trim() === '') return fallback;
     const n = Number(value);
@@ -156,10 +231,10 @@ function createLineChartConfig({ datasets = [], timeRange = {}, options = {} }) 
         : datasets.length === 1 && Boolean(datasets[0]?.isDiscrete);
 
     const tooltip = {
-        backgroundColor: '#22252a',
-        titleColor: '#d8dce2',
-        bodyColor: '#d8dce2',
-        borderColor: '#333840',
+        backgroundColor: CHART_THEME.tooltipBg,
+        titleColor: CHART_THEME.tooltipText,
+        bodyColor: CHART_THEME.tooltipText,
+        borderColor: CHART_THEME.gridLine,
         borderWidth: 1
     };
     if (options.tooltipEnabled !== undefined) {
@@ -190,11 +265,11 @@ function createLineChartConfig({ datasets = [], timeRange = {}, options = {} }) 
                 type: 'time',
                 display: true,
                 grid: {
-                    color: '#333840',
+                    color: CHART_THEME.gridLine,
                     drawBorder: false
                 },
                 ticks: {
-                    color: '#8a9099',
+                    color: CHART_THEME.tickColor,
                     maxTicksLimit: options.xMaxTicksLimit ?? 10,
                     display: options.xTicksDisplay ?? true
                 },
@@ -215,11 +290,11 @@ function createLineChartConfig({ datasets = [], timeRange = {}, options = {} }) 
                 suggestedMin: discreteYAxis ? 0 : undefined,
                 suggestedMax: discreteYAxis ? 1.1 : undefined,
                 grid: {
-                    color: '#333840',
+                    color: CHART_THEME.gridLine,
                     drawBorder: false
                 },
                 ticks: {
-                    color: '#8a9099',
+                    color: CHART_THEME.tickColor,
                     stepSize: discreteYAxis ? 1 : undefined
                 }
             }
@@ -293,9 +368,9 @@ function renderColorZoneItem(zone = {}, index = 0, defaultColor = '#ef4444') {
         <div class="zone-item">
             <input type="color" class="zone-color" name="zone-color-${index}" value="${escapeAttr(zone.color || defaultColor)}">
             <div class="zone-inputs">
-                <input type="number" class="zone-input" name="zone-from-${index}" value="${escapeAttr(zone.from ?? 0)}" placeholder="From">
+                <input type="number" class="zone-input" name="zone-from-${index}" value="${escapeAttr(zone.from ?? WIDGET_DEFAULT_MIN)}" placeholder="From">
                 <span class="zone-separator">→</span>
-                <input type="number" class="zone-input" name="zone-to-${index}" value="${escapeAttr(zone.to ?? 100)}" placeholder="To">
+                <input type="number" class="zone-input" name="zone-to-${index}" value="${escapeAttr(zone.to ?? WIDGET_DEFAULT_MAX)}" placeholder="To">
             </div>
             <button type="button" class="zone-remove-btn" onclick="removeZoneField(this)">×</button>
         </div>
@@ -339,4 +414,11 @@ if (typeof globalThis !== 'undefined') {
     globalThis.renderColorZonesEditor = renderColorZonesEditor;
     globalThis.parseColorZones = parseColorZones;
     globalThis.getFirstConnectedServerId = getFirstConnectedServerId;
+    globalThis.getConnectedServerIds = getConnectedServerIds;
+    globalThis.loadJSON = loadJSON;
+    globalThis.saveJSON = saveJSON;
+    globalThis.loadStorageMap = loadStorageMap;
+    globalThis.updateStorageMap = updateStorageMap;
+    globalThis.escapeRegex = escapeRegex;
+    globalThis.fetchJSONOrThrow = fetchJSONOrThrow;
 }

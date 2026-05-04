@@ -470,20 +470,13 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     }
 
     _renderRegisterRow(reg, isPinned) {
-        const pinClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-        const pinIcon = isPinned ? '📌' : '○';
-        const pinTitle = isPinned ? 'Unpin' : 'Pin';
         const deviceAddr = reg.device;
         const deviceInfo = this.devicesDict[deviceAddr] || {};
         const regInfo = reg.register || {};
         const respondClass = deviceInfo.respond ? 'ok' : 'fail';
         return `
             <tr data-sensor-id="${reg.id}">
-                <td class="col-pin">
-                    <span class="${pinClass}" data-id="${reg.id}" title="${pinTitle}">
-                        ${pinIcon}
-                    </span>
-                </td>
+                ${this.renderPinToggleCell({ id: reg.id, isPinned })}
                 ${this.renderAddButtonsCell(reg.id, reg.name, 'mbreg', reg.textname || reg.name)}
                 <td class="col-id">${reg.id}</td>
                 <td class="col-name" title="${escapeAttr(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
@@ -497,12 +490,9 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         `;
     }
 
-    // Override to use Modbus SSE subscription
+    // ModbusMaster registers are already subscribed through main SSE
     subscribeToChartSensor(sensorId) {
-        // ModbusMaster registers are already subscribed through main SSE
-        if (!this.subscribedSensorIds.has(sensorId)) {
-            this.subscribedSensorIds.add(sensorId);
-        }
+        this.subscribeToChartSensorLocal(sensorId);
     }
 
     loadRegistersHeight() {

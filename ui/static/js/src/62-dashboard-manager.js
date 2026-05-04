@@ -159,16 +159,14 @@ class DashboardManager {
 
     loadDashboards() {
         // Load from localStorage
-        try {
-            const userDashboards = JSON.parse(localStorage.getItem('user-dashboards') || '[]');
+        const userDashboards = loadJSON('user-dashboards', []);
+        if (Array.isArray(userDashboards)) {
             userDashboards.forEach(name => {
-                const config = localStorage.getItem(`dashboard:${name}`);
+                const config = loadJSON(`dashboard:${name}`, null);
                 if (config) {
-                    dashboardState.dashboards.set(name, JSON.parse(config));
+                    dashboardState.dashboards.set(name, config);
                 }
             });
-        } catch (err) {
-            console.warn('Failed to load dashboards from localStorage:', err);
         }
 
         // Load server dashboards
@@ -379,8 +377,7 @@ class DashboardManager {
         if (!this._bootstrappedServers) this._bootstrappedServers = new Set();
 
         const tasks = [];
-        for (const [serverId, srv] of state.servers) {
-            if (!srv?.connected) continue;
+        for (const serverId of getConnectedServerIds()) {
             if (this._bootstrappedServers.has(serverId)) continue;
             this._bootstrappedServers.add(serverId);
             tasks.push(this._bootstrapServerSensors(serverId));
@@ -403,10 +400,11 @@ class DashboardManager {
             // Параллельно fetch'аем sensors per object — server'ам обычно ОК с десятком
             // одновременных запросов.
             await Promise.allSettled(objects.map(async (objectName) => {
-                const sensorsResp = await fetch(
-                    `/api/objects/${encodeURIComponent(objectName)}/ionc/sensors`
-                    + `?server=${encodeURIComponent(serverId)}&limit=${DASHBOARD_SENSOR_REGISTRY_FETCH_LIMIT}`
-                );
+                const sensorsResp = await fetch(buildIONCSensorsUrl({
+                    objectName,
+                    serverId,
+                    limit: DASHBOARD_SENSOR_REGISTRY_FETCH_LIMIT,
+                }));
                 if (!sensorsResp.ok) return;
                 const data = await sensorsResp.json();
                 for (const s of (data?.sensors || [])) {
@@ -589,10 +587,12 @@ class DashboardManager {
             const { serverId, objectName } = parseGroupKey(grpKey);
             for (const [sensorName, sensorKey] of nameToKey) {
                 try {
-                    const url = `/api/objects/${encodeURIComponent(objectName)}/ionc/sensors`
-                        + `?server=${encodeURIComponent(serverId)}`
-                        + `&search=${encodeURIComponent(sensorName)}&limit=1`;
-                    const response = await fetch(url);
+                    const response = await fetch(buildIONCSensorsUrl({
+                        objectName,
+                        serverId,
+                        search: sensorName,
+                        limit: 1,
+                    }));
                     if (!response.ok) continue;
                     const data = await response.json();
                     if (!data.sensors || data.sensors.length === 0) continue;
@@ -1014,10 +1014,9 @@ class DashboardManager {
                         <input type="number" name="rotate" value="${currentRotate}" min="0" max="360" step="1">
                         <span class="rotate-unit">°</span>
                         <div class="rotate-quick-buttons">
-                            <button type="button" class="rotate-quick-btn" data-angle="0">0°</button>
-                            <button type="button" class="rotate-quick-btn" data-angle="90">90°</button>
-                            <button type="button" class="rotate-quick-btn" data-angle="180">180°</button>
-                            <button type="button" class="rotate-quick-btn" data-angle="270">270°</button>
+                            ${ROTATE_QUICK_ANGLES.map(angle =>
+                                `<button type="button" class="rotate-quick-btn" data-angle="${angle}">${angle}°</button>`
+                            ).join('')}
                         </div>
                     </div>
                 </div>
@@ -1728,7 +1727,15 @@ class DashboardManager {
 
         if (!dropzone || !fileInput) return;
 
-        dropzone.addEventListener('click', () => fileInput.click());
+        // Guard against double-trigger: <input type="file"> лежит ВНУТРИ dropzone,
+        // поэтому programmatic fileInput.click() bubbles обратно к этому handler'у
+        // и зовёт fileInput.click() ещё раз. Браузер при этом сначала открывает
+        // file picker, а второй вызов мгновенно его dismiss'ит → user видит мигание
+        // и не успевает выбрать файл.
+        dropzone.addEventListener('click', (e) => {
+            if (e.target === fileInput) return;
+            fileInput.click();
+        });
 
         dropzone.addEventListener('dragover', (e) => {
             e.preventDefault();

@@ -6,6 +6,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     static getTypeName() {
         return 'OPCUAExchange';
     }
+    static loadingIdPrefix = 'opcua';
 
     constructor(objectName, tabKey = null) {
         super(objectName, tabKey);
@@ -321,7 +322,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         // Компактная строка статистики
         const ioSize = status.iolist_size ?? status.iolistSize ?? '—';
         const errCount = status.errorHistorySize ?? 0;
-        const errMax = status.errorHistoryMax ?? 100;
+        const errMax = status.errorHistoryMax ?? OPCUA_ERROR_HISTORY_DEFAULT_MAX;
 
         // Определяем класс индикатора ошибок
         const errDotClass = errCount >= errMax ? 'fail' : (errCount > 0 ? 'warn' : 'ok');
@@ -605,19 +606,11 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         // Render visible rows with type badges and chart toggle
         tbody.innerHTML = visibleSensors.map(sensor => {
             const isPinned = pinnedSensors.has(String(sensor.id));
-            const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-            const pinIcon = isPinned ? '📌' : '○';
-            const pinTitle = isPinned ? 'Unpin' : 'Pin';
-
             const iotype = sensor.iotype || sensor.type || '';
             const typeBadgeClass = iotype ? `type-badge type-${iotype}` : '';
             return `
             <tr data-sensor-id="${sensor.id || ''}">
-                <td class="col-pin">
-                    <span class="${pinToggleClass}" data-id="${sensor.id}" title="${pinTitle}">
-                        ${pinIcon}
-                    </span>
-                </td>
+                ${this.renderPinToggleCell({ id: sensor.id, isPinned })}
                 ${this.renderAddButtonsCell(sensor.id, sensor.name, 'opcua', sensor.textname || sensor.name)}
                 <td class="col-id">${sensor.id ?? '—'}</td>
                 <td class="col-name" title="${escapeAttr(sensor.textname || sensor.comment || '')}">${escapeHtml(sensor.name || '')}</td>
@@ -657,25 +650,15 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         });
     }
 
-    // Override to use OPC UA SSE subscription
+    // OPCUAExchange sensors are already subscribed through main SSE
     subscribeToChartSensor(sensorId) {
-        // OPCUAExchange sensors are already subscribed through main SSE
-        // Just ensure the sensor is in our subscription list
-        if (!this.subscribedSensorIds.has(sensorId)) {
-            this.subscribedSensorIds.add(sensorId);
-        }
+        this.subscribeToChartSensorLocal(sensorId);
     }
 
     updateSensorCount() {
         this.updateItemCount(`opcua-sensor-count-${this.objectName}`, this.allSensors.length, this.sensorsTotal);
     }
 
-    showLoadingIndicator(show) {
-        const el = this.getEl(`opcua-loading-more-${this.objectName}`);
-        if (el) {
-            el.style.display = show ? 'block' : 'none';
-        }
-    }
 
     async loadSensorDetails(id) {
         try {

@@ -1,4 +1,7 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, request as apiRequest } from '@playwright/test';
+
+const VIEWER_URL = process.env.BASE_URL || 'http://localhost:8000';
+const MOCK_URL = 'http://mock-uniset:9393';
 
 test.describe('PushButtonWidget — third active widget', () => {
     test.beforeEach(async ({ page }) => {
@@ -106,6 +109,122 @@ test.describe('PushButtonWidget — third active widget', () => {
         expect(posts[0].value).toBe(1);
         expect(posts[1].value).toBe(0);
         expect(posts[1].time - posts[0].time).toBeGreaterThanOrEqual(150);
+    });
+
+    test('pulse mode: pulseWidth=2000 end-to-end real sensor on mock-uniset', async ({ page }) => {
+        // Integration test: backend → mock-uniset realный flow (без mock'а на /ionc/set).
+        // Проверяем что click PushButton реально проставляет sensor=valueOn в mock,
+        // удерживает ~2с, потом проставляет valueOff.
+        //
+        // Sensor2_S — AO type (mock noise ±2/s). valueOn=999, valueOff=-999 далеко
+        // от noise диапазона (±~6 за 3 тика), tolerance ±10 покрывает.
+        const SENSOR_ID = 2;
+        const VAL_ON = 999;
+        const VAL_OFF = -999;
+        const TOLERANCE = 10;
+        const ADMIN_TOKEN = 'admin';
+
+        // Backend требует active controller token для POST /ionc/set.
+        // Mock из beforeEach — только для frontend; backend проверяет controlMgr.IsController.
+        await page.unroute('**/ionc/set**');
+
+        const ctx = await apiRequest.newContext();
+        try {
+            // 1. Take control on backend (по умолчанию enabled с --control-token admin).
+            const takeResp = await ctx.post(`${VIEWER_URL}/api/control/take`, {
+                data: { token: ADMIN_TOKEN },
+            });
+            // Может вернуть 409 если другой тест уже взял; в этом случае forsce-release+retry.
+            if (!takeResp.ok()) {
+                await ctx.post(`${VIEWER_URL}/api/control/release`, { data: { token: ADMIN_TOKEN } });
+                const retake = await ctx.post(`${VIEWER_URL}/api/control/take`, { data: { token: ADMIN_TOKEN } });
+                expect(retake.ok()).toBeTruthy();
+            }
+
+            // 2. Reset sensor to known baseline (mock direct).
+            await ctx.get(`${MOCK_URL}/api/v2/SharedMemory/set?supplier=TestProc&${SENSOR_ID}=0`);
+
+            const readMockSensor = async () => {
+                const r = await ctx.get(`${MOCK_URL}/api/v2/SharedMemory/get?supplier=TestProc&filter=${SENSOR_ID}`);
+                const d = await r.json();
+                return d.sensors[0].value;
+            };
+
+            await createButtonDashboard(page, {
+                sensor: 'Sensor2_S',
+                sensorId: SENSOR_ID,
+                mode: 'pulse',
+                pulseWidth: 2000,
+                valueOff: VAL_OFF,
+                valueOn: VAL_ON,
+            });
+
+            // 3. Click — frontend POST /ionc/set с X-Control-Token: admin → backend
+            //    → mock-uniset /set?2=999. Через 2s — backend POST {value:0} → mock.
+            const t0 = Date.now();
+            await page.evaluate(() => {
+                const btn = document.querySelector('[data-test="btn"]') as HTMLElement;
+                btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            });
+
+            // 4. После 700ms — sensor=VAL_ON (с tolerance под mock noise).
+            await page.waitForTimeout(700);
+            const valueDuringPulse = await readMockSensor();
+            expect(valueDuringPulse).toBeGreaterThanOrEqual(VAL_ON - TOLERANCE);
+            expect(valueDuringPulse).toBeLessThanOrEqual(VAL_ON + TOLERANCE);
+
+            // 5. После ~2300ms — sensor=VAL_OFF (импульс уже закончился).
+            const elapsed = Date.now() - t0;
+            await page.waitForTimeout(Math.max(0, 2400 - elapsed));
+            const valueAfterPulse = await readMockSensor();
+            expect(valueAfterPulse).toBeGreaterThanOrEqual(VAL_OFF - TOLERANCE);
+            expect(valueAfterPulse).toBeLessThanOrEqual(VAL_OFF + TOLERANCE);
+        } finally {
+            await ctx.post(`${VIEWER_URL}/api/control/release`, { data: { token: ADMIN_TOKEN } });
+            await ctx.dispose();
+        }
+    });
+
+    test('pulse mode: pulseWidth=2000 holds sensor at valueOn for ~2s before reset', async ({ page }) => {
+        // Регресс-тест против ситуации, когда pulseWidth-таймер съедался
+        // bootstrap-багом (compaction Bug 1) или коротким clamp'ом. Проверяем
+        // что user-настраиваемая ширина 2с реально удерживается.
+        const posts: { value: number; time: number }[] = [];
+        page.on('request', req => {
+            if (req.url().includes('/ionc/set') && req.method() === 'POST') {
+                try {
+                    const body = JSON.parse(req.postData() || '{}');
+                    posts.push({ value: body.value, time: Date.now() });
+                } catch {}
+            }
+        });
+
+        await createButtonDashboard(page, { mode: 'pulse', pulseWidth: 2000, valueOff: 0, valueOn: 1 });
+        const t0 = Date.now();
+        await page.evaluate(() => {
+            const btn = document.querySelector('[data-test="btn"]') as HTMLElement;
+            btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        });
+
+        // Через 1с должен быть только ON (sensor удерживается).
+        await page.waitForTimeout(1000);
+        expect(posts.length).toBe(1);
+        expect(posts[0].value).toBe(1);
+
+        // Ждём до ~2.5с после клика — должен прийти OFF.
+        await page.waitForFunction(() => true, { timeout: 1600 });
+        await page.waitForTimeout(1600);
+
+        expect(posts.length).toBe(2);
+        expect(posts[1].value).toBe(0);
+
+        // Tolerance ±200ms — setTimeout jitter, fetch задержки, page.evaluate overhead.
+        const delta = posts[1].time - posts[0].time;
+        expect(delta).toBeGreaterThanOrEqual(1800);
+        expect(delta).toBeLessThanOrEqual(2300);
+
+        // Sanity: первый POST уходит почти сразу после клика (<300ms).
+        expect(posts[0].time - t0).toBeLessThanOrEqual(300);
     });
 
     test('momentary mode: mousedown → POST valueOn; window mouseup → POST valueOff', async ({ page }) => {

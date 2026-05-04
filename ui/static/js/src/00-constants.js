@@ -21,6 +21,7 @@ const CONTROL_PING_INTERVAL = 30000;
 const CONTROL_DEFAULT_TIMEOUT_SEC = 60;
 const SETTINGS_FILTER_DEBOUNCE_DELAY = 200;
 const SENSOR_AUTOCOMPLETE_BLUR_DELAY_MS = 150;
+const IONC_DIALOG_FOCUS_DELAY_MS = 50;
 const UI_DEBUG_LOG_STORAGE_KEY = 'uniset-ui-debug-log';
 
 // === SSE ===
@@ -56,6 +57,8 @@ const SENSOR_AUTOCOMPLETE_LIMIT = 20;
 const SENSOR_AUTOCOMPLETE_FOCUS_LIMIT = 10;
 const DASHBOARD_SENSOR_REGISTRY_FETCH_LIMIT = 10000;
 const DASHBOARD_SENSOR_CACHE_TTL_MS = 60000;
+const DEFAULT_VARIABLE_HISTORY_COUNT = 100;
+const OPCUA_ERROR_HISTORY_DEFAULT_MAX = 100;
 const BYTES_PER_KIB = 1024;
 const BYTE_UNITS = ['B', 'KB', 'MB', 'GB'];
 
@@ -216,6 +219,31 @@ const DIGITAL_SPECIAL_CHAR_ADVANCE = 8;
 const DIGITAL_DIGIT_ADVANCE = 22;
 const DIGITAL_VIEWBOX_PADDING = 10;
 const DIGITAL_VIEWBOX_HEIGHT = 48;
+const SPEEDOMETER_DEFAULT_MAX_RPM = 4000;
+
+// === Widget config defaults (диапазон значений по умолчанию для UI-полей min/max) ===
+// Используется во всех widget'ах, где пользователь задаёт диапазон значений
+// (Gauge, Level, Bar, Speedometer, RangeBars, BarGraph, Setpoint).
+const WIDGET_DEFAULT_MIN = 0;
+const WIDGET_DEFAULT_MAX = 100;
+
+// Преднастроенные углы поворота, доступные через quick-buttons в widget config dialog.
+const ROTATE_QUICK_ANGLES = [0, 90, 180, 270];
+
+// === Chart theme (Chart.js) ===
+// 8-цветная палитра для серий (циклически назначается через colorIndex).
+const CHART_COLORS = [
+    '#3274d9', '#73bf69', '#ff9830', '#f2495c',
+    '#b877d9', '#5794f2', '#fade2a', '#ff6eb4'
+];
+
+// Единая dark-тема для tooltip / grid / ticks. Используется в createLineChartConfig().
+const CHART_THEME = {
+    tooltipBg:   '#22252a',
+    tooltipText: '#d8dce2',
+    gridLine:    '#333840',
+    tickColor:   '#8a9099',
+};
 
 if (typeof globalThis !== 'undefined') {
     Object.assign(globalThis, {

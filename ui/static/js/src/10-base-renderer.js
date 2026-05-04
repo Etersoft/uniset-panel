@@ -114,12 +114,6 @@ const VirtualScrollMixin = {
                 this.vscrollLoadMore();
             }
         }
-    },
-
-    // Показать/скрыть индикатор загрузки
-    showVScrollLoadingIndicator(loadingId, show) {
-        const el = this.getEl(loadingId);
-        if (el) el.style.display = show ? 'block' : 'none';
     }
 };
 
@@ -201,27 +195,14 @@ const SSESubscriptionMixin = {
 const ResizableSectionMixin = {
     // Loading сохранённой высоты
     loadSectionHeight(storageKey, defaultHeight = DEFAULT_SECTION_HEIGHT) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            const value = saved[this.tabKey] ?? saved[this.objectName];
-            if (typeof value === 'number' && value > 0) {
-                return value;
-            }
-        } catch (err) {
-            console.warn('Failed to load section height:', err);
-        }
-        return defaultHeight;
+        const saved = loadStorageMap(storageKey);
+        const value = saved[this.tabKey] ?? saved[this.objectName];
+        return typeof value === 'number' && value > 0 ? value : defaultHeight;
     },
 
     // Сохранение высоты
     saveSectionHeight(storageKey, value) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            saved[this.tabKey] = value;
-            localStorage.setItem(storageKey, JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save section height:', err);
-        }
+        updateStorageMap(storageKey, (saved) => { saved[this.tabKey] = value; });
     },
 
     // Настройка resize для секции
@@ -561,12 +542,8 @@ const PinManagementMixin = {
      * @returns {Set<string>}
      */
     getPinnedItems(storageKey) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            return new Set(saved[this.tabKey] || saved[this.objectName] || []);
-        } catch (err) {
-            return new Set();
-        }
+        const saved = loadStorageMap(storageKey);
+        return new Set(saved[this.tabKey] || saved[this.objectName] || []);
     },
 
     /**
@@ -575,13 +552,7 @@ const PinManagementMixin = {
      * @param {Set<string>} pinnedSet - Множество ID закрепленных элементов
      */
     savePinnedItems(storageKey, pinnedSet) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            saved[this.tabKey] = Array.from(pinnedSet);
-            localStorage.setItem(storageKey, JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save pinned items:', err);
-        }
+        updateStorageMap(storageKey, (saved) => { saved[this.tabKey] = Array.from(pinnedSet); });
     },
 
     /**
@@ -684,15 +655,11 @@ const TableSortMixin = {
      */
     loadSortState(storageKey) {
         this.sortStorageKey = storageKey;
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            const sortState = saved[this.tabKey] || saved[this.objectName];
-            if (sortState) {
-                this.sortColumn = sortState.column || 'name';
-                this.sortDirection = sortState.direction || 'asc';
-            }
-        } catch (err) {
-            console.warn('Failed to load sort state:', err);
+        const saved = loadStorageMap(storageKey);
+        const sortState = saved[this.tabKey] || saved[this.objectName];
+        if (sortState) {
+            this.sortColumn = sortState.column || 'name';
+            this.sortDirection = sortState.direction || 'asc';
         }
     },
 
@@ -701,16 +668,12 @@ const TableSortMixin = {
      */
     saveSortState() {
         if (!this.sortStorageKey) return;
-        try {
-            const saved = JSON.parse(localStorage.getItem(this.sortStorageKey) || '{}');
+        updateStorageMap(this.sortStorageKey, (saved) => {
             saved[this.tabKey] = {
                 column: this.sortColumn,
                 direction: this.sortDirection
             };
-            localStorage.setItem(this.sortStorageKey, JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save sort state:', err);
-        }
+        });
     },
 
     /**
@@ -1567,6 +1530,43 @@ class BaseObjectRenderer {
     subscribeToChartSensor(sensorId) {
         // По умолчанию используем IONC подписку
         subscribeToIONCSensor(this.tabKey, sensorId);
+    }
+
+    // Helper для renderer'ов, чьи sensor'ы уже подписаны через batch SSE
+    // (modbus_register_batch / opcua_sensor_batch и т.п.) — отдельная подписка
+    // не нужна, достаточно отметить sensorId в локальном Set'е, чтобы
+    // BaseObjectRenderer.unsubscribeFromChart знал что снимать.
+    subscribeToChartSensorLocal(sensorId) {
+        if (!this.subscribedSensorIds.has(sensorId)) {
+            this.subscribedSensorIds.add(sensorId);
+        }
+    }
+
+    // Generic show/hide индикатора загрузки. Имя элемента —
+    // `${loadingIdPrefix}-loading-more-${objectName}` (уникальный по renderer'у).
+    // Renderer задаёт префикс через static loadingIdPrefix (или instance field).
+    // Если префикс не задан — silent no-op (renderer не использует loading indicator).
+    showLoadingIndicator(show) {
+        const prefix = this.loadingIdPrefix || this.constructor.loadingIdPrefix;
+        if (!prefix) return;
+        const el = this.getEl(`${prefix}-loading-more-${this.objectName}`);
+        if (el) el.style.display = show ? 'block' : 'none';
+    }
+
+    // Стандартная ячейка пин-индикатора в IO-таблицах. Шесть row-renderer'ов
+    // (IONC/Modbus×2/OPCUA×2/UWSGate) рендерили один и тот же `<td>` с микро-
+    // расхождениями: IONC использует `ionc-col-pin` (исторически), UWSGate
+    // — `data-name=` вместо `data-id=`. cellClass / dataAttr параметризуют
+    // эти расхождения, остальной markup общий.
+    renderPinToggleCell({ id, isPinned, dataAttr = 'data-id', cellClass = 'col-pin' }) {
+        const cls = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
+        const icon = isPinned ? '📌' : '○';
+        const title = isPinned ? 'Unpin' : 'Pin';
+        return `
+            <td class="${cellClass}">
+                <span class="${cls}" ${dataAttr}="${escapeAttr(id)}" title="${title}">${icon}</span>
+            </td>
+        `;
     }
 
     // Сгенерировать HTML для объединённой ячейки кнопок (Chart + Dashboard)

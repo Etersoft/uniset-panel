@@ -92,19 +92,37 @@ class ActiveDashboardWidget extends DashboardWidget {
     async _doWrite(value) {
         this.commandValue = value;
         this._setWriteState('pending');
+        const result = await this._postIoncSet(value);
+        if (result.ok) {
+            this._setWriteState('success');
+            return true;
+        }
+        this._setWriteState('error', result.error);
+        return false;
+    }
 
+    // Silent write — POST на ionc/set без _setWriteState/commandValue логики.
+    // Используется генератором (per-tick) и подобными fire-and-forget сценариями,
+    // где визуальный pending/success flash не нужен (или мешает). Caller сам
+    // решает что делать с результатом (`{ ok, error }`).
+    // Все sensorId/serverId/objectName проверки — те же, что в _doWrite.
+    async _doWriteSilent(value) {
+        return this._postIoncSet(value);
+    }
+
+    // Internal: чистый POST + validation (без UI side effects).
+    // Возвращает `{ ok: true }` или `{ ok: false, error: string }`.
+    async _postIoncSet(value) {
         // sensorId — числовой ID, должен быть резолвлен заранее (autocomplete сохраняет
         // его в config). config.sensor (имя) — fallback для smoke TestActiveWidget'а.
         const sensorId = this.config?.sensorId ?? this.config?.sensor;
         if (sensorId === undefined || sensorId === null || sensorId === '') {
-            this._setWriteState('error', 'Sensor not configured');
-            return false;
+            return { ok: false, error: 'Sensor not configured' };
         }
 
         const serverId = this.config?.serverId ?? this._resolveServerId();
         if (!serverId) {
-            this._setWriteState('error', 'No server configured');
-            return false;
+            return { ok: false, error: 'No server configured' };
         }
         // Warn один раз на widget lifetime — legacy widget'ы могут писать N раз/сек
         // (generator) или сериями (push-button pulse), spam в console не нужен.
@@ -123,14 +141,11 @@ class ActiveDashboardWidget extends DashboardWidget {
             });
             if (!resp.ok) {
                 const data = await resp.json().catch(() => ({}));
-                this._setWriteState('error', data.error || `HTTP ${resp.status}`);
-                return false;
+                return { ok: false, error: data.error || `HTTP ${resp.status}` };
             }
-            this._setWriteState('success');
-            return true;
+            return { ok: true };
         } catch (e) {
-            this._setWriteState('error', e.message);
-            return false;
+            return { ok: false, error: e.message };
         }
     }
 

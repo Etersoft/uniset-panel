@@ -29,23 +29,12 @@ async function loadSidebar() {
 
 // Загрузка collapse состояния групп из localStorage
 function loadGroupCollapseState() {
-    try {
-        const saved = localStorage.getItem('uniset-panel-group-collapse');
-        if (saved) {
-            state.groupCollapseState = JSON.parse(saved);
-        }
-    } catch (err) {
-        state.groupCollapseState = {};
-    }
+    state.groupCollapseState = loadJSON('uniset-panel-group-collapse', {}) || {};
 }
 
 // Сохранение collapse состояния групп в localStorage
 function saveGroupCollapseState() {
-    try {
-        localStorage.setItem('uniset-panel-group-collapse', JSON.stringify(state.groupCollapseState));
-    } catch (err) {
-        // ignore
-    }
+    saveJSON('uniset-panel-group-collapse', state.groupCollapseState);
 }
 
 // Основная функция рендеринга всех групп
@@ -254,23 +243,9 @@ function applySidebarStatuses() {
 
 // Рендеринг пользовательских dashboard'ов в отдельную группу
 function renderUserDashboardsGroup(container) {
-    try {
-        const saved = localStorage.getItem('user-dashboards');
-        if (!saved) return;
+    const userDashboards = loadJSON('user-dashboards', []);
+    if (!Array.isArray(userDashboards) || userDashboards.length === 0) return;
 
-        const userDashboards = JSON.parse(saved);
-        if (!Array.isArray(userDashboards) || userDashboards.length === 0) return;
-
-        const items = userDashboards.map(name => ({
-            type: 'dashboard',
-            name: name
-        }));
-
-        renderSidebarGroup({
-            name: 'Custom',
-            items: items
-        }, container);
-    } catch (err) {
-        // ignore
-    }
+    const items = userDashboards.map(name => ({ type: 'dashboard', name }));
+    renderSidebarGroup({ name: 'Custom', items }, container);
 }
