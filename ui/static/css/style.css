@@ -8769,9 +8769,12 @@ button.rotate-quick-btn:active {
     opacity: 0.85;
 }
 
-/* Когда controlToken не активен / edit mode — визуально блокированный виджет. */
+/* Когда controlToken не активен / edit mode — визуально блокированный виджет.
+   Frozen widget'ы — отдельный visual style (banner + dim на .widget-content),
+   на root opacity не ставим, иначе caskaded на ::before banner и он становится
+   полупрозрачным. */
 .dashboard-widget[data-active-widget="true"][data-control-blocked="true"],
-.dashboard-widget.active-disabled {
+.dashboard-widget.active-disabled:not([data-frozen="true"]) {
     cursor: not-allowed;
     opacity: 0.6;
 }
@@ -8790,37 +8793,54 @@ button.rotate-quick-btn:active {
 }
 
 /* Frozen state — sensor залатчен на фиксированном значении (IONC freeze).
-   Визуально отличается от data-control-blocked (нейтральный grey, "нет прав")
-   icy cyan tint'ом + ❄ marker — оператору сразу видно ПРИЧИНУ блокировки:
-   "датчик заморожен, сначала разморозь" vs "возьми контроль". Opacity выше
-   (0.88 vs 0.6) — feedback (current frozen value) хорошо читается, ведь
-   именно ради него frozen state и существует. */
+   Дизайн: top banner "❄ FROZEN" (cyan pill, inset 3px чтобы соседние widget'ы
+   не сливались в полосу при gap=0) + dim+grayscale на .widget-content.
+   Banner на самом widget root (::before), dim только на content — header
+   (.widget-header с config/delete) остаётся полноцветным в edit mode.
+   Feedback значение остаётся видимым (хоть и блёклым) — это критично:
+   оператор должен знать НА ЧЁМ датчик «застрял». */
 .dashboard-widget[data-active-widget="true"][data-frozen="true"] {
     cursor: not-allowed;
-    opacity: 0.88;
-    /* Лёгкий ledяной оттенок поверх. inset shadow вместо outer чтобы не
-       конкурировать с active-error/active-success (они снаружи). */
-    box-shadow: inset 0 0 0 2px rgba(56, 189, 248, 0.55), inset 0 0 12px rgba(56, 189, 248, 0.18);
-    transition: box-shadow 0.2s, opacity 0.2s;
+}
+.dashboard-widget[data-active-widget="true"][data-frozen="true"]::before {
+    content: "❄ FROZEN";
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    right: 4px;
+    height: 14px;
+    line-height: 14px;
+    text-align: center;
+    font-size: 8.5px;
+    letter-spacing: 1px;
+    font-weight: 700;
+    color: #fff;
+    /* Solid background (без alpha) + subtle shadow — чтобы banner был
+       одинаково контрастным на любом content фоне (mushroom red, flat blue,
+       toggle dark) и не выглядел сам полупрозрачным. */
+    background: #0284c7;
+    border-radius: 3px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    pointer-events: none;
+    /* z-index ниже header (.widget-header z-index:10) — чтобы в edit mode
+       config/delete кнопки перекрывали banner. */
+    z-index: 5;
 }
 .dashboard-widget[data-active-widget="true"][data-frozen="true"] .widget-content {
     pointer-events: none;
     cursor: not-allowed;
-}
-/* ❄ marker в правом верхнем углу. Через ::after на корне widget'а — поверх
-   контента, pointer-events:none чтобы не мешать selection виджета в edit mode.
-   Размер заметный (16px) — оператор должен сразу понять причину. */
-.dashboard-widget[data-active-widget="true"][data-frozen="true"]::after {
-    content: "❄";
-    position: absolute;
-    top: 4px;
-    right: 6px;
-    font-size: 16px;
-    line-height: 1;
-    color: #38bdf8;
-    text-shadow: 0 0 4px rgba(56, 189, 248, 0.6);
-    pointer-events: none;
-    z-index: 5;
+    /* Banner высотой 14+2+4=20px сверху — добавляем top padding чтобы
+       контент widget'а не залезал под banner (label, value). */
+    padding-top: 20px;
+    box-sizing: border-box;
+    /* Dim + умеренный grayscale (0.55, не 1.0) — «выключенный» feel,
+       но цвет частично сохраняется: mushroom STOP остаётся красноватым,
+       OPEN/CLOSED valve — зеленовато-серый. Полный grayscale убивает
+       SCADA-семантику цвета (red=аварийная) — для оператора это потеря
+       информации даже в frozen state. */
+    opacity: 0.5;
+    filter: grayscale(0.55) brightness(0.9);
+    transition: opacity 0.2s, filter 0.2s;
 }
 
 /* Active widgets — убираем все focus outlines (browser default :focus borders
