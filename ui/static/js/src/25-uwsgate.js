@@ -238,9 +238,9 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
 
         try {
             const tabState = state.tabs.get(this.tabKey);
-            const serverId = tabState?.serverId || '';
-            const param = serverId ? `?server=${encodeURIComponent(serverId)}` : '';
-            const response = await fetch(`/api/sensors${param}`);
+            const serverId = tabState?.serverId;
+            if (!serverId) return [];
+            const response = await fetch(`/api/sensors?server=${encodeURIComponent(serverId)}`);
             if (!response.ok) return [];
             const data = await response.json();
             this.allSensorsCache = data.sensors || [];

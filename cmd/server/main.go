@@ -20,13 +20,11 @@ import (
 	"github.com/pv/uniset-panel/internal/logserver"
 	"github.com/pv/uniset-panel/internal/modbus"
 	"github.com/pv/uniset-panel/internal/opcua"
-	"github.com/pv/uniset-panel/internal/poller"
 	"github.com/pv/uniset-panel/internal/recording"
 	"github.com/pv/uniset-panel/internal/sensorconfig"
 	"github.com/pv/uniset-panel/internal/server"
 	"github.com/pv/uniset-panel/internal/sm"
 	"github.com/pv/uniset-panel/internal/storage"
-	"github.com/pv/uniset-panel/internal/uniset"
 	"github.com/pv/uniset-panel/internal/uwsgate"
 	"github.com/pv/uniset-panel/ui"
 )
@@ -41,8 +39,8 @@ func main() {
 	store := setupStorage(cfg)
 	defer store.Close()
 
-	sensorCfg, perServerConfigs := loadSensorConfigs(cfg)
-	controlsEnabled := sensorCfg != nil || len(perServerConfigs) > 0
+	perServerConfigs := loadSensorConfigs(cfg)
+	controlsEnabled := len(perServerConfigs) > 0
 
 	logServerMgr := logserver.NewManager(slog.Default())
 	defer logServerMgr.Close()
@@ -62,7 +60,7 @@ func main() {
 		}
 	}
 
-	handlers := setupHandlers(cfg, store, serverMgr, sseHub, sensorCfg, perServerConfigs,
+	handlers := setupHandlers(cfg, store, serverMgr, sseHub, perServerConfigs,
 		controlsEnabled, logServerMgr, controlMgr, recordingMgr, launcherMgr)
 
 	dashboardMgr := setupDashboards(cfg, handlers)
@@ -123,27 +121,21 @@ func setupStorage(cfg *config.Config) storage.Storage {
 	}
 }
 
-// loadSensorConfigs loads global and per-server sensor configurations.
-func loadSensorConfigs(cfg *config.Config) (*sensorconfig.SensorConfig, map[string]*sensorconfig.SensorConfig) {
-	var sensorCfg *sensorconfig.SensorConfig
-	if cfg.ConFile != "" {
-		var err error
-		sensorCfg, err = sensorconfig.LoadFromFile(cfg.ConFile)
+// loadSensorConfigs loads per-server sensor configurations. Global cfg.ConFile,
+// если задан, применяется как дефолтный sensor-config ко всем серверам,
+// у которых не указан собственный UnisetConfig.
+func loadSensorConfigs(cfg *config.Config) map[string]*sensorconfig.SensorConfig {
+	cache := make(map[string]*sensorconfig.SensorConfig) // file → loaded
+	loadOnce := func(file string) (*sensorconfig.SensorConfig, error) {
+		if sc, ok := cache[file]; ok {
+			return sc, nil
+		}
+		sc, err := sensorconfig.LoadFromFile(file)
 		if err != nil {
-			slog.Error("Failed to load sensor config", "file", cfg.ConFile, "error", err)
-			os.Exit(1)
+			return nil, err
 		}
-		slog.Info("Loaded global sensor configuration", "file", cfg.ConFile, "sensors", sensorCfg.Count(),
-			"objects", sensorCfg.ObjectCount(), "services", sensorCfg.ServiceCount())
-
-		if !sensorCfg.HasObjectOrService(cfg.UnisetSupplier) {
-			slog.Error("Supplier not found in configuration",
-				"supplier", cfg.UnisetSupplier,
-				"hint", "Specify valid supplier with -uniset-supplier=<name>",
-				"note", "Supplier must exist in <objects> or <services> section of the config")
-			os.Exit(1)
-		}
-		slog.Info("Validated supplier", "supplier", cfg.UnisetSupplier)
+		cache[file] = sc
+		return sc, nil
 	}
 
 	perServerConfigs := make(map[string]*sensorconfig.SensorConfig)
@@ -156,29 +148,26 @@ func loadSensorConfigs(cfg *config.Config) (*sensorconfig.SensorConfig, map[stri
 			continue
 		}
 
-		if conFile == cfg.ConFile && sensorCfg != nil {
-			perServerConfigs[srvCfg.ID] = sensorCfg
-			continue
-		}
-
-		sc, err := sensorconfig.LoadFromFile(conFile)
+		sc, err := loadOnce(conFile)
 		if err != nil {
-			slog.Error("Failed to load per-server sensor config",
+			slog.Error("Failed to load sensor config",
 				"server", srvCfg.ID, "file", conFile, "error", err)
 			continue
 		}
-		slog.Info("Loaded per-server sensor configuration",
-			"server", srvCfg.ID, "file", conFile, "sensors", sc.Count())
+		slog.Info("Loaded sensor configuration",
+			"server", srvCfg.ID, "file", conFile, "sensors", sc.Count(),
+			"objects", sc.ObjectCount(), "services", sc.ServiceCount())
 
 		if !sc.HasObjectOrService(cfg.UnisetSupplier) {
-			slog.Warn("Supplier not found in per-server configuration",
-				"server", srvCfg.ID, "supplier", cfg.UnisetSupplier)
+			slog.Warn("Supplier not found in sensor configuration",
+				"server", srvCfg.ID, "supplier", cfg.UnisetSupplier,
+				"hint", "Specify valid supplier with -uniset-supplier=<name>")
 		}
 
 		perServerConfigs[srvCfg.ID] = sc
 	}
 
-	return sensorCfg, perServerConfigs
+	return perServerConfigs
 }
 
 // setupControl creates the control manager if tokens are configured.
@@ -294,7 +283,6 @@ func setupHandlers(
 	store storage.Storage,
 	serverMgr *server.Manager,
 	sseHub *api.SSEHub,
-	sensorCfg *sensorconfig.SensorConfig,
 	perServerConfigs map[string]*sensorconfig.SensorConfig,
 	controlsEnabled bool,
 	logServerMgr *logserver.Manager,
@@ -302,21 +290,19 @@ func setupHandlers(
 	recordingMgr *recording.Manager,
 	launcherMgr *launcher.Manager,
 ) *api.Handlers {
-	// Get first server's client and pollers for backward compatibility
-	var client *uniset.Client
-	var pollerInstance *poller.Poller
+	// IONC/Modbus/OPCUA pollers пока остаются с legacy single-instance fallback;
+	// в multi-server режиме per-server поллеры подбираются через serverMgr,
+	// поля используются только когда serverID не указан.
 	var ioncPollerInstance *ionc.Poller
 	var modbusPollerInstance *modbus.Poller
 	var opcuaPollerInstance *opcua.Poller
 	if instance, ok := serverMgr.GetFirstServer(); ok {
-		client = instance.Client
-		pollerInstance = instance.Poller
 		ioncPollerInstance = instance.IONCPoller
 		modbusPollerInstance = instance.ModbusPoller
 		opcuaPollerInstance = instance.OPCUAPoller
 	}
 
-	handlers := api.NewHandlers(client, store, pollerInstance, sensorCfg, cfg.PollInterval)
+	handlers := api.NewHandlers(store, cfg.PollInterval)
 	handlers.SetVersion(Version)
 	handlers.SetLogServerManager(logServerMgr)
 	handlers.SetServerManager(serverMgr)

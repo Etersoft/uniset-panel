@@ -11,13 +11,23 @@ import (
 
 	"github.com/pv/uniset-panel/internal/config"
 	"github.com/pv/uniset-panel/internal/logserver"
-	"github.com/pv/uniset-panel/internal/poller"
 	"github.com/pv/uniset-panel/internal/sensorconfig"
 	"github.com/pv/uniset-panel/internal/server"
 	"github.com/pv/uniset-panel/internal/sm"
 	"github.com/pv/uniset-panel/internal/storage"
-	"github.com/pv/uniset-panel/internal/uniset"
 )
+
+// testServerID — ID, под которым в тестах регистрируется единственный mock-сервер.
+const testServerID = "test"
+
+// withQuery добавляет ?server=test к пути, если его там ещё нет (helper для
+// тестов, изначально написанных под legacy single-client API).
+func withQuery(path string) string {
+	if strings.Contains(path, "?") {
+		return path + "&server=" + testServerID
+	}
+	return path + "?server=" + testServerID
+}
 
 func normalizeAPIPath(path string) string {
 	if strings.HasPrefix(path, "/api/") {
@@ -108,11 +118,26 @@ func mockUnisetServer() *httptest.Server {
 	}))
 }
 
+// setupTestHandlers создаёт Handlers с server.Manager, в котором зарегистрирован
+// единственный сервер testServerID, указывающий на unisetServer.URL.
+// Все тесты, использующие этот helper, должны передавать ?server=test в URL
+// (либо обернуть путь в withQuery).
 func setupTestHandlers(unisetServer *httptest.Server) *Handlers {
-	client := uniset.NewClient(unisetServer.URL)
+	const testPollInterval = 5 * time.Second
+
 	store := storage.NewMemoryStorage()
-	p := poller.New(client, store, 5*time.Second, time.Hour)
-	return NewHandlers(client, store, p, nil, 5*time.Second)
+	mgr := server.NewManager(store, testPollInterval, time.Hour, "TestProc", 0)
+	if err := mgr.AddServer(config.ServerConfig{
+		ID:   testServerID,
+		URL:  unisetServer.URL,
+		Name: testServerID,
+	}); err != nil {
+		panic("setupTestHandlers AddServer: " + err.Error())
+	}
+
+	handlers := NewHandlers(store, testPollInterval)
+	handlers.SetServerManager(mgr)
+	return handlers
 }
 
 func TestGetObjects(t *testing.T) {
@@ -121,7 +146,7 @@ func TestGetObjects(t *testing.T) {
 
 	handlers := setupTestHandlers(unisetServer)
 
-	req := httptest.NewRequest("GET", "/api/objects", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/objects"), nil)
 	w := httptest.NewRecorder()
 
 	handlers.GetObjects(w, req)
@@ -151,7 +176,7 @@ func TestGetObjectData(t *testing.T) {
 
 	handlers := setupTestHandlers(unisetServer)
 
-	req := httptest.NewRequest("GET", "/api/objects/TestProc", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/objects/TestProc"), nil)
 	req.SetPathValue("name", "TestProc")
 	w := httptest.NewRecorder()
 
@@ -182,7 +207,7 @@ func TestGetObjectDataMissingName(t *testing.T) {
 
 	handlers := setupTestHandlers(unisetServer)
 
-	req := httptest.NewRequest("GET", "/api/objects/", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/objects/"), nil)
 	// Не устанавливаем PathValue
 	w := httptest.NewRecorder()
 
@@ -199,7 +224,7 @@ func TestWatchObject(t *testing.T) {
 
 	handlers := setupTestHandlers(unisetServer)
 
-	req := httptest.NewRequest("POST", "/api/objects/TestProc/watch", nil)
+	req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/watch"), nil)
 	req.SetPathValue("name", "TestProc")
 	w := httptest.NewRecorder()
 
@@ -230,13 +255,13 @@ func TestUnwatchObject(t *testing.T) {
 	handlers := setupTestHandlers(unisetServer)
 
 	// Сначала watch
-	req := httptest.NewRequest("POST", "/api/objects/TestProc/watch", nil)
+	req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/watch"), nil)
 	req.SetPathValue("name", "TestProc")
 	w := httptest.NewRecorder()
 	handlers.WatchObject(w, req)
 
 	// Затем unwatch
-	req = httptest.NewRequest("DELETE", "/api/objects/TestProc/watch", nil)
+	req = httptest.NewRequest("DELETE", withQuery("/api/objects/TestProc/watch"), nil)
 	req.SetPathValue("name", "TestProc")
 	w = httptest.NewRecorder()
 
@@ -258,18 +283,16 @@ func TestGetVariableHistory(t *testing.T) {
 	unisetServer := mockUnisetServer()
 	defer unisetServer.Close()
 
-	client := uniset.NewClient(unisetServer.URL)
 	store := storage.NewMemoryStorage()
-	p := poller.New(client, store, 5*time.Second, time.Hour)
-	handlers := NewHandlers(client, store, p, nil, 5*time.Second)
+	handlers := NewHandlers(store, 5*time.Second)
 
-	// Добавляем данные в хранилище
+	// Добавляем данные в хранилище под тем же serverID, что используется в URL
 	now := time.Now()
-	store.Save("", "TestProc", "var1", 100, now.Add(-2*time.Second))
-	store.Save("", "TestProc", "var1", 110, now.Add(-time.Second))
-	store.Save("", "TestProc", "var1", 120, now)
+	store.Save(testServerID, "TestProc", "var1", 100, now.Add(-2*time.Second))
+	store.Save(testServerID, "TestProc", "var1", 110, now.Add(-time.Second))
+	store.Save(testServerID, "TestProc", "var1", 120, now)
 
-	req := httptest.NewRequest("GET", "/api/objects/TestProc/variables/var1/history?count=10", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/objects/TestProc/variables/var1/history?count=10"), nil)
 	req.SetPathValue("name", "TestProc")
 	req.SetPathValue("variable", "var1")
 	w := httptest.NewRecorder()
@@ -302,19 +325,17 @@ func TestGetVariableHistoryWithCount(t *testing.T) {
 	unisetServer := mockUnisetServer()
 	defer unisetServer.Close()
 
-	client := uniset.NewClient(unisetServer.URL)
 	store := storage.NewMemoryStorage()
-	p := poller.New(client, store, 5*time.Second, time.Hour)
-	handlers := NewHandlers(client, store, p, nil, 5*time.Second)
+	handlers := NewHandlers(store, 5*time.Second)
 
 	// Добавляем 10 точек
 	now := time.Now()
 	for i := 0; i < 10; i++ {
-		store.Save("", "TestProc", "var1", i*10, now.Add(time.Duration(i)*time.Second))
+		store.Save(testServerID, "TestProc", "var1", i*10, now.Add(time.Duration(i)*time.Second))
 	}
 
 	// Запрашиваем только 3
-	req := httptest.NewRequest("GET", "/api/objects/TestProc/variables/var1/history?count=3", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/objects/TestProc/variables/var1/history?count=3"), nil)
 	req.SetPathValue("name", "TestProc")
 	req.SetPathValue("variable", "var1")
 	w := httptest.NewRecorder()
@@ -332,14 +353,11 @@ func TestGetVariableHistoryWithCount(t *testing.T) {
 // === External Sensors API Tests ===
 
 func setupTestHandlersWithSMPoller(unisetServer *httptest.Server, smServer *httptest.Server) *Handlers {
-	client := uniset.NewClient(unisetServer.URL)
-	store := storage.NewMemoryStorage()
-	p := poller.New(client, store, 5*time.Second, time.Hour)
-	handlers := NewHandlers(client, store, p, nil, 5*time.Second)
+	handlers := setupTestHandlers(unisetServer)
 
 	if smServer != nil {
 		smClient := sm.NewClient(smServer.URL)
-		smPoller := sm.NewPoller(smClient, store, time.Second, nil)
+		smPoller := sm.NewPoller(smClient, handlers.storage, time.Second, nil)
 		handlers.SetSMPoller(smPoller)
 	}
 
@@ -383,7 +401,7 @@ func TestSubscribeExternalSensors(t *testing.T) {
 	handlers := setupTestHandlersWithSMPoller(unisetServer, smServer)
 
 	reqBody := `{"sensors": ["AI100_AS", "AI101_AS"]}`
-	req := httptest.NewRequest("POST", "/api/objects/TestProc/external-sensors", strings.NewReader(reqBody))
+	req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/external-sensors"), strings.NewReader(reqBody))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -416,7 +434,7 @@ func TestSubscribeExternalSensors_NoSMPoller(t *testing.T) {
 	handlers := setupTestHandlersWithSMPoller(unisetServer, nil) // No SM server
 
 	reqBody := `{"sensors": ["AI100_AS"]}`
-	req := httptest.NewRequest("POST", "/api/objects/TestProc/external-sensors", strings.NewReader(reqBody))
+	req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/external-sensors"), strings.NewReader(reqBody))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -437,7 +455,7 @@ func TestSubscribeExternalSensors_InvalidBody(t *testing.T) {
 
 	handlers := setupTestHandlersWithSMPoller(unisetServer, smServer)
 
-	req := httptest.NewRequest("POST", "/api/objects/TestProc/external-sensors", strings.NewReader("invalid json"))
+	req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/external-sensors"), strings.NewReader("invalid json"))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -460,14 +478,14 @@ func TestUnsubscribeExternalSensor(t *testing.T) {
 
 	// First subscribe
 	reqBody := `{"sensors": ["AI100_AS", "AI101_AS"]}`
-	req := httptest.NewRequest("POST", "/api/objects/TestProc/external-sensors", strings.NewReader(reqBody))
+	req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/external-sensors"), strings.NewReader(reqBody))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	handlers.SubscribeExternalSensors(w, req)
 
 	// Then unsubscribe one
-	req = httptest.NewRequest("DELETE", "/api/objects/TestProc/external-sensors/AI100_AS", nil)
+	req = httptest.NewRequest("DELETE", withQuery("/api/objects/TestProc/external-sensors/AI100_AS"), nil)
 	req.SetPathValue("name", "TestProc")
 	req.SetPathValue("sensor", "AI100_AS")
 	w = httptest.NewRecorder()
@@ -497,14 +515,14 @@ func TestGetExternalSensors(t *testing.T) {
 
 	// First subscribe
 	reqBody := `{"sensors": ["AI100_AS", "AI101_AS"]}`
-	req := httptest.NewRequest("POST", "/api/objects/TestProc/external-sensors", strings.NewReader(reqBody))
+	req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/external-sensors"), strings.NewReader(reqBody))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	handlers.SubscribeExternalSensors(w, req)
 
 	// Then get list
-	req = httptest.NewRequest("GET", "/api/objects/TestProc/external-sensors", nil)
+	req = httptest.NewRequest("GET", withQuery("/api/objects/TestProc/external-sensors"), nil)
 	req.SetPathValue("name", "TestProc")
 	w = httptest.NewRecorder()
 
@@ -531,7 +549,7 @@ func TestGetExternalSensors_NoSMPoller(t *testing.T) {
 
 	handlers := setupTestHandlersWithSMPoller(unisetServer, nil)
 
-	req := httptest.NewRequest("GET", "/api/objects/TestProc/external-sensors", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/objects/TestProc/external-sensors"), nil)
 	req.SetPathValue("name", "TestProc")
 	w := httptest.NewRecorder()
 
@@ -560,7 +578,7 @@ func TestGetExternalSensors_Empty(t *testing.T) {
 	handlers := setupTestHandlersWithSMPoller(unisetServer, smServer)
 
 	// Get list without subscribing
-	req := httptest.NewRequest("GET", "/api/objects/TestProc/external-sensors", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/objects/TestProc/external-sensors"), nil)
 	req.SetPathValue("name", "TestProc")
 	w := httptest.NewRecorder()
 
@@ -585,18 +603,16 @@ func TestGetVariableHistoryRange(t *testing.T) {
 	unisetServer := mockUnisetServer()
 	defer unisetServer.Close()
 
-	client := uniset.NewClient(unisetServer.URL)
 	store := storage.NewMemoryStorage()
-	p := poller.New(client, store, 5*time.Second, time.Hour)
-	handlers := NewHandlers(client, store, p, nil, 5*time.Second)
+	handlers := NewHandlers(store, 5*time.Second)
 
 	// Add test data
 	now := time.Now()
-	store.Save("", "TestProc", "var1", 100, now.Add(-30*time.Minute))
-	store.Save("", "TestProc", "var1", 150, now.Add(-15*time.Minute))
-	store.Save("", "TestProc", "var1", 200, now)
+	store.Save(testServerID, "TestProc", "var1", 100, now.Add(-30*time.Minute))
+	store.Save(testServerID, "TestProc", "var1", 150, now.Add(-15*time.Minute))
+	store.Save(testServerID, "TestProc", "var1", 200, now)
 
-	req := httptest.NewRequest("GET", "/api/objects/TestProc/variables/var1/history/range", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/objects/TestProc/variables/var1/history/range"), nil)
 	req.SetPathValue("name", "TestProc")
 	req.SetPathValue("variable", "var1")
 	w := httptest.NewRecorder()
@@ -621,21 +637,20 @@ func TestGetVariableHistoryRange_WithTimeParams(t *testing.T) {
 	unisetServer := mockUnisetServer()
 	defer unisetServer.Close()
 
-	client := uniset.NewClient(unisetServer.URL)
 	store := storage.NewMemoryStorage()
-	p := poller.New(client, store, 5*time.Second, time.Hour)
-	handlers := NewHandlers(client, store, p, nil, 5*time.Second)
+	handlers := NewHandlers(store, 5*time.Second)
 
 	// Truncate to seconds to avoid nanosecond precision issues with RFC3339
 	now := time.Now().Truncate(time.Second)
-	store.Save("", "TestProc", "var1", 100, now.Add(-2*time.Hour))
-	store.Save("", "TestProc", "var1", 200, now.Add(-30*time.Minute))
-	store.Save("", "TestProc", "var1", 300, now)
+	store.Save(testServerID, "TestProc", "var1", 100, now.Add(-2*time.Hour))
+	store.Save(testServerID, "TestProc", "var1", 200, now.Add(-30*time.Minute))
+	store.Save(testServerID, "TestProc", "var1", 300, now)
 
 	// Request with from/to parameters
 	from := now.Add(-1 * time.Hour).Format(time.RFC3339)
 	to := now.Add(time.Second).Format(time.RFC3339)
-	req := httptest.NewRequest("GET", "/api/objects/TestProc/variables/var1/history/range?from="+from+"&to="+to, nil)
+	url := "/api/objects/TestProc/variables/var1/history/range?from=" + from + "&to=" + to
+	req := httptest.NewRequest("GET", withQuery(url), nil)
 	req.SetPathValue("name", "TestProc")
 	req.SetPathValue("variable", "var1")
 	w := httptest.NewRecorder()
@@ -661,7 +676,7 @@ func TestGetVariableHistoryRange_MissingParams(t *testing.T) {
 
 	handlers := setupTestHandlers(unisetServer)
 
-	req := httptest.NewRequest("GET", "/api/objects//variables//history/range", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/objects//variables//history/range"), nil)
 	// Don't set path values
 	w := httptest.NewRecorder()
 
@@ -717,13 +732,11 @@ func TestGetSensors_WithConfig(t *testing.T) {
 	unisetServer := mockUnisetServer()
 	defer unisetServer.Close()
 
-	client := uniset.NewClient(unisetServer.URL)
 	store := storage.NewMemoryStorage()
-	p := poller.New(client, store, 5*time.Second, time.Hour)
 
 	// Create a mock sensor config
 	sensorCfg := createMockSensorConfig()
-	handlers := NewHandlers(client, store, p, sensorCfg, 5*time.Second)
+	handlers := NewHandlers(store, 5*time.Second)
 	handlers.SetPerServerSensorConfig("srv1", sensorCfg)
 
 	req := httptest.NewRequest("GET", "/api/sensors?server=srv1", nil)
@@ -740,35 +753,6 @@ func TestGetSensors_WithConfig(t *testing.T) {
 
 	if response["count"].(float64) == 0 {
 		t.Error("expected sensors in response")
-	}
-}
-
-func TestGetSensors_WithGlobalFallback(t *testing.T) {
-	unisetServer := mockUnisetServer()
-	defer unisetServer.Close()
-
-	client := uniset.NewClient(unisetServer.URL)
-	store := storage.NewMemoryStorage()
-	p := poller.New(client, store, 5*time.Second, time.Hour)
-
-	// Глобальный конфиг, без per-server — используется как fallback
-	sensorCfg := createMockSensorConfig()
-	handlers := NewHandlers(client, store, p, sensorCfg, 5*time.Second)
-
-	req := httptest.NewRequest("GET", "/api/sensors?server=unknown", nil)
-	w := httptest.NewRecorder()
-
-	handlers.GetSensors(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	var response map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &response)
-
-	if response["count"].(float64) == 0 {
-		t.Error("expected sensors in response (global fallback)")
 	}
 }
 
@@ -828,23 +812,10 @@ func TestGetSensorByName_EmptyName(t *testing.T) {
 // === GetSMSensors Tests ===
 
 func TestGetSMSensors(t *testing.T) {
-	// Create mock SM server
-	smServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"sensors": []map[string]interface{}{
-				{"id": 100, "name": "AI100_AS", "type": "AI"},
-				{"id": 101, "name": "DI101_S", "type": "DI"},
-			},
-			"count": 2,
-		})
-	}))
-	defer smServer.Close()
-
-	// Mock uniset server that returns SM sensors
+	// Mock uniset server that returns SM sensors через /api/v2/SharedMemory/sensors
 	unisetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if pathEquals(r, "SharedMemory/") {
+		if pathEquals(r, "SharedMemory/sensors") {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"sensors": []map[string]interface{}{
 					{"id": 100, "name": "AI100_AS", "type": "AI"},
@@ -858,19 +829,42 @@ func TestGetSMSensors(t *testing.T) {
 	}))
 	defer unisetServer.Close()
 
-	client := uniset.NewClient(unisetServer.URL)
-	store := storage.NewMemoryStorage()
-	p := poller.New(client, store, 5*time.Second, time.Hour)
-	handlers := NewHandlers(client, store, p, nil, 5*time.Second)
+	handlers := setupTestHandlers(unisetServer)
+
+	req := httptest.NewRequest("GET", withQuery("/api/sm/sensors"), nil)
+	w := httptest.NewRecorder()
+
+	handlers.GetSMSensors(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if resp["count"].(float64) != 2 {
+		t.Errorf("expected count=2, got %v", resp["count"])
+	}
+	if resp["source"] != "sm" {
+		t.Errorf("expected source=sm, got %v", resp["source"])
+	}
+}
+
+func TestGetSMSensors_NoServer(t *testing.T) {
+	unisetServer := mockUnisetServer()
+	defer unisetServer.Close()
+
+	handlers := setupTestHandlers(unisetServer)
 
 	req := httptest.NewRequest("GET", "/api/sm/sensors", nil)
 	w := httptest.NewRecorder()
 
 	handlers.GetSMSensors(w, req)
 
-	// Either 200 with sensors or 502 if SM not available
-	if w.Code != http.StatusOK && w.Code != http.StatusBadGateway {
-		t.Errorf("expected status 200 or 502, got %d", w.Code)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400 (server required), got %d", w.Code)
 	}
 }
 
@@ -918,7 +912,7 @@ func TestUnsubscribeExternalSensor_NoSMPoller(t *testing.T) {
 
 	handlers := setupTestHandlersWithSMPoller(unisetServer, nil) // No SM
 
-	req := httptest.NewRequest("DELETE", "/api/objects/TestProc/external-sensors/AI100_AS", nil)
+	req := httptest.NewRequest("DELETE", withQuery("/api/objects/TestProc/external-sensors/AI100_AS"), nil)
 	req.SetPathValue("name", "TestProc")
 	req.SetPathValue("sensor", "AI100_AS")
 	w := httptest.NewRecorder()
@@ -939,7 +933,7 @@ func TestUnsubscribeExternalSensor_MissingParams(t *testing.T) {
 
 	handlers := setupTestHandlersWithSMPoller(unisetServer, smServer)
 
-	req := httptest.NewRequest("DELETE", "/api/objects//external-sensors/", nil)
+	req := httptest.NewRequest("DELETE", withQuery("/api/objects//external-sensors/"), nil)
 	req.SetPathValue("name", "")
 	req.SetPathValue("sensor", "")
 	w := httptest.NewRecorder()
@@ -957,11 +951,9 @@ func TestGetSensorByName_WithConfig(t *testing.T) {
 	unisetServer := mockUnisetServer()
 	defer unisetServer.Close()
 
-	client := uniset.NewClient(unisetServer.URL)
 	store := storage.NewMemoryStorage()
-	p := poller.New(client, store, 5*time.Second, time.Hour)
 	sensorCfg := createMockSensorConfig()
-	handlers := NewHandlers(client, store, p, sensorCfg, 5*time.Second)
+	handlers := NewHandlers(store, 5*time.Second)
 	handlers.SetPerServerSensorConfig("srv1", sensorCfg)
 
 	req := httptest.NewRequest("GET", "/api/sensors/name/AI100_AS?server=srv1", nil)
@@ -986,11 +978,9 @@ func TestGetSensorByName_NotFound(t *testing.T) {
 	unisetServer := mockUnisetServer()
 	defer unisetServer.Close()
 
-	client := uniset.NewClient(unisetServer.URL)
 	store := storage.NewMemoryStorage()
-	p := poller.New(client, store, 5*time.Second, time.Hour)
 	sensorCfg := createMockSensorConfig()
-	handlers := NewHandlers(client, store, p, sensorCfg, 5*time.Second)
+	handlers := NewHandlers(store, 5*time.Second)
 	handlers.SetPerServerSensorConfig("srv1", sensorCfg)
 
 	req := httptest.NewRequest("GET", "/api/sensors/name/NonExistent?server=srv1", nil)
@@ -1012,7 +1002,7 @@ func TestGetLogServerStatus_EmptyName(t *testing.T) {
 
 	handlers := setupTestHandlers(unisetServer)
 
-	req := httptest.NewRequest("GET", "/api/logs//status", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/logs//status"), nil)
 	req.SetPathValue("name", "")
 	w := httptest.NewRecorder()
 
@@ -1030,7 +1020,7 @@ func TestGetLogServerStatus_NilManager(t *testing.T) {
 	handlers := setupTestHandlers(unisetServer)
 	// logServerMgr is nil by default in setupTestHandlers
 
-	req := httptest.NewRequest("GET", "/api/logs/TestProc/status", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/logs/TestProc/status"), nil)
 	req.SetPathValue("name", "TestProc")
 	w := httptest.NewRecorder()
 
@@ -1047,7 +1037,7 @@ func TestHandleLogServerStream_EmptyName(t *testing.T) {
 
 	handlers := setupTestHandlers(unisetServer)
 
-	req := httptest.NewRequest("GET", "/api/logs//stream", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/logs//stream"), nil)
 	req.SetPathValue("name", "")
 	w := httptest.NewRecorder()
 
@@ -1064,7 +1054,7 @@ func TestHandleLogServerStream_NilManager(t *testing.T) {
 
 	handlers := setupTestHandlers(unisetServer)
 
-	req := httptest.NewRequest("GET", "/api/logs/TestProc/stream", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/logs/TestProc/stream"), nil)
 	req.SetPathValue("name", "TestProc")
 	w := httptest.NewRecorder()
 
@@ -1081,7 +1071,7 @@ func TestSendLogServerCommand_EmptyName(t *testing.T) {
 
 	handlers := setupTestHandlers(unisetServer)
 
-	req := httptest.NewRequest("POST", "/api/logs//command", nil)
+	req := httptest.NewRequest("POST", withQuery("/api/logs//command"), nil)
 	req.SetPathValue("name", "")
 	w := httptest.NewRecorder()
 
@@ -1099,7 +1089,7 @@ func TestSendLogServerCommand_NilManager(t *testing.T) {
 	handlers := setupTestHandlers(unisetServer)
 
 	body := `{"command": "setLevel", "level": 1}`
-	req := httptest.NewRequest("POST", "/api/logs/TestProc/command", strings.NewReader(body))
+	req := httptest.NewRequest("POST", withQuery("/api/logs/TestProc/command"), strings.NewReader(body))
 	req.SetPathValue("name", "TestProc")
 	w := httptest.NewRecorder()
 
@@ -1116,7 +1106,7 @@ func TestGetAllLogServerStatuses_NilManager(t *testing.T) {
 
 	handlers := setupTestHandlers(unisetServer)
 
-	req := httptest.NewRequest("GET", "/api/logs/status", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/logs/status"), nil)
 	w := httptest.NewRecorder()
 
 	handlers.GetAllLogServerStatuses(w, req)
@@ -1371,7 +1361,7 @@ func TestGetAllObjectsGrouped(t *testing.T) {
 		"server2": server2,
 	})
 
-	req := httptest.NewRequest("GET", "/api/all-objects", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/all-objects"), nil)
 	w := httptest.NewRecorder()
 
 	handlers.GetAllObjectsWithServers(w, req)
@@ -1406,7 +1396,7 @@ func TestGetServers(t *testing.T) {
 		"server1": server1,
 	})
 
-	req := httptest.NewRequest("GET", "/api/servers", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/servers"), nil)
 	w := httptest.NewRecorder()
 
 	handlers.GetServers(w, req)
@@ -2108,7 +2098,7 @@ func TestGetPollInterval(t *testing.T) {
 
 	handlers := setupTestHandlers(unisetServer)
 
-	req := httptest.NewRequest("GET", "/api/settings/poll-interval", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/settings/poll-interval"), nil)
 	w := httptest.NewRecorder()
 
 	handlers.GetPollInterval(w, req)
@@ -2144,7 +2134,7 @@ func TestGetPollInterval_WithServerManager(t *testing.T) {
 		"server1": server,
 	})
 
-	req := httptest.NewRequest("GET", "/api/settings/poll-interval", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/settings/poll-interval"), nil)
 	w := httptest.NewRecorder()
 
 	handlers.GetPollInterval(w, req)
@@ -2169,7 +2159,7 @@ func TestSetPollInterval(t *testing.T) {
 	handlers := setupTestHandlers(unisetServer)
 
 	body := `{"interval": 10000}`
-	req := httptest.NewRequest("POST", "/api/settings/poll-interval", strings.NewReader(body))
+	req := httptest.NewRequest("POST", withQuery("/api/settings/poll-interval"), strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -2198,7 +2188,7 @@ func TestSetPollInterval(t *testing.T) {
 	}
 
 	// Verify the interval was actually changed
-	req = httptest.NewRequest("GET", "/api/settings/poll-interval", nil)
+	req = httptest.NewRequest("GET", withQuery("/api/settings/poll-interval"), nil)
 	w = httptest.NewRecorder()
 	handlers.GetPollInterval(w, req)
 
@@ -2215,7 +2205,7 @@ func TestSetPollInterval_InvalidBody(t *testing.T) {
 	handlers := setupTestHandlers(unisetServer)
 
 	body := `invalid json`
-	req := httptest.NewRequest("POST", "/api/settings/poll-interval", strings.NewReader(body))
+	req := httptest.NewRequest("POST", withQuery("/api/settings/poll-interval"), strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -2234,7 +2224,7 @@ func TestSetPollInterval_TooSmall(t *testing.T) {
 
 	// Interval less than 100ms should be rejected
 	body := `{"interval": 50}`
-	req := httptest.NewRequest("POST", "/api/settings/poll-interval", strings.NewReader(body))
+	req := httptest.NewRequest("POST", withQuery("/api/settings/poll-interval"), strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -2253,7 +2243,7 @@ func TestSetPollInterval_TooLarge(t *testing.T) {
 
 	// Interval more than 300000ms (5 minutes) should be rejected
 	body := `{"interval": 600000}`
-	req := httptest.NewRequest("POST", "/api/settings/poll-interval", strings.NewReader(body))
+	req := httptest.NewRequest("POST", withQuery("/api/settings/poll-interval"), strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -2272,7 +2262,7 @@ func TestSetPollInterval_MinValue(t *testing.T) {
 
 	// Minimum allowed value is 1000ms
 	body := `{"interval": 1000}`
-	req := httptest.NewRequest("POST", "/api/settings/poll-interval", strings.NewReader(body))
+	req := httptest.NewRequest("POST", withQuery("/api/settings/poll-interval"), strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -2291,7 +2281,7 @@ func TestSetPollInterval_MaxValue(t *testing.T) {
 
 	// Maximum allowed value is 300000ms (5 minutes)
 	body := `{"interval": 300000}`
-	req := httptest.NewRequest("POST", "/api/settings/poll-interval", strings.NewReader(body))
+	req := httptest.NewRequest("POST", withQuery("/api/settings/poll-interval"), strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -2314,7 +2304,7 @@ func TestSetPollInterval_WithServerManager(t *testing.T) {
 	})
 
 	body := `{"interval": 30000}`
-	req := httptest.NewRequest("POST", "/api/settings/poll-interval", strings.NewReader(body))
+	req := httptest.NewRequest("POST", withQuery("/api/settings/poll-interval"), strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -2344,7 +2334,7 @@ func TestSubscribeIONCSensors_EmptySensorIDs(t *testing.T) {
 
 	// Тест с пустым массивом sensor_ids
 	body := `{"sensor_ids": []}`
-	req := httptest.NewRequest("POST", "/api/objects/TestProc/ionc/subscribe", strings.NewReader(body))
+	req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/ionc/subscribe"), strings.NewReader(body))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -2370,7 +2360,7 @@ func TestSubscribeIONCSensors_MissingSensorIDs(t *testing.T) {
 
 	// Тест без поля sensor_ids
 	body := `{}`
-	req := httptest.NewRequest("POST", "/api/objects/TestProc/ionc/subscribe", strings.NewReader(body))
+	req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/ionc/subscribe"), strings.NewReader(body))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -2390,7 +2380,7 @@ func TestSubscribeIONCSensors_WrongFieldName(t *testing.T) {
 
 	// Тест с неправильным именем поля (sensorIds вместо sensor_ids)
 	body := `{"sensorIds": [1, 2, 3]}`
-	req := httptest.NewRequest("POST", "/api/objects/TestProc/ionc/subscribe", strings.NewReader(body))
+	req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/ionc/subscribe"), strings.NewReader(body))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -2410,7 +2400,7 @@ func TestSubscribeOPCUASensors_EmptySensorIDs(t *testing.T) {
 	handlers := setupTestHandlers(unisetServer)
 
 	body := `{"sensor_ids": []}`
-	req := httptest.NewRequest("POST", "/api/objects/TestProc/opcua/subscribe", strings.NewReader(body))
+	req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/opcua/subscribe"), strings.NewReader(body))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -2435,7 +2425,7 @@ func TestSubscribeOPCUASensors_MissingSensorIDs(t *testing.T) {
 	handlers := setupTestHandlers(unisetServer)
 
 	body := `{}`
-	req := httptest.NewRequest("POST", "/api/objects/TestProc/opcua/subscribe", strings.NewReader(body))
+	req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/opcua/subscribe"), strings.NewReader(body))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -2454,7 +2444,7 @@ func TestSubscribeModbusRegisters_EmptyRegisterIDs(t *testing.T) {
 	handlers := setupTestHandlers(unisetServer)
 
 	body := `{"register_ids": []}`
-	req := httptest.NewRequest("POST", "/api/objects/TestProc/modbus/subscribe", strings.NewReader(body))
+	req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/modbus/subscribe"), strings.NewReader(body))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -2479,7 +2469,7 @@ func TestSubscribeModbusRegisters_MissingRegisterIDs(t *testing.T) {
 	handlers := setupTestHandlers(unisetServer)
 
 	body := `{}`
-	req := httptest.NewRequest("POST", "/api/objects/TestProc/modbus/subscribe", strings.NewReader(body))
+	req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/modbus/subscribe"), strings.NewReader(body))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -2499,7 +2489,7 @@ func TestGetUNetStatus(t *testing.T) {
 
 	handlers := setupTestHandlers(unisetServer)
 
-	req := httptest.NewRequest("GET", "/api/objects/UNetExchange/unet/status", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/objects/UNetExchange/unet/status"), nil)
 	req.SetPathValue("name", "UNetExchange")
 	w := httptest.NewRecorder()
 
@@ -2534,7 +2524,7 @@ func TestGetUNetStatus_MissingObjectName(t *testing.T) {
 
 	handlers := setupTestHandlers(unisetServer)
 
-	req := httptest.NewRequest("GET", "/api/objects//unet/status", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/objects//unet/status"), nil)
 	// Don't set PathValue
 	w := httptest.NewRecorder()
 
@@ -2551,7 +2541,7 @@ func TestGetUNetReceivers(t *testing.T) {
 
 	handlers := setupTestHandlers(unisetServer)
 
-	req := httptest.NewRequest("GET", "/api/objects/UNetExchange/unet/receivers", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/objects/UNetExchange/unet/receivers"), nil)
 	req.SetPathValue("name", "UNetExchange")
 	w := httptest.NewRecorder()
 
@@ -2598,7 +2588,7 @@ func TestGetUNetReceivers_MissingObjectName(t *testing.T) {
 
 	handlers := setupTestHandlers(unisetServer)
 
-	req := httptest.NewRequest("GET", "/api/objects//unet/receivers", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/objects//unet/receivers"), nil)
 	// Don't set PathValue
 	w := httptest.NewRecorder()
 
@@ -2615,7 +2605,7 @@ func TestGetUNetSenders(t *testing.T) {
 
 	handlers := setupTestHandlers(unisetServer)
 
-	req := httptest.NewRequest("GET", "/api/objects/UNetExchange/unet/senders", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/objects/UNetExchange/unet/senders"), nil)
 	req.SetPathValue("name", "UNetExchange")
 	w := httptest.NewRecorder()
 
@@ -2660,7 +2650,7 @@ func TestGetUNetSenders_MissingObjectName(t *testing.T) {
 
 	handlers := setupTestHandlers(unisetServer)
 
-	req := httptest.NewRequest("GET", "/api/objects//unet/senders", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/objects//unet/senders"), nil)
 	// Don't set PathValue
 	w := httptest.NewRecorder()
 
@@ -2681,7 +2671,7 @@ func TestGetUNetStatus_ServerError(t *testing.T) {
 
 	handlers := setupTestHandlers(errorServer)
 
-	req := httptest.NewRequest("GET", "/api/objects/UNetExchange/unet/status", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/objects/UNetExchange/unet/status"), nil)
 	req.SetPathValue("name", "UNetExchange")
 	w := httptest.NewRecorder()
 
@@ -2701,7 +2691,7 @@ func TestGetUNetReceivers_ServerError(t *testing.T) {
 
 	handlers := setupTestHandlers(errorServer)
 
-	req := httptest.NewRequest("GET", "/api/objects/UNetExchange/unet/receivers", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/objects/UNetExchange/unet/receivers"), nil)
 	req.SetPathValue("name", "UNetExchange")
 	w := httptest.NewRecorder()
 
@@ -2721,7 +2711,7 @@ func TestGetUNetSenders_ServerError(t *testing.T) {
 
 	handlers := setupTestHandlers(errorServer)
 
-	req := httptest.NewRequest("GET", "/api/objects/UNetExchange/unet/senders", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/objects/UNetExchange/unet/senders"), nil)
 	req.SetPathValue("name", "UNetExchange")
 	w := httptest.NewRecorder()
 
@@ -2838,12 +2828,9 @@ func TestGetObjects_TypeFilter(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			// Back-compat path (no params): handler инициализируется без h.client,
-			// поэтому back-compat branch попадает в nil-guard и возвращает 503.
-			// Сам факт что код идёт по back-compat branch (а не 400/200) — главное.
-			name:       "no params back-compat (no client → 503)",
+			name:       "no params — server is required",
 			query:      "",
-			wantStatus: http.StatusServiceUnavailable,
+			wantStatus: http.StatusBadRequest,
 		},
 	}
 

@@ -59,7 +59,7 @@ services:
       mock-uniset-2:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/objects"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/version"]
       interval: 2s
       timeout: 5s
       retries: 5

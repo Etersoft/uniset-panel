@@ -66,42 +66,25 @@ func (h *Handlers) HandleLogServerStream(w http.ResponseWriter, r *http.Request)
 
 	// Получаем данные объекта для получения host:port LogServer
 	serverID := r.URL.Query().Get("server")
-
-	var host string
-	var port int
-
-	if h.serverMgr != nil {
-		if serverID == "" {
-			h.writeError(w, http.StatusBadRequest, "server parameter is required")
-			return
-		}
-		objData, err := h.serverMgr.GetObjectData(serverID, name)
-		if err != nil {
-			h.writeError(w, http.StatusBadGateway, err.Error())
-			return
-		}
-		if objData.LogServer == nil {
-			h.writeError(w, http.StatusNotFound, "object has no LogServer")
-			return
-		}
-		host = objData.LogServer.Host
-		port = objData.LogServer.Port
-	} else if h.client != nil {
-		objData, err := h.client.GetObjectData(name)
-		if err != nil {
-			h.writeError(w, http.StatusBadGateway, err.Error())
-			return
-		}
-		if objData.LogServer == nil {
-			h.writeError(w, http.StatusNotFound, "object has no LogServer")
-			return
-		}
-		host = objData.LogServer.Host
-		port = objData.LogServer.Port
-	} else {
-		h.writeError(w, http.StatusServiceUnavailable, "no client configured")
+	if h.serverMgr == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "server manager not configured")
 		return
 	}
+	if serverID == "" {
+		h.writeError(w, http.StatusBadRequest, "server parameter is required")
+		return
+	}
+	objData, err := h.serverMgr.GetObjectData(serverID, name)
+	if err != nil {
+		h.writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	if objData.LogServer == nil {
+		h.writeError(w, http.StatusNotFound, "object has no LogServer")
+		return
+	}
+	host := objData.LogServer.Host
+	port := objData.LogServer.Port
 	if host == "" {
 		host = defaultLogServerHost
 	}

@@ -8475,9 +8475,9 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
 
         try {
             const tabState = state.tabs.get(this.tabKey);
-            const serverId = tabState?.serverId || '';
-            const param = serverId ? `?server=${encodeURIComponent(serverId)}` : '';
-            const response = await fetch(`/api/sensors${param}`);
+            const serverId = tabState?.serverId;
+            if (!serverId) return [];
+            const response = await fetch(`/api/sensors?server=${encodeURIComponent(serverId)}`);
             if (!response.ok) return [];
             const data = await response.json();
             this.allSensorsCache = data.sensors || [];
@@ -12084,57 +12084,42 @@ async function fetchVariableHistory(objectName, variableName, count = DEFAULT_VA
 }
 
 async function fetchSensors(serverId) {
-    const param = serverId ? `?server=${encodeURIComponent(serverId)}` : '';
-    const response = await fetch(`/api/sensors${param}`);
+    const response = await fetch(`/api/sensors?server=${encodeURIComponent(serverId)}`);
     if (!response.ok) return { sensors: [], count: 0 };
     return response.json();
 }
 
-async function fetchSMSensors() {
-    const response = await fetch('/api/sm/sensors');
+async function fetchSMSensors(serverId) {
+    const response = await fetch(`/api/sm/sensors?server=${encodeURIComponent(serverId)}`);
     if (!response.ok) return { sensors: [], count: 0 };
     return response.json();
 }
 
-// Loading конфигурации сенсоров (per-server, вызывается после заполнения state.servers)
+// Loading конфигурации сенсоров (per-server, вызывается после заполнения state.servers).
+// Для каждого сервера сначала пробуем sensorconfig (XML — даёт textname,
+// isDiscrete, isInput); если для этого сервера конфига нет, спрашиваем
+// IONC/SharedMemory напрямую — список тот же, без metadata.
 async function loadSensorsConfig() {
     try {
-        let totalLoaded = 0;
-
-        // Загружаем сенсоры для каждого известного сервера
         for (const [serverId] of state.servers) {
-            const data = await fetchSensors(serverId);
-            if (data.sensors && data.sensors.length > 0) {
-                data.sensors.forEach(sensor => {
-                    // sensor.supplier — owning object (типично "SharedMemory");
-                    // если backend не вернул — fallback. Это не идеально для
-                    // cross-object одинаковых имён, но лучшее, что есть из
-                    // /api/sensors response сейчас.
-                    const objectName = sensor.supplier || 'SharedMemory';
-                    const key = makeSensorKey(serverId, objectName, sensor.name);
-                    state.sensorsByKey.set(key, sensor);
-                    if (!state.sensorsByName.has(sensor.name)) {
-                        state.sensors.set(sensor.id, sensor);
-                        state.sensorsByName.set(sensor.name, sensor);
-                        totalLoaded++;
-                    }
-                });
+            let data = await fetchSensors(serverId);
+            if (!data.sensors || data.sensors.length === 0) {
+                data = await fetchSMSensors(serverId);
             }
-        }
-
-        // Если ничего не загрузилось, пробуем SharedMemory как fallback
-        if (totalLoaded === 0) {
-            debugLog('Конфиг датчиков пуст, загружаю из SharedMemory...');
-            const data = await fetchSMSensors();
-            if (data.sensors) {
-                data.sensors.forEach(sensor => {
+            if (!data.sensors) continue;
+            data.sensors.forEach(sensor => {
+                // sensor.supplier — owning object (типично "SharedMemory");
+                // если backend не вернул — fallback. Это не идеально для
+                // cross-object одинаковых имён, но лучшее, что есть из
+                // /api/sensors response сейчас.
+                const objectName = sensor.supplier || 'SharedMemory';
+                const key = makeSensorKey(serverId, objectName, sensor.name);
+                state.sensorsByKey.set(key, sensor);
+                if (!state.sensorsByName.has(sensor.name)) {
                     state.sensors.set(sensor.id, sensor);
                     state.sensorsByName.set(sensor.name, sensor);
-                    // SM events идут с serverId='sm' (см. SM_SERVER_ID).
-                    const key = makeSensorKey(SM_SERVER_ID, 'SharedMemory', sensor.name);
-                    state.sensorsByKey.set(key, sensor);
-                });
-            }
+                }
+            });
         }
 
         debugLog(`Загружено ${state.sensors.size} сенсоров`);
