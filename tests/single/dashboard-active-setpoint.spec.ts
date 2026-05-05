@@ -545,6 +545,22 @@ test.describe('SetpointWidget — fourth active widget', () => {
         const input = page.locator('[data-test="value-input"]').first();
         await expect(input).toBeDisabled();
 
+        // Frozen НЕ должен ломать rendering: input.value (initial sync) и
+        // feedback-value-span отражают присланное value=50.
+        await expect(input).toHaveValue('50');
+        await expect(page.locator('[data-test="feedback-value"]').first()).toHaveText('50');
+
+        // Последующие SSE-update'ы пока sensor frozen ДОЛЖНЫ продолжать
+        // менять отображение — главное требование: оператор видит как «висит»
+        // значение, а не stale 50 после повторного freeze-broadcast'а.
+        await page.evaluate(() => {
+            const w: any = window;
+            w.dashboardState.widgets.get('sp-1').update(75, null, { frozen: true });
+        });
+        await expect(input).toHaveValue('75');
+        await expect(page.locator('[data-test="feedback-value"]').first()).toHaveText('75');
+        await expect(container).toHaveAttribute('data-frozen', 'true');
+
         // Попытка Apply: посчитаем POST'ы. Sentinel timeout 300ms — confirm что
         // ничего не уехало даже после потенциального async.
         let posted = false;

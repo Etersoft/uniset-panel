@@ -339,6 +339,26 @@ test.describe('PushButtonWidget — third active widget', () => {
         await expect(container).toHaveClass(/active-disabled/);
         await expect(container).toHaveAttribute('title', /frozen/i);
 
+        // Push-button не рисует value (renderFeedback no-op), но update() обязан
+        // продолжать трекать состояние датчика — иначе после unfreeze стейт
+        // виджета будет stale и interactivity не пересчитается.
+        let feedbackValue = await page.evaluate(() => {
+            const w: any = window;
+            return w.dashboardState.widgets.get('pb-1').feedbackValue;
+        });
+        expect(feedbackValue).toBe(0);
+
+        await page.evaluate(() => {
+            const w: any = window;
+            w.dashboardState.widgets.get('pb-1').update(1, null, { frozen: true });
+        });
+        feedbackValue = await page.evaluate(() => {
+            const w: any = window;
+            return w.dashboardState.widgets.get('pb-1').feedbackValue;
+        });
+        expect(feedbackValue).toBe(1);
+        await expect(container).toHaveAttribute('data-frozen', 'true');
+
         let posted = false;
         page.on('request', req => {
             if (req.url().includes('/ionc/set') && req.method() === 'POST') posted = true;
