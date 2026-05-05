@@ -120,12 +120,16 @@ const _sseHandlers = {
         const sensors = event.data;
 
         // Cache sensor values for dashboard initialization (по sensorKey).
+        // frozen/blocked сохраняем для active widget'ов — иначе после reload
+        // dashboard'а они не узнают статус до следующего batch'а (~1s).
         const now = Date.now();
         for (const sensor of sensors) {
             const key = makeSensorKey(serverId, objectName, sensor.name);
             state.sensorValuesCache.set(key, {
                 value: sensor.value,
                 error: sensor.error || null,
+                frozen: !!sensor.frozen,
+                blocked: !!sensor.blocked,
                 timestamp: now
             });
         }

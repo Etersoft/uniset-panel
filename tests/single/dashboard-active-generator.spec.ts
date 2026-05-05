@@ -343,4 +343,43 @@ test.describe('GeneratorWidget — fifth active widget', () => {
         const count = await page.evaluate(() => (window as any).__confirmCount);
         expect(count).toBe(1);
     });
+
+    // Generator running → external freeze → автостоп.
+    // Нет смысла гнать тики в frozen-датчик: backend silent no-op'ит, оператор
+    // в недоумении. Реактивно: meta.frozen триггерит _updateInteractivityClass,
+    // override в Generator стопит generator при !isInteractive.
+    test('frozen sensor while running: generator stops automatically', async ({ page }) => {
+        await createGeneratorDashboard(page, { type: 'random', period: 200 });
+
+        // Старт генератора.
+        await page.evaluate(() => {
+            const t = document.querySelector('[data-test="toggle"]') as HTMLElement;
+            t.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        });
+        await expect(page.locator('[data-test="toggle"]')).toHaveClass(/running/);
+        const wasRunning = await page.evaluate(() => {
+            const w: any = window;
+            return w.dashboardState.widgets.get('gen-1')._isRunning();
+        });
+        expect(wasRunning).toBe(true);
+
+        // External freeze.
+        await page.evaluate(() => {
+            const w: any = window;
+            w.dashboardState.widgets.get('gen-1').update(7, null, { frozen: true });
+        });
+
+        // Generator должен остановиться сам.
+        await expect(page.locator('[data-test="toggle"]')).not.toHaveClass(/running/);
+        const stillRunning = await page.evaluate(() => {
+            const w: any = window;
+            return w.dashboardState.widgets.get('gen-1')._isRunning();
+        });
+        expect(stillRunning).toBe(false);
+
+        // ❄ marker + active-disabled.
+        const container = page.locator('.dashboard-widget[data-widget-id="gen-1"]').first();
+        await expect(container).toHaveAttribute('data-frozen', 'true');
+        await expect(container).toHaveClass(/active-disabled/);
+    });
 });

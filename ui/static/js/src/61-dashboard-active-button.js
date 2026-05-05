@@ -46,14 +46,17 @@ class PushButtonWidget extends ActiveDashboardWidget {
         return { width: 3, height: 2 }; // flat
     }
 
-    // === SSE feedback override — игнорируем (push-button fire-and-forget) ===
-    update(value, error = null) {
-        // Сохраняем поля для совместимости с base (writeState handlers могут читать),
-        // но НЕ вызываем renderFeedback — push-button не визуализирует feedback своего
-        // sensor'а (valueOn пролетает за миллисекунды и не несёт смысла оператору).
+    // === SSE feedback override — игнорируем value, но meta обрабатываем ===
+    // Push-button fire-and-forget: feedback value пролетает за миллисекунды и
+    // не несёт смысла оператору, потому renderFeedback() пуст. Но meta.frozen
+    // должен блокировать клик — иначе аварийная команда (STOP/RESET) уйдёт
+    // на frozen sensor silent no-op'ом и оператор не узнает что не сработало.
+    update(value, error = null, meta = null) {
         this.feedbackValue = value;
         this.value = value;
         this.error = error;
+        this._applyFeedbackMeta(meta);
+        // НЕ вызываем renderFeedback — UI остаётся неподвижным.
     }
 
     _currentStyle() {

@@ -321,4 +321,33 @@ test.describe('PushButtonWidget — third active widget', () => {
         expect(posts[0].value).toBe(42);
         expect(posts[1].value).toBe(5);
     });
+
+    // Frozen sensor: button blocked + ❄ marker. Push-button фактически не
+    // отображает feedback, но frozen всё равно блокирует click — иначе аварийная
+    // STOP-команда уйдёт на frozen sensor silent no-op'ом и оператор не узнает.
+    test('frozen sensor: blocks click, shows ❄ marker', async ({ page }) => {
+        await createButtonDashboard(page, { mode: 'pulse', pulseWidth: 100 });
+
+        // External freeze.
+        await page.evaluate(() => {
+            const w: any = window;
+            w.dashboardState.widgets.get('pb-1').update(0, null, { frozen: true });
+        });
+
+        const container = page.locator('.dashboard-widget[data-widget-id="pb-1"]').first();
+        await expect(container).toHaveAttribute('data-frozen', 'true');
+        await expect(container).toHaveClass(/active-disabled/);
+        await expect(container).toHaveAttribute('title', /frozen/i);
+
+        let posted = false;
+        page.on('request', req => {
+            if (req.url().includes('/ionc/set') && req.method() === 'POST') posted = true;
+        });
+        await page.evaluate(() => {
+            const btn = document.querySelector('[data-test="btn"]') as HTMLElement;
+            btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        });
+        await page.waitForTimeout(300);
+        expect(posted).toBe(false);
+    });
 });

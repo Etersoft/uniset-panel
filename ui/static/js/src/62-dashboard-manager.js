@@ -552,7 +552,10 @@ class DashboardManager {
             const cached = state.sensorValuesCache.get(cacheKey);
             if (cached) {
                 if (Date.now() - cached.timestamp < DASHBOARD_SENSOR_CACHE_TTL_MS) {
-                    this.handleSensorUpdate(cacheKey, cached.value, cached.error);
+                    const meta = (cached.frozen || cached.blocked)
+                        ? { frozen: !!cached.frozen, blocked: !!cached.blocked }
+                        : null;
+                    this.handleSensorUpdate(cacheKey, cached.value, cached.error, null, meta);
                 } else {
                     uncachedKeys.push(cacheKey);
                 }
@@ -602,9 +605,14 @@ class DashboardManager {
                     state.sensorValuesCache.set(writeKey, {
                         value: sensor.value,
                         error: null,
+                        frozen: !!sensor.frozen,
+                        blocked: !!sensor.blocked,
                         timestamp: Date.now()
                     });
-                    this.handleSensorUpdate(writeKey, sensor.value, null);
+                    const meta = (sensor.frozen || sensor.blocked)
+                        ? { frozen: !!sensor.frozen, blocked: !!sensor.blocked }
+                        : null;
+                    this.handleSensorUpdate(writeKey, sensor.value, null, null, meta);
                 } catch (err) {
                     console.warn('Failed to fetch sensor value:', sensorKey, err);
                 }
@@ -1650,10 +1658,12 @@ class DashboardManager {
         }
     }
 
-    handleSensorUpdate(sensorKey, value, error = null, timestamp = null) {
+    handleSensorUpdate(sensorKey, value, error = null, timestamp = null, meta = null) {
         // sensorKey = ${serverId}|${objectName}|${sensorName} — canonical identity.
         // ctx передаётся в updateBySensor/updateSensor чтобы multi-sensor widget'ы
         // могли отбраковать совпадающие по имени, но пришедшие с другого (server, object).
+        // meta = { frozen, blocked } — статусные флаги датчика для active widget'ов;
+        // read-only widget'ы (LevelWidget и т.п.) этот аргумент игнорируют.
         const parsed = (typeof parseSensorKey === 'function') ? parseSensorKey(sensorKey) : null;
         const sensorName = parsed?.sensorName ?? sensorKey;
         const ctx = parsed
@@ -1670,7 +1680,7 @@ class DashboardManager {
                     if (typeof widget.updateBySensor === 'function') {
                         widget.updateBySensor(sensorName, value, error, ctx);
                     } else {
-                        widget.update(value, error);
+                        widget.update(value, error, meta);
                     }
                 }
             });

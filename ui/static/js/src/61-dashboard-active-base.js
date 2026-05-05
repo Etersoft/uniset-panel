@@ -56,6 +56,7 @@ class ActiveDashboardWidget extends DashboardWidget {
         super(id, config, container);
         this.commandValue = null;
         this.feedbackValue = null;
+        this.feedbackMeta = null;  // { frozen, blocked } — статусные флаги датчика
         this.writeState = 'idle';
         this._writeStateTimer = null;
         this._pendingTimeoutTimer = null;
@@ -68,11 +69,29 @@ class ActiveDashboardWidget extends DashboardWidget {
     }
 
     // ===== SSE feedback =====
-    update(value, error = null) {
+    // meta — { frozen, blocked }. Subclass'ы которые игнорируют value (PushButton,
+    // Generator) ВСЁ РАВНО должны обработать meta — frozen блокирует запись.
+    // Используют _applyFeedbackMeta() без последующего renderFeedback().
+    update(value, error = null, meta = null) {
         this.feedbackValue = value;
         this.value = value;
         this.error = error;
+        this._applyFeedbackMeta(meta);
         this.renderFeedback();
+    }
+
+    // Сохранить meta и реактивно обновить interactivity если frozen-flag менялся.
+    // Subclass'ы зовут это из своих override'ов update() (см. PushButton/Generator).
+    _applyFeedbackMeta(meta) {
+        const wasFrozen = this.isFrozen();
+        this.feedbackMeta = meta || null;
+        if (wasFrozen !== this.isFrozen()) {
+            this._updateInteractivityClass();
+        }
+    }
+
+    isFrozen() {
+        return !!this.feedbackMeta?.frozen;
     }
 
     // ===== Write =====
@@ -191,24 +210,32 @@ class ActiveDashboardWidget extends DashboardWidget {
         if (this.element) this.renderCommand();
     }
 
-    // ===== Edit-mode / control gating =====
+    // ===== Edit-mode / control / frozen gating =====
+    // Любой "не могу писать" → false. Источник конкретной причины — это уже
+    // _recomputeTitle() и data-* атрибуты в _updateInteractivityClass().
     isInteractive() {
         if (typeof dashboardState !== 'undefined' && dashboardState.editMode) return false;
         if (typeof canControl === 'function' && !canControl()) return false;
+        if (this.isFrozen()) return false;
         return true;
     }
 
     // Единая точка владения title. Приоритет:
     //   1. write error message (пока активен writeState='error')
-    //   2. control-blocked / edit-mode → 'Take control to interact'
-    //   3. пусто
-    // Вызывается из _setWriteState и _updateInteractivityClass — так оба источника
-    // не затирают друг друга и пользователь видит самую релевантную информацию.
+    //   2. sensor frozen → 'Sensor is frozen — unfreeze to control'
+    //   3. control-blocked / edit-mode → 'Take control to interact'
+    //   4. пусто
+    // Вызывается из _setWriteState и _updateInteractivityClass — так разные
+    // источники не затирают друг друга и пользователь видит самое релевантное.
     _recomputeTitle() {
         const root = this.container;
         if (!root) return;
         if (this.writeState === 'error' && this._lastWriteMessage) {
             root.title = this._lastWriteMessage;
+            return;
+        }
+        if (this.isFrozen()) {
+            root.title = 'Sensor is frozen — unfreeze to control';
             return;
         }
         if (!this.isInteractive()) {
@@ -218,17 +245,28 @@ class ActiveDashboardWidget extends DashboardWidget {
         root.removeAttribute('title');
     }
 
-    // Toggles 'active-disabled' class and 'data-control-blocked' attr on the
-    // widget container so CSS can show "click does nothing right now" state.
-    // Also sets `disabled` attribute on all form controls within this.element —
-    // native <input type=range> и <input type=text> игнорировали pointer-events:none
-    // (можно было drag'ать slider клавиатурой/keyboard). disabled — гарантия.
+    // Toggles 'active-disabled' class и data-* attrs:
+    //   - data-control-blocked="true" — edit mode / no controlToken (нейтральный grey)
+    //   - data-frozen="true"          — sensor latched (icy/cyan + ❄ marker, см. CSS)
+    // Раздельные attrs позволяют CSS показать причину разным цветом — оператору
+    // видно «нет прав» vs «датчик заморожен». Native disabled гарантирует что
+    // <input type=range>/<input type=text> не drag'аются клавиатурой.
     _updateInteractivityClass() {
         const root = this.container;
         if (!root) return;
         const interactive = this.isInteractive();
+        const frozen = this.isFrozen();
         root.classList.toggle('active-disabled', !interactive);
-        if (!interactive) {
+        // data-frozen ставится независимо от других причин блокировки —
+        // оператор должен видеть ❄ даже если ещё и controlToken отозван.
+        if (frozen) {
+            root.dataset.frozen = 'true';
+        } else {
+            delete root.dataset.frozen;
+        }
+        // data-control-blocked — только когда заблокирован НЕ из-за frozen
+        // (иначе frozen marker и грей-control marker наслаиваются и сбивают).
+        if (!interactive && !frozen) {
             root.dataset.controlBlocked = 'true';
         } else {
             delete root.dataset.controlBlocked;

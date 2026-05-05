@@ -383,7 +383,13 @@ function updateDashboardWidgets(sensors, ctx) {
 
         if (name !== undefined && value !== undefined) {
             const key = makeSensorKey(ctx.serverId, ctx.objectName, name);
-            dashboardManager.handleSensorUpdate(key, value, error, ctx.timestamp || null);
+            // meta — статусные флаги датчика (frozen/blocked) для active widget'ов.
+            // Active base class смотрит meta?.frozen чтобы блокировать запись и
+            // показать ❄ marker; старые read-only widget'ы meta игнорируют.
+            const meta = (sensor.frozen || sensor.blocked)
+                ? { frozen: !!sensor.frozen, blocked: !!sensor.blocked }
+                : null;
+            dashboardManager.handleSensorUpdate(key, value, error, ctx.timestamp || null, meta);
         }
     }
 }

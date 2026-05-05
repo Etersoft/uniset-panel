@@ -394,6 +394,54 @@ test.describe('ToggleWidget — first active widget', () => {
         expect(saved.sensor).toBe('PUMP_RUN');
         expect(saved.sensorId).toBe(555);
     });
+
+    // Frozen sensor → toggle blocked + ❄ marker, feedback continues to render.
+    // Сценарий: оператор видит что датчик «висит» на frozen value (track цвет
+    // отражает feedback), но клик не отправляет POST — нужно сначала unfreeze.
+    test('frozen sensor: blocks click, shows ❄ marker, keeps feedback render', async ({ page }) => {
+        await createToggleDashboard(page);
+        await page.evaluate(() => {
+            const w: any = window;
+            w.dashboardState.widgets.get('tw-1').update(1, null, null);
+        });
+        const container = page.locator('.dashboard-widget[data-widget-id="tw-1"]').first();
+        await expect(container).not.toHaveAttribute('data-frozen', 'true');
+
+        // Внешний freeze: SSE-подобный update с meta.frozen=true.
+        await page.evaluate(() => {
+            const w: any = window;
+            w.dashboardState.widgets.get('tw-1').update(1, null, { frozen: true });
+        });
+
+        // ❄ marker via data-frozen + active-disabled, control-blocked НЕ ставится
+        // (frozen-приоритет, чтобы CSS показал icy визуал, а не нейтральный grey).
+        await expect(container).toHaveAttribute('data-frozen', 'true');
+        await expect(container).toHaveClass(/active-disabled/);
+        await expect(container).not.toHaveAttribute('data-control-blocked', 'true');
+        await expect(container).toHaveAttribute('title', /frozen/i);
+
+        // Feedback продолжает рисоваться: track всё ещё fb-on (frozen value=1=valueOn).
+        await expect(page.locator('[data-test="track"]').first()).toHaveClass(/fb-on/);
+
+        let posted = false;
+        page.on('request', req => {
+            if (req.url().includes('/ionc/set') && req.method() === 'POST') posted = true;
+        });
+        await page.evaluate(() => {
+            const track = document.querySelector('[data-test="track"]') as HTMLElement;
+            track.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        });
+        await page.waitForTimeout(300);
+        expect(posted).toBe(false);
+
+        // Unfreeze (meta=null) → атрибут снимается, click снова работает.
+        await page.evaluate(() => {
+            const w: any = window;
+            w.dashboardState.widgets.get('tw-1').update(1, null, null);
+        });
+        await expect(container).not.toHaveAttribute('data-frozen', 'true');
+        await expect(container).not.toHaveClass(/active-disabled/);
+    });
 });
 
 test.describe('ToggleWidget — checkbox style', () => {
@@ -535,4 +583,6 @@ test.describe('ToggleWidget — checkbox style', () => {
         // НЕ на .toggle-cb
         await expect(page.locator('[data-test="cb"]').first()).not.toHaveClass(/diverge/);
     });
+
+    // Frozen sensor → toggle blocked + ❄ marker, feedback continues to render.
 });

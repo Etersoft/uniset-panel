@@ -301,10 +301,12 @@ class SetpointWidget extends ActiveDashboardWidget {
     // Auto-snap dirty: если feedback догнал command (с tolerance step/2) → снять.
     // Делается ТОЛЬКО здесь (в update от SSE), не в renderFeedback — иначе во
     // время typing совпавшее с feedback значение автоматически апплаилось.
-    update(value, error = null) {
+    // meta = { frozen, blocked } — пробрасываем в base для interactivity gating.
+    update(value, error = null, meta = null) {
         this.feedbackValue = value;
         this.value = value;
         this.error = error;
+        this._applyFeedbackMeta(meta);
         if (this.commandValue !== null && this.commandValue !== undefined &&
             value !== null && value !== undefined) {
             const tolerance = Math.abs(this.config?.step ?? 1) / 2;

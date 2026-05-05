@@ -65,13 +65,16 @@ class GeneratorWidget extends ActiveDashboardWidget {
         toggle.addEventListener('mousedown', (e) => e.preventDefault());
     }
 
-    // === SSE feedback override — игнорируем (как PushButton) ===
-    update(value, error = null) {
+    // === SSE feedback override — игнорируем value, но meta обрабатываем ===
+    // UI показывает значение от генератора (через _updateValueDisplay), а не
+    // от датчика — потому feedback value игнорируем. Но meta.frozen → автостоп
+    // (через _updateInteractivityClass override ниже): нет смысла гнать тики
+    // в frozen-датчик, на backend они станут silent no-op'ом.
+    update(value, error = null, meta = null) {
         this.feedbackValue = value;
         this.value = value;
         this.error = error;
-        // НЕ вызываем renderFeedback — UI показывает значение от генератора
-        // через _updateValueDisplay в _onTick.
+        this._applyFeedbackMeta(meta);
     }
 
     // === Toggle handler ===

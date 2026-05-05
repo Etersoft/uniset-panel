@@ -526,4 +526,36 @@ test.describe('SetpointWidget — fourth active widget', () => {
             document.querySelector('[data-test="value"]')?.textContent);
         expect(valueShown).toBe('4');
     });
+
+    // Frozen sensor: input/Apply disabled, ❄ marker. Feedback продолжает
+    // отображаться (текущее frozen value). Apply click не отправляет POST.
+    test('frozen sensor: input disabled, ❄ marker, no POST on Apply', async ({ page }) => {
+        await createSetpointDashboard(page, { applyMode: 'manual' });
+        await page.evaluate(() => {
+            const w: any = window;
+            w.dashboardState.widgets.get('sp-1').update(50, null, { frozen: true });
+        });
+
+        const container = page.locator('.dashboard-widget[data-widget-id="sp-1"]').first();
+        await expect(container).toHaveAttribute('data-frozen', 'true');
+        await expect(container).toHaveClass(/active-disabled/);
+        await expect(container).toHaveAttribute('title', /frozen/i);
+
+        // Native disabled на input.
+        const input = page.locator('[data-test="value-input"]').first();
+        await expect(input).toBeDisabled();
+
+        // Попытка Apply: посчитаем POST'ы. Sentinel timeout 300ms — confirm что
+        // ничего не уехало даже после потенциального async.
+        let posted = false;
+        page.on('request', req => {
+            if (req.url().includes('/ionc/set') && req.method() === 'POST') posted = true;
+        });
+        await page.evaluate(() => {
+            const apply = document.querySelector('[data-test="apply-btn"]') as HTMLElement | null;
+            apply?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        });
+        await page.waitForTimeout(300);
+        expect(posted).toBe(false);
+    });
 });

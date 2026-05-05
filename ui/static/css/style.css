@@ -8789,6 +8789,40 @@ button.rotate-quick-btn:active {
     cursor: not-allowed;
 }
 
+/* Frozen state — sensor залатчен на фиксированном значении (IONC freeze).
+   Визуально отличается от data-control-blocked (нейтральный grey, "нет прав")
+   icy cyan tint'ом + ❄ marker — оператору сразу видно ПРИЧИНУ блокировки:
+   "датчик заморожен, сначала разморозь" vs "возьми контроль". Opacity выше
+   (0.88 vs 0.6) — feedback (current frozen value) хорошо читается, ведь
+   именно ради него frozen state и существует. */
+.dashboard-widget[data-active-widget="true"][data-frozen="true"] {
+    cursor: not-allowed;
+    opacity: 0.88;
+    /* Лёгкий ledяной оттенок поверх. inset shadow вместо outer чтобы не
+       конкурировать с active-error/active-success (они снаружи). */
+    box-shadow: inset 0 0 0 2px rgba(56, 189, 248, 0.55), inset 0 0 12px rgba(56, 189, 248, 0.18);
+    transition: box-shadow 0.2s, opacity 0.2s;
+}
+.dashboard-widget[data-active-widget="true"][data-frozen="true"] .widget-content {
+    pointer-events: none;
+    cursor: not-allowed;
+}
+/* ❄ marker в правом верхнем углу. Через ::after на корне widget'а — поверх
+   контента, pointer-events:none чтобы не мешать selection виджета в edit mode.
+   Размер заметный (16px) — оператор должен сразу понять причину. */
+.dashboard-widget[data-active-widget="true"][data-frozen="true"]::after {
+    content: "❄";
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    font-size: 16px;
+    line-height: 1;
+    color: #38bdf8;
+    text-shadow: 0 0 4px rgba(56, 189, 248, 0.6);
+    pointer-events: none;
+    z-index: 5;
+}
+
 /* Active widgets — убираем все focus outlines (browser default :focus borders
    на input/slider/button). В SCADA-context эти рамки выглядят как «помехи»
    и не нужны: широта взаимодействия — мышь / touch. Disabled inputs от

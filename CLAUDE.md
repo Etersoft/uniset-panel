@@ -259,13 +259,17 @@ make build
 **Контракт `ActiveDashboardWidget`:**
 - `writeValue(value)` — orchestrator: проверяет `isInteractive()` + `_confirm()`, затем дёргает `_doWrite(value)`. Главный entry point для UI-инициированной записи (click handler виджета).
 - `_doWrite(value)` — actual fetch на `/api/objects/{config.objectName}/ionc/set?server=...` без UI guards. Используется напрямую для release/OFF path push-button'ов и подобных операций где second POST должен дойти даже если controlToken отозван между ON и OFF (иначе actuator виснет в ON). Server validation (sensorId/serverId/objectName) сохраняется. Default `objectName = 'SharedMemory'`, `sensor_id` из `config.sensorId` с fallback на `config.sensor`.
-- `update(value, error)` — приходит от SSE через dashboard manager, обновляет `feedbackValue`
+- `update(value, error, meta)` — приходит от SSE через dashboard manager. `value`+`error` обновляют `feedbackValue`/`error`; `meta = { frozen, blocked }` — статусные флаги датчика. Subclass'ы которые игнорируют value (PushButton, Generator) ВСЁ РАВНО должны вызвать `_applyFeedbackMeta(meta)` — frozen блокирует запись.
+- `_applyFeedbackMeta(meta)` — сохранить `feedbackMeta` и реактивно вызвать `_updateInteractivityClass()` если `frozen` поменялся. Используется subclass override'ами `update()` без последующего `renderFeedback`.
+- `isFrozen()` — `!!feedbackMeta?.frozen`. Когда true, `isInteractive()` возвращает false и UI блокируется.
 - `commandValue` / `feedbackValue` — раздельное хранение «команда vs обратная связь» (SCADA pattern)
 - `writeState`: `idle | pending | success | error` — отображается через CSS-классы `.active-*` на контейнере (стили в `style.css`). Цвета: success — зелёный, error — **пурпурный** (НЕ красный: в SCADA red зарезервирован за процессными авариями). Dirty (для setpoint) — янтарный (`#fbbf24`).
-- `isInteractive()` — `false` в edit mode и при отсутствии controlToken
-- `_updateInteractivityClass()` — реактивно обновляет `active-disabled` класс и `data-control-blocked` атрибут
-  по событиям `dashboardEditModeChanged` / `controlStatusChanged` (dispatched из dashboard-manager и control модулей)
-- `_recomputeTitle()` — единая точка владения tooltip'ом: приоритет `error message > 'Take control to interact' > пусто`
+- `isInteractive()` — `false` в edit mode, при отсутствии controlToken, **или когда `isFrozen()` true** (заморожен sensor нельзя записать).
+- `_updateInteractivityClass()` — реактивно обновляет `active-disabled` класс и data-* атрибуты:
+  - `data-control-blocked="true"` — нейтральная блокировка (edit mode / no token), серый opacity 0.6
+  - `data-frozen="true"` — sensor latched, icy cyan tint + ❄ marker (CSS `::after`), opacity 0.88 (feedback хорошо читается). **Не наслаивается** с `data-control-blocked` — приоритет frozen
+  - Триггеры: события `dashboardEditModeChanged` / `controlStatusChanged` + изменение `feedbackMeta.frozen` через `_applyFeedbackMeta`
+- `_recomputeTitle()` — единая точка владения tooltip'ом: приоритет `error message > 'Sensor is frozen — unfreeze to control' > 'Take control to interact' > пусто`
 - `requireConfirmation` — опция в config, по умолчанию выкл.
 - `usesNewSensorAutocomplete = true` — дефолт; dashboard-manager пропускает legacy in-memory autocomplete для всех ActiveDashboardWidget'ов
 - `static getConfigForm` базового класса рендерит binding-поля через `renderSensorBindingFields()`: server select + objectName select + sensor input + hidden sensorId; затем style select (когда `static styles.length > 1`) + label + requireConfirmation
@@ -337,8 +341,12 @@ fallback на `static defaultSize` (3×2 — для flat по умолчанию
   (window-listener гарантирует release даже при mouseleave). Release path также
   через `_writeValueRaw` — bypass interactivity guard.
 
-`update()` override игнорирует SSE feedback от sensor'а. `renderCommand`/`renderFeedback` —
-no-op (push-button показывает только команду + общий writeState `pending`/`error`).
+`update(value, error, meta)` override игнорирует value (renderFeedback не вызывается —
+push-button fire-and-forget), но meta.frozen обрабатывается через `_applyFeedbackMeta` —
+`isInteractive()` вернёт false и click заблокируется. Иначе аварийная команда (STOP/RESET)
+ушла бы на frozen sensor silent no-op'ом и оператор не узнал бы что не сработало.
+`renderCommand`/`renderFeedback` — no-op (push-button показывает только команду +
+общий writeState `pending`/`error`).
 
 **SetpointWidget (`61-dashboard-active-setpoint.js`):** числовой задатчик
 для AI/AO датчиков. Произвольное значение в `[min, max]` с шагом `step`.
@@ -400,7 +408,9 @@ base.getConfigForm не рендерит style select.
 - ControlToken released во время работы → автостоп через override
   `_updateInteractivityClass`.
 - `destroy()` override → `_stop()` + `super.destroy()` (нет утечек таймеров).
-- `update()` override = no-op (SSE feedback игнорируется как у PushButton).
+- `update(value, error, meta)` override игнорирует value (UI показывает значения
+  от генератора, не от датчика), но вызывает `_applyFeedbackMeta(meta)` — frozen
+  через `isInteractive()`+override `_updateInteractivityClass` триггерит автостоп.
 - `requireConfirmation` спрашивается ОДИН РАЗ при Start, не на каждом тике.
 - Не persist running state между reload'ами (после reload всегда stopped).
 

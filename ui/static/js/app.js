@@ -1016,12 +1016,16 @@ const _sseHandlers = {
         const sensors = event.data;
 
         // Cache sensor values for dashboard initialization (по sensorKey).
+        // frozen/blocked сохраняем для active widget'ов — иначе после reload
+        // dashboard'а они не узнают статус до следующего batch'а (~1s).
         const now = Date.now();
         for (const sensor of sensors) {
             const key = makeSensorKey(serverId, objectName, sensor.name);
             state.sensorValuesCache.set(key, {
                 value: sensor.value,
                 error: sensor.error || null,
+                frozen: !!sensor.frozen,
+                blocked: !!sensor.blocked,
                 timestamp: now
             });
         }
@@ -16338,6 +16342,7 @@ class ActiveDashboardWidget extends DashboardWidget {
         super(id, config, container);
         this.commandValue = null;
         this.feedbackValue = null;
+        this.feedbackMeta = null;  // { frozen, blocked } — статусные флаги датчика
         this.writeState = 'idle';
         this._writeStateTimer = null;
         this._pendingTimeoutTimer = null;
@@ -16350,11 +16355,29 @@ class ActiveDashboardWidget extends DashboardWidget {
     }
 
     // ===== SSE feedback =====
-    update(value, error = null) {
+    // meta — { frozen, blocked }. Subclass'ы которые игнорируют value (PushButton,
+    // Generator) ВСЁ РАВНО должны обработать meta — frozen блокирует запись.
+    // Используют _applyFeedbackMeta() без последующего renderFeedback().
+    update(value, error = null, meta = null) {
         this.feedbackValue = value;
         this.value = value;
         this.error = error;
+        this._applyFeedbackMeta(meta);
         this.renderFeedback();
+    }
+
+    // Сохранить meta и реактивно обновить interactivity если frozen-flag менялся.
+    // Subclass'ы зовут это из своих override'ов update() (см. PushButton/Generator).
+    _applyFeedbackMeta(meta) {
+        const wasFrozen = this.isFrozen();
+        this.feedbackMeta = meta || null;
+        if (wasFrozen !== this.isFrozen()) {
+            this._updateInteractivityClass();
+        }
+    }
+
+    isFrozen() {
+        return !!this.feedbackMeta?.frozen;
     }
 
     // ===== Write =====
@@ -16473,24 +16496,32 @@ class ActiveDashboardWidget extends DashboardWidget {
         if (this.element) this.renderCommand();
     }
 
-    // ===== Edit-mode / control gating =====
+    // ===== Edit-mode / control / frozen gating =====
+    // Любой "не могу писать" → false. Источник конкретной причины — это уже
+    // _recomputeTitle() и data-* атрибуты в _updateInteractivityClass().
     isInteractive() {
         if (typeof dashboardState !== 'undefined' && dashboardState.editMode) return false;
         if (typeof canControl === 'function' && !canControl()) return false;
+        if (this.isFrozen()) return false;
         return true;
     }
 
     // Единая точка владения title. Приоритет:
     //   1. write error message (пока активен writeState='error')
-    //   2. control-blocked / edit-mode → 'Take control to interact'
-    //   3. пусто
-    // Вызывается из _setWriteState и _updateInteractivityClass — так оба источника
-    // не затирают друг друга и пользователь видит самую релевантную информацию.
+    //   2. sensor frozen → 'Sensor is frozen — unfreeze to control'
+    //   3. control-blocked / edit-mode → 'Take control to interact'
+    //   4. пусто
+    // Вызывается из _setWriteState и _updateInteractivityClass — так разные
+    // источники не затирают друг друга и пользователь видит самое релевантное.
     _recomputeTitle() {
         const root = this.container;
         if (!root) return;
         if (this.writeState === 'error' && this._lastWriteMessage) {
             root.title = this._lastWriteMessage;
+            return;
+        }
+        if (this.isFrozen()) {
+            root.title = 'Sensor is frozen — unfreeze to control';
             return;
         }
         if (!this.isInteractive()) {
@@ -16500,17 +16531,28 @@ class ActiveDashboardWidget extends DashboardWidget {
         root.removeAttribute('title');
     }
 
-    // Toggles 'active-disabled' class and 'data-control-blocked' attr on the
-    // widget container so CSS can show "click does nothing right now" state.
-    // Also sets `disabled` attribute on all form controls within this.element —
-    // native <input type=range> и <input type=text> игнорировали pointer-events:none
-    // (можно было drag'ать slider клавиатурой/keyboard). disabled — гарантия.
+    // Toggles 'active-disabled' class и data-* attrs:
+    //   - data-control-blocked="true" — edit mode / no controlToken (нейтральный grey)
+    //   - data-frozen="true"          — sensor latched (icy/cyan + ❄ marker, см. CSS)
+    // Раздельные attrs позволяют CSS показать причину разным цветом — оператору
+    // видно «нет прав» vs «датчик заморожен». Native disabled гарантирует что
+    // <input type=range>/<input type=text> не drag'аются клавиатурой.
     _updateInteractivityClass() {
         const root = this.container;
         if (!root) return;
         const interactive = this.isInteractive();
+        const frozen = this.isFrozen();
         root.classList.toggle('active-disabled', !interactive);
-        if (!interactive) {
+        // data-frozen ставится независимо от других причин блокировки —
+        // оператор должен видеть ❄ даже если ещё и controlToken отозван.
+        if (frozen) {
+            root.dataset.frozen = 'true';
+        } else {
+            delete root.dataset.frozen;
+        }
+        // data-control-blocked — только когда заблокирован НЕ из-за frozen
+        // (иначе frozen marker и грей-control marker наслаиваются и сбивают).
+        if (!interactive && !frozen) {
             root.dataset.controlBlocked = 'true';
         } else {
             delete root.dataset.controlBlocked;
@@ -16672,14 +16714,17 @@ class PushButtonWidget extends ActiveDashboardWidget {
         return { width: 3, height: 2 }; // flat
     }
 
-    // === SSE feedback override — игнорируем (push-button fire-and-forget) ===
-    update(value, error = null) {
-        // Сохраняем поля для совместимости с base (writeState handlers могут читать),
-        // но НЕ вызываем renderFeedback — push-button не визуализирует feedback своего
-        // sensor'а (valueOn пролетает за миллисекунды и не несёт смысла оператору).
+    // === SSE feedback override — игнорируем value, но meta обрабатываем ===
+    // Push-button fire-and-forget: feedback value пролетает за миллисекунды и
+    // не несёт смысла оператору, потому renderFeedback() пуст. Но meta.frozen
+    // должен блокировать клик — иначе аварийная команда (STOP/RESET) уйдёт
+    // на frozen sensor silent no-op'ом и оператор не узнает что не сработало.
+    update(value, error = null, meta = null) {
         this.feedbackValue = value;
         this.value = value;
         this.error = error;
+        this._applyFeedbackMeta(meta);
+        // НЕ вызываем renderFeedback — UI остаётся неподвижным.
     }
 
     _currentStyle() {
@@ -16932,13 +16977,16 @@ class GeneratorWidget extends ActiveDashboardWidget {
         toggle.addEventListener('mousedown', (e) => e.preventDefault());
     }
 
-    // === SSE feedback override — игнорируем (как PushButton) ===
-    update(value, error = null) {
+    // === SSE feedback override — игнорируем value, но meta обрабатываем ===
+    // UI показывает значение от генератора (через _updateValueDisplay), а не
+    // от датчика — потому feedback value игнорируем. Но meta.frozen → автостоп
+    // (через _updateInteractivityClass override ниже): нет смысла гнать тики
+    // в frozen-датчик, на backend они станут silent no-op'ом.
+    update(value, error = null, meta = null) {
         this.feedbackValue = value;
         this.value = value;
         this.error = error;
-        // НЕ вызываем renderFeedback — UI показывает значение от генератора
-        // через _updateValueDisplay в _onTick.
+        this._applyFeedbackMeta(meta);
     }
 
     // === Toggle handler ===
@@ -17442,10 +17490,12 @@ class SetpointWidget extends ActiveDashboardWidget {
     // Auto-snap dirty: если feedback догнал command (с tolerance step/2) → снять.
     // Делается ТОЛЬКО здесь (в update от SSE), не в renderFeedback — иначе во
     // время typing совпавшее с feedback значение автоматически апплаилось.
-    update(value, error = null) {
+    // meta = { frozen, blocked } — пробрасываем в base для interactivity gating.
+    update(value, error = null, meta = null) {
         this.feedbackValue = value;
         this.value = value;
         this.error = error;
+        this._applyFeedbackMeta(meta);
         if (this.commandValue !== null && this.commandValue !== undefined &&
             value !== null && value !== undefined) {
             const tolerance = Math.abs(this.config?.step ?? 1) / 2;
@@ -21424,7 +21474,10 @@ class DashboardManager {
             const cached = state.sensorValuesCache.get(cacheKey);
             if (cached) {
                 if (Date.now() - cached.timestamp < DASHBOARD_SENSOR_CACHE_TTL_MS) {
-                    this.handleSensorUpdate(cacheKey, cached.value, cached.error);
+                    const meta = (cached.frozen || cached.blocked)
+                        ? { frozen: !!cached.frozen, blocked: !!cached.blocked }
+                        : null;
+                    this.handleSensorUpdate(cacheKey, cached.value, cached.error, null, meta);
                 } else {
                     uncachedKeys.push(cacheKey);
                 }
@@ -21474,9 +21527,14 @@ class DashboardManager {
                     state.sensorValuesCache.set(writeKey, {
                         value: sensor.value,
                         error: null,
+                        frozen: !!sensor.frozen,
+                        blocked: !!sensor.blocked,
                         timestamp: Date.now()
                     });
-                    this.handleSensorUpdate(writeKey, sensor.value, null);
+                    const meta = (sensor.frozen || sensor.blocked)
+                        ? { frozen: !!sensor.frozen, blocked: !!sensor.blocked }
+                        : null;
+                    this.handleSensorUpdate(writeKey, sensor.value, null, null, meta);
                 } catch (err) {
                     console.warn('Failed to fetch sensor value:', sensorKey, err);
                 }
@@ -22522,10 +22580,12 @@ class DashboardManager {
         }
     }
 
-    handleSensorUpdate(sensorKey, value, error = null, timestamp = null) {
+    handleSensorUpdate(sensorKey, value, error = null, timestamp = null, meta = null) {
         // sensorKey = ${serverId}|${objectName}|${sensorName} — canonical identity.
         // ctx передаётся в updateBySensor/updateSensor чтобы multi-sensor widget'ы
         // могли отбраковать совпадающие по имени, но пришедшие с другого (server, object).
+        // meta = { frozen, blocked } — статусные флаги датчика для active widget'ов;
+        // read-only widget'ы (LevelWidget и т.п.) этот аргумент игнорируют.
         const parsed = (typeof parseSensorKey === 'function') ? parseSensorKey(sensorKey) : null;
         const sensorName = parsed?.sensorName ?? sensorKey;
         const ctx = parsed
@@ -22542,7 +22602,7 @@ class DashboardManager {
                     if (typeof widget.updateBySensor === 'function') {
                         widget.updateBySensor(sensorName, value, error, ctx);
                     } else {
-                        widget.update(value, error);
+                        widget.update(value, error, meta);
                     }
                 }
             });
@@ -23163,7 +23223,13 @@ function updateDashboardWidgets(sensors, ctx) {
 
         if (name !== undefined && value !== undefined) {
             const key = makeSensorKey(ctx.serverId, ctx.objectName, name);
-            dashboardManager.handleSensorUpdate(key, value, error, ctx.timestamp || null);
+            // meta — статусные флаги датчика (frozen/blocked) для active widget'ов.
+            // Active base class смотрит meta?.frozen чтобы блокировать запись и
+            // показать ❄ marker; старые read-only widget'ы meta игнорируют.
+            const meta = (sensor.frozen || sensor.blocked)
+                ? { frozen: !!sensor.frozen, blocked: !!sensor.blocked }
+                : null;
+            dashboardManager.handleSensorUpdate(key, value, error, ctx.timestamp || null, meta);
         }
     }
 }
