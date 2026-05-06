@@ -88,7 +88,24 @@ func (p *Poller) Stop() {
 	p.wg.Wait()
 }
 
-// Subscribe подписывается на датчики для объекта
+// Subscribe подписывается на датчики для объекта.
+//
+// Поведение по двум осям:
+//
+//  1. Для sensor'ов, ВПЕРВЫЕ подписываемых через WS-клиент (newSensors) — отправляем
+//     ask:-команду в WebSocket, сервис ответит initial value через handleData. lastValues
+//     для них сбрасывается явно — иначе если в кэше остался hash от прошлой подписки
+//     (после Unsubscribe lastValues[name] удаляется, но мы перестраховываемся для
+//     случая когда старая подписка ещё жила в момент resubscribe), первый push мог бы
+//     совпасть и виджет не получил бы initial update.
+//
+//  2. Для sensor'ов, УЖЕ подписанных через WS (новый objectName подписался на тот же
+//     sensorName, что и старый объект) — ask: повторно не шлём, сервис не присылает
+//     initial value. Чтобы новый подписчик не висел с пустым state до следующего
+//     change'а у стабильного датчика, эмитим callback из currentValues если они есть.
+//
+// Аналогично BasePoller.Subscribe (issue: dashboard widget'ы оставались на initial OFF
+// при возврате на dashboard для sensor'ов чьё значение не менялось).
 func (p *Poller) Subscribe(objectName string, sensorNames []string) error {
 	if len(sensorNames) == 0 {
 		return nil
@@ -100,13 +117,52 @@ func (p *Poller) Subscribe(objectName string, sensorNames []string) error {
 	}
 
 	newSensors := make([]string, 0)
+	resubscribeReplay := make([]SensorData, 0)
+	now := time.Now()
 	for _, name := range sensorNames {
 		if _, exists := p.subscriptions[objectName][name]; !exists {
 			p.subscriptions[objectName][name] = struct{}{}
-			newSensors = append(newSensors, name)
+			// Различаем "ВПЕРВЫЕ для всего poller'а" и "уже подписан другим объектом".
+			// Для "уже подписан" — берём значение из cache; для "впервые" — ждём ask:.
+			alreadySubscribedElsewhere := false
+			for otherObj, subs := range p.subscriptions {
+				if otherObj == objectName {
+					continue
+				}
+				if _, ok := subs[name]; ok {
+					alreadySubscribedElsewhere = true
+					break
+				}
+			}
+			if alreadySubscribedElsewhere {
+				if cached, ok := p.currentValues[name]; ok {
+					resubscribeReplay = append(resubscribeReplay, cached)
+				}
+			} else {
+				newSensors = append(newSensors, name)
+			}
 		}
+		// Сбрасываем lastValues для всех подписываемых имён, чтобы первый
+		// после Subscribe push не был отброшен dedup'ом (см. handleData).
+		delete(p.lastValues, name)
 	}
 	p.mu.Unlock()
+
+	// Replay для sensors, которые уже были subscribed через WS другим объектом —
+	// отдаём текущее значение нашему новому подписчику без ожидания push'а.
+	if len(resubscribeReplay) > 0 {
+		updates := make([]SensorUpdate, 0, len(resubscribeReplay))
+		for _, sensor := range resubscribeReplay {
+			updates = append(updates, SensorUpdate{
+				ObjectName: objectName,
+				Sensor:     sensor,
+				Timestamp:  now,
+			})
+		}
+		if p.callback != nil {
+			p.callback(updates)
+		}
+	}
 
 	if len(newSensors) == 0 {
 		return nil
