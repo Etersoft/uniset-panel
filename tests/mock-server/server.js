@@ -715,10 +715,35 @@ const server = http.createServer((req, res) => {
     }
     res.end(JSON.stringify({ result: 'OK' }));
   } else if (url.startsWith('/api/v2/SharedMemory/freeze?')) {
-    // Mock freeze endpoint (GET method like real UniSet2)
+    // Mock freeze endpoint (GET method like real UniSet2).
+    // URL format: /api/v2/SharedMemory/freeze?{sensorId}={value}&...
+    // Сохраняем frozen state в mockSensors — иначе race с rand-генератором значений
+    // (interval below) делает frontend frozen state нестабильным после первого poll'а.
+    const urlObj = new URL(url, `http://localhost:${PORT}`);
+    for (const [key, value] of urlObj.searchParams) {
+      if (key === 'supplier') continue;
+      const sensorId = parseInt(key, 10);
+      const newValue = parseInt(value, 10);
+      const sensor = mockSensors.find(s => s.id === sensorId);
+      if (sensor && !isNaN(newValue)) {
+        sensor.frozen = true;
+        sensor.value = newValue;
+      }
+    }
     res.end(JSON.stringify({ result: 'OK' }));
   } else if (url.startsWith('/api/v2/SharedMemory/unfreeze?')) {
-    // Mock unfreeze endpoint (GET method like real UniSet2)
+    // Mock unfreeze endpoint (GET method like real UniSet2).
+    // URL format: /api/v2/SharedMemory/unfreeze?{sensorId}=&...
+    const urlObj = new URL(url, `http://localhost:${PORT}`);
+    for (const [key] of urlObj.searchParams) {
+      if (key === 'supplier') continue;
+      const sensorId = parseInt(key, 10);
+      const sensor = mockSensors.find(s => s.id === sensorId);
+      if (sensor) {
+        sensor.frozen = false;
+        sensor.value = sensor.real_value;
+      }
+    }
     res.end(JSON.stringify({ result: 'OK' }));
   } else if (url === '/api/v2/OPCUAClient1') {
     res.end(JSON.stringify({
@@ -1226,16 +1251,20 @@ const server = http.createServer((req, res) => {
   }
 });
 
-// Simulate value changes for IONC sensors (triggers SSE batch events in backend)
+// Simulate value changes for IONC sensors (triggers SSE batch events in backend).
+// Для frozen sensor'ов меняется только real_value (фактическое значение SM),
+// value остаётся равным замороженному (как в реальном UniSet2).
 setInterval(() => {
   mockSensors.forEach(sensor => {
     if (sensor.type === 'AI' || sensor.type === 'AO') {
-      sensor.value += Math.floor(Math.random() * 5) - 2;
-      sensor.real_value = sensor.value;
+      const newReal = (sensor.real_value ?? sensor.value) + Math.floor(Math.random() * 5) - 2;
+      sensor.real_value = newReal;
+      if (!sensor.frozen) sensor.value = newReal;
     } else {
       if (Math.random() < 0.05) {
-        sensor.value = sensor.value === 0 ? 1 : 0;
-        sensor.real_value = sensor.value;
+        const newReal = (sensor.real_value ?? sensor.value) === 0 ? 1 : 0;
+        sensor.real_value = newReal;
+        if (!sensor.frozen) sensor.value = newReal;
       }
     }
     sensor.tv_sec = Math.floor(Date.now() / 1000);
