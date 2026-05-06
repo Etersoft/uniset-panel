@@ -115,14 +115,12 @@ func TestBasePollerSubscribe(t *testing.T) {
 	}
 }
 
-// Re-Subscribe должен:
-//  1. Replay'нуть текущее cached значение СРАЗУ через callback (новый
-//     подписчик получает initial state без задержки на poll-цикл).
-//  2. Сбросить lastValues для подписываемых ids — следующий poll тоже
-//     отправит batch (на случай если cached значение успело устареть).
-// Issue: после reload UI/dashboard'а виджеты со стабильно не меняющимся
-// значением оставались с initial value=null до тех пор, пока значение
-// реально не изменится.
+// Re-Subscribe должен сбросить lastValues для подписываемых ids — иначе
+// после reload UI/dashboard'а виджеты со стабильно не меняющимся значением
+// не получат initial SSE update (poller считает что ничего не изменилось).
+//
+// Замечание: immediate replay в Subscribe был испробован но откачен —
+// см. комментарий в base.go.
 func TestBasePollerSubscribeResetsLastValues(t *testing.T) {
 	fetcher := &MockFetcher{
 		items: map[string][]MockItem{
@@ -139,12 +137,8 @@ func TestBasePollerSubscribeResetsLastValues(t *testing.T) {
 		"Test",
 	)
 
-	// Initial subscribe — replay'ить нечего (lastItems пуст). Затем poll
-	// должен отправить оба значения как "впервые увиденные".
+	// Initial subscribe + poll: оба значения должны прийти.
 	bp.Subscribe("Object1", []int64{1, 2})
-	if len(batches) != 0 {
-		t.Fatalf("first subscribe: want 0 replay batches (cache empty), got %d: %+v", len(batches), batches)
-	}
 	bp.poll()
 	if len(batches) != 1 || len(batches[0]) != 2 {
 		t.Fatalf("first poll: want 1 batch with 2 updates, got %d batches: %+v", len(batches), batches)
@@ -157,98 +151,12 @@ func TestBasePollerSubscribeResetsLastValues(t *testing.T) {
 		t.Fatalf("idempotent poll: want 0 batches, got %d: %+v", len(batches), batches)
 	}
 
-	// Re-Subscribe с теми же ids — должен немедленно replay'нуть cached items
-	// (они уже сохранены в lastItems с прошлого poll'а).
+	// Re-Subscribe с теми же ids — должно сбросить lastValues и заставить
+	// следующий poll отправить full batch заново.
 	bp.Subscribe("Object1", []int64{1, 2})
-	if len(batches) != 1 || len(batches[0]) != 2 {
-		t.Fatalf("re-subscribe replay: want 1 immediate batch with 2 updates, got %d: %+v", len(batches), batches)
-	}
-	batches = nil
-
-	// + следующий poll должен тоже отправить (lastValues был сброшен в Subscribe).
 	bp.poll()
 	if len(batches) != 1 || len(batches[0]) != 2 {
 		t.Fatalf("re-subscribe poll: want 1 batch with 2 updates (force re-emit), got %d: %+v", len(batches), batches)
-	}
-}
-
-// Subscribe нового объекта на УЖЕ-известный (другому объекту) item должен
-// мгновенно replay'нуть кэшированное значение через callback.
-func TestBasePollerSubscribeReplaysCachedValue(t *testing.T) {
-	fetcher := &MockFetcher{
-		items: map[string][]MockItem{
-			"ObjectA": {{ID: 1, Value: 42}},
-		},
-	}
-	var batches [][]MockUpdate
-	bp := NewBasePoller[MockItem, MockUpdate](
-		time.Second, 100, fetcher,
-		func(objectName string, item MockItem, ts time.Time) MockUpdate {
-			return MockUpdate{ObjectName: objectName, Item: item, Timestamp: ts}
-		},
-		func(updates []MockUpdate) { batches = append(batches, updates) },
-		"Test",
-	)
-
-	// ObjectA подписался → poll → cache заполнен.
-	bp.Subscribe("ObjectA", []int64{1})
-	bp.poll()
-	batches = nil
-
-	// ObjectB подписывается на тот же item id=1, но через свой objectName.
-	// lastItems per-object — кэш для ObjectB пуст → replay не будет.
-	bp.Subscribe("ObjectB", []int64{1})
-	if len(batches) != 0 {
-		t.Fatalf("cross-object Subscribe: cache is per-objectName, want 0 replays, got %d: %+v", len(batches), batches)
-	}
-
-	// А вот re-subscribe ObjectA на тот же id — должен replay'нуть из кэша.
-	bp.Subscribe("ObjectA", []int64{1})
-	if len(batches) != 1 || len(batches[0]) != 1 {
-		t.Fatalf("re-subscribe same object: want 1 replay batch with 1 update, got %d: %+v", len(batches), batches)
-	}
-	if batches[0][0].ObjectName != "ObjectA" || batches[0][0].Item.ID != 1 || batches[0][0].Item.Value != 42 {
-		t.Errorf("replayed update mismatch: %+v", batches[0][0])
-	}
-}
-
-// Unsubscribe должен очищать lastItems вместе с lastValues — иначе
-// последующий resubscribe replay'нул бы устаревшее значение.
-func TestBasePollerUnsubscribeClearsCachedItems(t *testing.T) {
-	fetcher := &MockFetcher{
-		items: map[string][]MockItem{
-			"Object1": {{ID: 1, Value: 42}},
-		},
-	}
-	var batches [][]MockUpdate
-	bp := NewBasePoller[MockItem, MockUpdate](
-		time.Second, 100, fetcher,
-		func(objectName string, item MockItem, ts time.Time) MockUpdate {
-			return MockUpdate{ObjectName: objectName, Item: item, Timestamp: ts}
-		},
-		func(updates []MockUpdate) { batches = append(batches, updates) },
-		"Test",
-	)
-
-	bp.Subscribe("Object1", []int64{1})
-	bp.poll()
-	bp.Unsubscribe("Object1", []int64{1})
-
-	bp.mu.RLock()
-	if items, ok := bp.lastItems["Object1"]; ok {
-		if _, exists := items[1]; exists {
-			bp.mu.RUnlock()
-			t.Fatalf("lastItems[Object1][1] should be cleared after Unsubscribe")
-		}
-	}
-	bp.mu.RUnlock()
-
-	batches = nil
-
-	// Resubscribe сейчас — кэш пуст → replay = 0; ждём poll.
-	bp.Subscribe("Object1", []int64{1})
-	if len(batches) != 0 {
-		t.Fatalf("resubscribe after unsubscribe: cache cleared, want 0 replays, got %d: %+v", len(batches), batches)
 	}
 }
 

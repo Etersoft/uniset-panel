@@ -35,10 +35,6 @@ type Poller struct {
 	mu           sync.RWMutex
 	// subscriptions: objectName -> set of sensorNames
 	subscriptions map[string]map[string]struct{}
-	// lastValues: sensorName -> last fetched SensorValue.
-	// Используется для replay при Subscribe — новый подписчик получает
-	// текущее значение СРАЗУ, а не через poll-интервал.
-	lastValues map[string]SensorValue
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -55,7 +51,6 @@ func NewPoller(client *Client, store storage.Storage, interval time.Duration, ca
 		interval:      interval,
 		callback:      callback,
 		subscriptions: make(map[string]map[string]struct{}),
-		lastValues:    make(map[string]SensorValue),
 		ctx:           ctx,
 		cancel:        cancel,
 	}
@@ -75,36 +70,20 @@ func (p *Poller) Stop() {
 	slog.Info("SM Poller stopped")
 }
 
-// Subscribe подписывает объект на датчик.
-//
-// Если poller уже знает текущее значение sensor'а из прошлого poll'а —
-// эмитит callback с этим значением СРАЗУ, чтобы новый подписчик получил
-// initial state без задержки на poll-интервал. Иначе — ждём ближайший
-// poll (max задержка = poll interval).
+// Subscribe подписывает объект на датчик
 func (p *Poller) Subscribe(objectName, sensorName string) {
 	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	if p.subscriptions[objectName] == nil {
 		p.subscriptions[objectName] = make(map[string]struct{})
 	}
 	p.subscriptions[objectName][sensorName] = struct{}{}
 
-	cached, hasCache := p.lastValues[sensorName]
-	cb := p.callback
-	p.mu.Unlock()
-
-	if hasCache && cb != nil {
-		cb(SensorUpdate{
-			ObjectName: objectName,
-			Sensor:     cached,
-			Timestamp:  time.Now().UTC(),
-		})
-	}
-
-	slog.Debug("SM sensor subscribed", "object", objectName, "sensor", sensorName, "replayed", hasCache)
+	slog.Debug("SM sensor subscribed", "object", objectName, "sensor", sensorName)
 }
 
-// Unsubscribe отписывает объект от датчика.
-// Если sensor больше никем не подписан — чистим cache (lastValues).
+// Unsubscribe отписывает объект от датчика
 func (p *Poller) Unsubscribe(objectName, sensorName string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -115,34 +94,17 @@ func (p *Poller) Unsubscribe(objectName, sensorName string) {
 			delete(p.subscriptions, objectName)
 		}
 	}
-	p.maybeEvictSensorCacheLocked(sensorName)
 
 	slog.Debug("SM sensor unsubscribed", "object", objectName, "sensor", sensorName)
 }
 
-// UnsubscribeAll отписывает объект от всех датчиков.
-// Чистим cache для sensors, которые больше никем не подписаны.
+// UnsubscribeAll отписывает объект от всех датчиков
 func (p *Poller) UnsubscribeAll(objectName string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	subs := p.subscriptions[objectName]
 	delete(p.subscriptions, objectName)
-	for sensorName := range subs {
-		p.maybeEvictSensorCacheLocked(sensorName)
-	}
 	slog.Debug("SM all sensors unsubscribed", "object", objectName)
-}
-
-// maybeEvictSensorCacheLocked удаляет sensorName из lastValues, если ни один
-// объект больше на него не подписан. Должна вызываться под p.mu.Lock().
-func (p *Poller) maybeEvictSensorCacheLocked(sensorName string) {
-	for _, sensors := range p.subscriptions {
-		if _, ok := sensors[sensorName]; ok {
-			return
-		}
-	}
-	delete(p.lastValues, sensorName)
 }
 
 // GetSubscriptions возвращает список подписок для объекта
@@ -223,13 +185,6 @@ func (p *Poller) poll() {
 	}
 
 	now := time.Now().UTC()
-
-	// Обновляем cache актуальных значений (для replay при Subscribe).
-	p.mu.Lock()
-	for name, val := range values {
-		p.lastValues[name] = val
-	}
-	p.mu.Unlock()
 
 	// Отправляем обновления для каждого подписчика
 	for sensorName, objects := range allSensors {
