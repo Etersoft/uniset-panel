@@ -32,6 +32,11 @@ type BasePoller[T any, U any] struct {
 	subscriptions map[string]map[int64]struct{}
 	// lastValues: objectName -> ID -> value hash
 	lastValues map[string]map[int64]string
+	// lastItems: objectName -> ID -> last fetched item.
+	// Используется для replay при Subscribe — новый подписчик получает
+	// актуальное значение СРАЗУ, не дожидаясь ближайшего poll-цикла
+	// или change-event'а на стабильном датчике.
+	lastItems map[string]map[int64]T
 
 	// Recording support
 	serverID       string
@@ -63,6 +68,7 @@ func NewBasePoller[T any, U any](
 		logPrefix:     logPrefix,
 		subscriptions: make(map[string]map[int64]struct{}),
 		lastValues:    make(map[string]map[int64]string),
+		lastItems:     make(map[string]map[int64]T),
 		ctx:           ctx,
 		cancel:        cancel,
 	}
@@ -129,14 +135,22 @@ func (p *BasePoller[T, U]) saveToRecording(batch []U) {
 
 // Subscribe подписывает на элементы объекта.
 //
-// Сбрасывает lastValues для подписываемых ids, чтобы следующий poll отправил
-// SSE с актуальным значением — иначе при reload UI/dashboard'а виджеты со
-// стабильно не меняющимися датчиками остаются с initial value=null до тех пор,
-// пока значение реально не поменяется (issue: toggle сбрасывался в OFF при
-// возврате на dashboard для sensor'ов чьё значение не менялось).
+// Двойная стратегия для гарантии initial-value у нового подписчика:
+//
+//  1. Replay из кэша lastItems (синхронно): если poller уже видел item раньше
+//     (другой объект подписывался, или это re-subscribe нашего объекта),
+//     эмитим callback с cached значением сразу — виджет получает initial state
+//     без задержки на poll-цикл.
+//
+//  2. Сброс lastValues для подписываемых ids: следующий poll увидит "новый"
+//     hash для этих ids и отправит callback даже если значение не менялось.
+//     Покрывает случай когда cache пуст (item ни разу не fetch'ился) и случай
+//     когда cached значение могло устареть между прошлым poll'ом и Subscribe.
+//
+// Issue: dashboard widget'ы оставались на initial OFF при возврате на dashboard
+// для sensor'ов чьё значение не менялось — backend dedup hash блокировал SSE.
 func (p *BasePoller[T, U]) Subscribe(objectName string, ids []int64) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
 
 	if p.subscriptions[objectName] == nil {
 		p.subscriptions[objectName] = make(map[int64]struct{})
@@ -145,9 +159,20 @@ func (p *BasePoller[T, U]) Subscribe(objectName string, ids []int64) {
 		p.lastValues[objectName] = make(map[int64]string)
 	}
 
+	// Собираем replay-batch внутри Lock'а, callback вызовем после Unlock
+	// (callback обычно делает SSE.Broadcast — может блокировать или сам
+	// возвращаться через poller'овые методы; держать Lock небезопасно).
+	var replay []U
+	now := time.Now().UTC()
+	itemsForObj := p.lastItems[objectName]
 	for _, id := range ids {
 		p.subscriptions[objectName][id] = struct{}{}
 		delete(p.lastValues[objectName], id)
+		if itemsForObj != nil {
+			if cached, ok := itemsForObj[id]; ok {
+				replay = append(replay, p.makeUpdate(objectName, cached, now))
+			}
+		}
 	}
 
 	// Считаем общее количество подписок
@@ -155,8 +180,15 @@ func (p *BasePoller[T, U]) Subscribe(objectName string, ids []int64) {
 	for _, items := range p.subscriptions {
 		totalCount += len(items)
 	}
+	cb := p.callback
+	p.mu.Unlock()
 
-	slog.Info(p.logPrefix+" items subscribed", "object", objectName, "count", len(ids), "total_subscriptions", totalCount)
+	if len(replay) > 0 && cb != nil {
+		cb(replay)
+	}
+
+	slog.Info(p.logPrefix+" items subscribed", "object", objectName,
+		"count", len(ids), "total_subscriptions", totalCount, "replayed", len(replay))
 }
 
 // Unsubscribe отписывает от элементов объекта
@@ -168,10 +200,14 @@ func (p *BasePoller[T, U]) Unsubscribe(objectName string, ids []int64) {
 		for _, id := range ids {
 			delete(items, id)
 			delete(p.lastValues[objectName], id)
+			if cached, ok := p.lastItems[objectName]; ok {
+				delete(cached, id)
+			}
 		}
 		if len(items) == 0 {
 			delete(p.subscriptions, objectName)
 			delete(p.lastValues, objectName)
+			delete(p.lastItems, objectName)
 		}
 	}
 
@@ -185,6 +221,7 @@ func (p *BasePoller[T, U]) UnsubscribeAll(objectName string) {
 
 	delete(p.subscriptions, objectName)
 	delete(p.lastValues, objectName)
+	delete(p.lastItems, objectName)
 	slog.Debug(p.logPrefix+" all items unsubscribed", "object", objectName)
 }
 
@@ -290,7 +327,8 @@ func (p *BasePoller[T, U]) ForceEmitAll() {
 	}
 }
 
-// updateLastValue обновляет lastValues для элемента (без проверки изменения)
+// updateLastValue обновляет lastValues и lastItems для элемента (без проверки изменения).
+// lastItems нужен чтобы Subscribe мог replay'нуть текущее значение новому подписчику.
 func (p *BasePoller[T, U]) updateLastValue(objectName string, item T) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -298,10 +336,13 @@ func (p *BasePoller[T, U]) updateLastValue(objectName string, item T) {
 	if p.lastValues[objectName] == nil {
 		p.lastValues[objectName] = make(map[int64]string)
 	}
+	if p.lastItems[objectName] == nil {
+		p.lastItems[objectName] = make(map[int64]T)
+	}
 
 	itemID := p.fetcher.GetItemID(item)
-	newHash := p.fetcher.GetValueHash(item)
-	p.lastValues[objectName][itemID] = newHash
+	p.lastValues[objectName][itemID] = p.fetcher.GetValueHash(item)
+	p.lastItems[objectName][itemID] = item
 }
 
 func (p *BasePoller[T, U]) pollLoop() {
@@ -428,9 +469,17 @@ func (p *BasePoller[T, U]) hasValueChanged(objectName string, item T) bool {
 	if p.lastValues[objectName] == nil {
 		p.lastValues[objectName] = make(map[int64]string)
 	}
+	if p.lastItems[objectName] == nil {
+		p.lastItems[objectName] = make(map[int64]T)
+	}
 
 	itemID := p.fetcher.GetItemID(item)
 	newHash := p.fetcher.GetValueHash(item)
+
+	// lastItems обновляем всегда — нужен для replay при Subscribe (даже если
+	// hash не менялся, мы всё равно хотим иметь текущее значение в кэше для
+	// нового подписчика).
+	p.lastItems[objectName][itemID] = item
 
 	lastHash, exists := p.lastValues[objectName][itemID]
 	if !exists || lastHash != newHash {
