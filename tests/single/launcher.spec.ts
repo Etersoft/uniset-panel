@@ -41,6 +41,24 @@ test.describe('Launcher', () => {
     await expect(rows.first()).toBeVisible();
   });
 
+  // Регрессия: sidebar-group-item для launcher должен иметь status dot —
+  // раньше dot создавался только для object/server, и недоступность launcher'а
+  // не отображалась в sidebar (пользователь видел 502 в консоли, но никаких
+  // визуальных индикаторов).
+  test('sidebar launcher item should have a status dot', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForTimeout(1000);
+
+    const launcherItem = page.locator('.sidebar-group-item[data-type="launcher"]').first();
+    await expect(launcherItem).toBeVisible();
+
+    const dot = launcherItem.locator('.sidebar-group-status');
+    await expect(dot).toHaveCount(1);
+    // При запущенном mock-launcher'е dot должен в итоге стать connected
+    // (initial state — pending; backend поллер обновит через ~poll interval).
+    await expect(dot).not.toHaveClass(/disconnected/, { timeout: 10000 });
+  });
+
   test('should show Take button when control token is configured', async ({ page }) => {
     await openLauncher(page);
     await expect(page.locator('.launcher-control-btn', { hasText: 'Take' })).toBeVisible();

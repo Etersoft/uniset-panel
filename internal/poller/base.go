@@ -127,7 +127,13 @@ func (p *BasePoller[T, U]) saveToRecording(batch []U) {
 	}
 }
 
-// Subscribe подписывает на элементы объекта
+// Subscribe подписывает на элементы объекта.
+//
+// Сбрасывает lastValues для подписываемых ids, чтобы следующий poll отправил
+// SSE с актуальным значением — иначе при reload UI/dashboard'а виджеты со
+// стабильно не меняющимися датчиками остаются с initial value=null до тех пор,
+// пока значение реально не поменяется (issue: toggle сбрасывался в OFF при
+// возврате на dashboard для sensor'ов чьё значение не менялось).
 func (p *BasePoller[T, U]) Subscribe(objectName string, ids []int64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -141,6 +147,7 @@ func (p *BasePoller[T, U]) Subscribe(objectName string, ids []int64) {
 
 	for _, id := range ids {
 		p.subscriptions[objectName][id] = struct{}{}
+		delete(p.lastValues[objectName], id)
 	}
 
 	// Считаем общее количество подписок

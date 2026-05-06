@@ -108,8 +108,11 @@ function createSidebarGroupItem(item) {
         li.dataset.serverId = item.serverId;
     }
 
-    // Status dot для объектов и серверов
-    if (item.type === 'object' || item.type === 'server') {
+    // Status dot для всех сущностей с понятием connectivity
+    // (object/server — UniSet2 сервер; launcher — pRunner; journal — журнал).
+    // Dashboard — статичный конфиг, всегда «connected», dot не нужен.
+    if (item.type === 'object' || item.type === 'server'
+        || item.type === 'launcher' || item.type === 'journal') {
         const dot = document.createElement('span');
         dot.className = 'sidebar-group-status';
         li.appendChild(dot);
