@@ -359,10 +359,74 @@ push-button fire-and-forget), но meta.frozen обрабатывается че
 - **`input`** (default, defaultSize 3×2): текстовый input + Apply кнопка.
   В dirty state (cmd ≠ fb) — жёлтая граница input'а, видны Apply + Cancel.
   Enter = apply, Esc = cancel.
-- **`slider`** (defaultSize 3×2): horizontal slider + value-label сверху +
-  min/max подписи снизу. В manual mode change-event (release) триггерит apply.
+- **`slider`** (defaultSize 6×4 horizontal / 4×6 vertical через
+  `static getDefaultSizeForStyle(style, config)`): custom-rendered
+  (БЕЗ нативного `<input type="range">`). Mouse-friendly UX для SCADA HMI:
+  - **Click anywhere on track** → handle прыгает + один POST.
+  - **Drag** (mousedown → mousemove → mouseup) → один POST на release.
+    Промежуточные mousemove только обновляют handle position.
+  - **Inline-edit** двойным кликом по числу → input на месте.
+  - **`zones: [{from, to, color}]`** — цветные зоны на треке (формат как у
+    Gauge/Level; используется `renderColorZonesEditor`/`parseColorZones`
+    из `06-utils.js`). Если `zones` задан — `setpoint-slider-fill` не
+    рендерится (зоны заменяют fill).
+  - **Orientation** через config-поле `'horizontal'` (default) | `'vertical'`.
+    В vertical track вертикальный, top = max, bottom = min, drag по Y инвертируется.
+  - **`fb-marker`** ▾ (под треком для horizontal, слева от трека для vertical) —
+    показывает `feedbackValue` ТОЛЬКО когда виджет dirty (`commandValue ≠ null`).
+  - **Two-mode feedback tracking:**
+    - Idle (`commandValue === null`) → handle следует за `feedbackValue`
+      по приходу SSE (включая дрейф датчика без участия оператора).
+    - Dirty (после клика/драга) → handle стоит на `commandValue`,
+      `fb-marker` показывает текущий `feedbackValue`.
+    - Auto-snap dirty → idle когда `|cmd - fb| < step/2` (в `update()`).
+  - **No-jump-during-drag**: пока `_sliderDragging === true`, входящие SSE
+    обновления записывают `feedbackValue` но НЕ перерисовывают handle —
+    handle остаётся под курсором.
+  - **No-data**: до первого SSE update root получает класс
+    `.setpoint-slider-no-data`, value = `--`, fill/handle dimmed.
+  - **Layout DOM**: для horizontal `<div class="setpoint-slider-labels">` —
+    sibling AFTER `track-wrap` (нормальный flex flow); для vertical —
+    INSIDE `track-wrap` как `position:absolute` справа от трека.
+    Единицы измерения (`unit`) рендерятся рядом с max-меткой
+    (`<span>${max} ${unit}</span>`).
+  - **Value bubble follows handle**: `<span class="setpoint-slider-value">` —
+    absolute child `track-wrap`. В renderFeedback ставится
+    `style.left = pct%` (h) / `style.bottom = pct%` (v) — бабл двигается
+    синхронно с handle. CSS reserves место `margin-top: 28px` (h) или
+    `margin-left: 60px` (v) на `track-wrap`. Старый `.setpoint-slider-value-row`
+    скрыт через `display: none` (legacy wrapper, удалён из innerHTML).
+  - **Zero mark**: когда `min < 0 && max > 0`, в track-wrap рендерятся два
+    элемента — `.setpoint-slider-zero-tick` (тонкий контрастный штрих
+    поперёк трека) и `.setpoint-slider-zero-label` ('0' в строке labels между
+    min и max). Оба позиционируются по `(0 - min) / (max - min) * 100%`.
+    Strict inequality — когда ноль совпадает с границей, метка не рендерится.
+  - **`fillOrigin`** (`'zero'` default | `'min'` | `'max'`) — откуда
+    рисуется заливка. `'zero'`: signed от нуля (вправо для positive,
+    влево для negative; fallback на `'min'` если ноль вне диапазона).
+    `'min'`: legacy, от левого/нижнего края до значения. `'max'`: зеркало —
+    от значения до правого/верхнего края. Реализовано через inline
+    `style.left + style.width` (h) / `style.bottom + style.height` (v) на
+    `.setpoint-slider-fill` в `renderFeedback`.
+  - **`applyMode` ИГНОРИРУЕТСЯ** для slider style — write всегда происходит
+    на release/click (нет manual/auto wait). Поле скрывается в config-форме.
+  - **Listener cleanup**: window-level `mousemove`/`mouseup` слушатели
+    сохраняются как `this._onSliderMove`/`_onSliderUp` и удаляются в
+    `destroy()` (чтобы при переключении dashboard'а во время drag не
+    остались висячие обработчики).
 - **`stepper`** (defaultSize 3×2): кнопки `−` / `+` + value-label.
   Stepper всегда auto-apply on click (applyMode игнорируется).
+
+**Conditional config form** (`initConfigHandlers` override):
+- Когда `style='slider'` выбран в edit-диалоге, `applyMode`-row скрывается,
+  появляются `orientation` + `zones` rows. Switch обратно — наоборот.
+  Идемпотентно через `form.dataset.setpointStyleHandlersWired`.
+
+**Migration существующих конфигов** с `style='slider'`:
+- `applyMode` (`'manual'`/`'auto'`) — игнорируется в runtime, дропается
+  при следующем save из config-формы.
+- `orientation` — отсутствует → defaults to `'horizontal'`.
+- `zones` — отсутствует → defaults to `[]` (без зон, обычный fill).
 
 **Apply mode:**
 - `manual`: пользователь явно жмёт Apply (или Enter). До того value «dirty».

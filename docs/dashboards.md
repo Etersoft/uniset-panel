@@ -479,7 +479,7 @@ Write-only momentary/pulse кнопка для команд (RESET, START, STOP,
 | Стиль | Описание |
 |-------|----------|
 | `input` (default, 3×2) | Текстовый input + Apply кнопка (visible в dirty). Enter = apply, Esc = cancel |
-| `slider` (3×2) | Horizontal slider + value-label сверху + min/max подписи снизу. Inline-edit value через double-click |
+| `slider` (6×4 horizontal / 4×6 vertical) | Custom-rendered (БЕЗ нативного `<input type=range>`) с mouse-friendly UX для SCADA. Click on track = handle прыгает + один POST. Drag = один POST на release. Color zones, vertical orientation, fb-marker — см. ниже |
 | `stepper` (3×2) | Кнопки `−` / `+` + value-label. Auto-apply on click. × Cancel кнопка в dirty state |
 
 **Clean state:**
@@ -499,8 +499,11 @@ Write-only momentary/pulse кнопка для команд (RESET, START, STOP,
 | `style` | `input` / `slider` / `stepper` |
 | `min` / `max` | Границы диапазона |
 | `step` | Шаг изменения (для slider/stepper). При `step ≤ 0` → 1. При `min > max` пара свапается |
-| `unit` | Текстовая подпись после значения (`°C`, `%`, `bar`) |
-| `applyMode` | `manual` (default) — explicit Apply кнопка / Enter. `auto` — debounce 500ms на change → автоотправка. Stepper всегда auto-apply on click |
+| `unit` | Текстовая подпись после значения (`°C`, `%`, `bar`). В стиле `slider` рендерится рядом с max-меткой |
+| `applyMode` | `manual` (default) — explicit Apply кнопка / Enter. `auto` — debounce 500ms на change → автоотправка. Stepper всегда auto-apply on click. **Для `slider` игнорируется** (всегда write-on-release/click) и поле скрывается в config-форме |
+| `orientation` | Только для `slider`: `horizontal` (default) или `vertical`. В vertical top = max, bottom = min |
+| `zones` | Только для `slider`: `[{from, to, color}]` — цветные зоны на треке (формат как у Gauge/Level). Если задано — заменяет однотонный fill |
+| `fillOrigin` | Только для `slider`: откуда рисуется заливка. `zero` (default) — от нуля (signed: вправо для положительных значений, влево для отрицательных; если ноль вне диапазона, ведёт себя как `min`). `min` — от левого/нижнего края до значения (legacy). `max` — от значения до правого/верхнего края (зеркало `min`) |
 | `label` | Заголовок виджета |
 | `requireConfirmation` | Confirm перед записью |
 
@@ -510,6 +513,41 @@ Write-only momentary/pulse кнопка для команд (RESET, START, STOP,
 - Validation: значения вне `[min, max]` обрезаются (clamp).
 - Auto-snap dirty: при SSE feedback совпавшем с command (с tolerance step/2 для float) → dirty снимается. Не срабатывает во время typing — только на feedback от сервера.
 - Esc через widget container — отменяет pending command для любого стиля.
+
+**Slider-специфика (`style: 'slider'`):**
+
+UX-семантика для оператора SCADA:
+- **Click anywhere on track** — handle прыгает в точку клика, отправляется один POST.
+- **Drag** (mousedown → mousemove → mouseup) — handle двигается за курсором, POST отправляется только на release. Промежуточные mousemove не пишут в датчик.
+- **Inline-edit** — двойной клик по числу открывает input для точного ввода. Enter применяет, Esc отменяет.
+
+Two-mode feedback tracking:
+- **Idle** (`commandValue === null`, оператор не активен): handle следует за `feedbackValue` по приходу SSE — слайдер отображает реальное состояние датчика, даже если он дрейфует без вмешательства.
+- **Dirty** (после клика/драга, до auto-snap): handle стоит на `commandValue` (что задал оператор), а отдельный янтарный маркер `▾` под треком показывает текущий `feedbackValue` — оператор видит расхождение «команда vs реальность».
+- **Auto-snap dirty → idle** при `|cmd - fb| < step/2` (например, регулятор отработал уставку).
+
+Защита от прыжков во время drag: пока пользователь тянет handle, входящие SSE-обновления НЕ перерисовывают handle — он остаётся под курсором. Изменения feedback применяются на mouseup.
+
+**Value bubble следует за handle.** Текущее значение рендерится не в углу виджета, а маленьким бабблом непосредственно над ползунком (для horizontal) или слева от ползунка (для vertical) — так оператору сразу видно к какой точке шкалы относится цифра. Bubble и handle двигаются синхронно. В dirty-состоянии (cmd ≠ fb) текст бабла янтарный — чтобы выделять незакоммиченную команду.
+
+**Zero mark на шкале.** Если диапазон проходит через ноль (`min < 0 < max`, например `-50..+50`), на треке рисуется тонкий вертикальный (или горизонтальный — для vertical) штрих, а в подписях min/max добавляется метка `0` на правильной позиции. Так оператор сразу видит знак значения и точку перехода. Когда ноль совпадает с одной из границ — отдельная метка не рендерится (она уже есть в min или max).
+
+**Fill origin** (`fillOrigin`). По умолчанию `zero` — заливка стартует от нуля (signed: вправо для положительных значений, влево — для отрицательных). Это позволяет оператору с одного взгляда отличить, в какую сторону отклонилось значение, особенно для двухполярных шкал (давление/расход, температура с отрицательным диапазоном, отклонение от уставки). Если ноль вне диапазона (`min ≥ 0` или `max ≤ 0`), `zero` автоматически ведёт себя как `min`. Альтернативы — `min` (legacy: от левого/нижнего края до значения) и `max` (зеркало `min`: от значения до правого/верхнего края).
+
+Initial state: до первого SSE update виджет рендерится с классом `setpoint-slider-no-data` — handle и fill полупрозрачные, value показывает `--`. Как только приходит первое значение, виджет «оживает».
+
+Color zones: `zones: [{from, to, color}]` — массив цветных полос на треке (формат идентичен Gauge / Level widgets). Например, для контроля температуры:
+```json
+[
+  { "from": 0,  "to": 40,  "color": "#10b981" },
+  { "from": 40, "to": 75,  "color": "#fbbf24" },
+  { "from": 75, "to": 100, "color": "#ef4444" }
+]
+```
+
+Vertical orientation: top = max, bottom = min. Drag сверху вниз уменьшает значение. Метки `min`/`max` справа от трека (max сверху, min снизу). Ширина виджета по умолчанию увеличена под labels (4 колонки против 6 в horizontal — потому что vertical проще «положить рядом»).
+
+Конфиг-форма с conditional полями: при выборе `style: 'slider'` поле `applyMode` скрывается, появляются `orientation` и `zones` editors. Переключение обратно — наоборот.
 
 ---
 

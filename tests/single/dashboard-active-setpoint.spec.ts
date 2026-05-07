@@ -73,8 +73,7 @@ test.describe('SetpointWidget — fourth active widget', () => {
     test('renders style "slider"', async ({ page }) => {
         await createSetpointDashboard(page, { style: 'slider' });
         await expect(page.locator('.setpoint-style-slider').first()).toBeVisible();
-        await expect(page.locator('[data-test="slider"]').first()).toBeVisible();
-        await expect(page.locator('[data-test="value"]').first()).toBeVisible();
+        await expect(page.locator('[data-test="track-wrap"]').first()).toBeVisible();
     });
 
     test('renders style "stepper"', async ({ page }) => {
@@ -527,6 +526,346 @@ test.describe('SetpointWidget — fourth active widget', () => {
         expect(valueShown).toBe('4');
     });
 
+    test('AC-10: initial state shows no-data dim before SSE arrives', async ({ page }) => {
+        // Use a sensorId that doesn't exist in mock — no SSE will populate it
+        await page.evaluate(() => {
+            const w: any = window;
+            const widgetCfg = {
+                id: 'sp-1',
+                type: 'setpoint',
+                config: { sensor: 'TEST_NO_SENSOR', sensorId: 999999, objectName: 'SharedMemory',
+                          style: 'slider', min: 0, max: 100, step: 1 },
+                position: { col: 0, row: 0, width: 12, height: 5 },
+            };
+            w.dashboardState.dashboards.set('TEST_SP', { meta: { name: 'TEST_SP' }, widgets: [widgetCfg] });
+            w.dashboardManager.loadDashboard('TEST_SP');
+            w.switchView('dashboard');
+        });
+        await page.locator('.setpoint-widget').first().waitFor({ state: 'visible' });
+        // Check immediately — before SSE can populate (sensor 999999 doesn't exist in mock)
+        const valueText = await page.locator('[data-test="value"]').first().textContent();
+        expect(valueText?.trim()).toBe('--');
+        // The .setpoint-slider-no-data class should be on the widget root
+        const widget = page.locator('.setpoint-widget').first();
+        await expect(widget).toHaveClass(/setpoint-slider-no-data/);
+    });
+
+    test('AC-4: handle tracks feedback when idle (commandValue=null)', async ({ page }) => {
+        await createSetpointDashboard(page, { style: 'slider', min: 0, max: 100, step: 1 });
+
+        // Simulate SSE update: fb=75 arrives, commandValue is still null (idle)
+        await page.evaluate(() => {
+            for (const [, w] of (window as any).dashboardState.widgets) {
+                w.update(75);
+            }
+        });
+        // Wait for CSS transition (left 80ms ease-out) to settle
+        await page.waitForTimeout(200);
+
+        const valueText = await page.locator('[data-test="value"]').first().textContent();
+        expect(valueText?.trim()).toBe('75');
+
+        // Handle position: left ~ 75% of track width
+        // After transition, use getBoundingClientRect via evaluate for accuracy
+        const pct = await page.evaluate(() => {
+            const handle = document.querySelector('[data-test="handle"]') as HTMLElement;
+            const trackWrap = document.querySelector('[data-test="track-wrap"]') as HTMLElement;
+            const handleBCR = handle.getBoundingClientRect();
+            const trackBCR = trackWrap.getBoundingClientRect();
+            // Handle center = left + width/2; transform:translateX(-50%) is baked into BCR
+            const handleCenterX = handleBCR.left + handleBCR.width / 2;
+            return (handleCenterX - trackBCR.left) / trackBCR.width;
+        });
+        expect(pct).toBeGreaterThan(0.7);
+        expect(pct).toBeLessThan(0.8);
+    });
+
+    test('AC-5: auto-snap dirty->idle when feedback catches up to command', async ({ page }) => {
+        // step:5 → tolerance=2.5
+        await createSetpointDashboard(page, { style: 'slider', min: 0, max: 100, step: 5 });
+
+        // Give initial feedback so handle is not in no-data state
+        await page.evaluate(() => {
+            for (const [, w] of (window as any).dashboardState.widgets) {
+                w.update(30);
+            }
+        });
+
+        const trackWrap = page.locator('[data-test="track-wrap"]').first();
+        const box = await trackWrap.boundingBox();
+        if (!box) throw new Error('no box');
+        // Click at 50% → commandValue ~50
+        await trackWrap.click({ position: { x: box.width * 0.5, y: box.height / 2 } });
+        await page.waitForTimeout(100);
+
+        const widget = page.locator('.setpoint-widget').first();
+        await expect(widget).toHaveClass(/dirty/);
+
+        // Simulate SSE: feedback arrives at 50 (within step/2=2.5 of commandValue ~50)
+        await page.evaluate(() => {
+            for (const [, w] of (window as any).dashboardState.widgets) {
+                w.update(50);
+            }
+        });
+        await expect(widget).not.toHaveClass(/dirty/);
+    });
+
+    test('AC-6: dirty stays when feedback drifts away from command', async ({ page }) => {
+        await createSetpointDashboard(page, { style: 'slider', min: 0, max: 100, step: 1 });
+
+        // Give initial feedback
+        await page.evaluate(() => {
+            for (const [, w] of (window as any).dashboardState.widgets) {
+                w.update(30);
+            }
+        });
+
+        const trackWrap = page.locator('[data-test="track-wrap"]').first();
+        const box = await trackWrap.boundingBox();
+        if (!box) throw new Error('no box');
+        // Click at 50% → commandValue ~50
+        await trackWrap.click({ position: { x: box.width * 0.5, y: box.height / 2 } });
+        await page.waitForTimeout(100);
+
+        // Simulate SSE: feedback arrives at 20 — far from cmd=50, should stay dirty
+        await page.evaluate(() => {
+            for (const [, w] of (window as any).dashboardState.widgets) {
+                w.update(20);
+            }
+        });
+
+        const widget = page.locator('.setpoint-widget').first();
+        await expect(widget).toHaveClass(/dirty/);
+        // fb-marker should be visible (dirty state)
+        const fbMarker = page.locator('[data-test="fb-marker"]').first();
+        await expect(fbMarker).toBeVisible();
+    });
+
+    test('AC-1: click on track jumps handle and sends POST', async ({ page }) => {
+        const requests: Array<{ url: string; body: string }> = [];
+        page.on('request', (req) => {
+            if (req.url().includes('/ionc/set')) {
+                requests.push({ url: req.url(), body: req.postData() || '' });
+            }
+        });
+        await createSetpointDashboard(page, { style: 'slider', min: 0, max: 100, step: 1 });
+
+        const trackWrap = page.locator('[data-test="track-wrap"]').first();
+        const box = await trackWrap.boundingBox();
+        if (!box) throw new Error('track-wrap has no box');
+        // Click at 50% horizontally
+        await trackWrap.click({ position: { x: box.width * 0.5, y: box.height / 2 } });
+
+        await page.waitForTimeout(300);
+        expect(requests.length).toBeGreaterThanOrEqual(1);
+        const last = requests[requests.length - 1];
+        // value is in POST body JSON, should be ~50 (within step rounding)
+        const body = JSON.parse(last.body);
+        expect(body.value).toBeGreaterThanOrEqual(48);
+        expect(body.value).toBeLessThanOrEqual(52);
+    });
+
+    test('AC-2: drag sends exactly one POST on release', async ({ page }) => {
+        const requests: Array<{ url: string; body: string }> = [];
+        page.on('request', (req) => {
+            if (req.url().includes('/ionc/set')) {
+                requests.push({ url: req.url(), body: req.postData() || '' });
+            }
+        });
+        await createSetpointDashboard(page, { style: 'slider', min: 0, max: 100, step: 1 });
+
+        const trackWrap = page.locator('[data-test="track-wrap"]').first();
+        const box = await trackWrap.boundingBox();
+        if (!box) throw new Error('track-wrap has no box');
+
+        const startX = box.x + box.width * 0.2;
+        const midX = box.x + box.width * 0.5;
+        const endX = box.x + box.width * 0.8;
+        const y = box.y + box.height / 2;
+
+        await page.mouse.move(startX, y);
+        await page.mouse.down();
+        await page.mouse.move(midX, y, { steps: 5 });
+        await page.mouse.move(endX, y, { steps: 5 });
+        // Mid-drag: NO POST yet
+        expect(requests.filter(r => r.url.includes('/ionc/set'))).toHaveLength(0);
+        await page.mouse.up();
+        await page.waitForTimeout(300);
+        // After release: exactly one POST with the final position value
+        expect(requests.length).toBe(1);
+        const body = JSON.parse(requests[0].body);
+        expect(body.value).toBeGreaterThanOrEqual(75);
+        expect(body.value).toBeLessThanOrEqual(85);
+    });
+
+    test('AC-3: handle does not move during drag despite incoming SSE', async ({ page }) => {
+        await createSetpointDashboard(page, { style: 'slider', min: 0, max: 100, step: 1 });
+        await page.waitForTimeout(500);
+
+        const trackWrap = page.locator('[data-test="track-wrap"]').first();
+        const box = await trackWrap.boundingBox();
+        if (!box) throw new Error('no box');
+
+        // Start a drag at 30%
+        await page.mouse.move(box.x + box.width * 0.3, box.y + box.height / 2);
+        await page.mouse.down();
+        await page.waitForTimeout(100);
+
+        // Inject a feedback update via direct widget.update() — same entry point as real SSE
+        await page.evaluate(() => {
+            for (const [, w] of (window as any).dashboardState.widgets) {
+                w.update(80);
+            }
+        });
+        await page.waitForTimeout(500); // wait long enough that any rerender would have happened
+
+        // Handle should still be near 30% (because of drag), NOT 80%
+        const handle = page.locator('[data-test="handle"]').first();
+        const handleBox = await handle.boundingBox();
+        if (!handleBox) throw new Error('no handle box');
+        const handleCenterX = handleBox.x + handleBox.width / 2;
+        const pct = (handleCenterX - box.x) / box.width;
+        expect(pct).toBeGreaterThan(0.25);
+        expect(pct).toBeLessThan(0.35);
+
+        await page.mouse.up();
+    });
+
+    test('AC-7: dblclick on value, type, Enter -> POST', async ({ page }) => {
+        const requests: Array<{ url: string; body: string }> = [];
+        page.on('request', (req) => {
+            if (req.url().includes('/ionc/set')) {
+                requests.push({ url: req.url(), body: req.postData() || '' });
+            }
+        });
+        await createSetpointDashboard(page, { style: 'slider', min: 0, max: 100, step: 1 });
+        await page.waitForTimeout(500);
+
+        const valueSpan = page.locator('[data-test="value"]').first();
+        await valueSpan.dblclick();
+        const inlineInput = page.locator('[data-test="inline-input"]').first();
+        await inlineInput.waitFor({ state: 'visible', timeout: 2000 });
+        await inlineInput.fill('42');
+        await inlineInput.press('Enter');
+        await page.waitForTimeout(300);
+        expect(requests.length).toBeGreaterThanOrEqual(1);
+        const last = requests[requests.length - 1];
+        const body = JSON.parse(last.body);
+        expect(body.value).toBe(42);
+    });
+
+    test('AC-8: frozen sensor blocks click and drag', async ({ page }) => {
+        await createSetpointDashboard(page, { style: 'slider', min: 0, max: 100, step: 1 });
+        await page.waitForTimeout(300);
+
+        // Force frozen state via direct call — matches existing frozen test pattern
+        await page.evaluate(() => {
+            const w: any = window;
+            w.dashboardState.widgets.get('sp-1').update(50, null, { frozen: true });
+        });
+        await page.waitForTimeout(200);
+
+        const container = page.locator('.dashboard-widget[data-widget-id="sp-1"]').first();
+        await expect(container).toHaveAttribute('data-frozen', 'true');
+
+        const requests: Array<{ url: string; body: string }> = [];
+        page.on('request', (req) => {
+            if (req.url().includes('/ionc/set')) {
+                requests.push({ url: req.url(), body: req.postData() || '' });
+            }
+        });
+
+        // Use dispatchEvent directly — Playwright's physical click refuses to land on
+        // an element covered by the active-disabled overlay (pointer-events blocker).
+        // We want to verify the widget's own handler ignores the event, not that
+        // Playwright can't click through CSS.
+        await page.evaluate(() => {
+            const trackWrap = document.querySelector('[data-test="track-wrap"]') as HTMLElement;
+            const rect = trackWrap.getBoundingClientRect();
+            const x = rect.left + rect.width * 0.7;
+            const y = rect.top + rect.height / 2;
+            trackWrap.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: x, clientY: y }));
+            trackWrap.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: x, clientY: y }));
+            trackWrap.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, clientX: x, clientY: y }));
+        });
+        await page.waitForTimeout(500);
+        expect(requests).toHaveLength(0);
+    });
+
+    test('AC-9: no control token blocks click and drag', async ({ page }) => {
+        await createSetpointDashboard(page, { style: 'slider', min: 0, max: 100, step: 1 });
+        await page.waitForTimeout(300);
+
+        // Revoke control AFTER widget created — matches toggle spec pattern
+        await page.evaluate(() => {
+            const w: any = window;
+            w.state.control.token = null;
+            w.state.control.isController = false;
+            w.state.control.hasController = false;
+            document.dispatchEvent(new CustomEvent('controlStatusChanged', { detail: { ...w.state.control } }));
+        });
+        await page.waitForTimeout(200);
+
+        const container = page.locator('.dashboard-widget[data-widget-id="sp-1"]').first();
+        await expect(container).toHaveAttribute('data-control-blocked', 'true');
+
+        const requests: Array<{ url: string; body: string }> = [];
+        page.on('request', (req) => {
+            if (req.url().includes('/ionc/set')) {
+                requests.push({ url: req.url(), body: req.postData() || '' });
+            }
+        });
+
+        // Use dispatchEvent directly for the same reason as AC-8: Playwright's
+        // physical click refuses to land on an element covered by the overlay.
+        await page.evaluate(() => {
+            const trackWrap = document.querySelector('[data-test="track-wrap"]') as HTMLElement;
+            const rect = trackWrap.getBoundingClientRect();
+            const x = rect.left + rect.width * 0.7;
+            const y = rect.top + rect.height / 2;
+            trackWrap.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: x, clientY: y }));
+            trackWrap.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: x, clientY: y }));
+            trackWrap.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, clientX: x, clientY: y }));
+        });
+        await page.waitForTimeout(500);
+        expect(requests).toHaveLength(0);
+    });
+
+    test('AC-11: color zones render with correct positions and colors', async ({ page }) => {
+        await createSetpointDashboard(page, {
+            style: 'slider',
+            min: 0, max: 100, step: 1,
+            zones: [
+                { from: 0,  to: 40,  color: '#10b981' },
+                { from: 40, to: 75,  color: '#fbbf24' },
+                { from: 75, to: 100, color: '#ef4444' },
+            ],
+        });
+        await page.waitForTimeout(500);
+
+        const zoneEls = page.locator('.setpoint-slider-zone');
+        await expect(zoneEls).toHaveCount(3);
+
+        const first = await zoneEls.nth(0).evaluate(el => ({
+            bg: el.style.background || el.style.backgroundColor,
+            left: el.style.left,
+            right: el.style.right,
+        }));
+        // Background may be normalized to rgb() or kept as #hex; accept both
+        expect(first.bg.toLowerCase()).toMatch(/16, 185, 129|10b981/);
+        expect(first.left).toBe('0%');
+        expect(first.right).toBe('60%');
+
+        const third = await zoneEls.nth(2).evaluate(el => ({
+            bg: el.style.background || el.style.backgroundColor,
+            left: el.style.left,
+            right: el.style.right,
+        }));
+        expect(third.bg.toLowerCase()).toMatch(/239, 68, 68|ef4444/);
+        expect(third.left).toBe('75%');
+        expect(third.right).toBe('0%');
+    });
+
     // Frozen sensor: input/Apply disabled, ❄ marker. Feedback продолжает
     // отображаться (текущее frozen value). Apply click не отправляет POST.
     test('frozen sensor: input disabled, ❄ marker, no POST on Apply', async ({ page }) => {
@@ -573,5 +912,195 @@ test.describe('SetpointWidget — fourth active widget', () => {
         });
         await page.waitForTimeout(300);
         expect(posted).toBe(false);
+    });
+
+    test('AC-12: vertical orientation - drag from top to bottom decreases value', async ({ page }) => {
+        const requests: Array<{ url: string; body: string }> = [];
+        page.on('request', (req) => {
+            if (req.url().includes('/ionc/set')) {
+                requests.push({ url: req.url(), body: req.postData() || '' });
+            }
+        });
+        await createSetpointDashboard(page, {
+            style: 'slider',
+            orientation: 'vertical',
+            min: 0, max: 100, step: 1,
+        });
+        await page.waitForTimeout(500);
+
+        const widget = page.locator('.setpoint-widget').first();
+        await expect(widget).toHaveClass(/setpoint-slider-vertical/);
+
+        const trackWrap = page.locator('[data-test="track-wrap"]').first();
+        const box = await trackWrap.boundingBox();
+        if (!box) throw new Error('no box');
+
+        // Top of track = max (100), bottom = min (0). Start near top, release near bottom.
+        const startY = box.y + box.height * 0.1;
+        const endY = box.y + box.height * 0.9;
+        const x = box.x + box.width / 2;
+
+        await page.mouse.move(x, startY);
+        await page.mouse.down();
+        await page.mouse.move(x, endY, { steps: 5 });
+        await page.mouse.up();
+        await page.waitForTimeout(300);
+
+        expect(requests.length).toBe(1);
+        const body = JSON.parse(requests[0].body);
+        // End at 90% from top = 10% from bottom = ~10 in [0,100]
+        expect(body.value).toBeGreaterThanOrEqual(0);
+        expect(body.value).toBeLessThanOrEqual(15);
+    });
+
+    test('default size for slider horizontal: 6x4', async ({ page }) => {
+        // Use a special path that triggers the default-size logic in dashboard-manager.
+        // We can't use createSetpointDashboard directly because it sets explicit position;
+        // instead emulate the openWidgetEditor / save path that uses default size.
+        await page.evaluate(() => {
+            const w: any = window;
+            const WidgetClass = w.SetpointWidget;
+            const config = { style: 'slider', orientation: 'horizontal' };
+            const size = WidgetClass.getDefaultSizeForStyle('slider', config);
+            (window as any).__testSize = size;
+        });
+        const size = await page.evaluate(() => (window as any).__testSize);
+        expect(size).toEqual({ width: 6, height: 4 });
+    });
+
+    test('default size for slider vertical: 4x6', async ({ page }) => {
+        await page.evaluate(() => {
+            const w: any = window;
+            const WidgetClass = w.SetpointWidget;
+            const config = { style: 'slider', orientation: 'vertical' };
+            const size = WidgetClass.getDefaultSizeForStyle('slider', config);
+            (window as any).__testSize = size;
+        });
+        const size = await page.evaluate(() => (window as any).__testSize);
+        expect(size).toEqual({ width: 4, height: 6 });
+    });
+
+    test('default size for non-slider styles is null (uses static defaultSize)', async ({ page }) => {
+        await page.evaluate(() => {
+            const w: any = window;
+            const WidgetClass = w.SetpointWidget;
+            (window as any).__testSizeInput = WidgetClass.getDefaultSizeForStyle('input', {});
+            (window as any).__testSizeStepper = WidgetClass.getDefaultSizeForStyle('stepper', {});
+        });
+        const sizeInput = await page.evaluate(() => (window as any).__testSizeInput);
+        const sizeStepper = await page.evaluate(() => (window as any).__testSizeStepper);
+        expect(sizeInput).toBeNull();
+        expect(sizeStepper).toBeNull();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Config form conditional field visibility (AC-13)
+// Uses the widget picker flow (same pattern as dashboard-widget-settings.spec.ts)
+// ---------------------------------------------------------------------------
+
+async function setupDashboardEnvForAC13(page) {
+    await page.route('**/api/control/status', route => {
+        route.fulfill({
+            status: 200, contentType: 'application/json',
+            body: JSON.stringify({ enabled: true, isController: true, hasController: true, timeoutSec: 60 })
+        });
+    });
+    await page.route('**/api/objects?server=mock-srv&type=IONotifyController', route => {
+        route.fulfill({
+            status: 200, contentType: 'application/json',
+            body: JSON.stringify({ objects: [{ name: 'SharedMemory' }] })
+        });
+    });
+    await page.route('**/api/objects/SharedMemory/ionc/sensors**', route => {
+        route.fulfill({
+            status: 200, contentType: 'application/json',
+            body: JSON.stringify({ sensors: [{ id: 100, name: 'TEMP', type: 'AO', value: 0 }] })
+        });
+    });
+
+    await page.goto('/');
+    await page.waitForFunction(() => {
+        const w = window as any;
+        return typeof w.dashboardState !== 'undefined'
+            && typeof w.dashboardManager !== 'undefined'
+            && typeof w.SetpointWidget !== 'undefined';
+    });
+    await page.evaluate(() => {
+        const w = window as any;
+        w.state.control.token = 'admin';
+        w.state.control.isController = true;
+        w.state.control.hasController = true;
+        w.state.control.enabled = true;
+    });
+    await page.waitForFunction(() => {
+        const w = window as any;
+        for (const [, srv] of (w.state?.servers || new Map())) {
+            if (srv.connected) return true;
+        }
+        return false;
+    }, { timeout: 15000 });
+    await page.evaluate(() => {
+        const w = window as any;
+        w.state.servers.clear();
+        w.state.servers.set('mock-srv', { id: 'mock-srv', name: 'Mock', url: 'http://mock', connected: true });
+        localStorage.removeItem('user-dashboards');
+        Object.keys(localStorage).filter(k => k.startsWith('dashboard:')).forEach(k => localStorage.removeItem(k));
+    });
+}
+
+async function createEmptyDashboardInEditModeForAC13(page, name: string) {
+    await page.evaluate((n) => {
+        const w = window as any;
+        const dashCfg = { meta: { name: n }, widgets: [] };
+        w.dashboardState.dashboards.set(n, dashCfg);
+        w.dashboardManager.loadDashboard(n);
+        if (typeof w.switchView === 'function') w.switchView('dashboard');
+        w.dashboardState.editMode = true;
+        document.dispatchEvent(new CustomEvent('dashboardEditModeChanged', { detail: { editMode: true } }));
+    }, name);
+}
+
+async function openSetpointConfigViaPicker(page) {
+    await page.locator('#dashboard-add-widget-btn').click();
+    await page.locator('#widget-picker-overlay').waitFor({ state: 'visible' });
+    await page.locator('.widget-picker-item[data-type="setpoint"]').click();
+    const cfg = page.locator('#widget-config-overlay');
+    await cfg.waitFor({ state: 'visible' });
+    return cfg;
+}
+
+test.describe('SetpointWidget — AC-13: config form conditional field visibility', () => {
+    test.beforeEach(async ({ page }) => {
+        await setupDashboardEnvForAC13(page);
+    });
+
+    test('AC-13: slider style shows orientation+zones, hides applyMode; others show applyMode', async ({ page }) => {
+        await createEmptyDashboardInEditModeForAC13(page, 'AC13_DASH');
+        const cfg = await openSetpointConfigViaPicker(page);
+
+        const styleSel = cfg.locator('[name="style"]');
+        await expect(styleSel).toBeVisible({ timeout: 3000 });
+
+        const applyRow  = cfg.locator('[data-row="applyMode"]');
+        const orientRow = cfg.locator('[data-row="orientation"]');
+        const zonesRow  = cfg.locator('[data-row="zones"]');
+
+        // Default style is 'input' — applyMode visible, orientation/zones hidden
+        await expect(applyRow).toBeVisible();
+        await expect(orientRow).toBeHidden();
+        await expect(zonesRow).toBeHidden();
+
+        // Switch to slider
+        await styleSel.selectOption('slider');
+        await expect(applyRow).toBeHidden();
+        await expect(orientRow).toBeVisible();
+        await expect(zonesRow).toBeVisible();
+
+        // Switch back to stepper
+        await styleSel.selectOption('stepper');
+        await expect(applyRow).toBeVisible();
+        await expect(orientRow).toBeHidden();
+        await expect(zonesRow).toBeHidden();
     });
 });

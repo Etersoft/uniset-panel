@@ -38,9 +38,23 @@ class SetpointWidget extends ActiveDashboardWidget {
     static minSize = { width: 2, height: 1 };
     static maxSize = { width: 6, height: 3 };
 
+    static getDefaultSizeForStyle(style, config = {}) {
+        if (style === 'slider') {
+            const orientation = config.orientation === 'vertical' ? 'vertical' : 'horizontal';
+            return orientation === 'vertical'
+                ? { width: 4, height: 6 }
+                : { width: 6, height: 4 };
+        }
+        return null; // fall back to static defaultSize
+    }
+
     constructor(id, config, container) {
         super(id, config, container);
         this._autoApplyTimer = null;
+        this._sliderDragging = false;
+        this._onSliderMove = null;
+        this._onSliderUp = null;
+        this._sliderTrackWrap = null;
         // True после первого ручного ввода/clicka на +/- — после этого
         // renderFeedback больше не перезаписывает input.value на feedbackValue
         // (иначе после blur значение возвращалось бы на старое feedback).
@@ -170,40 +184,132 @@ class SetpointWidget extends ActiveDashboardWidget {
         const unit = escapeHtml(this.config?.unit || '');
         const min = this.config?.min ?? SETPOINT_DEFAULT_MIN;
         const max = this.config?.max ?? SETPOINT_DEFAULT_MAX;
-        const step = this.config?.step ?? SETPOINT_DEFAULT_STEP;
+        const orientation = this.config?.orientation === 'vertical' ? 'vertical' : 'horizontal';
+        const zones = Array.isArray(this.config?.zones) ? this.config.zones : [];
+        if (orientation === 'vertical') {
+            this.element.classList.add('setpoint-slider-vertical');
+        }
+        const zonesHtml = zones.length > 0
+            ? `<div class="setpoint-slider-zones" data-test="zones">${this._renderZonesHtml(zones, min, max, orientation)}</div>`
+            : '';
+        const fillHtml = zones.length > 0
+            ? ''
+            : '<div class="setpoint-slider-fill"></div>';
+
+        // Zero mark on the scale when the range crosses zero (e.g. -50..+50).
+        // Renders a small tick on the track plus a "0" label beside the min/max
+        // labels. Strict `min<0<max` — when zero coincides with min or max it's
+        // already labelled by the existing min/max span.
+        let zeroTickHtml = '';
+        let zeroLabelHtml = '';
+        if (min < 0 && max > 0 && max > min) {
+            const zeroPct = ((0 - min) / (max - min)) * 100;
+            const tickPos = orientation === 'vertical' ? `bottom:${zeroPct}%` : `left:${zeroPct}%`;
+            const labelPos = orientation === 'vertical' ? `bottom:${zeroPct}%` : `left:${zeroPct}%`;
+            zeroTickHtml  = `<div class="setpoint-slider-zero-tick"  style="${tickPos}"  data-test="zero-tick"></div>`;
+            zeroLabelHtml = `<span class="setpoint-slider-zero-label" style="${labelPos}" data-test="zero-label">0</span>`;
+        }
+
+        const unitSpan = unit ? `<span class="setpoint-unit"> ${unit}</span>` : '';
+        const labelsHtml = `
+            <div class="setpoint-slider-labels">
+                <span>${escapeHtml(String(min))}</span>
+                ${zeroLabelHtml}
+                <span>${escapeHtml(String(max))}${unitSpan}</span>
+            </div>
+        `;
+        // For vertical orientation labels live INSIDE track-wrap (positioned
+        // absolutely alongside the track). For horizontal they are a sibling
+        // AFTER the wrap so they participate in normal column flex flow and
+        // the widget container reserves space for them.
+        const labelsInside = orientation === 'vertical' ? labelsHtml : '';
+        const labelsAfter = orientation === 'vertical' ? '' : labelsHtml;
+
+        // Value bubble lives inside track-wrap (absolutely positioned) so it
+        // can follow the handle's X (horizontal) or Y (vertical). The previous
+        // `.setpoint-slider-value-row` is gone — track-wrap reserves space for
+        // the bubble via margin-top (h) / margin-left (v) in CSS.
         this.element.innerHTML = `
             ${this._labelHtml()}
             <div class="setpoint-slider-wrap">
-                <div class="setpoint-slider-value-row">
+                <div class="setpoint-slider-track-wrap" data-test="track-wrap">
+                    ${zonesHtml}
+                    <div class="setpoint-slider-track">${fillHtml}</div>
+                    ${zeroTickHtml}
+                    <div class="setpoint-slider-handle" data-test="handle"></div>
                     <span class="setpoint-slider-value" data-test="value" title="Двойной клик — точный ввод">--</span>
-                    ${unit ? '<span class="setpoint-unit">' + unit + '</span>' : ''}
+                    <div class="setpoint-slider-fb-marker" data-test="fb-marker"></div>
+                    ${labelsInside}
                 </div>
-                <input type="range" class="setpoint-slider" data-test="slider"
-                       min="${escapeHtml(String(min))}" max="${escapeHtml(String(max))}" step="${escapeHtml(String(step))}">
-                <div class="setpoint-slider-labels">
-                    <span>${escapeHtml(String(min))}</span>
-                    <span>${escapeHtml(String(max))}</span>
-                </div>
+                ${labelsAfter}
             </div>
         `;
 
-        const slider = this.element.querySelector('[data-test="slider"]');
         const valueSpan = this.element.querySelector('[data-test="value"]');
-
-        slider.addEventListener('input', () => {
-            const num = Number(slider.value);
-            this._setCommand(num);
-            valueSpan.textContent = String(num);
-        });
-        // Manual mode: change (release) = trigger apply
-        slider.addEventListener('change', () => {
-            if (this._applyMode() === 'manual') {
-                // В manual mode для slider apply при release (change event).
-                // (Apply button + Cancel также видны для consistency с input style.)
-                this._applyNow();
-            }
-        });
         this._makeInlineEditable(valueSpan);
+
+        const trackWrap = this.element.querySelector('[data-test="track-wrap"]');
+        this._sliderTrackWrap = trackWrap;
+
+        const valueAtPointer = (e) => {
+            const rect = trackWrap.getBoundingClientRect();
+            const cfgMin = this.config?.min ?? SETPOINT_DEFAULT_MIN;
+            const cfgMax = this.config?.max ?? SETPOINT_DEFAULT_MAX;
+            const cfgStep = this.config?.step ?? SETPOINT_DEFAULT_STEP;
+            const isVertical = this.config?.orientation === 'vertical';
+            let pct = isVertical
+                ? 1 - (e.clientY - rect.top) / rect.height
+                : (e.clientX - rect.left) / rect.width;
+            pct = Math.max(0, Math.min(1, pct));
+            const raw = cfgMin + pct * (cfgMax - cfgMin);
+            const stepped = Math.round(raw / cfgStep) * cfgStep;
+            return Math.max(cfgMin, Math.min(cfgMax, stepped));
+        };
+
+        this._onSliderMove = (e) => {
+            if (!this._sliderDragging) return;
+            const v = valueAtPointer(e);
+            this._setCommand(v);
+        };
+        this._onSliderUp = () => {
+            if (!this._sliderDragging) return;
+            this._sliderDragging = false;
+            trackWrap.classList.remove('dragging');
+            window.removeEventListener('mousemove', this._onSliderMove);
+            window.removeEventListener('mouseup', this._onSliderUp);
+            this._applyNow();
+        };
+
+        trackWrap.addEventListener('mousedown', (e) => {
+            if (!this.isInteractive()) return;
+            e.preventDefault();
+            e.stopPropagation();
+            this._sliderDragging = true;
+            trackWrap.classList.add('dragging');
+            const v = valueAtPointer(e);
+            this._setCommand(v);
+            // Do NOT _applyNow() here — committed on mouseup.
+            window.addEventListener('mousemove', this._onSliderMove);
+            window.addEventListener('mouseup', this._onSliderUp);
+        });
+    }
+
+    _renderZonesHtml(zones, min, max, orientation) {
+        const range = max - min;
+        if (range <= 0) return '';
+        return zones.map(z => {
+            const fromPct = Math.max(0, Math.min(100, (z.from - min) / range * 100));
+            const toPct   = Math.max(0, Math.min(100, (z.to   - min) / range * 100));
+            const left  = Math.min(fromPct, toPct);
+            const right = 100 - Math.max(fromPct, toPct);
+            const color = escapeAttr(z.color || '#ef4444');
+            if (orientation === 'vertical') {
+                const bottom = left;
+                const heightPct = 100 - left - right;
+                return `<div class="setpoint-slider-zone" style="bottom:${bottom}%;height:${heightPct}%;background:${color}"></div>`;
+            }
+            return `<div class="setpoint-slider-zone" style="left:${left}%;right:${right}%;background:${color}"></div>`;
+        }).join('');
     }
 
     // ===== Style: stepper =====
@@ -279,14 +385,117 @@ class SetpointWidget extends ActiveDashboardWidget {
                 input.value = this.feedbackValue ?? '';
             }
         } else if (style === 'slider') {
-            const slider = this.element.querySelector('[data-test="slider"]');
+            const trackWrap = this.element.querySelector('[data-test="track-wrap"]');
+            const handle = this.element.querySelector('[data-test="handle"]');
             const valueSpan = this.element.querySelector('[data-test="value"]');
+            const fill = this.element.querySelector('.setpoint-slider-fill');
+            const fbMarker = this.element.querySelector('[data-test="fb-marker"]');
             const display = this.commandValue ?? this.feedbackValue;
-            if (slider && display !== null && display !== undefined && document.activeElement !== slider) {
-                slider.value = display;
-            }
+            const isVertical = this.config?.orientation === 'vertical';
+            const cfgMin = this.config?.min ?? SETPOINT_DEFAULT_MIN;
+            const cfgMax = this.config?.max ?? SETPOINT_DEFAULT_MAX;
+            const range = cfgMax - cfgMin;
+
+            const pct = (v) => {
+                if (range <= 0) return 0;
+                return Math.max(0, Math.min(100, (v - cfgMin) / range * 100));
+            };
+
+            // No-data state
+            const noData = (display === null || display === undefined);
+            this.element.classList.toggle('setpoint-slider-no-data', noData);
+
             if (valueSpan) {
-                valueSpan.textContent = (display !== null && display !== undefined) ? String(display) : '--';
+                valueSpan.textContent = noData ? '--' : String(display);
+                // Bubble follows the handle. Horizontal: track X via `left`.
+                // Vertical: track Y via `bottom`. CSS handles the rest of the
+                // positioning (offset, transform, transition).
+                if (!noData) {
+                    const p = pct(display);
+                    if (isVertical) {
+                        valueSpan.style.bottom = p + '%';
+                        valueSpan.style.left = '';
+                    } else {
+                        valueSpan.style.left = p + '%';
+                        valueSpan.style.bottom = '';
+                    }
+                } else {
+                    // Park bubble at left/bottom edge while we have no data.
+                    if (isVertical) {
+                        valueSpan.style.bottom = '0%';
+                        valueSpan.style.left = '';
+                    } else {
+                        valueSpan.style.left = '0%';
+                        valueSpan.style.bottom = '';
+                    }
+                }
+            }
+            if (!noData && handle) {
+                const p = pct(display);
+                if (isVertical) {
+                    handle.style.bottom = p + '%';
+                    handle.style.left = '';
+                } else {
+                    handle.style.left = p + '%';
+                    handle.style.bottom = '';
+                }
+            }
+            if (!noData && fill) {
+                // Fill range:
+                //   'zero' (default) — signed from zero. Extends RIGHT of zero
+                //                      for positive values, LEFT of zero for
+                //                      negative. Falls back to 'min' when zero
+                //                      is outside [min, max].
+                //   'min'            — fill from left/bottom edge to value
+                //                      (legacy default).
+                //   'max'            — fill from value to right/top edge
+                //                      (mirror image of 'min').
+                const fillOrigin = this.config?.fillOrigin || 'zero';
+                const valuePct = pct(display);
+                let startPct = 0;
+                let endPct = valuePct;
+                if (fillOrigin === 'max') {
+                    startPct = valuePct;
+                    endPct = 100;
+                } else if (fillOrigin === 'zero' && cfgMin < 0 && cfgMax > 0) {
+                    const zeroPct = ((0 - cfgMin) / range) * 100;
+                    if (display >= 0) {
+                        startPct = zeroPct;
+                        endPct = valuePct;
+                    } else {
+                        startPct = valuePct;
+                        endPct = zeroPct;
+                    }
+                }
+                const sizePct = Math.max(0, endPct - startPct);
+                if (isVertical) {
+                    fill.style.bottom = startPct + '%';
+                    fill.style.height = sizePct + '%';
+                    fill.style.top = 'auto';
+                    fill.style.width = '';
+                    fill.style.left = '';
+                } else {
+                    fill.style.left = startPct + '%';
+                    fill.style.width = sizePct + '%';
+                    fill.style.right = 'auto';
+                    fill.style.height = '';
+                    fill.style.bottom = '';
+                }
+            }
+            // fb-marker — only when dirty (cmd != fb), positioned at fb
+            if (fbMarker) {
+                const fbReady = this.feedbackValue !== null && this.feedbackValue !== undefined;
+                const isDirty = this.commandValue !== null && this.commandValue !== undefined && fbReady;
+                if (isDirty) {
+                    const p = pct(this.feedbackValue);
+                    if (isVertical) {
+                        fbMarker.style.bottom = p + '%';
+                        fbMarker.style.left = '';
+                    } else {
+                        fbMarker.style.left = p + '%';
+                        fbMarker.style.bottom = '';
+                    }
+                }
             }
         } else { // stepper
             const valueSpan = this.element.querySelector('[data-test="value"]');
@@ -315,7 +524,11 @@ class SetpointWidget extends ActiveDashboardWidget {
                 this._updateDirty(false);
             }
         }
-        this.renderFeedback();
+        // Skip handle re-render during active drag — feedback is recorded but not visualized
+        // until mouseup, so the handle does not "jump out of the operator's hand".
+        if (!this._sliderDragging) {
+            this.renderFeedback();
+        }
     }
 
     renderCommand() {
@@ -408,6 +621,9 @@ class SetpointWidget extends ActiveDashboardWidget {
     // ===== Config form =====
     static getActiveConfigFields(config = {}) {
         const applyMode = config.applyMode || 'manual';
+        const orientation = config.orientation || 'horizontal';
+        const fillOrigin = config.fillOrigin || 'zero';
+        const zones = Array.isArray(config.zones) ? config.zones : [];
         return `
             <div class="widget-config-row">
                 <div class="widget-config-field">
@@ -432,13 +648,31 @@ class SetpointWidget extends ActiveDashboardWidget {
                     <input type="text" class="widget-input" name="unit"
                            value="${escapeAttr(config.unit || '')}" placeholder="°C, %, Pa..." data-test="cfg-unit">
                 </div>
-                <div class="widget-config-field">
+                <div class="widget-config-field" data-row="applyMode">
                     <label>Apply mode</label>
                     <select class="widget-input" name="applyMode" data-test="cfg-applyMode">
                         <option value="manual" ${applyMode === 'manual' ? 'selected' : ''}>manual (Apply button)</option>
                         <option value="auto" ${applyMode === 'auto' ? 'selected' : ''}>auto (debounce ${SETPOINT_AUTO_APPLY_DEBOUNCE_MS}ms)</option>
                     </select>
                 </div>
+                <div class="widget-config-field" data-row="orientation">
+                    <label>Orientation</label>
+                    <select class="widget-input" name="orientation" data-test="cfg-orientation">
+                        <option value="horizontal" ${orientation === 'horizontal' ? 'selected' : ''}>horizontal</option>
+                        <option value="vertical"   ${orientation === 'vertical'   ? 'selected' : ''}>vertical</option>
+                    </select>
+                </div>
+                <div class="widget-config-field" data-row="fillOrigin">
+                    <label>Fill from</label>
+                    <select class="widget-input" name="fillOrigin" data-test="cfg-fillOrigin">
+                        <option value="zero" ${fillOrigin === 'zero' ? 'selected' : ''}>zero (signed)</option>
+                        <option value="min"  ${fillOrigin === 'min'  ? 'selected' : ''}>left/bottom edge</option>
+                        <option value="max"  ${fillOrigin === 'max'  ? 'selected' : ''}>right/top edge</option>
+                    </select>
+                </div>
+            </div>
+            <div class="widget-config-row" data-row="zones">
+                ${renderColorZonesEditor(zones, '#3b82f6')}
             </div>
         `;
     }
@@ -448,17 +682,69 @@ class SetpointWidget extends ActiveDashboardWidget {
         const max = parseDecimalInputOrDefault(form.querySelector('[name="max"]')?.value, SETPOINT_DEFAULT_MAX);
         const stepRaw = parseDecimalInputOrDefault(form.querySelector('[name="step"]')?.value, SETPOINT_DEFAULT_STEP);
         const step = stepRaw > 0 ? stepRaw : SETPOINT_DEFAULT_STEP;
-        return {
+        const style = form.querySelector('[name="style"]')?.value || SetpointWidget.defaultStyle;
+        const result = {
             min: Math.min(min, max),
             max: Math.max(min, max),
             step,
-            unit:      form.querySelector('[name="unit"]')?.value || '',
-            applyMode: form.querySelector('[name="applyMode"]')?.value || 'manual',
+            unit: form.querySelector('[name="unit"]')?.value || '',
         };
+        if (style === 'slider') {
+            const orient = form.querySelector('[name="orientation"]')?.value;
+            result.orientation = orient === 'vertical' ? 'vertical' : 'horizontal';
+            const fillOrigin = form.querySelector('[name="fillOrigin"]')?.value;
+            result.fillOrigin = (fillOrigin === 'min' || fillOrigin === 'max')
+                ? fillOrigin
+                : 'zero';
+            const zonesContainer = form.querySelector('[data-row="zones"]');
+            result.zones = zonesContainer ? parseColorZones(zonesContainer) : [];
+        } else {
+            result.applyMode = form.querySelector('[name="applyMode"]')?.value === 'auto' ? 'auto' : 'manual';
+        }
+        return result;
+    }
+
+    static initConfigHandlers(form, config = {}) {
+        super.initConfigHandlers(form, config);  // wires sensor binding
+
+        if (form.dataset.setpointStyleHandlersWired === 'true') return;
+        form.dataset.setpointStyleHandlersWired = 'true';
+
+        const styleSel = form.querySelector('[name="style"]');
+        if (!styleSel) return;
+
+        const applyRow      = form.querySelector('[data-row="applyMode"]');
+        const orientRow     = form.querySelector('[data-row="orientation"]');
+        const fillOriginRow = form.querySelector('[data-row="fillOrigin"]');
+        const zonesRow      = form.querySelector('[data-row="zones"]');
+
+        const applyVisibility = () => {
+            const isSlider = styleSel.value === 'slider';
+            if (applyRow)      applyRow.style.display      = isSlider ? 'none' : '';
+            if (orientRow)     orientRow.style.display     = isSlider ? '' : 'none';
+            if (fillOriginRow) fillOriginRow.style.display = isSlider ? '' : 'none';
+            if (zonesRow)      zonesRow.style.display      = isSlider ? '' : 'none';
+        };
+        applyVisibility();
+        styleSel.addEventListener('change', applyVisibility);
     }
 
     destroy() {
         clearTimeout(this._autoApplyTimer);
+        if (this._sliderDragging) {
+            this._sliderDragging = false;
+            if (this._sliderTrackWrap) {
+                this._sliderTrackWrap.classList.remove('dragging');
+            }
+        }
+        if (this._onSliderMove) {
+            window.removeEventListener('mousemove', this._onSliderMove);
+            this._onSliderMove = null;
+        }
+        if (this._onSliderUp) {
+            window.removeEventListener('mouseup', this._onSliderUp);
+            this._onSliderUp = null;
+        }
         super.destroy();
     }
 }

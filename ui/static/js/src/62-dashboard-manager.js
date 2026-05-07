@@ -1128,7 +1128,7 @@ class DashboardManager {
             // в форме конфига — используем тот размер, иначе static defaultSize.
             const newId = `widget-${Date.now()}`;
             const sizeOverride = (typeof WidgetClass.getDefaultSizeForStyle === 'function' && config.style)
-                ? WidgetClass.getDefaultSizeForStyle(config.style)
+                ? WidgetClass.getDefaultSizeForStyle(config.style, config)
                 : null;
             const width  = sizeOverride?.width  ?? WidgetClass.defaultSize.width;
             const height = sizeOverride?.height ?? WidgetClass.defaultSize.height;

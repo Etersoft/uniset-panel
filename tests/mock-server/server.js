@@ -589,6 +589,33 @@ const server = http.createServer((req, res) => {
     console.log('[mock] Simulating server UP');
     res.end(JSON.stringify({ status: 'connected' }));
     return;
+  } else if (url === '/api/mock/set-sensor-value' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const { id, value } = JSON.parse(body);
+        if (typeof id !== 'number' || typeof value !== 'number') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'expected {id: number, value: number}' }));
+          return;
+        }
+        const sensor = mockSensors.find(s => s.id === id);
+        if (!sensor) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: `sensor ${id} not found` }));
+          return;
+        }
+        sensor.value = value;
+        sensor.real_value = value;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, id, value }));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: String(e) }));
+      }
+    });
+    return;
   } else if (url === '/api/mock/status') {
     res.end(JSON.stringify({ simulateDown }));
     return;

@@ -8721,11 +8721,6 @@ button.rotate-quick-btn:active {
     box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.7) !important;
     transition: box-shadow 0.15s;
 }
-/* Setpoint — slider style: рамка вокруг slider */
-.dashboard-widget.active-success .setpoint-slider {
-    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.7) !important;
-    transition: box-shadow 0.15s;
-}
 /* Setpoint — stepper style: рамка вокруг кнопочного ряда */
 .dashboard-widget.active-success .setpoint-stepper-row {
     box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.7) !important;
@@ -9280,59 +9275,6 @@ button.rotate-quick-btn:active {
     width: 100%;
     padding: 8px 14px;
 }
-.setpoint-style-slider .setpoint-slider-wrap {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    align-items: center;
-}
-.setpoint-style-slider .setpoint-slider-value-row {
-    display: flex;
-    align-items: baseline;
-    gap: 6px;
-}
-.setpoint-style-slider .setpoint-slider-value {
-    font-size: 18px;
-    font-weight: 600;
-    color: #d8dce2;
-    font-family: monospace;
-    cursor: pointer;
-    padding: 2px 6px;
-    border-radius: 3px;
-    transition: background 0.1s;
-}
-.setpoint-style-slider .setpoint-slider-value:hover {
-    background: #374151;
-}
-.setpoint-widget.dirty .setpoint-slider-value {
-    color: #fbbf24;
-}
-.setpoint-style-slider .setpoint-slider {
-    width: 100%;
-    -webkit-appearance: none;
-    appearance: none;
-    height: 6px;
-    background: #374151;
-    border-radius: 3px;
-    outline: none;
-}
-.setpoint-style-slider .setpoint-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 18px;
-    height: 18px;
-    background: #3b82f6;
-    border-radius: 50%;
-    cursor: pointer;
-    border: 2px solid #fff;
-}
-.setpoint-style-slider .setpoint-slider-labels {
-    display: flex;
-    justify-content: space-between;
-    width: 100%;
-    font-size: 10px;
-    color: #6b7280;
-}
 
 /* === Style: stepper === */
 .setpoint-style-stepper .setpoint-stepper-row {
@@ -9472,4 +9414,293 @@ button.rotate-quick-btn:active {
 }
 .generator-widget .gen-toggle.running .gen-handle {
     left: 21px;
+}
+
+/* ===== SetpointWidget style='slider' (custom-rendered) ===== */
+.setpoint-slider-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    justify-content: center;
+}
+/* Legacy wrapper — value moved into track-wrap as a handle-following bubble. */
+.setpoint-slider-value-row { display: none; }
+/* Value bubble — sits above the handle (h) or to the left of the handle (v),
+   tracks handle position via inline `left`/`bottom` set in renderFeedback. */
+.setpoint-slider-value {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    transform: translateX(-50%);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: text;
+    padding: 1px 6px;
+    border-radius: 3px;
+    line-height: 1.2;
+    background: rgba(17, 24, 39, 0.78);
+    color: #fff;
+    white-space: nowrap;
+    pointer-events: auto;
+    transition: left 80ms ease-out;
+    z-index: 3;
+}
+.setpoint-slider-value:hover {
+    background: rgba(17, 24, 39, 0.95);
+}
+.setpoint-widget.dirty .setpoint-slider-value {
+    color: #fbbf24;
+}
+.setpoint-slider-track-wrap {
+    position: relative;
+    /* Compact 24px — just the handle's height. Track sits centered on the
+       handle's vertical mid-line, fb-marker hangs off the bottom edge.
+       flex:0 0 prevents collapse in tight flex columns (otherwise the
+       absolutely-positioned children get dragged out of their box).
+       margin-top reserves room for the value bubble that hangs above the
+       handle (calc 24px label + 6px gap = 30px). */
+    height: 24px;
+    flex: 0 0 24px;
+    margin-top: 28px;
+    cursor: pointer;
+    user-select: none;
+}
+.setpoint-slider-track {
+    position: absolute;
+    left: 0; right: 0;
+    top: 8px;
+    height: 8px;
+    background: var(--bg-secondary, #374151);
+    border-radius: 4px;
+}
+.setpoint-slider-fill {
+    position: absolute;
+    /* `left` and `width` are set inline in renderFeedback so the fill can
+       start from zero (signed) or from the left edge depending on
+       config.fillOrigin. */
+    left: 0; top: 0; bottom: 0;
+    width: 0;
+    background: var(--accent-primary, #3b82f6);
+    border-radius: 4px;
+    transition: left 80ms ease-out, width 80ms ease-out;
+}
+.setpoint-slider-zones {
+    position: absolute;
+    left: 0; right: 0;
+    top: 8px;
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    pointer-events: none;
+}
+.setpoint-slider-zone {
+    position: absolute;
+    top: 0; bottom: 0;
+}
+.setpoint-slider-handle {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 24px;
+    height: 24px;
+    background: #fff;
+    border: 2px solid var(--accent-primary, #3b82f6);
+    border-radius: 50%;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    transform: translateX(-50%);
+    transition: left 80ms ease-out;
+    z-index: 2;
+}
+.setpoint-slider-track-wrap.dragging .setpoint-slider-handle {
+    transition: none;
+    transform: translateX(-50%) scale(1.1);
+}
+/* Kill fill transition during drag — otherwise the 80ms left/width ease-out
+   gets re-triggered on every mousemove, producing visible jitter and a
+   momentary gap between the fill and the zero tick (the fill is mid-animation
+   when fillOrigin='zero' and the user crosses zero). */
+.setpoint-slider-track-wrap.dragging .setpoint-slider-fill {
+    transition: none;
+}
+.setpoint-slider-fb-marker {
+    position: absolute;
+    top: 16px;
+    left: 0;
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-bottom: 8px solid #fbbf24;
+    transform: translateX(-50%);
+    pointer-events: none;
+    transition: left 80ms ease-out;
+    display: none;
+}
+.setpoint-widget.dirty .setpoint-slider-fb-marker {
+    display: block;
+}
+.setpoint-slider-labels {
+    /* For horizontal orientation labels are a sibling AFTER track-wrap and
+       participate in normal column flex flow. The vertical override below
+       moves them inside the wrap as absolutely-positioned. position:relative
+       so the absolutely-positioned zero label is anchored to the labels row. */
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-muted, #6b7280);
+    margin-top: 0;
+    pointer-events: none;
+}
+/* Zero tick — short notch on the track at the zero position when the scale
+   spans negative→positive (e.g. -50..+50). The notch sits across the track
+   height (3px above + 3px below) so it's visible against both the empty
+   track and the blue fill. White on dark = high contrast. */
+.setpoint-slider-zero-tick {
+    position: absolute;
+    top: 4px;
+    left: 0;
+    width: 2px;
+    height: 16px;
+    background: #e5e7eb;
+    transform: translateX(-50%);
+    pointer-events: none;
+    opacity: 0.85;
+    z-index: 2;
+}
+/* Zero label sits in the labels row at the calculated %, between min and max. */
+.setpoint-slider-zero-label {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform: translateX(-50%);
+    pointer-events: none;
+    color: var(--text-muted, #6b7280);
+}
+.setpoint-slider-no-data .setpoint-slider-handle,
+.setpoint-slider-no-data .setpoint-slider-fill {
+    opacity: 0.4;
+}
+.setpoint-slider-no-data .setpoint-slider-value {
+    opacity: 0.5;
+}
+
+/* Vertical orientation */
+.setpoint-style-slider.setpoint-slider-vertical .setpoint-slider-wrap {
+    align-items: center;
+}
+.setpoint-style-slider.setpoint-slider-vertical .setpoint-label {
+    text-align: center;
+}
+.setpoint-style-slider.setpoint-slider-vertical .setpoint-slider-value-row {
+    justify-content: center;
+}
+.setpoint-slider-vertical .setpoint-slider-track-wrap {
+    width: 24px;
+    height: auto;
+    flex: 1 1 auto;
+    min-height: 100px;
+    /* No top margin in vertical layout — the value bubble sits to the LEFT
+       of the handle, not above. margin-left widened to fit value bubble
+       (~50px wide) plus a small gap. margin-right stays at 40px for the
+       min/max labels column on the right. */
+    margin-top: 0;
+    margin-left: 60px;
+    margin-right: 40px;
+}
+/* Vertical: value bubble to the LEFT of the handle, follows handle Y. */
+.setpoint-slider-vertical .setpoint-slider-value {
+    bottom: 0;
+    left: -8px;
+    transform: translateX(-100%) translateY(50%);
+    transition: bottom 80ms ease-out;
+}
+/* Vertical zero tick — across the track horizontally at the calculated Y. */
+.setpoint-slider-vertical .setpoint-slider-zero-tick {
+    top: auto;
+    bottom: 0;
+    left: 5px;
+    width: 14px;
+    height: 2px;
+    transform: translateY(50%);
+}
+/* Vertical zero label — pinned to the right (where min/max labels live),
+   positioned by `bottom` set inline. */
+.setpoint-slider-vertical .setpoint-slider-zero-label {
+    left: auto;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    transform: translateY(50%);
+}
+.setpoint-slider-vertical .setpoint-slider-track {
+    left: 8px;
+    top: 0;
+    bottom: 0;
+    right: auto;
+    width: 8px;
+    height: auto;
+}
+.setpoint-slider-vertical .setpoint-slider-fill {
+    /* `bottom` and `height` are set inline by renderFeedback (see horizontal
+       comment above for fill-origin semantics). */
+    left: 0; right: 0; bottom: 0; top: auto;
+    width: auto;
+    height: 0;
+    transition: bottom 80ms ease-out, height 80ms ease-out;
+}
+.setpoint-slider-vertical .setpoint-slider-zones {
+    left: 8px;
+    top: 0;
+    bottom: 0;
+    right: auto;
+    width: 8px;
+    height: auto;
+}
+.setpoint-slider-vertical .setpoint-slider-zone {
+    left: 0; right: 0;
+    top: auto; bottom: 0;
+}
+.setpoint-slider-vertical .setpoint-slider-handle {
+    left: 12px;
+    top: auto;
+    bottom: 0;
+    transform: translateX(-50%) translateY(50%);
+    transition: bottom 80ms ease-out;
+}
+.setpoint-slider-vertical .setpoint-slider-track-wrap.dragging .setpoint-slider-handle {
+    transition: none;
+    transform: translateX(-50%) translateY(50%) scale(1.1);
+}
+.setpoint-slider-vertical .setpoint-slider-track-wrap.dragging .setpoint-slider-fill {
+    transition: none;
+}
+.setpoint-slider-vertical .setpoint-slider-fb-marker {
+    top: auto;
+    bottom: 0;
+    left: -2px;
+    border-left: none;
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    border-right: 8px solid #fbbf24;
+    transform: translateY(50%);
+    transition: bottom 80ms ease-out;
+}
+.setpoint-slider-vertical .setpoint-slider-labels {
+    /* Inside track-wrap (position:relative). Labels stack vertically
+       to the right of the track, max at top, min at bottom. */
+    flex-direction: column-reverse;
+    position: absolute;
+    left: 100%;
+    margin-left: 6px;
+    top: 0; bottom: 0;
+    right: auto;
+    margin-top: 0;
+    width: 60px;
+    overflow: visible;
+    white-space: nowrap;
 }
