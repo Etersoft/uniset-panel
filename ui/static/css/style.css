@@ -9496,6 +9496,10 @@ button.rotate-quick-btn:active {
     border-radius: 4px;
     overflow: hidden;
     pointer-events: none;
+    z-index: 1;
+}
+.setpoint-slider-track-wrap:has(.setpoint-slider-zones) .setpoint-slider-track {
+    background: transparent;
 }
 .setpoint-slider-zone {
     position: absolute;
