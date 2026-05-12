@@ -245,11 +245,19 @@ const CHART_THEME = {
     tickColor:   '#8a9099',
 };
 
+// === Zones reuse picker ===
+const ZONES_HISTORY_MAX = 10;                              // FIFO cap для localStorage history
+const ZONES_PICKER_MAX_HEIGHT_PX = 220;                    // max-height scrollable area
+const ZONES_HISTORY_STORAGE_KEY = 'uniset.zonesHistory';   // localStorage key для recent zones
+
 if (typeof globalThis !== 'undefined') {
     Object.assign(globalThis, {
         CHART_LINE_TENSION,
         CHART_LINE_BORDER_WIDTH,
         CHART_STEPPED_LINE_BORDER_WIDTH,
-        UNET_CHART_LINE_TENSION
+        UNET_CHART_LINE_TENSION,
+        ZONES_HISTORY_MAX,
+        ZONES_HISTORY_STORAGE_KEY,
+        ZONES_PICKER_MAX_HEIGHT_PX,
     });
 }

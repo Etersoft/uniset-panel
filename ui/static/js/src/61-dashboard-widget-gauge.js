@@ -1008,6 +1008,7 @@ class GaugeWidget extends DashboardWidget {
     }
 
     static initConfigHandlers(form, config = {}) {
+        mountZonesReusePicker(form, 'gauge');
         initSensorBindingHandlers(form, config, { fieldPrefix: '' });
 
         const wireDual = () => {

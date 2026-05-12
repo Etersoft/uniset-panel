@@ -108,6 +108,7 @@ class LevelWidget extends DashboardWidget {
     }
 
     static initConfigHandlers(form, config = {}) {
+        mountZonesReusePicker(form, 'level');
         initSensorBindingHandlers(form, config, { fieldPrefix: '' });
     }
 }

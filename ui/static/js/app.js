@@ -249,12 +249,20 @@ const CHART_THEME = {
     tickColor:   '#8a9099',
 };
 
+// === Zones reuse picker ===
+const ZONES_HISTORY_MAX = 10;                              // FIFO cap для localStorage history
+const ZONES_PICKER_MAX_HEIGHT_PX = 220;                    // max-height scrollable area
+const ZONES_HISTORY_STORAGE_KEY = 'uniset.zonesHistory';   // localStorage key для recent zones
+
 if (typeof globalThis !== 'undefined') {
     Object.assign(globalThis, {
         CHART_LINE_TENSION,
         CHART_LINE_BORDER_WIDTH,
         CHART_STEPPED_LINE_BORDER_WIDTH,
-        UNET_CHART_LINE_TENSION
+        UNET_CHART_LINE_TENSION,
+        ZONES_HISTORY_MAX,
+        ZONES_HISTORY_STORAGE_KEY,
+        ZONES_PICKER_MAX_HEIGHT_PX,
     });
 }
 
@@ -1881,6 +1889,210 @@ function parseColorZones(container) {
     return zones;
 }
 
+function canonicalizeZones(zones) {
+    if (!Array.isArray(zones)) return '';
+    const normalized = zones
+        .map(z => ({
+            from:  Number(Number(z.from).toFixed(6)),
+            to:    Number(Number(z.to).toFixed(6)),
+            color: String(z.color || '').toLowerCase(),
+        }))
+        .sort((a, b) => a.from - b.from);
+    return JSON.stringify(normalized);
+}
+
+function getZonesHistory() {
+    try {
+        const raw = localStorage.getItem(ZONES_HISTORY_STORAGE_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+}
+
+function addZonesToHistory(zones, sourceWidgetType) {
+    if (!Array.isArray(zones) || zones.length === 0) return;
+    const normalized = zones.map(z => ({
+        from:  Number(Number(z.from).toFixed(6)),
+        to:    Number(Number(z.to).toFixed(6)),
+        color: String(z.color || '').toLowerCase(),
+    }));
+    const key = canonicalizeZones(normalized);
+    const history = getZonesHistory();
+    const filtered = history.filter(item => canonicalizeZones(item.zones) !== key);
+    filtered.unshift({
+        zones:            normalized,
+        timestamp:        Date.now(),
+        sourceWidgetType: sourceWidgetType || '',
+    });
+    const capped = filtered.slice(0, ZONES_HISTORY_MAX);
+    try {
+        localStorage.setItem(ZONES_HISTORY_STORAGE_KEY, JSON.stringify(capped));
+    } catch (e) {
+        console.warn('addZonesToHistory: localStorage write failed', e);
+    }
+}
+
+function renderZoneChipBar(zones) {
+    if (!Array.isArray(zones) || zones.length === 0) {
+        return '<span class="zone-bar"></span>';
+    }
+    const spans = zones.map(z => {
+        const weight = Math.max(1, Number(z.to) - Number(z.from));
+        const color = escapeAttr(String(z.color || '#888'));
+        return `<span style="background:${color};flex:${weight}">${escapeHtml(`${z.from}–${z.to}`)}</span>`;
+    }).join('');
+    return `<span class="zone-bar">${spans}</span>`;
+}
+
+function getDashboardZoneSources(currentDashboardId, excludeWidgetId) {
+    const state = globalThis.dashboardState;
+    if (!state || !state.dashboards) return [];
+    const dash = state.dashboards.get(currentDashboardId);
+    if (!dash || !Array.isArray(dash.widgets)) return [];
+    return dash.widgets
+        .filter(w => w.id !== excludeWidgetId
+                  && Array.isArray(w.config?.zones)
+                  && w.config.zones.length > 0)
+        .map(w => ({
+            widgetId: w.id,
+            widgetType: w.type,
+            sensorLabel: w.config.sensor || w.config.label || w.id,
+            zones: w.config.zones,
+        }));
+}
+
+function _renderZoneChipFromSource(zones, sourceLabel, sourceClass) {
+    const json = escapeAttr(JSON.stringify(zones));
+    const labelHtml = escapeHtml(sourceLabel);
+    const labelClass = sourceClass === 'recent' ? 'chip-source recent-source' : 'chip-source';
+    return `<div class="zone-chip" data-zones-json="${json}" role="button" tabindex="0">${renderZoneChipBar(zones)}<span class="${labelClass}">${labelHtml}</span></div>`;
+}
+
+function _formatRelativeTime(timestamp) {
+    const diff = Date.now() - timestamp;
+    const sec = Math.floor(diff / 1000);
+    if (sec < 60) return 'just now';
+    const min = Math.floor(sec / 60);
+    if (min < 60) return `${min}m ago`;
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return `${hr}h ago`;
+    const day = Math.floor(hr / 24);
+    if (day < 30) return `${day}d ago`;
+    return new Date(timestamp).toISOString().slice(0, 10);
+}
+
+function _widgetTypeDisplayName(type) {
+    const types = globalThis.WIDGET_TYPES || {};
+    return types[type]?.displayName || type;
+}
+
+function renderZonesReusePicker(currentWidgetType, currentDashboardId, currentWidgetId) {
+    const dashSources = getDashboardZoneSources(currentDashboardId, currentWidgetId || '');
+    const history = getZonesHistory();
+    if (dashSources.length === 0 && history.length === 0) return '';
+
+    // Group dashboard sources by widget type
+    const byType = new Map();
+    dashSources.forEach(src => {
+        if (!byType.has(src.widgetType)) byType.set(src.widgetType, []);
+        byType.get(src.widgetType).push(src);
+    });
+
+    // Order: current-type first, then alphabetical by displayName
+    const orderedTypes = Array.from(byType.keys()).sort((a, b) => {
+        if (a === currentWidgetType) return -1;
+        if (b === currentWidgetType) return 1;
+        return _widgetTypeDisplayName(a).localeCompare(_widgetTypeDisplayName(b));
+    });
+
+    const totalCount = dashSources.length + history.length;
+
+    let groupsHtml = '';
+
+    if (history.length > 0) {
+        const recentChips = history.map(item => {
+            const label = _formatRelativeTime(item.timestamp);
+            return _renderZoneChipFromSource(item.zones, label, 'recent');
+        }).join('');
+        groupsHtml += `
+            <div class="group-label group-recent">
+                <span>★ Recent</span>
+                <span class="group-count">(${history.length})</span>
+                <span class="group-divider"></span>
+            </div>
+            <div>${recentChips}</div>
+        `;
+    }
+
+    orderedTypes.forEach(type => {
+        const list = byType.get(type);
+        const isSame = type === currentWidgetType;
+        const labelClass = isSame ? 'group-label group-same-class' : 'group-label';
+        const typeName = escapeHtml(_widgetTypeDisplayName(type));
+        const suffix = isSame ? ` · same type` : '';
+        const chips = list.map(src => _renderZoneChipFromSource(src.zones, src.sensorLabel, '')).join('');
+        groupsHtml += `
+            <div class="${labelClass}">
+                <span>${typeName}</span>
+                <span class="group-count">(${list.length})${suffix}</span>
+                <span class="group-divider"></span>
+            </div>
+            <div>${chips}</div>
+        `;
+    });
+
+    return `
+        <div class="reuse-picker">
+            <div class="reuse-header">
+                <span>Reuse zones</span>
+                <span class="reuse-count">${totalCount} saved</span>
+            </div>
+            <div class="reuse-scroll" style="max-height:${ZONES_PICKER_MAX_HEIGHT_PX}px">${groupsHtml}</div>
+        </div>
+    `;
+}
+
+function applyZonesToEditor(form, zones) {
+    if (!form || !Array.isArray(zones)) return;
+    const list = form.querySelector('.zones-list');
+    if (!list) return;
+    list.innerHTML = zones.map((z, idx) => renderColorZoneItem(z, idx, '#888')).join('');
+}
+
+function setupZonesReusePicker(form) {
+    if (!form || form.dataset.zonesPickerWired === '1') return;
+    form.dataset.zonesPickerWired = '1';
+    form.addEventListener('click', (e) => {
+        const chip = e.target.closest('.zone-chip');
+        if (!chip || !form.contains(chip)) return;
+        const raw = chip.dataset.zonesJson;
+        if (!raw) return;
+        let zones;
+        try { zones = JSON.parse(raw); } catch { return; }
+        if (!Array.isArray(zones)) return;
+        applyZonesToEditor(form, zones);
+    });
+}
+
+function mountZonesReusePicker(form, widgetType) {
+    if (!form) return;
+    const dashId = globalThis.dashboardState?.currentDashboard ?? '';
+    const widgetId = form.dataset.widgetId || '';
+    const html = renderZonesReusePicker(widgetType, dashId, widgetId);
+    // Render target: replace existing .reuse-picker (legacy placement) OR insert before .zones-editor.
+    const existing = form.querySelector('.reuse-picker');
+    if (existing) {
+        existing.outerHTML = html;
+    } else if (html) {
+        const editor = form.querySelector('.zones-editor');
+        if (editor) editor.insertAdjacentHTML('beforebegin', html);
+    }
+    setupZonesReusePicker(form);
+}
+
 if (typeof globalThis !== 'undefined') {
     globalThis.parseNumberOrDefault = parseNumberOrDefault;
     globalThis.parseDecimalInputOrDefault = parseDecimalInputOrDefault;
@@ -1899,6 +2111,15 @@ if (typeof globalThis !== 'undefined') {
     globalThis.updateStorageMap = updateStorageMap;
     globalThis.escapeRegex = escapeRegex;
     globalThis.fetchJSONOrThrow = fetchJSONOrThrow;
+    globalThis.canonicalizeZones = canonicalizeZones;
+    globalThis.getZonesHistory = getZonesHistory;
+    globalThis.addZonesToHistory = addZonesToHistory;
+    globalThis.getDashboardZoneSources = getDashboardZoneSources;
+    globalThis.renderZoneChipBar = renderZoneChipBar;
+    globalThis.renderZonesReusePicker = renderZonesReusePicker;
+    globalThis.applyZonesToEditor = applyZonesToEditor;
+    globalThis.setupZonesReusePicker = setupZonesReusePicker;
+    globalThis.mountZonesReusePicker = mountZonesReusePicker;
 }
 
 
@@ -17898,6 +18119,7 @@ class SetpointWidget extends ActiveDashboardWidget {
     }
 
     static initConfigHandlers(form, config = {}) {
+        mountZonesReusePicker(form, 'setpoint');
         super.initConfigHandlers(form, config);  // wires sensor binding
 
         if (form.dataset.setpointStyleHandlersWired === 'true') return;
@@ -19317,6 +19539,7 @@ class GaugeWidget extends DashboardWidget {
     }
 
     static initConfigHandlers(form, config = {}) {
+        mountZonesReusePicker(form, 'gauge');
         initSensorBindingHandlers(form, config, { fieldPrefix: '' });
 
         const wireDual = () => {
@@ -19453,6 +19676,7 @@ class LevelWidget extends DashboardWidget {
     }
 
     static initConfigHandlers(form, config = {}) {
+        mountZonesReusePicker(form, 'level');
         initSensorBindingHandlers(form, config, { fieldPrefix: '' });
     }
 }
@@ -21230,6 +21454,7 @@ const WIDGET_TYPES = {
     'generator': GeneratorWidget,
     'chart': ChartWidget
 };
+globalThis.WIDGET_TYPES = WIDGET_TYPES;
 
 window.registerDashboardWidgetType = function(type, WidgetClass) {
     WIDGET_TYPES[type] = WidgetClass;
@@ -22286,6 +22511,12 @@ class DashboardManager {
         if (!WidgetClass) return;
 
         const config = WidgetClass.parseConfigForm(content);
+
+        // Save zones to reuse-history (Recent group of zones reuse picker)
+        if (Array.isArray(config.zones) && config.zones.length > 0) {
+            addZonesToHistory(config.zones, type);
+        }
+
         const transparent = content.querySelector('[name="transparent"]')?.checked || false;
         config.transparent = transparent;
 

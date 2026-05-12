@@ -721,6 +721,7 @@ class SetpointWidget extends ActiveDashboardWidget {
     }
 
     static initConfigHandlers(form, config = {}) {
+        mountZonesReusePicker(form, 'setpoint');
         super.initConfigHandlers(form, config);  // wires sensor binding
 
         if (form.dataset.setpointStyleHandlersWired === 'true') return;

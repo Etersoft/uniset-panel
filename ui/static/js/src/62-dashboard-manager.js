@@ -18,6 +18,7 @@ const WIDGET_TYPES = {
     'generator': GeneratorWidget,
     'chart': ChartWidget
 };
+globalThis.WIDGET_TYPES = WIDGET_TYPES;
 
 window.registerDashboardWidgetType = function(type, WidgetClass) {
     WIDGET_TYPES[type] = WidgetClass;
@@ -1074,6 +1075,12 @@ class DashboardManager {
         if (!WidgetClass) return;
 
         const config = WidgetClass.parseConfigForm(content);
+
+        // Save zones to reuse-history (Recent group of zones reuse picker)
+        if (Array.isArray(config.zones) && config.zones.length > 0) {
+            addZonesToHistory(config.zones, type);
+        }
+
         const transparent = content.querySelector('[name="transparent"]')?.checked || false;
         config.transparent = transparent;
 

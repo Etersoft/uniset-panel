@@ -505,6 +505,23 @@ IONC renderer'ом (`20-ionc-renderer.js`) и активным generator-вид�
 `dashboard-active-setpoint.spec.ts`, `dashboard-active-generator.spec.ts`; config persistence —
 `dashboard-widget-settings.spec.ts`.
 
+### Zones reuse picker
+
+Виджеты с `zones: [{from, to, color}]` — Setpoint slider, Gauge, Level — рендерят
+inline-picker над zones-editor для переиспользования предыдущих наборов.
+
+Wiring per widget:
+- В `static getConfigForm` (или `getActiveConfigFields` для Setpoint) — вызвать
+  `renderZonesReusePicker(widgetType, currentDashboard, currentWidgetId)` ПЕРЕД
+  `renderColorZonesEditor(...)`.
+- В `static initConfigHandlers(form, config)` — `setupZonesReusePicker(form);`
+  (idempotent, можно звать многократно).
+- History push автоматически из `62-dashboard-manager.js applyWidgetConfig` —
+  никаких ручных вызовов из widget класса.
+
+Константы: `ZONES_HISTORY_MAX`, `ZONES_PICKER_MAX_HEIGHT_PX`,
+`ZONES_HISTORY_STORAGE_KEY` (все в `00-constants.js`).
+
 ### Правила размещения кода
 
 - **Новый рендерер** → `2X-renderer-name.js`
@@ -566,6 +583,12 @@ class в `NO_TOGGLE_ZONE_SELECTOR` в `_setupSectionDelegation`.
 | `DashboardWidget.getColorForZones(value, zones)` | `60-dashboard-base.js` | Static — выбор цвета по `zones[]` config (Level, Gauge, ...) |
 | `bindSingleDoubleClick(el, single, double, delay)` | `06-utils.js` | Различение single/double click (используется IONC freeze quick-action) |
 | `setupResizeHandle(handle, container, min, save, max, onResize, opts)` | `06-utils.js` | Resize-handle pattern (mousedown→move→up) |
+| `canonicalizeZones(zones)` | `06-utils.js` | Канонический JSON-ключ для dedup (sort by from, lowercase color, fixed precision). Используется в `addZonesToHistory`. Не вызывать напрямую из renderer'ов. |
+| `getZonesHistory()` / `addZonesToHistory(zones, sourceType)` | `06-utils.js` | localStorage CRUD для Recent zones. FIFO cap = `ZONES_HISTORY_MAX`. Move-to-front при duplicate. No-op для пустого `zones`. Push вызывается из `dashboard-manager.applyWidgetConfig` после save. |
+| `getDashboardZoneSources(dashId, excludeWidgetId)` | `06-utils.js` | Live-read widget'ов текущего dashboard'а с непустыми zones, исключая редактируемый. Возвращает `{widgetId, widgetType, sensorLabel, zones}[]`. |
+| `renderZonesReusePicker(currentType, dashId, currentWidgetId)` | `06-utils.js` | HTML для блока reuse-picker'а над `renderColorZonesEditor`. Группировка: Recent → same-class → others alphabetical. Возвращает `''` если оба источника пусты. |
+| `setupZonesReusePicker(form)` | `06-utils.js` | Click-delegation на `.zone-chip` элементах. Idempotent (`form.dataset.zonesPickerWired`). Вызывать в `static initConfigHandlers` каждого widget'а с zones. |
+| `applyZonesToEditor(form, zones)` | `06-utils.js` | DOM-replace `.zones-list` через `renderColorZoneItem`. Используется внутри `setupZonesReusePicker` click handler'а. |
 
 ### Именование JS констант
 
