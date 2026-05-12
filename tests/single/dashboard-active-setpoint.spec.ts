@@ -953,6 +953,97 @@ test.describe('SetpointWidget — fourth active widget', () => {
         expect(body.value).toBeLessThanOrEqual(15);
     });
 
+    test('dblclick on handle → moves to 0 when 0 ∈ [min, max]', async ({ page }) => {
+        const requests: Array<{ url: string; body: string }> = [];
+        page.on('request', (req) => {
+            if (req.url().includes('/ionc/set')) {
+                requests.push({ url: req.url(), body: req.postData() || '' });
+            }
+        });
+        await createSetpointDashboard(page, { style: 'slider', min: -50, max: 50, step: 1 });
+        await page.waitForTimeout(500);
+
+        // Place handle at 25 (75% horizontal position) so dblclick target is well away from zero.
+        await page.evaluate(() => {
+            for (const [, w] of (window as any).dashboardState.widgets) w.update(25);
+        });
+        await page.waitForTimeout(200);
+
+        const handle = page.locator('[data-test="handle"]').first();
+        await handle.dblclick();
+        await page.waitForTimeout(400);
+
+        // Двойной клик может также произвести промежуточные POST'ы от drag-flow
+        // (mousedown→mouseup на каждом из двух кликов handle'а — это часть существующего
+        // click-to-jump поведения). Главное: финальный POST = 0 присутствует.
+        const zeroPost = requests.find((r) => {
+            try { return JSON.parse(r.body).value === 0; } catch { return false; }
+        });
+        expect(zeroPost).toBeDefined();
+
+        // Handle визуально на 50% (нулевая позиция в [-50, 50])
+        const handleBox = await handle.boundingBox();
+        const trackBox = await page.locator('[data-test="track-wrap"]').first().boundingBox();
+        if (!handleBox || !trackBox) throw new Error('no boxes');
+        const handleCenterPct = (handleBox.x + handleBox.width / 2 - trackBox.x) / trackBox.width;
+        expect(handleCenterPct).toBeGreaterThan(0.45);
+        expect(handleCenterPct).toBeLessThan(0.55);
+    });
+
+    test('dblclick on handle when 0 outside range → no zero POST (no-op)', async ({ page }) => {
+        const requests: Array<{ url: string; body: string }> = [];
+        page.on('request', (req) => {
+            if (req.url().includes('/ionc/set')) {
+                requests.push({ url: req.url(), body: req.postData() || '' });
+            }
+        });
+        await createSetpointDashboard(page, { style: 'slider', min: 10, max: 100, step: 1 });
+        await page.waitForTimeout(500);
+
+        await page.evaluate(() => {
+            for (const [, w] of (window as any).dashboardState.widgets) w.update(50);
+        });
+        await page.waitForTimeout(200);
+
+        const handle = page.locator('[data-test="handle"]').first();
+        await handle.dblclick();
+        await page.waitForTimeout(400);
+
+        // POST'ы от click-to-jump допустимы, но среди них не должно быть value=0
+        // (handler short-circuits когда 0 вне диапазона).
+        const zeroPost = requests.find((r) => {
+            try { return JSON.parse(r.body).value === 0; } catch { return false; }
+        });
+        expect(zeroPost).toBeUndefined();
+    });
+
+    test('single click on handle does NOT trigger zero (regression: existing click-jump preserved)', async ({ page }) => {
+        const requests: Array<{ url: string; body: string }> = [];
+        page.on('request', (req) => {
+            if (req.url().includes('/ionc/set')) {
+                requests.push({ url: req.url(), body: req.postData() || '' });
+            }
+        });
+        await createSetpointDashboard(page, { style: 'slider', min: -50, max: 50, step: 1 });
+        await page.waitForTimeout(500);
+
+        await page.evaluate(() => {
+            for (const [, w] of (window as any).dashboardState.widgets) w.update(30);
+        });
+        await page.waitForTimeout(200);
+
+        const handle = page.locator('[data-test="handle"]').first();
+        await handle.click();
+        await page.waitForTimeout(400);
+
+        // Click-to-jump на handle = click к месту handle. Значение ~30, точно НЕ 0.
+        expect(requests.length).toBeGreaterThanOrEqual(1);
+        const last = JSON.parse(requests[requests.length - 1].body);
+        expect(last.value).not.toBe(0);
+        expect(last.value).toBeGreaterThanOrEqual(25);
+        expect(last.value).toBeLessThanOrEqual(35);
+    });
+
     test('default size for slider horizontal: 6x4', async ({ page }) => {
         // Use a special path that triggers the default-size logic in dashboard-manager.
         // We can't use createSetpointDashboard directly because it sets explicit position;

@@ -292,6 +292,22 @@ class SetpointWidget extends ActiveDashboardWidget {
             window.addEventListener('mousemove', this._onSliderMove);
             window.addEventListener('mouseup', this._onSliderUp);
         });
+
+        // Double-click on handle → jump to 0 (if 0 ∈ [min, max]).
+        // stopPropagation чтобы dblclick не дошёл до valueSpan (inline-edit).
+        const handleEl = this.element.querySelector('[data-test="handle"]');
+        if (handleEl) {
+            handleEl.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                if (!this.isInteractive()) return;
+                const cfgMin = this.config?.min ?? SETPOINT_DEFAULT_MIN;
+                const cfgMax = this.config?.max ?? SETPOINT_DEFAULT_MAX;
+                if (cfgMin > 0 || cfgMax < 0) return;
+                this._setCommand(0);
+                this._applyNow();
+            });
+        }
     }
 
     _renderZonesHtml(zones, min, max, orientation) {

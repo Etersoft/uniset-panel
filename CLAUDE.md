@@ -366,6 +366,9 @@ push-button fire-and-forget), но meta.frozen обрабатывается че
   - **Drag** (mousedown → mousemove → mouseup) → один POST на release.
     Промежуточные mousemove только обновляют handle position.
   - **Inline-edit** двойным кликом по числу → input на месте.
+  - **Двойной клик по handle** → handle прыгает в 0 (если `min ≤ 0 ≤ max`).
+    Если 0 вне диапазона — no-op. Quick-action для «обнуления» setpoint'а
+    без drag'а до нулевой отметки.
   - **`zones: [{from, to, color}]`** — цветные зоны на треке (формат как у
     Gauge/Level; используется `renderColorZonesEditor`/`parseColorZones`
     из `06-utils.js`). Если `zones` задан — `setpoint-slider-fill` не
