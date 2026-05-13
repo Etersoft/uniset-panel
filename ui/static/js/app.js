@@ -1942,7 +1942,10 @@ function renderZoneChipBar(zones) {
     const spans = zones.map(z => {
         const weight = Math.max(1, Number(z.to) - Number(z.from));
         const color = escapeAttr(String(z.color || '#888'));
-        return `<span style="background:${color};flex:${weight}">${escapeHtml(`${z.from}–${z.to}`)}</span>`;
+        // flex: <weight> 0 auto — grow proportionally, do NOT shrink, basis=natural-content.
+        // Иначе при длинных labels (например '-180–0') flex-basis:0 + shrink:1 + overflow:hidden
+        // на parent .zone-bar обрезали бы текст в узких диалогах.
+        return `<span style="background:${color};flex:${weight} 0 auto">${escapeHtml(`${z.from}–${z.to}`)}</span>`;
     }).join('');
     return `<span class="zone-bar">${spans}</span>`;
 }
@@ -1952,16 +1955,24 @@ function getDashboardZoneSources(currentDashboardId, excludeWidgetId) {
     if (!state || !state.dashboards) return [];
     const dash = state.dashboards.get(currentDashboardId);
     if (!dash || !Array.isArray(dash.widgets)) return [];
-    return dash.widgets
-        .filter(w => w.id !== excludeWidgetId
-                  && Array.isArray(w.config?.zones)
-                  && w.config.zones.length > 0)
-        .map(w => ({
+    // Dedup по canonical key — несколько widget'ов с одинаковыми zones
+    // отображаются одним chip'ом (label = первый встреченный sensor).
+    const seen = new Set();
+    const result = [];
+    for (const w of dash.widgets) {
+        if (w.id === excludeWidgetId) continue;
+        if (!Array.isArray(w.config?.zones) || w.config.zones.length === 0) continue;
+        const key = canonicalizeZones(w.config.zones);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        result.push({
             widgetId: w.id,
             widgetType: w.type,
             sensorLabel: w.config.sensor || w.config.label || w.id,
             zones: w.config.zones,
-        }));
+        });
+    }
+    return result;
 }
 
 function _renderZoneChipFromSource(zones, sourceLabel, sourceClass) {

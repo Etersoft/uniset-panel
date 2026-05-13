@@ -140,6 +140,30 @@ describe('getDashboardZoneSources', () => {
         expect(wA.widgetType).toBe('gauge');
         expect(wA.zones).toEqual([{ from: 0, to: 100, color: '#aaa' }]);
     });
+
+    it('dedups widgets with identical zones (canonical key) — one chip per unique set', () => {
+        const w: any = globalThis;
+        w.dashboardState = {
+            dashboards: new Map([
+                ['dash2', {
+                    widgets: [
+                        { id: 'wA', type: 'gauge', config: { sensor: 'TempA',
+                            zones: [{ from: 0, to: 50, color: '#3b82f6' }, { from: 50, to: 100, color: '#ef4444' }] } },
+                        { id: 'wB', type: 'gauge', config: { sensor: 'TempB',
+                            zones: [{ from: 50, to: 100, color: '#EF4444' }, { from: 0, to: 50, color: '#3B82F6' }] } }, // same set, different order/case
+                        { id: 'wC', type: 'level', config: { sensor: 'TankA',
+                            zones: [{ from: 0, to: 100, color: '#22c55e' }] } }, // distinct
+                    ],
+                }],
+            ]),
+        };
+        const result = getDashboardZoneSources('dash2', '');
+        // 2 unique sets (wA = wB by canonical key, wC distinct)
+        expect(result.length).toBe(2);
+        // First-occurrence wins for the dedup'd entry
+        expect(result.find((r: any) => r.zones.length === 2)?.sensorLabel).toBe('TempA');
+        expect(result.find((r: any) => r.zones.length === 1)?.sensorLabel).toBe('TankA');
+    });
 });
 
 declare const renderZoneChipBar: (zones: any) => string;

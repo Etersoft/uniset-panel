@@ -6145,6 +6145,8 @@ button.rotate-quick-btn:active {
     cursor: pointer;
     transition: border-color 0.12s, background 0.12s, transform 0.08s;
     gap: 6px;
+    max-width: 100%;
+    min-width: 0;
 }
 .zone-chip:hover {
     border-color: #60a5fa;
@@ -6156,6 +6158,9 @@ button.rotate-quick-btn:active {
     height: 14px;
     border-radius: 2px;
     overflow: hidden;
+    /* Бар никогда не сжимается — диапазоны from-to всегда читаемы.
+       Урезается source-name (см. .chip-source ниже). */
+    flex-shrink: 0;
 }
 .zone-bar > span {
     display: inline-block;
@@ -6174,6 +6179,12 @@ button.rotate-quick-btn:active {
     color: #9ca3af;
     font-size: 11px;
     white-space: nowrap;
+    /* Source name урезается с ellipsis при недостатке места.
+       min-width:0 нужен flex-child'у чтобы overflow:hidden+ellipsis сработали. */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 0 1 auto;
 }
 .chip-source.recent-source {
     color: #fbbf24;
