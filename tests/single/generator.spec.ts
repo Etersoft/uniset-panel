@@ -218,6 +218,12 @@ test.describe('IONC Value Generator', () => {
     });
 
     test('should show active generator info in dialog', async ({ page }) => {
+        // Capture target sensorId — query'ить именно его строку, а не .first()
+        // (последний нестабилен под параллельной нагрузкой full E2E прогона:
+        // если другая строка случайно получила класс — .first() match'ит её).
+        const firstRow = page.locator('.ionc-sensor-row').first();
+        const sensorId = await firstRow.getAttribute('data-sensor-id');
+
         // Start a generator
         await page.locator('.ionc-btn-gen').first().click();
         await page.waitForSelector('.ionc-dialog-overlay.visible');
@@ -228,14 +234,16 @@ test.describe('IONC Value Generator', () => {
         await page.selectOption('#ionc-gen-type', 'cos');
         await page.click('#ionc-gen-start');
 
-        // Open dialog again by clicking stop button (which opens dialog when generator is active)
-        // Actually, we click on the gen-stop button to stop, but to see dialog we click on button area
-        // Let's verify by clicking the row's stop button which just stops
-        // Instead, let's check by programmatically - the stop button just stops
+        // Sync barrier: ждём закрытия dialog'а — гарантирует что startSensorTestSignal
+        // отработал полностью (включая reRenderSensorRow), прежде чем проверять class
+        // на row'е. Без этого assertion'а 220-й тест flaky под полной нагрузкой
+        // (см. test 152 — там этот wait уже есть и тест стабилен).
+        await expect(page.locator('.ionc-dialog-overlay.visible')).not.toBeVisible();
 
-        // We can verify the generator is running by checking the indicators
-        await expect(page.locator('.ionc-sensor-generating').first()).toBeVisible();
-        await expect(page.locator('.ionc-flag-generator').first()).toBeVisible();
+        // Verify indicators on the SPECIFIC row (по data-sensor-id, не .first()).
+        const updatedRow = page.locator(`tr[data-sensor-id="${sensorId}"]`);
+        await expect(updatedRow).toHaveClass(/ionc-sensor-generating/);
+        await expect(updatedRow.locator('.ionc-flag-generator')).toBeVisible();
     });
 
     test('generator button should be disabled for readonly sensors', async ({ page }) => {
