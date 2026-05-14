@@ -258,6 +258,7 @@ if (typeof globalThis !== 'undefined') {
         CHART_LINE_BORDER_WIDTH,
         CHART_STEPPED_LINE_BORDER_WIDTH,
         UNET_CHART_LINE_TENSION,
+        CHART_THEME,
         ZONES_HISTORY_MAX,
         ZONES_HISTORY_STORAGE_KEY,
         ZONES_PICKER_MAX_HEIGHT_PX,
