@@ -57,8 +57,10 @@ const MAX_CHART_POINTS = 1000;
 const MAX_LOG_LINES = 10000;
 const VIRTUAL_SCROLL_CHUNK_SIZE = 200;
 const JOURNAL_DEFAULT_LIMIT = 100;
-const SENSOR_AUTOCOMPLETE_LIMIT = 20;
-const SENSOR_AUTOCOMPLETE_FOCUS_LIMIT = 10;
+const SENSOR_AUTOCOMPLETE_LIMIT = 20;          // legacy alias (используется в bootstrap dashboard'а)
+const SENSOR_AUTOCOMPLETE_FOCUS_LIMIT = 10;    // legacy alias
+const SENSOR_AUTOCOMPLETE_CHUNK_SIZE = 50;     // chunk pagination для infinite-scroll dropdown
+const SENSOR_AUTOCOMPLETE_SCROLL_THRESHOLD_PX = 80; // load-more срабатывает в N px от низа
 const DASHBOARD_SENSOR_REGISTRY_FETCH_LIMIT = 10000;
 const DASHBOARD_SENSOR_CACHE_TTL_MS = 60000;
 const DEFAULT_VARIABLE_HISTORY_COUNT = 100;
@@ -13263,18 +13265,34 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
     let debounceTimer = null;
     let activeIndex = -1;
     let currentItems = [];
+    let currentSearch = '';
+    let currentOffset = 0;
+    let currentTotal = 0;
+    let isLoading = false;
+    let hasMore = false;
+    let scrollHandler = null;
+    // requestId защищает от race condition: устаревший fetch не должен затереть
+    // более свежий результат, если user быстро перепечатывает search.
+    let requestId = 0;
 
     function destroyDropdown() {
         if (dropdown) {
+            if (scrollHandler) dropdown.removeEventListener('scroll', scrollHandler);
             dropdown.remove();
             dropdown = null;
         }
+        scrollHandler = null;
         activeIndex = -1;
         currentItems = [];
+        currentSearch = '';
+        currentOffset = 0;
+        currentTotal = 0;
+        isLoading = false;
+        hasMore = false;
     }
 
     function buildDropdown() {
-        destroyDropdown();
+        if (dropdown) return;
         dropdown = document.createElement('div');
         dropdown.className = 'sensor-autocomplete-dropdown';
         // Положение — fixed с подсчётом координат относительно input'а.
@@ -13285,16 +13303,24 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
         dropdown.style.width = `${rect.width}px`;
         dropdown.style.zIndex = String(SENSOR_AUTOCOMPLETE_DROPDOWN_Z_INDEX);
         document.body.appendChild(dropdown);
+
+        scrollHandler = () => {
+            if (!dropdown || isLoading || !hasMore) return;
+            const remaining = dropdown.scrollHeight - (dropdown.scrollTop + dropdown.clientHeight);
+            if (remaining <= SENSOR_AUTOCOMPLETE_SCROLL_THRESHOLD_PX) {
+                fetchMore();
+            }
+        };
+        dropdown.addEventListener('scroll', scrollHandler);
     }
 
-    function renderItems(items) {
+    function renderItems() {
         if (!dropdown) return;
-        currentItems = items;
-        if (items.length === 0) {
+        if (currentItems.length === 0 && !isLoading) {
             dropdown.innerHTML = '<div class="sensor-autocomplete-empty">Не найдено</div>';
             return;
         }
-        dropdown.innerHTML = items.map((s, idx) => `
+        const itemsHtml = currentItems.map((s, idx) => `
             <div class="sensor-autocomplete-item ${idx === activeIndex ? 'active' : ''}"
                  data-idx="${idx}"
                  data-id="${escapeAttr(s.id)}"
@@ -13303,9 +13329,18 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
                 <div class="sensor-autocomplete-meta">id=${escapeHtml(String(s.id))} · type=${escapeHtml(s.type || '?')} · value=${escapeHtml(String(s.value ?? '—'))}</div>
             </div>
         `).join('');
+        let footerHtml = '';
+        if (currentTotal > 0) {
+            const showing = currentItems.length;
+            const hint = isLoading
+                ? `Загрузка ещё ${SENSOR_AUTOCOMPLETE_CHUNK_SIZE}…`
+                : (showing < currentTotal ? 'прокрутите для загрузки или введите для фильтра' : 'весь список');
+            footerHtml = `<div class="sensor-autocomplete-footer">${showing} из ${currentTotal} — ${hint}</div>`;
+        }
+        dropdown.innerHTML = itemsHtml + footerHtml;
         dropdown.querySelectorAll('.sensor-autocomplete-item').forEach(el => {
             el.addEventListener('mousedown', (e) => {
-                e.preventDefault(); // prevent input blur before we read values
+                e.preventDefault();
                 pickItem(parseInt(el.dataset.idx, 10));
             });
         });
@@ -13319,37 +13354,88 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
         destroyDropdown();
     }
 
-    async function fetchAndShow(searchText, options = {}) {
-        const limit = options.limit ?? SENSOR_AUTOCOMPLETE_LIMIT;
+    async function fetchInitial(searchText) {
         const objectName = (getObjectName && getObjectName()) || 'SharedMemory';
         const serverId = (getServerId && getServerId()) || '';
+        currentSearch = searchText;
+        currentOffset = 0;
+        currentItems = [];
+        currentTotal = 0;
+        hasMore = false;
+        activeIndex = -1;
         if (!serverId) {
             buildDropdown();
-            renderItems([]);
+            renderItems();
             return;
         }
+        const myReq = ++requestId;
+        isLoading = true;
         try {
-            const resp = await fetch(buildIONCSensorsUrl({ objectName, serverId, search: searchText, limit }));
+            const resp = await fetch(buildIONCSensorsUrl({
+                objectName, serverId, search: searchText,
+                limit: SENSOR_AUTOCOMPLETE_CHUNK_SIZE, offset: 0,
+            }));
+            if (myReq !== requestId) return; // stale — newer request superseded
+            buildDropdown();
+            isLoading = false;
             if (!resp.ok) {
-                buildDropdown();
-                renderItems([]);
+                renderItems();
                 return;
             }
             const data = await resp.json();
-            const items = data.sensors || [];
-            buildDropdown();
-            activeIndex = -1;
-            renderItems(items);
+            if (myReq !== requestId) return;
+            currentItems = data.sensors || [];
+            currentTotal = (typeof data.count === 'number') ? data.count : currentItems.length;
+            currentOffset = currentItems.length;
+            hasMore = currentItems.length > 0 && currentItems.length < currentTotal;
+            renderItems();
         } catch (e) {
+            if (myReq !== requestId) return;
+            isLoading = false;
             console.warn('sensor autocomplete fetch failed:', e);
         }
     }
 
+    async function fetchMore() {
+        if (!dropdown || isLoading || !hasMore) return;
+        const objectName = (getObjectName && getObjectName()) || 'SharedMemory';
+        const serverId = (getServerId && getServerId()) || '';
+        if (!serverId) return;
+        const myReq = ++requestId;
+        isLoading = true;
+        renderItems(); // обновить footer на «Загрузка…»
+        try {
+            const resp = await fetch(buildIONCSensorsUrl({
+                objectName, serverId, search: currentSearch,
+                limit: SENSOR_AUTOCOMPLETE_CHUNK_SIZE, offset: currentOffset,
+            }));
+            if (myReq !== requestId) return;
+            isLoading = false;
+            if (!resp.ok) {
+                hasMore = false;
+                renderItems();
+                return;
+            }
+            const data = await resp.json();
+            if (myReq !== requestId) return;
+            const newItems = data.sensors || [];
+            // Сохранить scroll position при ре-рендере list (innerHTML wipe сбрасывает scrollTop)
+            const savedScroll = dropdown.scrollTop;
+            currentItems = currentItems.concat(newItems);
+            if (typeof data.count === 'number') currentTotal = data.count;
+            currentOffset = currentItems.length;
+            hasMore = newItems.length > 0 && currentItems.length < currentTotal;
+            renderItems();
+            dropdown.scrollTop = savedScroll;
+        } catch (e) {
+            if (myReq !== requestId) return;
+            isLoading = false;
+            console.warn('sensor autocomplete fetch-more failed:', e);
+        }
+    }
+
     inputEl.addEventListener('focus', () => {
-        // Focus всегда показывает top-N (limit=10) без search-фильтра — иначе при
-        // editing existing config dropdown забит результатами по уже выбранному
-        // имени, что бесполезно для просмотра «что ещё есть на этом объекте».
-        fetchAndShow('', { limit: SENSOR_AUTOCOMPLETE_FOCUS_LIMIT });
+        fetchInitial('');
     });
 
     inputEl.addEventListener('input', () => {
@@ -13359,7 +13445,7 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
         // dropdown (mousedown в pickItem) перезапишет hidden обратно.
         if (hiddenIdEl) hiddenIdEl.value = '';
         clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => fetchAndShow(inputEl.value.trim()),
+        debounceTimer = setTimeout(() => fetchInitial(inputEl.value.trim()),
             AUTOCOMPLETE_DEBOUNCE_DELAY);
     });
 
@@ -13368,11 +13454,14 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
         if (e.key === 'ArrowDown') {
             e.preventDefault();
             activeIndex = Math.min(activeIndex + 1, currentItems.length - 1);
-            renderItems(currentItems);
+            renderItems();
+            // Scroll active item into view if needed
+            dropdown.querySelector('.sensor-autocomplete-item.active')?.scrollIntoView({ block: 'nearest' });
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
             activeIndex = Math.max(activeIndex - 1, 0);
-            renderItems(currentItems);
+            renderItems();
+            dropdown.querySelector('.sensor-autocomplete-item.active')?.scrollIntoView({ block: 'nearest' });
         } else if (e.key === 'Enter') {
             if (activeIndex >= 0) {
                 e.preventDefault();

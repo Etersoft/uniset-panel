@@ -9054,6 +9054,17 @@ button.rotate-quick-btn:active {
     font-size: 12px;
     text-align: center;
 }
+.sensor-autocomplete-footer {
+    position: sticky;
+    bottom: 0;
+    padding: 5px 10px;
+    background: #0b1220;
+    border-top: 1px solid #1f2937;
+    color: #9ca3af;
+    font-size: 10px;
+    text-align: center;
+    pointer-events: none;
+}
 
 /* ============================================================================
  * ToggleWidget
