@@ -149,9 +149,11 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
             const data = await resp.json();
             if (myReq !== requestId) return;
             currentItems = data.sensors || [];
-            currentTotal = (typeof data.count === 'number') ? data.count : currentItems.length;
+            // Pagination semantics — общий хелпер (см. 06-utils.js).
+            const meta = computeSensorChunkPagination(currentItems.length, data, SENSOR_AUTOCOMPLETE_CHUNK_SIZE);
+            currentTotal = meta.total;
+            hasMore = meta.hasMore;
             currentOffset = currentItems.length;
-            hasMore = currentItems.length > 0 && currentItems.length < currentTotal;
             renderItems();
         } catch (e) {
             if (myReq !== requestId) return;
@@ -186,9 +188,12 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
             // Сохранить scroll position при ре-рендере list (innerHTML wipe сбрасывает scrollTop)
             const savedScroll = dropdown.scrollTop;
             currentItems = currentItems.concat(newItems);
-            if (typeof data.count === 'number') currentTotal = data.count;
+            const meta = computeSensorChunkPagination(currentItems.length, data, SENSOR_AUTOCOMPLETE_CHUNK_SIZE);
+            currentTotal = meta.total;
+            hasMore = meta.hasMore;
             currentOffset = currentItems.length;
-            hasMore = newItems.length > 0 && currentItems.length < currentTotal;
+            // Empty chunk — backend подтвердил end-of-list (heuristic-cleanup).
+            if (newItems.length === 0) hasMore = false;
             renderItems();
             dropdown.scrollTop = savedScroll;
         } catch (e) {

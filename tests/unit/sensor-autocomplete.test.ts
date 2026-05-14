@@ -49,12 +49,13 @@ describe('setupSensorAutocomplete', () => {
     });
 
     it('shows count footer with total when partial list returned', async () => {
-        // First chunk: 2 sensors out of 50 total
+        // Backend semantics: data.size = TOTAL count, data.count = chunk size.
+        // First chunk: 2 sensors out of 50 total.
         vi.stubGlobal('fetch', vi.fn(async () => ({
             ok: true,
             json: async () => ({
-                count: 50,
-                size: 2,
+                size: 50,
+                count: 2,
                 sensors: [
                     { id: 1, name: 'A', type: 'AI', value: 0 },
                     { id: 2, name: 'B', type: 'AI', value: 0 },
@@ -76,7 +77,8 @@ describe('setupSensorAutocomplete', () => {
     });
 
     it('infinite scroll: fetchMore appends next chunk and updates offset', async () => {
-        // Chunk 1: ids 1..3 (offset 0) | Chunk 2: ids 4..5 (offset 3, end of list)
+        // Backend semantics: data.size = TOTAL count, data.count = chunk size.
+        // Total = 5 sensors. Chunk 1: ids 1..3 (offset 0). Chunk 2: ids 4..5 (offset 3, end).
         const fetchMock = vi.fn(async (urlIn: any) => {
             const url = String(urlIn);
             const offsetMatch = url.match(/[&?]offset=(\d+)/);
@@ -85,7 +87,7 @@ describe('setupSensorAutocomplete', () => {
                 return {
                     ok: true,
                     json: async () => ({
-                        count: 5, size: 3,
+                        size: 5, count: 3,
                         sensors: [
                             { id: 1, name: 'A1', type: 'AI', value: 0 },
                             { id: 2, name: 'A2', type: 'AI', value: 0 },
@@ -97,7 +99,7 @@ describe('setupSensorAutocomplete', () => {
             return {
                 ok: true,
                 json: async () => ({
-                    count: 5, size: 2,
+                    size: 5, count: 2,
                     sensors: [
                         { id: 4, name: 'A4', type: 'AI', value: 0 },
                         { id: 5, name: 'A5', type: 'AI', value: 0 },
@@ -154,13 +156,13 @@ describe('setupSensorAutocomplete', () => {
                 return new Promise((res) => {
                     firstResolve = () => res({
                         ok: true,
-                        json: async () => ({ count: 1, size: 1, sensors: [{ id: 100, name: 'STALE', type: 'AI', value: 0 }] }),
+                        json: async () => ({ size: 1, count: 1, sensors: [{ id: 100, name: 'STALE', type: 'AI', value: 0 }] }),
                     });
                 });
             }
             return {
                 ok: true,
-                json: async () => ({ count: 1, size: 1, sensors: [{ id: 200, name: 'FRESH', type: 'AI', value: 0 }] }),
+                json: async () => ({ size: 1, count: 1, sensors: [{ id: 200, name: 'FRESH', type: 'AI', value: 0 }] }),
             };
         });
         vi.stubGlobal('fetch', fetchMock);

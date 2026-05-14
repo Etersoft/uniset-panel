@@ -250,7 +250,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                 await this.loadPinnedSensors();
             }
 
-            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
+            // hasMore — общий хелпер semantically'ного парсинга backend response.
+            this.hasMore = computeSensorChunkPagination(sensors.length, data, this.chunkSize).hasMore;
             this.updateVisibleRows();
             this.updateSensorCount();
 
@@ -336,7 +337,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             this.sensors = this.allSensors; // Для совместимости
             uniqueNewSensors.forEach(s => this.sensorMap.set(s.id, s));
 
-            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
+            this.hasMore = computeSensorChunkPagination(this.allSensors.length, data, this.chunkSize).hasMore;
             this.updateVisibleRows();
             this.updateSensorCount();
         } catch (err) {

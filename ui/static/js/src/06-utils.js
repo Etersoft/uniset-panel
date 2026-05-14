@@ -363,6 +363,31 @@ function debugLog(...args) {
     }
 }
 
+// computeSensorChunkPagination — общая семантика IONC sensor list response.
+// Backend возвращает { count, size, sensors[] } где:
+//   data.size  — TOTAL count датчиков на объекте
+//   data.count — размер текущего chunk'а (НЕ total, НЕ используется здесь)
+//   data.sensors — items этого chunk'а
+// Если backend не вернул size — fallback heuristic: получили ровно chunkSize
+// items → возможно есть ещё (доберём; если нет — empty chunk остановит цикл).
+//
+// Используется setupSensorAutocomplete (41-sensor-autocomplete.js) и SM-renderer
+// (20-ionc-renderer.js). Возвращает { total, hasMore } — caller сам управляет
+// state'ом (currentItems, currentOffset).
+function computeSensorChunkPagination(currentItemsLength, data, chunkSize) {
+    const reportedTotal = (data && typeof data.size === 'number' && data.size > 0)
+        ? data.size : null;
+    const lastChunkSize = (data && Array.isArray(data.sensors)) ? data.sensors.length : 0;
+    if (reportedTotal !== null) {
+        return { total: reportedTotal, hasMore: currentItemsLength < reportedTotal };
+    }
+    const probablyMore = lastChunkSize === chunkSize;
+    return {
+        total: currentItemsLength + (probablyMore ? 1 : 0),
+        hasMore: probablyMore,
+    };
+}
+
 function renderColorZoneItem(zone = {}, index = 0, defaultColor = '#ef4444') {
     return `
         <div class="zone-item">
@@ -636,6 +661,7 @@ if (typeof globalThis !== 'undefined') {
     globalThis.updateStorageMap = updateStorageMap;
     globalThis.escapeRegex = escapeRegex;
     globalThis.fetchJSONOrThrow = fetchJSONOrThrow;
+    globalThis.computeSensorChunkPagination = computeSensorChunkPagination;
     globalThis.canonicalizeZones = canonicalizeZones;
     globalThis.getZonesHistory = getZonesHistory;
     globalThis.addZonesToHistory = addZonesToHistory;

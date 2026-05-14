@@ -1852,6 +1852,31 @@ function debugLog(...args) {
     }
 }
 
+// computeSensorChunkPagination — общая семантика IONC sensor list response.
+// Backend возвращает { count, size, sensors[] } где:
+//   data.size  — TOTAL count датчиков на объекте
+//   data.count — размер текущего chunk'а (НЕ total, НЕ используется здесь)
+//   data.sensors — items этого chunk'а
+// Если backend не вернул size — fallback heuristic: получили ровно chunkSize
+// items → возможно есть ещё (доберём; если нет — empty chunk остановит цикл).
+//
+// Используется setupSensorAutocomplete (41-sensor-autocomplete.js) и SM-renderer
+// (20-ionc-renderer.js). Возвращает { total, hasMore } — caller сам управляет
+// state'ом (currentItems, currentOffset).
+function computeSensorChunkPagination(currentItemsLength, data, chunkSize) {
+    const reportedTotal = (data && typeof data.size === 'number' && data.size > 0)
+        ? data.size : null;
+    const lastChunkSize = (data && Array.isArray(data.sensors)) ? data.sensors.length : 0;
+    if (reportedTotal !== null) {
+        return { total: reportedTotal, hasMore: currentItemsLength < reportedTotal };
+    }
+    const probablyMore = lastChunkSize === chunkSize;
+    return {
+        total: currentItemsLength + (probablyMore ? 1 : 0),
+        hasMore: probablyMore,
+    };
+}
+
 function renderColorZoneItem(zone = {}, index = 0, defaultColor = '#ef4444') {
     return `
         <div class="zone-item">
@@ -2125,6 +2150,7 @@ if (typeof globalThis !== 'undefined') {
     globalThis.updateStorageMap = updateStorageMap;
     globalThis.escapeRegex = escapeRegex;
     globalThis.fetchJSONOrThrow = fetchJSONOrThrow;
+    globalThis.computeSensorChunkPagination = computeSensorChunkPagination;
     globalThis.canonicalizeZones = canonicalizeZones;
     globalThis.getZonesHistory = getZonesHistory;
     globalThis.addZonesToHistory = addZonesToHistory;
@@ -4827,7 +4853,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                 await this.loadPinnedSensors();
             }
 
-            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
+            // hasMore — общий хелпер semantically'ного парсинга backend response.
+            this.hasMore = computeSensorChunkPagination(sensors.length, data, this.chunkSize).hasMore;
             this.updateVisibleRows();
             this.updateSensorCount();
 
@@ -4913,7 +4940,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             this.sensors = this.allSensors; // Для совместимости
             uniqueNewSensors.forEach(s => this.sensorMap.set(s.id, s));
 
-            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
+            this.hasMore = computeSensorChunkPagination(this.allSensors.length, data, this.chunkSize).hasMore;
             this.updateVisibleRows();
             this.updateSensorCount();
         } catch (err) {
@@ -13386,9 +13413,11 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
             const data = await resp.json();
             if (myReq !== requestId) return;
             currentItems = data.sensors || [];
-            currentTotal = (typeof data.count === 'number') ? data.count : currentItems.length;
+            // Pagination semantics — общий хелпер (см. 06-utils.js).
+            const meta = computeSensorChunkPagination(currentItems.length, data, SENSOR_AUTOCOMPLETE_CHUNK_SIZE);
+            currentTotal = meta.total;
+            hasMore = meta.hasMore;
             currentOffset = currentItems.length;
-            hasMore = currentItems.length > 0 && currentItems.length < currentTotal;
             renderItems();
         } catch (e) {
             if (myReq !== requestId) return;
@@ -13423,9 +13452,12 @@ function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId
             // Сохранить scroll position при ре-рендере list (innerHTML wipe сбрасывает scrollTop)
             const savedScroll = dropdown.scrollTop;
             currentItems = currentItems.concat(newItems);
-            if (typeof data.count === 'number') currentTotal = data.count;
+            const meta = computeSensorChunkPagination(currentItems.length, data, SENSOR_AUTOCOMPLETE_CHUNK_SIZE);
+            currentTotal = meta.total;
+            hasMore = meta.hasMore;
             currentOffset = currentItems.length;
-            hasMore = newItems.length > 0 && currentItems.length < currentTotal;
+            // Empty chunk — backend подтвердил end-of-list (heuristic-cleanup).
+            if (newItems.length === 0) hasMore = false;
             renderItems();
             dropdown.scrollTop = savedScroll;
         } catch (e) {
