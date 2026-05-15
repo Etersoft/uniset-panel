@@ -100,6 +100,33 @@ func TestGetObjectsByType_noServerMgr(t *testing.T) {
 	}
 }
 
+func TestGetObjectsByType_routeRegistered(t *testing.T) {
+	mock := startMockUnisetWithTypes(t, map[string]string{
+		"SharedMemory": "IONotifyController",
+	})
+	defer mock.Close()
+
+	store := storage.NewMemoryStorage()
+	mgr := server.NewManager(store, 5*time.Second, time.Hour, "TestProc", 0)
+	if err := mgr.AddServer(config.ServerConfig{ID: "srv1", URL: mock.URL, Name: "S1"}); err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+	defer mgr.RemoveServer("srv1")
+
+	h := &Handlers{storage: store, sseHub: NewSSEHub(), pollInterval: 5 * time.Second}
+	h.SetServerManager(mgr)
+
+	srv := NewServer(h, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/objects-by-type?type=IONotifyController", nil)
+	rr := httptest.NewRecorder()
+	srv.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: want 200, got %d (body: %s)", rr.Code, rr.Body.String())
+	}
+}
+
 func TestGetObjectsByType_noMatches(t *testing.T) {
 	mock := startMockUnisetWithTypes(t, map[string]string{
 		"MBSlave1": "ModbusSlave",
