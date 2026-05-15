@@ -137,6 +137,45 @@ describe('setupIONCComboAutocomplete', () => {
         expect(items[0].textContent).toContain('Server2');
     });
 
+    it('pickItem on offline entry shows (offline) suffix and keeps data-orphan', () => {
+        // Empty config so single-match short-circuit doesn't fire (registry has 2 servers anyway).
+        const form = mountForm({});
+        (globalThis as any).setupIONCComboAutocomplete(form, '');
+        const input = form.querySelector<HTMLInputElement>('.ionc-combo-input')!;
+        const hiddenServer = form.querySelector<HTMLInputElement>('input[name="serverId"]')!;
+        const hiddenObject = form.querySelector<HTMLInputElement>('input[name="objectName"]')!;
+
+        input.dispatchEvent(new FocusEvent('focus'));
+        const items = document.querySelectorAll('.ionc-combo-item');
+        // Pick the offline entry (Server2). seedRegistry has SharedMemory @ Server2 (offline).
+        const offlineItem = Array.from(items).find(el => el.textContent?.includes('Server2'))! as HTMLElement;
+        offlineItem.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+
+        // Hidden filled (user explicit pick).
+        expect(hiddenServer.value).toBe('s2');
+        expect(hiddenObject.value).toBe('SharedMemory');
+        // Visible value carries (offline) suffix so user sees the chosen target is unreachable.
+        expect(input.value).toBe('SharedMemory @ Server2 (offline)');
+        // data-orphan preserved as visual marker.
+        expect(input.dataset.orphan).toBe('true');
+    });
+
+    it('pickItem on online entry omits (offline) suffix and clears data-orphan', () => {
+        // Start as orphan (so data-orphan=true initially), then pick an online entry.
+        const form = mountForm({ serverId: 'ghost', objectName: 'Ghost' });
+        (globalThis as any).setupIONCComboAutocomplete(form, '');
+        const input = form.querySelector<HTMLInputElement>('.ionc-combo-input')!;
+        expect(input.dataset.orphan).toBe('true');
+
+        input.dispatchEvent(new FocusEvent('focus'));
+        const items = document.querySelectorAll('.ionc-combo-item');
+        const onlineItem = Array.from(items).find(el => el.textContent?.includes('SharedMemory @ Server1'))! as HTMLElement;
+        onlineItem.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+
+        expect(input.value).toBe('SharedMemory @ Server1');
+        expect(input.dataset.orphan).toBeUndefined();
+    });
+
     it('pickItem fills hidden inputs and fires change event', () => {
         const form = mountForm({ serverId: 's1', objectName: 'SharedMemory' });
         (globalThis as any).setupIONCComboAutocomplete(form, '');
