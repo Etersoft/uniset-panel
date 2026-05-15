@@ -25,11 +25,18 @@ coverage:
 	go tool cover -func=coverage.out | tail -1
 
 # E2E tests with Playwright in Docker (all tests)
+# Usage: make js-tests              — runs full suite (single + integration + multi)
+#        make js-tests TEST=single/foo.spec.ts  — runs only specified spec
 js-tests:
+ifeq ($(TEST),)
 	docker compose up --build --abort-on-container-exit --exit-code-from e2e
 	docker compose down
 	docker compose -f docker-compose.multi.yml up --build --abort-on-container-exit --exit-code-from e2e-multi
 	docker compose -f docker-compose.multi.yml down
+else
+	docker compose run --rm e2e $(TEST)
+	docker compose down
+endif
 
 # E2E tests with Playwright in Docker (multi-server)
 js-tests-multi:
