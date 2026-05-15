@@ -107,9 +107,121 @@ function findIONCEntry(serverId, objectName) {
     return entry;
 }
 
+// ============================================================================
+// IONC combo helpers — module-level pure / DOM helpers
+// (вынесены из setupIONCComboAutocomplete для читаемости + тестируемости)
+// ============================================================================
+
+// _highlightIONCMatch — wrap'ит match-substring в <mark>, безопасно escape'ит остальное.
+// Pure: не зависит от DOM или closure-state.
+function _highlightIONCMatch(text, filterLower) {
+    if (!filterLower) return escapeHtml(text);
+    const lower = text.toLowerCase();
+    const idx = lower.indexOf(filterLower);
+    if (idx < 0) return escapeHtml(text);
+    return `${escapeHtml(text.slice(0, idx))}<mark>${escapeHtml(text.slice(idx, idx + filterLower.length))}</mark>${escapeHtml(text.slice(idx + filterLower.length))}`;
+}
+
+// _buildIONCDropdownNode — создаёт+позиционирует absolute dropdown под input'ом.
+// Возвращает только что вставленный <div>. Стиль/класс выровнен с CSS .ionc-combo-dropdown.
+function _buildIONCDropdownNode(input) {
+    const dropdown = document.createElement('div');
+    dropdown.className = 'ionc-combo-dropdown';
+    const rect = input.getBoundingClientRect();
+    dropdown.style.position = 'fixed';
+    dropdown.style.left   = `${rect.left}px`;
+    dropdown.style.top    = `${rect.bottom + IONC_COMBO_DROPDOWN_TOP_OFFSET_PX}px`;
+    dropdown.style.width  = `${rect.width}px`;
+    dropdown.style.zIndex = String(SENSOR_AUTOCOMPLETE_DROPDOWN_Z_INDEX);
+    document.body.appendChild(dropdown);
+    return dropdown;
+}
+
+// _renderIONCEmptyState — выбирает HTML для пустого dropdown'а:
+// либо error message (registry пустой + lastError зафиксирован),
+// либо обычное "Нет совпадений".
+function _renderIONCEmptyState(reg) {
+    const noEntries = reg.servers.size === 0;
+    if (noEntries && reg.lastError) {
+        return '<div class="ionc-combo-empty error">Не удалось загрузить — попробуйте ↻</div>';
+    }
+    return '<div class="ionc-combo-empty">Нет совпадений</div>';
+}
+
+// _renderIONCDropdownItems — innerHTML для items + click-delegation.
+// ctx: { activeIndex, currentFilter, hiddenServer, hiddenObject, onPick(idx) }.
+function _renderIONCDropdownItems(dropdown, items, ctx) {
+    const filterLower = ctx.currentFilter.toLowerCase();
+    const itemsHtml = items.map((entry, idx) => {
+        const isPreselected = ctx.hiddenServer.value === entry.serverId
+            && ctx.hiddenObject.value === entry.objectName;
+        const cls = [
+            'ionc-combo-item',
+            idx === ctx.activeIndex ? 'active' : '',
+            entry.connected ? '' : 'offline',
+            isPreselected ? 'preselected' : '',
+        ].filter(Boolean).join(' ');
+        const offlineMark = entry.connected
+            ? ''
+            : '<span class="ionc-combo-offline-mark">⚠ offline</span>';
+        const star = isPreselected ? '<span class="ionc-combo-star">★</span>' : '';
+        return `<div class="${cls}" data-idx="${idx}">
+            ${star}<span class="ionc-combo-display">${_highlightIONCMatch(entry.displayString, filterLower)}</span>${offlineMark}
+        </div>`;
+    }).join('');
+    dropdown.innerHTML = itemsHtml;
+    dropdown.querySelectorAll('.ionc-combo-item').forEach(el => {
+        el.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            ctx.onPick(parseIntegerOrDefault(el.dataset.idx, -1));
+        });
+    });
+}
+
+// _setIONCRefreshLoading — одна точка для visual loading state кнопки и input'а.
+// Используется в refresh-handler'е (toggle on/off вокруг await fetch).
+function _setIONCRefreshLoading(input, refreshBtn, isLoading) {
+    if (isLoading) {
+        refreshBtn.classList.add('spinning');
+        input.disabled = true;
+    } else {
+        refreshBtn.classList.remove('spinning');
+        // input.disabled НЕ восстанавливается тут — это решение caller'а
+        // (применить applySingleMatchOrPreselect или restore wasDisabled на error).
+    }
+}
+
+// _applyIONCFilter — pure фильтрация + сортировка (preselected first).
+// Возвращает новый массив.
+function _applyIONCFilter(allEntries, filterText, currentServerId, currentObjectName) {
+    const text = filterText || '';
+    let filtered;
+    if (!text) {
+        filtered = allEntries;
+    } else {
+        const lowered = text.toLowerCase();
+        filtered = allEntries.filter(entry => entry.displayString.toLowerCase().includes(lowered));
+    }
+    // Preselected item (current binding) sorts first for quick re-selection.
+    if (currentServerId && currentObjectName) {
+        filtered = filtered.slice().sort((a, b) => {
+            const aMatch = (a.serverId === currentServerId && a.objectName === currentObjectName) ? -1 : 0;
+            const bMatch = (b.serverId === currentServerId && b.objectName === currentObjectName) ? -1 : 0;
+            if (aMatch !== bMatch) return aMatch - bMatch;
+            return 0; // preserve existing order (online-first + alpha from getIONCEntries)
+        });
+    }
+    return filtered;
+}
+
 // setupIONCComboAutocomplete — wiring combobox'а IONC@server.
 // Привязывает к input/hidden/refresh-кнопке. Идемпотентен через
 // form.dataset[`ioncCombo_${prefix}_wired`].
+//
+// Внутри держит замыкания: dropdown (DOM nullable), debounceTimer, activeIndex,
+// currentItems, currentFilter, lastCommittedDisplay. Все остальные операции
+// (рендер items, build dropdown DOM, фильтрация, refresh-loading toggle)
+// делегированы в module-level _-helpers выше.
 function setupIONCComboAutocomplete(form, prefix = '') {
     const flagKey = `ioncCombo_${prefix.replace(/[^a-z0-9]/gi, '_')}_wired`;
     if (form.dataset[flagKey] === 'true') return;
@@ -131,6 +243,7 @@ function setupIONCComboAutocomplete(form, prefix = '') {
     // На blur без pick'а input.value откатывается на это значение. Hidden inputs
     // никогда не трогаются автоматически (Persistence Invariant).
     let lastCommittedDisplay = '';
+
     function commit(displayValue) {
         lastCommittedDisplay = displayValue;
         delete input.dataset.invalid;
@@ -142,119 +255,69 @@ function setupIONCComboAutocomplete(form, prefix = '') {
         currentItems = [];
     }
 
-    function highlightMatch(text, filterLower) {
-        if (!filterLower) return escapeHtml(text);
-        const lower = text.toLowerCase();
-        const idx = lower.indexOf(filterLower);
-        if (idx < 0) return escapeHtml(text);
-        return `${escapeHtml(text.slice(0, idx))}<mark>${escapeHtml(text.slice(idx, idx + filterLower.length))}</mark>${escapeHtml(text.slice(idx + filterLower.length))}`;
+    function ensureDropdown() {
+        if (!dropdown) dropdown = _buildIONCDropdownNode(input);
     }
 
     function renderItems() {
         if (!dropdown) return;
         if (currentItems.length === 0) {
-            // Если registry пустой и был зафиксирован lastError — показываем error empty-state.
-            // Иначе обычное "Нет совпадений" (плюс случай "registry загружен но фильтр не дал hits").
-            const reg = state.ioncRegistry;
-            const noEntries = reg.servers.size === 0;
-            if (noEntries && reg.lastError) {
-                dropdown.innerHTML = '<div class="ionc-combo-empty error">Не удалось загрузить — попробуйте ↻</div>';
-            } else {
-                dropdown.innerHTML = '<div class="ionc-combo-empty">Нет совпадений</div>';
-            }
+            dropdown.innerHTML = _renderIONCEmptyState(state.ioncRegistry);
             return;
         }
-        const filterLower = currentFilter.toLowerCase();
-        const itemsHtml = currentItems.map((entry, idx) => {
-            const isPreselected = hiddenServer.value === entry.serverId && hiddenObject.value === entry.objectName;
-            const cls = [
-                'ionc-combo-item',
-                idx === activeIndex ? 'active' : '',
-                entry.connected ? '' : 'offline',
-                isPreselected ? 'preselected' : '',
-            ].filter(Boolean).join(' ');
-            const offlineMark = entry.connected ? '' : '<span class="ionc-combo-offline-mark">⚠ offline</span>';
-            const star = isPreselected ? '<span class="ionc-combo-star">★</span>' : '';
-            return `<div class="${cls}" data-idx="${idx}">
-                ${star}<span class="ionc-combo-display">${highlightMatch(entry.displayString, filterLower)}</span>${offlineMark}
-            </div>`;
-        }).join('');
-        dropdown.innerHTML = itemsHtml;
-        dropdown.querySelectorAll('.ionc-combo-item').forEach(el => {
-            el.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                pickItem(parseInt(el.dataset.idx, 10));
-            });
+        _renderIONCDropdownItems(dropdown, currentItems, {
+            activeIndex,
+            currentFilter,
+            hiddenServer,
+            hiddenObject,
+            onPick: pickItem,
         });
-    }
-
-    function buildDropdown() {
-        if (dropdown) return;
-        dropdown = document.createElement('div');
-        dropdown.className = 'ionc-combo-dropdown';
-        const rect = input.getBoundingClientRect();
-        dropdown.style.position = 'fixed';
-        dropdown.style.left = `${rect.left}px`;
-        dropdown.style.top = `${rect.bottom + IONC_COMBO_DROPDOWN_TOP_OFFSET_PX}px`;
-        dropdown.style.width = `${rect.width}px`;
-        dropdown.style.zIndex = String(SENSOR_AUTOCOMPLETE_DROPDOWN_Z_INDEX);
-        document.body.appendChild(dropdown);
     }
 
     function applyFilter(text) {
         currentFilter = text;
-        const all = getIONCEntries();
-        let filtered;
-        if (!text) {
-            filtered = all;
-        } else {
-            const t = text.toLowerCase();
-            filtered = all.filter(it => it.displayString.toLowerCase().includes(t));
-        }
-        // Preselected item (current binding) sorts first for quick re-selection.
-        const currentServerId = hiddenServer.value;
-        const currentObjectName = hiddenObject.value;
-        if (currentServerId && currentObjectName) {
-            filtered = filtered.slice().sort((a, b) => {
-                const aMatch = (a.serverId === currentServerId && a.objectName === currentObjectName) ? -1 : 0;
-                const bMatch = (b.serverId === currentServerId && b.objectName === currentObjectName) ? -1 : 0;
-                if (aMatch !== bMatch) return aMatch - bMatch;
-                return 0; // preserve existing order (online-first + alpha from getIONCEntries)
-            });
-        }
-        currentItems = filtered;
+        currentItems = _applyIONCFilter(
+            getIONCEntries(),
+            text,
+            hiddenServer.value,
+            hiddenObject.value
+        );
         activeIndex = -1;
         renderItems();
     }
 
-    function pickItem(idx) {
-        const item = currentItems[idx];
-        if (!item) return;
+    function commitSelection(entry) {
         // Offline pick: input показывает (offline) суффикс + orphan-маркер сохраняется
-        // (UI sign'ал что выбранный target недоступен). Online pick: чистый display.
-        const displayValue = formatIONCComboValue(item, { autoOfflineSuffix: true });
+        // (UI signал что выбранный target недоступен). Online pick: чистый display.
+        const displayValue = formatIONCComboValue(entry, { autoOfflineSuffix: true });
         input.value = displayValue;
-        if (item.connected) {
+        if (entry.connected) {
             delete input.dataset.orphan;
         } else {
             input.dataset.orphan = 'true';
         }
         commit(displayValue);
-        hiddenServer.value = item.serverId;
-        hiddenObject.value = item.objectName;
+        hiddenServer.value = entry.serverId;
+        hiddenObject.value = entry.objectName;
         hiddenServer.dispatchEvent(new Event('change', { bubbles: true }));
         hiddenObject.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function pickItem(idx) {
+        const entry = currentItems[idx];
+        if (!entry) return;
+        commitSelection(entry);
         destroyDropdown();
     }
 
     function preselectFromConfig() {
-        const sid = hiddenServer.value;
-        const oname = hiddenObject.value;
-        if (!sid || !oname) {
+        const serverId = hiddenServer.value;
+        const objectName = hiddenObject.value;
+        if (!serverId || !objectName) {
             commit(input.value || '');
             return;
         }
-        const entry = findIONCEntry(sid, oname);
+        const entry = findIONCEntry(serverId, objectName);
         let displayValue;
         if (entry) {
             // Если entry online — обычный display. Если offline — с суффиксом + orphan.
@@ -266,7 +329,7 @@ function setupIONCComboAutocomplete(form, prefix = '') {
             }
         } else {
             // Pair не в registry → orphan: показываем raw serverId/objectName + offline.
-            displayValue = formatIONCComboValue({ serverId: sid, objectName: oname }, { showOffline: true });
+            displayValue = formatIONCComboValue({ serverId, objectName }, { showOffline: true });
             input.dataset.orphan = 'true';
         }
         input.value = displayValue;
@@ -298,16 +361,9 @@ function setupIONCComboAutocomplete(form, prefix = '') {
                 preselectFromConfig();
                 return;
             }
-            const displayValue = formatIONCComboValue(only, { autoOfflineSuffix: true });
-            input.value = displayValue;
-            if (!only.connected) input.dataset.orphan = 'true';
             input.disabled = true;
             input.title = 'Только 1 IONC@server в системе';
-            commit(displayValue);
-            hiddenServer.value = only.serverId;
-            hiddenObject.value = only.objectName;
-            hiddenServer.dispatchEvent(new Event('change', { bubbles: true }));
-            hiddenObject.dispatchEvent(new Event('change', { bubbles: true }));
+            commitSelection(only);
             return;
         }
         input.disabled = false;
@@ -325,14 +381,14 @@ function setupIONCComboAutocomplete(form, prefix = '') {
 
     input.addEventListener('focus', () => {
         if (input.disabled) return;
-        buildDropdown();
+        ensureDropdown();
         applyFilter('');
     });
 
     input.addEventListener('input', () => {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
-            buildDropdown();
+            ensureDropdown();
             const text = input.value || '';
             applyFilter(text);
             // data-invalid: typed text не матчит ни одну entry's displayString.
@@ -387,8 +443,7 @@ function setupIONCComboAutocomplete(form, prefix = '') {
             // input в исходное состояние (single-match disabled или enabled).
             // На success applySingleMatchOrPreselect самостоятельно перезапишет disabled.
             const wasDisabled = input.disabled;
-            refreshBtn.classList.add('spinning');
-            input.disabled = true;
+            _setIONCRefreshLoading(input, refreshBtn, true);
             try {
                 await ensureIONCRegistry({ force: true });
                 applySingleMatchOrPreselect();
@@ -399,7 +454,7 @@ function setupIONCComboAutocomplete(form, prefix = '') {
                 // restore prior disabled state, чтобы не оставить input залипшим.
                 input.disabled = wasDisabled;
             } finally {
-                refreshBtn.classList.remove('spinning');
+                _setIONCRefreshLoading(input, refreshBtn, false);
             }
         });
     }

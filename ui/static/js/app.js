@@ -260,6 +260,8 @@ const ZONES_HISTORY_STORAGE_KEY = 'uniset.zonesHistory';   // localStorage key �
 const IONC_REGISTRY_TTL_MS    = 5 * 60 * 1000;  // 5 минут — TTL session-cache
 const IONC_COMBO_DEBOUNCE_MS  = 100;            // короче чем sensor-autocomplete (150ms),
                                                  // т.к. фильтрация локальная без fetch
+const IONC_COMBO_DROPDOWN_TOP_OFFSET_PX = 2;    // отступ dropdown'а от низа input'а
+const IONC_COMBO_DROPDOWN_MAX_HEIGHT_PX = 320;  // max-height dropdown'а (sync с CSS)
 
 if (typeof globalThis !== 'undefined') {
     Object.assign(globalThis, {
@@ -273,6 +275,8 @@ if (typeof globalThis !== 'undefined') {
         ZONES_PICKER_MAX_HEIGHT_PX,
         IONC_REGISTRY_TTL_MS,
         IONC_COMBO_DEBOUNCE_MS,
+        IONC_COMBO_DROPDOWN_TOP_OFFSET_PX,
+        IONC_COMBO_DROPDOWN_MAX_HEIGHT_PX,
     });
 }
 
@@ -347,6 +351,7 @@ state.ioncRegistry = {
     isFetching:   false,              // race guard для ↻ во время in-flight
     fetchPromise: null,               // shared promise для concurrent waiters
     servers:      new Map(),          // serverId → { serverName, connected, objects: [name,...] }
+    lastError:    null,               // string|null — последняя ошибка fetch'а (cache не cleared)
 };
 
 
@@ -16283,6 +16288,22 @@ class DashboardWidget {
 // существующие данные сохраняются для fallback.
 // ============================================================================
 
+// formatIONCComboValue — единственный источник истины для display-string'а
+// combo input'а и его dropdown items. Формат: `${objectName} @ ${serverName||serverId}`.
+// `(offline)` суффикс добавляется когда либо явно через opts.showOffline=true,
+// либо когда entry.connected === false и opts.autoOfflineSuffix !== false.
+//
+// Передавать можно либо registry-entry ({serverId, objectName, serverName, connected}),
+// либо «orphan-binding» из config'а (serverId+objectName, без serverName/connected → showOffline:true).
+function formatIONCComboValue(entry, opts = {}) {
+    if (!entry || !entry.objectName) return '';
+    const serverNameOrId = entry.serverName || entry.serverId || '';
+    const base = `${entry.objectName} @ ${serverNameOrId}`;
+    const explicitShow = opts.showOffline === true;
+    const auto = opts.autoOfflineSuffix !== false && entry.connected === false;
+    return (explicitShow || auto) ? `${base} (offline)` : base;
+}
+
 async function ensureIONCRegistry({ force = false } = {}) {
     const reg = state.ioncRegistry;
     const fresh = (Date.now() - reg.fetchedAt) < IONC_REGISTRY_TTL_MS;
@@ -16290,19 +16311,28 @@ async function ensureIONCRegistry({ force = false } = {}) {
     if (reg.fetchPromise) return reg.fetchPromise;
     reg.isFetching = true;
     reg.fetchPromise = (async () => {
-        const resp = await fetch('/api/objects-by-type?type=IONotifyController');
-        if (!resp.ok) throw new Error(`/api/objects-by-type: HTTP ${resp.status}`);
-        const data = await resp.json();
-        reg.servers.clear();
-        (data.servers || []).forEach(s => {
-            reg.servers.set(s.serverId, {
-                serverName: s.serverName || '',
-                connected:  !!s.connected,
-                objects:    Array.isArray(s.objects) ? s.objects : [],
+        try {
+            const resp = await fetch('/api/objects-by-type?type=IONotifyController');
+            if (!resp.ok) throw new Error(`/api/objects-by-type: HTTP ${resp.status}`);
+            const data = await resp.json();
+            reg.servers.clear();
+            (data.servers || []).forEach(s => {
+                reg.servers.set(s.serverId, {
+                    serverName: s.serverName || '',
+                    connected:  !!s.connected,
+                    objects:    Array.isArray(s.objects) ? s.objects : [],
+                });
             });
-        });
-        reg.fetchedAt = Date.now();
-        return reg;
+            reg.fetchedAt = Date.now();
+            reg.lastError = null;
+            return reg;
+        } catch (err) {
+            // Cache (servers Map + fetchedAt) НЕ инвалидируется — old data fallback.
+            // lastError используется dropdown'ом для отображения error message.
+            reg.lastError = (err && err.message) ? err.message : String(err);
+            console.warn('IONC registry fetch failed:', err);
+            throw err;
+        }
     })().finally(() => {
         reg.isFetching = false;
         reg.fetchPromise = null;
@@ -16313,15 +16343,18 @@ async function ensureIONCRegistry({ force = false } = {}) {
 function getIONCEntries() {
     const out = [];
     state.ioncRegistry.servers.forEach((srv, serverId) => {
-        const sn = srv.serverName || serverId;
         srv.objects.forEach(objectName => {
-            out.push({
+            const entry = {
                 serverId,
                 serverName: srv.serverName,
                 connected:  srv.connected,
                 objectName,
-                displayString: `${objectName} @ ${sn}`,
-            });
+            };
+            // displayString — канонический ключ для filter/sort (БЕЗ offline-суффикса,
+            // чтобы поиск "SharedMemory" находил и offline pair'ы). Для input value
+            // используется formatIONCComboValue с autoOfflineSuffix.
+            entry.displayString = formatIONCComboValue(entry, { autoOfflineSuffix: false });
+            out.push(entry);
         });
     });
     out.sort((a, b) => {
@@ -16335,16 +16368,128 @@ function findIONCEntry(serverId, objectName) {
     const srv = state.ioncRegistry.servers.get(serverId);
     if (!srv) return null;
     if (!srv.objects.includes(objectName)) return null;
-    const sn = srv.serverName || serverId;
-    return {
-        serverId, serverName: srv.serverName, connected: srv.connected,
-        objectName, displayString: `${objectName} @ ${sn}`,
+    const entry = {
+        serverId, serverName: srv.serverName, connected: srv.connected, objectName,
     };
+    entry.displayString = formatIONCComboValue(entry, { autoOfflineSuffix: false });
+    return entry;
+}
+
+// ============================================================================
+// IONC combo helpers — module-level pure / DOM helpers
+// (вынесены из setupIONCComboAutocomplete для читаемости + тестируемости)
+// ============================================================================
+
+// _highlightIONCMatch — wrap'ит match-substring в <mark>, безопасно escape'ит остальное.
+// Pure: не зависит от DOM или closure-state.
+function _highlightIONCMatch(text, filterLower) {
+    if (!filterLower) return escapeHtml(text);
+    const lower = text.toLowerCase();
+    const idx = lower.indexOf(filterLower);
+    if (idx < 0) return escapeHtml(text);
+    return `${escapeHtml(text.slice(0, idx))}<mark>${escapeHtml(text.slice(idx, idx + filterLower.length))}</mark>${escapeHtml(text.slice(idx + filterLower.length))}`;
+}
+
+// _buildIONCDropdownNode — создаёт+позиционирует absolute dropdown под input'ом.
+// Возвращает только что вставленный <div>. Стиль/класс выровнен с CSS .ionc-combo-dropdown.
+function _buildIONCDropdownNode(input) {
+    const dropdown = document.createElement('div');
+    dropdown.className = 'ionc-combo-dropdown';
+    const rect = input.getBoundingClientRect();
+    dropdown.style.position = 'fixed';
+    dropdown.style.left   = `${rect.left}px`;
+    dropdown.style.top    = `${rect.bottom + IONC_COMBO_DROPDOWN_TOP_OFFSET_PX}px`;
+    dropdown.style.width  = `${rect.width}px`;
+    dropdown.style.zIndex = String(SENSOR_AUTOCOMPLETE_DROPDOWN_Z_INDEX);
+    document.body.appendChild(dropdown);
+    return dropdown;
+}
+
+// _renderIONCEmptyState — выбирает HTML для пустого dropdown'а:
+// либо error message (registry пустой + lastError зафиксирован),
+// либо обычное "Нет совпадений".
+function _renderIONCEmptyState(reg) {
+    const noEntries = reg.servers.size === 0;
+    if (noEntries && reg.lastError) {
+        return '<div class="ionc-combo-empty error">Не удалось загрузить — попробуйте ↻</div>';
+    }
+    return '<div class="ionc-combo-empty">Нет совпадений</div>';
+}
+
+// _renderIONCDropdownItems — innerHTML для items + click-delegation.
+// ctx: { activeIndex, currentFilter, hiddenServer, hiddenObject, onPick(idx) }.
+function _renderIONCDropdownItems(dropdown, items, ctx) {
+    const filterLower = ctx.currentFilter.toLowerCase();
+    const itemsHtml = items.map((entry, idx) => {
+        const isPreselected = ctx.hiddenServer.value === entry.serverId
+            && ctx.hiddenObject.value === entry.objectName;
+        const cls = [
+            'ionc-combo-item',
+            idx === ctx.activeIndex ? 'active' : '',
+            entry.connected ? '' : 'offline',
+            isPreselected ? 'preselected' : '',
+        ].filter(Boolean).join(' ');
+        const offlineMark = entry.connected
+            ? ''
+            : '<span class="ionc-combo-offline-mark">⚠ offline</span>';
+        const star = isPreselected ? '<span class="ionc-combo-star">★</span>' : '';
+        return `<div class="${cls}" data-idx="${idx}">
+            ${star}<span class="ionc-combo-display">${_highlightIONCMatch(entry.displayString, filterLower)}</span>${offlineMark}
+        </div>`;
+    }).join('');
+    dropdown.innerHTML = itemsHtml;
+    dropdown.querySelectorAll('.ionc-combo-item').forEach(el => {
+        el.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            ctx.onPick(parseIntegerOrDefault(el.dataset.idx, -1));
+        });
+    });
+}
+
+// _setIONCRefreshLoading — одна точка для visual loading state кнопки и input'а.
+// Используется в refresh-handler'е (toggle on/off вокруг await fetch).
+function _setIONCRefreshLoading(input, refreshBtn, isLoading) {
+    if (isLoading) {
+        refreshBtn.classList.add('spinning');
+        input.disabled = true;
+    } else {
+        refreshBtn.classList.remove('spinning');
+        // input.disabled НЕ восстанавливается тут — это решение caller'а
+        // (применить applySingleMatchOrPreselect или restore wasDisabled на error).
+    }
+}
+
+// _applyIONCFilter — pure фильтрация + сортировка (preselected first).
+// Возвращает новый массив.
+function _applyIONCFilter(allEntries, filterText, currentServerId, currentObjectName) {
+    const text = filterText || '';
+    let filtered;
+    if (!text) {
+        filtered = allEntries;
+    } else {
+        const lowered = text.toLowerCase();
+        filtered = allEntries.filter(entry => entry.displayString.toLowerCase().includes(lowered));
+    }
+    // Preselected item (current binding) sorts first for quick re-selection.
+    if (currentServerId && currentObjectName) {
+        filtered = filtered.slice().sort((a, b) => {
+            const aMatch = (a.serverId === currentServerId && a.objectName === currentObjectName) ? -1 : 0;
+            const bMatch = (b.serverId === currentServerId && b.objectName === currentObjectName) ? -1 : 0;
+            if (aMatch !== bMatch) return aMatch - bMatch;
+            return 0; // preserve existing order (online-first + alpha from getIONCEntries)
+        });
+    }
+    return filtered;
 }
 
 // setupIONCComboAutocomplete — wiring combobox'а IONC@server.
 // Привязывает к input/hidden/refresh-кнопке. Идемпотентен через
 // form.dataset[`ioncCombo_${prefix}_wired`].
+//
+// Внутри держит замыкания: dropdown (DOM nullable), debounceTimer, activeIndex,
+// currentItems, currentFilter, lastCommittedDisplay. Все остальные операции
+// (рендер items, build dropdown DOM, фильтрация, refresh-loading toggle)
+// делегированы в module-level _-helpers выше.
 function setupIONCComboAutocomplete(form, prefix = '') {
     const flagKey = `ioncCombo_${prefix.replace(/[^a-z0-9]/gi, '_')}_wired`;
     if (form.dataset[flagKey] === 'true') return;
@@ -16361,6 +16506,16 @@ function setupIONCComboAutocomplete(form, prefix = '') {
     let activeIndex = -1;
     let currentItems = [];
     let currentFilter = '';
+    // lastCommittedDisplay — последнее значение input.value, которое мы признаём
+    // «коммитнутым» (через preselect, single-match auto-fill или explicit pickItem).
+    // На blur без pick'а input.value откатывается на это значение. Hidden inputs
+    // никогда не трогаются автоматически (Persistence Invariant).
+    let lastCommittedDisplay = '';
+
+    function commit(displayValue) {
+        lastCommittedDisplay = displayValue;
+        delete input.dataset.invalid;
+    }
 
     function destroyDropdown() {
         if (dropdown) { dropdown.remove(); dropdown = null; }
@@ -16368,130 +16523,115 @@ function setupIONCComboAutocomplete(form, prefix = '') {
         currentItems = [];
     }
 
-    function highlightMatch(text, filterLower) {
-        if (!filterLower) return escapeHtml(text);
-        const lower = text.toLowerCase();
-        const idx = lower.indexOf(filterLower);
-        if (idx < 0) return escapeHtml(text);
-        return `${escapeHtml(text.slice(0, idx))}<mark>${escapeHtml(text.slice(idx, idx + filterLower.length))}</mark>${escapeHtml(text.slice(idx + filterLower.length))}`;
+    function ensureDropdown() {
+        if (!dropdown) dropdown = _buildIONCDropdownNode(input);
     }
 
     function renderItems() {
         if (!dropdown) return;
         if (currentItems.length === 0) {
-            dropdown.innerHTML = '<div class="ionc-combo-empty">Нет совпадений</div>';
+            dropdown.innerHTML = _renderIONCEmptyState(state.ioncRegistry);
             return;
         }
-        const filterLower = currentFilter.toLowerCase();
-        const itemsHtml = currentItems.map((it, idx) => {
-            const cls = [
-                'ionc-combo-item',
-                idx === activeIndex ? 'active' : '',
-                it.connected ? '' : 'offline',
-                hiddenServer.value === it.serverId && hiddenObject.value === it.objectName ? 'preselected' : '',
-            ].filter(Boolean).join(' ');
-            const offlineMark = it.connected ? '' : '<span class="ionc-combo-offline-mark">⚠ offline</span>';
-            const star = (hiddenServer.value === it.serverId && hiddenObject.value === it.objectName)
-                ? '<span class="ionc-combo-star">★</span>' : '';
-            return `<div class="${cls}" data-idx="${idx}">
-                ${star}<span class="ionc-combo-display">${highlightMatch(it.displayString, filterLower)}</span>${offlineMark}
-            </div>`;
-        }).join('');
-        dropdown.innerHTML = itemsHtml;
-        dropdown.querySelectorAll('.ionc-combo-item').forEach(el => {
-            el.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                pickItem(parseInt(el.dataset.idx, 10));
-            });
+        _renderIONCDropdownItems(dropdown, currentItems, {
+            activeIndex,
+            currentFilter,
+            hiddenServer,
+            hiddenObject,
+            onPick: pickItem,
         });
-    }
-
-    function buildDropdown() {
-        if (dropdown) return;
-        dropdown = document.createElement('div');
-        dropdown.className = 'ionc-combo-dropdown';
-        const rect = input.getBoundingClientRect();
-        dropdown.style.position = 'fixed';
-        dropdown.style.left = `${rect.left}px`;
-        dropdown.style.top = `${rect.bottom + 2}px`;
-        dropdown.style.width = `${rect.width}px`;
-        dropdown.style.zIndex = String(SENSOR_AUTOCOMPLETE_DROPDOWN_Z_INDEX);
-        document.body.appendChild(dropdown);
     }
 
     function applyFilter(text) {
         currentFilter = text;
-        const all = getIONCEntries();
-        let filtered;
-        if (!text) {
-            filtered = all;
-        } else {
-            const t = text.toLowerCase();
-            filtered = all.filter(it => it.displayString.toLowerCase().includes(t));
-        }
-        // Preselected item (current binding) sorts first for quick re-selection.
-        const sid = hiddenServer.value;
-        const oid = hiddenObject.value;
-        if (sid && oid) {
-            filtered = filtered.slice().sort((a, b) => {
-                const aMatch = (a.serverId === sid && a.objectName === oid) ? -1 : 0;
-                const bMatch = (b.serverId === sid && b.objectName === oid) ? -1 : 0;
-                if (aMatch !== bMatch) return aMatch - bMatch;
-                return 0; // preserve existing order (online-first + alpha from getIONCEntries)
-            });
-        }
-        currentItems = filtered;
+        currentItems = _applyIONCFilter(
+            getIONCEntries(),
+            text,
+            hiddenServer.value,
+            hiddenObject.value
+        );
         activeIndex = -1;
         renderItems();
     }
 
-    function pickItem(idx) {
-        const item = currentItems[idx];
-        if (!item) return;
-        input.value = item.displayString;
-        delete input.dataset.orphan;
-        hiddenServer.value = item.serverId;
-        hiddenObject.value = item.objectName;
+    function commitSelection(entry) {
+        // Offline pick: input показывает (offline) суффикс + orphan-маркер сохраняется
+        // (UI signал что выбранный target недоступен). Online pick: чистый display.
+        const displayValue = formatIONCComboValue(entry, { autoOfflineSuffix: true });
+        input.value = displayValue;
+        if (entry.connected) {
+            delete input.dataset.orphan;
+        } else {
+            input.dataset.orphan = 'true';
+        }
+        commit(displayValue);
+        hiddenServer.value = entry.serverId;
+        hiddenObject.value = entry.objectName;
         hiddenServer.dispatchEvent(new Event('change', { bubbles: true }));
         hiddenObject.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function pickItem(idx) {
+        const entry = currentItems[idx];
+        if (!entry) return;
+        commitSelection(entry);
         destroyDropdown();
     }
 
     function preselectFromConfig() {
-        const sid = hiddenServer.value;
-        const oname = hiddenObject.value;
-        if (!sid || !oname) return;
-        const entry = findIONCEntry(sid, oname);
+        const serverId = hiddenServer.value;
+        const objectName = hiddenObject.value;
+        if (!serverId || !objectName) {
+            commit(input.value || '');
+            return;
+        }
+        const entry = findIONCEntry(serverId, objectName);
+        let displayValue;
         if (entry) {
-            input.value = entry.displayString;
-            delete input.dataset.orphan;
+            // Если entry online — обычный display. Если offline — с суффиксом + orphan.
+            displayValue = formatIONCComboValue(entry, { autoOfflineSuffix: true });
+            if (entry.connected) {
+                delete input.dataset.orphan;
+            } else {
+                input.dataset.orphan = 'true';
+            }
         } else {
-            input.value = `${oname} @ ${sid} (offline)`;
+            // Pair не в registry → orphan: показываем raw serverId/objectName + offline.
+            displayValue = formatIONCComboValue({ serverId, objectName }, { showOffline: true });
             input.dataset.orphan = 'true';
         }
+        input.value = displayValue;
+        commit(displayValue);
     }
 
     function applySingleMatchOrPreselect() {
         const all = getIONCEntries();
         if (all.length === 1) {
+            const only = all[0];
             // Persistence Invariant: existing binding is user property — never overwrite automatically.
             // Single-match auto-fill только когда config пустой (новый widget без серверной привязки).
             // serverId — достаточный discriminator: новый widget не имеет serverId,
             // а существующий (даже orphan) всегда имеет сохранённый serverId.
             if (hiddenServer.value) {
-                input.disabled = false;
-                input.title = '';
+                // Если сохранённый binding совпадает с единственной entry registry —
+                // disable input (никакой альтернативы пользователь выбрать не может,
+                // даже после refresh). Иначе оставляем enabled, чтобы можно было
+                // перейти на правильную entry / orphan-fallback оставить виден.
+                const matchesOnly = hiddenServer.value === only.serverId
+                    && hiddenObject.value === only.objectName;
+                if (matchesOnly) {
+                    input.disabled = true;
+                    input.title = 'Только 1 IONC@server в системе';
+                } else {
+                    input.disabled = false;
+                    input.title = '';
+                }
                 preselectFromConfig();
                 return;
             }
-            const it = all[0];
-            input.value = it.displayString;
             input.disabled = true;
             input.title = 'Только 1 IONC@server в системе';
-            hiddenServer.value = it.serverId;
-            hiddenObject.value = it.objectName;
-            hiddenServer.dispatchEvent(new Event('change', { bubbles: true }));
-            hiddenObject.dispatchEvent(new Event('change', { bubbles: true }));
+            commitSelection(only);
             return;
         }
         input.disabled = false;
@@ -16509,15 +16649,26 @@ function setupIONCComboAutocomplete(form, prefix = '') {
 
     input.addEventListener('focus', () => {
         if (input.disabled) return;
-        buildDropdown();
+        ensureDropdown();
         applyFilter('');
     });
 
     input.addEventListener('input', () => {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
-            buildDropdown();
-            applyFilter(input.value || '');
+            ensureDropdown();
+            const text = input.value || '';
+            applyFilter(text);
+            // data-invalid: typed text не матчит ни одну entry's displayString.
+            // Пустой text → не invalid (пользователь стирает). Не трогаем hidden.
+            if (!text) {
+                delete input.dataset.invalid;
+            } else {
+                const lower = text.toLowerCase();
+                const hasMatch = getIONCEntries().some(e => e.displayString.toLowerCase().includes(lower));
+                if (hasMatch) delete input.dataset.invalid;
+                else          input.dataset.invalid = 'true';
+            }
         }, IONC_COMBO_DEBOUNCE_MS);
     });
 
@@ -16542,21 +16693,36 @@ function setupIONCComboAutocomplete(form, prefix = '') {
     });
 
     input.addEventListener('blur', () => {
-        setTimeout(destroyDropdown, SENSOR_AUTOCOMPLETE_BLUR_DELAY_MS);
+        // Откладываем revert на тот же delay что и destroyDropdown — чтобы успел
+        // отработать mousedown→pickItem (который обновит lastCommittedDisplay).
+        // Если pickItem уже committed новое значение, restore просто перезапишет
+        // input.value тем же, что там и так стоит.
+        setTimeout(() => {
+            destroyDropdown();
+            input.value = lastCommittedDisplay;
+            delete input.dataset.invalid;
+        }, SENSOR_AUTOCOMPLETE_BLUR_DELAY_MS);
     });
 
     if (refreshBtn) {
         refreshBtn.addEventListener('click', async () => {
             if (state.ioncRegistry.isFetching) return;
-            refreshBtn.classList.add('spinning');
+            // Snapshot prior disabled state — на случай fetch error мы возвращаем
+            // input в исходное состояние (single-match disabled или enabled).
+            // На success applySingleMatchOrPreselect самостоятельно перезапишет disabled.
+            const wasDisabled = input.disabled;
+            _setIONCRefreshLoading(input, refreshBtn, true);
             try {
                 await ensureIONCRegistry({ force: true });
                 applySingleMatchOrPreselect();
                 if (dropdown) applyFilter(input.value || '');
             } catch (err) {
                 console.warn('IONC registry refresh failed:', err);
+                // На fetch error applySingleMatchOrPreselect не вызвана —
+                // restore prior disabled state, чтобы не оставить input залипшим.
+                input.disabled = wasDisabled;
             } finally {
-                refreshBtn.classList.remove('spinning');
+                _setIONCRefreshLoading(input, refreshBtn, false);
             }
         });
     }
@@ -16569,10 +16735,10 @@ function renderSensorBindingFields(config = {}, opts = {}) {
 
     const serverId = config.serverId || '';
     const objectName = config.objectName || objectNameDefault;
-    // displayString рендерится как orphan-fallback; setupIONCComboAutocomplete
-    // переписывает после ensureIONCRegistry, если registry содержит pair.
+    // initialDisplay — orphan fallback (без serverName, registry ещё не загружена).
+    // setupIONCComboAutocomplete переписывает после ensureIONCRegistry, если pair найден.
     const initialDisplay = serverId && objectName
-        ? `${objectName} @ ${serverId}`
+        ? formatIONCComboValue({ serverId, objectName }, { autoOfflineSuffix: false })
         : '';
 
     return `
@@ -16901,6 +17067,7 @@ if (typeof globalThis !== 'undefined') {
     globalThis.ensureIONCRegistry = ensureIONCRegistry;
     globalThis.getIONCEntries     = getIONCEntries;
     globalThis.findIONCEntry      = findIONCEntry;
+    globalThis.formatIONCComboValue = formatIONCComboValue;
 }
 
 
