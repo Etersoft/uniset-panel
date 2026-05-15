@@ -252,6 +252,11 @@ const ZONES_HISTORY_MAX = 10;                              // FIFO cap для lo
 const ZONES_PICKER_MAX_HEIGHT_PX = 220;                    // max-height scrollable area
 const ZONES_HISTORY_STORAGE_KEY = 'uniset.zonesHistory';   // localStorage key для recent zones
 
+// === IONC@server combobox ===
+const IONC_REGISTRY_TTL_MS    = 5 * 60 * 1000;  // 5 минут — TTL session-cache
+const IONC_COMBO_DEBOUNCE_MS  = 100;            // короче чем sensor-autocomplete (150ms),
+                                                 // т.к. фильтрация локальная без fetch
+
 if (typeof globalThis !== 'undefined') {
     Object.assign(globalThis, {
         CHART_LINE_TENSION,
@@ -262,5 +267,7 @@ if (typeof globalThis !== 'undefined') {
         ZONES_HISTORY_MAX,
         ZONES_HISTORY_STORAGE_KEY,
         ZONES_PICKER_MAX_HEIGHT_PX,
+        IONC_REGISTRY_TTL_MS,
+        IONC_COMBO_DEBOUNCE_MS,
     });
 }

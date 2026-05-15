@@ -59,3 +59,12 @@ const state = window.state = {
         pingIntervalId: null  // ID интервала ping
     }
 };
+
+// IONC@server registry для combobox'а в config-форме widget'ов.
+// Lazy-populated; TTL 5 минут (IONC_REGISTRY_TTL_MS); ручное обновление через кнопку ↻.
+state.ioncRegistry = {
+    fetchedAt:    0,                  // ms; 0 = never fetched
+    isFetching:   false,              // race guard для ↻ во время in-flight
+    fetchPromise: null,               // shared promise для concurrent waiters
+    servers:      new Map(),          // serverId → { serverName, connected, objects: [name,...] }
+};
