@@ -43,19 +43,28 @@ async function ensureIONCRegistry({ force = false } = {}) {
     if (reg.fetchPromise) return reg.fetchPromise;
     reg.isFetching = true;
     reg.fetchPromise = (async () => {
-        const resp = await fetch('/api/objects-by-type?type=IONotifyController');
-        if (!resp.ok) throw new Error(`/api/objects-by-type: HTTP ${resp.status}`);
-        const data = await resp.json();
-        reg.servers.clear();
-        (data.servers || []).forEach(s => {
-            reg.servers.set(s.serverId, {
-                serverName: s.serverName || '',
-                connected:  !!s.connected,
-                objects:    Array.isArray(s.objects) ? s.objects : [],
+        try {
+            const resp = await fetch('/api/objects-by-type?type=IONotifyController');
+            if (!resp.ok) throw new Error(`/api/objects-by-type: HTTP ${resp.status}`);
+            const data = await resp.json();
+            reg.servers.clear();
+            (data.servers || []).forEach(s => {
+                reg.servers.set(s.serverId, {
+                    serverName: s.serverName || '',
+                    connected:  !!s.connected,
+                    objects:    Array.isArray(s.objects) ? s.objects : [],
+                });
             });
-        });
-        reg.fetchedAt = Date.now();
-        return reg;
+            reg.fetchedAt = Date.now();
+            reg.lastError = null;
+            return reg;
+        } catch (err) {
+            // Cache (servers Map + fetchedAt) НЕ инвалидируется — old data fallback.
+            // lastError используется dropdown'ом для отображения error message.
+            reg.lastError = (err && err.message) ? err.message : String(err);
+            console.warn('IONC registry fetch failed:', err);
+            throw err;
+        }
     })().finally(() => {
         reg.isFetching = false;
         reg.fetchPromise = null;
@@ -144,7 +153,15 @@ function setupIONCComboAutocomplete(form, prefix = '') {
     function renderItems() {
         if (!dropdown) return;
         if (currentItems.length === 0) {
-            dropdown.innerHTML = '<div class="ionc-combo-empty">Нет совпадений</div>';
+            // Если registry пустой и был зафиксирован lastError — показываем error empty-state.
+            // Иначе обычное "Нет совпадений" (плюс случай "registry загружен но фильтр не дал hits").
+            const reg = state.ioncRegistry;
+            const noEntries = reg.servers.size === 0;
+            if (noEntries && reg.lastError) {
+                dropdown.innerHTML = '<div class="ionc-combo-empty error">Не удалось загрузить — попробуйте ↻</div>';
+            } else {
+                dropdown.innerHTML = '<div class="ionc-combo-empty">Нет совпадений</div>';
+            }
             return;
         }
         const filterLower = currentFilter.toLowerCase();

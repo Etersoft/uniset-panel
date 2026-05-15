@@ -279,6 +279,50 @@ describe('setupIONCComboAutocomplete', () => {
         expect(input.value).toBe(committed);
     });
 
+    it('dropdown shows error message when initial fetch fails', async () => {
+        // Reset registry to empty so setupIONCComboAutocomplete will trigger initial fetch.
+        const reg = (globalThis as any).state.ioncRegistry;
+        reg.servers.clear();
+        reg.fetchedAt = 0;
+        reg.fetchPromise = null;
+        reg.lastError = null;
+
+        // Stub fetch to fail.
+        vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 500 })));
+
+        const form = mountForm({ serverId: 'foo', objectName: 'Bar' });
+        (globalThis as any).setupIONCComboAutocomplete(form, '');
+        // Wait for ensureIONCRegistry rejection to settle.
+        await new Promise(r => setTimeout(r, 50));
+
+        const input = form.querySelector<HTMLInputElement>('.ionc-combo-input')!;
+        // lastError should be populated.
+        expect(reg.lastError).toBeTruthy();
+
+        // Open dropdown — it should show error message.
+        input.dispatchEvent(new FocusEvent('focus'));
+        await new Promise(r => setTimeout(r, 0));
+        const empty = document.querySelector('.ionc-combo-empty');
+        expect(empty).not.toBeNull();
+        expect(empty?.textContent).toMatch(/Не удалось загрузить/);
+        expect(empty?.classList.contains('error')).toBe(true);
+    });
+
+    it('successful fetch clears lastError', async () => {
+        const reg = (globalThis as any).state.ioncRegistry;
+        reg.servers.clear();
+        reg.fetchedAt = 0;
+        reg.lastError = 'previous error';
+        vi.stubGlobal('fetch', vi.fn(async () => ({
+            ok: true,
+            json: async () => ({ type: 'IONotifyController', servers: [
+                { serverId: 's1', serverName: 'Server1', connected: true, objects: ['SharedMemory'] },
+            ] }),
+        })));
+        await (globalThis as any).ensureIONCRegistry();
+        expect(reg.lastError).toBeNull();
+    });
+
     it('refresh button triggers force fetch', async () => {
         const fetchMock = vi.fn(async () => ({
             ok: true,

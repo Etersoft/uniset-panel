@@ -67,4 +67,5 @@ state.ioncRegistry = {
     isFetching:   false,              // race guard для ↻ во время in-flight
     fetchPromise: null,               // shared promise для concurrent waiters
     servers:      new Map(),          // serverId → { serverName, connected, objects: [name,...] }
+    lastError:    null,               // string|null — последняя ошибка fetch'а (cache не cleared)
 };
