@@ -1,19 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { readFileSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { loadBindingModules } from './helpers/load-binding-modules';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const SRC_DIR = resolve(__dirname, '../../ui/static/js/src');
-
-function loadModule() {
-    const constants = readFileSync(resolve(SRC_DIR, '00-constants.js'), 'utf8');
-    const stateSrc  = readFileSync(resolve(SRC_DIR, '00-state.js'), 'utf8');
-    const utils     = readFileSync(resolve(SRC_DIR, '06-utils.js'), 'utf8');
-    const ac        = readFileSync(resolve(SRC_DIR, '41-sensor-autocomplete.js'), 'utf8');
-    const binding   = readFileSync(resolve(SRC_DIR, '60-widget-sensor-binding.js'), 'utf8');
-    new Function(`${constants}\n${stateSrc}\n${utils}\n${ac}\n${binding}`)();
-}
+const loadModule = () => loadBindingModules();
 
 function seedRegistry(entries: Array<{serverId:string, serverName:string, connected:boolean, objects:string[]}>) {
     const reg = (globalThis as any).state.ioncRegistry;
