@@ -119,11 +119,9 @@ services:
 
   # Mock uniset2 server for testing
   mock-uniset:
-    image: node:20-alpine
-    working_dir: /app
-    volumes:
-      - ./tests/mock-server:/app
-    command: sh -c "npm install --silent 2>/dev/null && node server.js"
+    build:
+      context: ./tests/mock-server
+      dockerfile: Dockerfile
     expose:
       - "9393"
     healthcheck:
