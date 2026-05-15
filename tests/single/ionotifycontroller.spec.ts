@@ -181,10 +181,10 @@ test.describe('IONotifyController (SharedMemory)', () => {
     const firstPinToggle = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first().locator('.pin-toggle');
     await firstPinToggle.click();
 
-    // Теперь должен отображаться только 1 датчик (закреплённый)
-    await page.waitForTimeout(100);
-    const filteredCount = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count();
-    expect(filteredCount).toBe(1);
+    // Теперь должен отображаться только 1 датчик (закреплённый) — toHaveCount polls автоматически
+    const pinnedRows = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row');
+    await expect(pinnedRows).toHaveCount(1, { timeout: 2000 });
+    const filteredCount = await pinnedRows.count();
   });
 
   test('should unpin all sensors on unpin-all button click', async ({ page }) => {
@@ -199,19 +199,17 @@ test.describe('IONotifyController (SharedMemory)', () => {
     // Закрепляем первый датчик
     const firstPinToggle = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first().locator('.pin-toggle');
     await firstPinToggle.click();
-    await page.waitForTimeout(100);
 
-    // Проверяем что показывается только 1
-    expect(await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count()).toBe(1);
+    // Проверяем что показывается только 1 — toHaveCount polls автоматически
+    await expect(page.locator('.ionc-sensors-tbody tr.ionc-sensor-row')).toHaveCount(1, { timeout: 2000 });
 
     // Кликаем "снять все"
     const unpinAllBtn = page.locator('.ionc-unpin-all');
     await unpinAllBtn.click();
-    await page.waitForTimeout(100);
 
-    // Все датчики должны снова отображаться
+    // Все датчики должны снова отображаться — toHaveCount polls автоматически
+    await expect(page.locator('.ionc-sensors-tbody tr.ionc-sensor-row')).toHaveCount(initialCount, { timeout: 2000 });
     const restoredCount = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count();
-    expect(restoredCount).toBe(initialCount);
 
     // Кнопка "снять все" должна скрыться
     await expect(unpinAllBtn).not.toBeVisible();
@@ -273,18 +271,21 @@ test.describe('IONotifyController (SharedMemory)', () => {
     const firstPinToggle = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first().locator('.pin-toggle');
     const firstSensorId = await firstPinToggle.getAttribute('data-id');
     await firstPinToggle.click();
-    await page.waitForTimeout(100);
 
-    // Теперь показывается только 1 закреплённый датчик
+    // Теперь показывается только 1 закреплённый датчик — toHaveCount polls автоматически
+    await expect(page.locator('.ionc-sensors-tbody tr.ionc-sensor-row')).toHaveCount(1, { timeout: 2000 });
     const pinnedCount = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count();
-    expect(pinnedCount).toBe(1);
 
     // Вводим поисковый запрос — должны показаться все датчики, соответствующие фильтру
     const filterInput = page.locator('.filter-input');
     await filterInput.fill('Sensor');
-    await page.waitForTimeout(400); // debounce 300ms + buffer
 
     // После ввода фильтра показываются все найденные датчики (не только закреплённые)
+    // Ждём debounce через poll вместо fixed waitForTimeout(400)
+    await expect.poll(
+      async () => await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count(),
+      { timeout: 2000, intervals: [100, 200] }
+    ).toBeGreaterThan(1);
     const filteredCount = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count();
     expect(filteredCount).toBeGreaterThan(1);
 
@@ -350,7 +351,8 @@ test.describe('IONotifyController (SharedMemory)', () => {
     const filterInput = page.locator('.filter-input');
     const sensorsContainer = page.locator('.ionc-sensors-table-container');
 
-    // Вводим фильтр
+    // Вводим фильтр — debounce 300ms, оставляем waitForTimeout(400) как намеренную паузу
+    // (poll здесь ненадёжен: Sensor150 возвращает 0 строк, 0<100 сразу true → race с debounce)
     await filterInput.fill('Sensor150');
     await page.waitForTimeout(400);
 
@@ -368,8 +370,11 @@ test.describe('IONotifyController (SharedMemory)', () => {
     // Фильтр должен сброситься
     await expect(filterInput).toHaveValue('');
 
-    // Должны показаться все датчики
-    await page.waitForTimeout(400);
+    // Должны показаться все датчики — poll вместо fixed waitForTimeout(400)
+    await expect.poll(
+      async () => await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count(),
+      { timeout: 2000, intervals: [100, 200] }
+    ).toBeGreaterThan(filteredCount);
     const restoredCount = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count();
     expect(restoredCount).toBeGreaterThan(filteredCount);
   });
@@ -397,16 +402,16 @@ test.describe('IONotifyController (SharedMemory)', () => {
     // Получаем имя первого датчика
     const firstName = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row:first-child .ionc-col-name').textContent();
 
-    // Вводим часть имени в фильтр
+    // Вводим часть имени в фильтр и ждём применения через poll вместо fixed waitForTimeout(400)
     const filterInput = page.locator('.filter-input');
     await filterInput.fill(firstName?.substring(0, 5) || 'Sensor');
 
-    // Ждём debounce и перезагрузки
-    await page.waitForTimeout(400);
-
-    // Проверяем что фильтр применился
+    // Проверяем что фильтр применился (ждём debounce через poll)
+    await expect.poll(
+      async () => await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count(),
+      { timeout: 2000, intervals: [100, 200] }
+    ).toBeLessThanOrEqual(initialCount);
     const filteredCount = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count();
-    expect(filteredCount).toBeLessThanOrEqual(initialCount);
   });
 
   test('should have type filter dropdown', async ({ page }) => {
@@ -426,15 +431,19 @@ test.describe('IONotifyController (SharedMemory)', () => {
   test('should filter sensors by type', async ({ page }) => {
     await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
 
-    // Выбираем тип AI
+    // Выбираем тип AI и ждём применения через poll вместо fixed waitForTimeout(400)
     const typeFilter = page.locator('.type-filter');
     await typeFilter.selectOption('AI');
 
-    // Ждём перезагрузки
-    await page.waitForTimeout(400);
-
-    // Все отображаемые датчики должны быть типа AI (или пусто)
+    // Все отображаемые датчики должны быть типа AI (или пусто) — ждём DOM стабилизации
     const rows = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row');
+    // Дебаунс фильтра — проверяем через toPass что badge'ы имеют правильный тип
+    await expect(async () => {
+      const count = await rows.count();
+      if (count > 0) {
+        await expect(page.locator('.ionc-sensors-tbody .type-badge').first()).toHaveText('AI');
+      }
+    }).toPass({ timeout: 2000, intervals: [100, 200] });
     const count = await rows.count();
 
     if (count > 0) {
@@ -886,15 +895,14 @@ test.describe('IONotifyController (SharedMemory)', () => {
     const chartPanel = chartsSection.locator('.chart-panel').first();
     await expect(chartPanel).toBeVisible({ timeout: 5000 });
 
-    // Ждём несколько секунд для накопления данных
-    await page.waitForTimeout(3000);
-
-    // Получаем значение из таблицы
+    // Ждём появления данных в таблице и легенде (SSE обновление)
     const tableValue = firstRow.locator('.ionc-value');
-    const tableText = await tableValue.textContent();
+    await expect(tableValue).not.toBeEmpty({ timeout: 6000 });
 
-    // Получаем значение из легенды графика
     const legendValue = chartPanel.locator('.chart-panel-value');
+    await expect(legendValue).not.toBeEmpty({ timeout: 6000 });
+
+    const tableText = await tableValue.textContent();
     const legendText = await legendValue.textContent();
 
     // Оба значения должны быть непустыми (данные обновляются)
@@ -1068,7 +1076,6 @@ test.describe('IONotifyController (SharedMemory)', () => {
 
     await firstRow.locator('.chart-toggle-label').click();
     await expect(firstRow.locator('.chart-toggle input[type="checkbox"]')).toBeChecked();
-    await page.waitForTimeout(300);
 
     await secondRow.locator('.chart-toggle-label').click();
     await expect(secondRow.locator('.chart-toggle input[type="checkbox"]')).toBeChecked();
@@ -1118,8 +1125,16 @@ test.describe('IONotifyController (SharedMemory)', () => {
     await firstRow.locator('.chart-toggle-label').click();
     await expect(firstRow.locator('.chart-toggle input[type="checkbox"]')).toBeChecked();
 
-    // Ждём сохранения в localStorage
-    await page.waitForTimeout(500);
+    // Ждём сохранения в localStorage через poll вместо fixed waitForTimeout(500)
+    await expect.poll(async () => {
+      return await page.evaluate(() => {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.includes('uniset-panel-external-sensors')) return true;
+        }
+        return false;
+      });
+    }, { timeout: 3000, intervals: [100, 200] }).toBe(true);
 
     // Проверяем формат данных в localStorage
     const savedData = await page.evaluate(() => {
@@ -1272,7 +1287,7 @@ test.describe('IONotifyController (SharedMemory)', () => {
     // не отрендерен в DOM. Filter сужает результат до 1 row + serverside filter.
     const filterInput = page.locator('input.filter-input').first();
     await filterInput.fill(SENSOR_NAME);
-    await page.waitForTimeout(500);  // debounce filter
+    // debounce 300ms — toBeVisible below covers the wait
 
     const row = page.locator(`tr[data-sensor-id="${SENSOR_ID}"]`);
     await expect(row).toBeVisible({ timeout: 5000 });

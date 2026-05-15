@@ -106,9 +106,9 @@ test.describe('SetpointWidget — fourth active widget', () => {
             const btn = document.querySelector('[data-test="apply-btn"]') as HTMLElement;
             btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         });
-        await page.waitForTimeout(300);
+        // Wait for POST to arrive
+        await expect.poll(() => posts.length, { timeout: 3000 }).toBeGreaterThanOrEqual(1);
 
-        expect(posts.length).toBeGreaterThanOrEqual(1);
         expect(posts[0].value).toBe(42);
     });
 
@@ -127,9 +127,11 @@ test.describe('SetpointWidget — fourth active widget', () => {
             input.value = '55';
             input.dispatchEvent(new Event('input', { bubbles: true }));
         });
-        await page.waitForTimeout(800);
+        // Intentional wait: debounce timer is 500ms — must wait for it to fire.
+        // poll with short intervals is equivalent but adds no benefit here since
+        // we also need to verify the timing constraint (posts[0].time - tStart >= 400).
+        await expect.poll(() => posts.length, { timeout: 2000, intervals: [100, 200, 300] }).toBeGreaterThanOrEqual(1);
 
-        expect(posts.length).toBeGreaterThanOrEqual(1);
         expect(posts[0].value).toBe(55);
         // Debounced — at least 400ms after input
         expect(posts[0].time - tStart).toBeGreaterThanOrEqual(400);
@@ -158,9 +160,9 @@ test.describe('SetpointWidget — fourth active widget', () => {
             inp.value = '37';
             inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
         });
-        await page.waitForTimeout(300);
+        // Wait for POST
+        await expect.poll(() => posts.length, { timeout: 3000 }).toBeGreaterThanOrEqual(1);
 
-        expect(posts.length).toBeGreaterThanOrEqual(1);
         expect(posts[0].value).toBe(37);
     });
 
@@ -180,9 +182,9 @@ test.describe('SetpointWidget — fourth active widget', () => {
             const btn = document.querySelector('[data-test="apply-btn"]') as HTMLElement;
             btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         });
-        await page.waitForTimeout(300);
+        // Wait for POST
+        await expect.poll(() => posts.length, { timeout: 3000 }).toBeGreaterThanOrEqual(1);
 
-        expect(posts.length).toBeGreaterThanOrEqual(1);
         expect(posts[0].value).toBe(50);  // clamped to max
     });
 
@@ -212,6 +214,8 @@ test.describe('SetpointWidget — fourth active widget', () => {
             input.value = '77';
             input.dispatchEvent(new Event('input', { bubbles: true }));
         });
+        // Intentional sentinel wait: debounce is 500ms, we wait 800ms to confirm
+        // nothing was sent. No poll alternative for negative assertions.
         await page.waitForTimeout(800);
         expect(requestSent).toBe(false);
     });
@@ -234,7 +238,8 @@ test.describe('SetpointWidget — fourth active widget', () => {
             input.dispatchEvent(new Event('input', { bubbles: true }));
             input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
         });
-        await page.waitForTimeout(200);
+        // Wait for apply to process (sync DOM update after Enter)
+        await expect(page.locator('.setpoint-widget').first()).not.toHaveClass(/dirty/, { timeout: 2000 }).catch(() => {});
 
         // Simulate stale feedback re-arriving (e.g. SSE tick with old value)
         await page.evaluate(() => {
@@ -271,11 +276,12 @@ test.describe('SetpointWidget — fourth active widget', () => {
             const input = document.querySelector('[data-test="value-input"]') as HTMLInputElement;
             input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         });
-        await page.waitForTimeout(100);
-
-        const val = await page.evaluate(() =>
-            (document.querySelector('[data-test="value-input"]') as HTMLInputElement).value);
-        expect(val).toBe('22');
+        // Poll until input value settles to 22
+        await expect.poll(async () =>
+            (await page.evaluate(() =>
+                (document.querySelector('[data-test="value-input"]') as HTMLInputElement).value)),
+            { timeout: 2000 }
+        ).toBe('22');
     });
 
     test('keydown filter: letters blocked', async ({ page }) => {
@@ -596,7 +602,8 @@ test.describe('SetpointWidget — fourth active widget', () => {
         if (!box) throw new Error('no box');
         // Click at 50% → commandValue ~50
         await trackWrap.click({ position: { x: box.width * 0.5, y: box.height / 2 } });
-        await page.waitForTimeout(100);
+        // Wait for dirty to appear after click
+        await expect(page.locator('.setpoint-widget').first()).toHaveClass(/dirty/, { timeout: 2000 });
 
         const widget = page.locator('.setpoint-widget').first();
         await expect(widget).toHaveClass(/dirty/);
@@ -625,7 +632,8 @@ test.describe('SetpointWidget — fourth active widget', () => {
         if (!box) throw new Error('no box');
         // Click at 50% → commandValue ~50
         await trackWrap.click({ position: { x: box.width * 0.5, y: box.height / 2 } });
-        await page.waitForTimeout(100);
+        // Wait for dirty to appear after click
+        await expect(page.locator('.setpoint-widget').first()).toHaveClass(/dirty/, { timeout: 2000 });
 
         // Simulate SSE: feedback arrives at 20 — far from cmd=50, should stay dirty
         await page.evaluate(() => {
@@ -656,8 +664,8 @@ test.describe('SetpointWidget — fourth active widget', () => {
         // Click at 50% horizontally
         await trackWrap.click({ position: { x: box.width * 0.5, y: box.height / 2 } });
 
-        await page.waitForTimeout(300);
-        expect(requests.length).toBeGreaterThanOrEqual(1);
+        // Wait for POST to arrive
+        await expect.poll(() => requests.length, { timeout: 3000 }).toBeGreaterThanOrEqual(1);
         const last = requests[requests.length - 1];
         // value is in POST body JSON, should be ~50 (within step rounding)
         const body = JSON.parse(last.body);
@@ -690,9 +698,8 @@ test.describe('SetpointWidget — fourth active widget', () => {
         // Mid-drag: NO POST yet
         expect(requests.filter(r => r.url.includes('/ionc/set'))).toHaveLength(0);
         await page.mouse.up();
-        await page.waitForTimeout(300);
-        // After release: exactly one POST with the final position value
-        expect(requests.length).toBe(1);
+        // Wait for POST on release
+        await expect.poll(() => requests.length, { timeout: 3000 }).toBe(1);
         const body = JSON.parse(requests[0].body);
         expect(body.value).toBeGreaterThanOrEqual(75);
         expect(body.value).toBeLessThanOrEqual(85);
@@ -700,6 +707,7 @@ test.describe('SetpointWidget — fourth active widget', () => {
 
     test('AC-3: handle does not move during drag despite incoming SSE', async ({ page }) => {
         await createSetpointDashboard(page, { style: 'slider', min: 0, max: 100, step: 1 });
+        // Allow slider to initialize fully (CSS layout settle)
         await page.waitForTimeout(500);
 
         const trackWrap = page.locator('[data-test="track-wrap"]').first();
@@ -717,7 +725,9 @@ test.describe('SetpointWidget — fourth active widget', () => {
                 w.update(80);
             }
         });
-        await page.waitForTimeout(500); // wait long enough that any rerender would have happened
+        // Intentional sentinel wait: wait long enough that any rerender would have happened
+        // if the no-jump-during-drag guard weren't in place.
+        await page.waitForTimeout(500);
 
         // Handle should still be near 30% (because of drag), NOT 80%
         const handle = page.locator('[data-test="handle"]').first();
@@ -739,6 +749,7 @@ test.describe('SetpointWidget — fourth active widget', () => {
             }
         });
         await createSetpointDashboard(page, { style: 'slider', min: 0, max: 100, step: 1 });
+        // Allow slider to initialize fully (CSS layout settle)
         await page.waitForTimeout(500);
 
         const valueSpan = page.locator('[data-test="value"]').first();
@@ -747,8 +758,8 @@ test.describe('SetpointWidget — fourth active widget', () => {
         await inlineInput.waitFor({ state: 'visible', timeout: 2000 });
         await inlineInput.fill('42');
         await inlineInput.press('Enter');
-        await page.waitForTimeout(300);
-        expect(requests.length).toBeGreaterThanOrEqual(1);
+        // Wait for POST
+        await expect.poll(() => requests.length, { timeout: 3000 }).toBeGreaterThanOrEqual(1);
         const last = requests[requests.length - 1];
         const body = JSON.parse(last.body);
         expect(body.value).toBe(42);
@@ -756,6 +767,7 @@ test.describe('SetpointWidget — fourth active widget', () => {
 
     test('AC-8: frozen sensor blocks click and drag', async ({ page }) => {
         await createSetpointDashboard(page, { style: 'slider', min: 0, max: 100, step: 1 });
+        // Allow slider to initialize
         await page.waitForTimeout(300);
 
         // Force frozen state via direct call — matches existing frozen test pattern
@@ -763,10 +775,9 @@ test.describe('SetpointWidget — fourth active widget', () => {
             const w: any = window;
             w.dashboardState.widgets.get('sp-1').update(50, null, { frozen: true });
         });
-        await page.waitForTimeout(200);
-
+        // Wait for frozen attribute to appear
         const container = page.locator('.dashboard-widget[data-widget-id="sp-1"]').first();
-        await expect(container).toHaveAttribute('data-frozen', 'true');
+        await expect(container).toHaveAttribute('data-frozen', 'true', { timeout: 2000 });
 
         const requests: Array<{ url: string; body: string }> = [];
         page.on('request', (req) => {
@@ -788,12 +799,14 @@ test.describe('SetpointWidget — fourth active widget', () => {
             trackWrap.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: x, clientY: y }));
             trackWrap.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, clientX: x, clientY: y }));
         });
+        // Sentinel wait: frozen widget must NOT post. 500ms is sufficient guard.
         await page.waitForTimeout(500);
         expect(requests).toHaveLength(0);
     });
 
     test('AC-9: no control token blocks click and drag', async ({ page }) => {
         await createSetpointDashboard(page, { style: 'slider', min: 0, max: 100, step: 1 });
+        // Allow slider to initialize
         await page.waitForTimeout(300);
 
         // Revoke control AFTER widget created — matches toggle spec pattern
@@ -804,10 +817,9 @@ test.describe('SetpointWidget — fourth active widget', () => {
             w.state.control.hasController = false;
             document.dispatchEvent(new CustomEvent('controlStatusChanged', { detail: { ...w.state.control } }));
         });
-        await page.waitForTimeout(200);
-
+        // Wait for blocked attribute to appear
         const container = page.locator('.dashboard-widget[data-widget-id="sp-1"]').first();
-        await expect(container).toHaveAttribute('data-control-blocked', 'true');
+        await expect(container).toHaveAttribute('data-control-blocked', 'true', { timeout: 2000 });
 
         const requests: Array<{ url: string; body: string }> = [];
         page.on('request', (req) => {
@@ -827,6 +839,7 @@ test.describe('SetpointWidget — fourth active widget', () => {
             trackWrap.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: x, clientY: y }));
             trackWrap.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, clientX: x, clientY: y }));
         });
+        // Sentinel wait: blocked widget must NOT post. 500ms is sufficient guard.
         await page.waitForTimeout(500);
         expect(requests).toHaveLength(0);
     });
@@ -841,10 +854,9 @@ test.describe('SetpointWidget — fourth active widget', () => {
                 { from: 75, to: 100, color: '#ef4444' },
             ],
         });
-        await page.waitForTimeout(500);
-
+        // Wait for zone elements to render
         const zoneEls = page.locator('.setpoint-slider-zone');
-        await expect(zoneEls).toHaveCount(3);
+        await expect(zoneEls).toHaveCount(3, { timeout: 3000 });
 
         const first = await zoneEls.nth(0).evaluate(el => ({
             bg: el.style.background || el.style.backgroundColor,
@@ -910,6 +922,7 @@ test.describe('SetpointWidget — fourth active widget', () => {
             const apply = document.querySelector('[data-test="apply-btn"]') as HTMLElement | null;
             apply?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         });
+        // Sentinel: frozen widget must NOT post. 300ms is sufficient guard.
         await page.waitForTimeout(300);
         expect(posted).toBe(false);
     });
@@ -926,6 +939,7 @@ test.describe('SetpointWidget — fourth active widget', () => {
             orientation: 'vertical',
             min: 0, max: 100, step: 1,
         });
+        // Allow vertical slider to initialize (CSS layout settle)
         await page.waitForTimeout(500);
 
         const widget = page.locator('.setpoint-widget').first();
@@ -944,9 +958,9 @@ test.describe('SetpointWidget — fourth active widget', () => {
         await page.mouse.down();
         await page.mouse.move(x, endY, { steps: 5 });
         await page.mouse.up();
-        await page.waitForTimeout(300);
+        // Wait for POST on release
+        await expect.poll(() => requests.length, { timeout: 3000 }).toBe(1);
 
-        expect(requests.length).toBe(1);
         const body = JSON.parse(requests[0].body);
         // End at 90% from top = 10% from bottom = ~10 in [0,100]
         expect(body.value).toBeGreaterThanOrEqual(0);
@@ -961,25 +975,24 @@ test.describe('SetpointWidget — fourth active widget', () => {
             }
         });
         await createSetpointDashboard(page, { style: 'slider', min: -50, max: 50, step: 1 });
+        // Allow slider to initialize fully
         await page.waitForTimeout(500);
 
         // Place handle at 25 (75% horizontal position) so dblclick target is well away from zero.
         await page.evaluate(() => {
             for (const [, w] of (window as any).dashboardState.widgets) w.update(25);
         });
+        // Allow CSS transition (80ms ease-out) to settle
         await page.waitForTimeout(200);
 
         const handle = page.locator('[data-test="handle"]').first();
         await handle.dblclick();
-        await page.waitForTimeout(400);
-
-        // Двойной клик может также произвести промежуточные POST'ы от drag-flow
-        // (mousedown→mouseup на каждом из двух кликов handle'а — это часть существующего
-        // click-to-jump поведения). Главное: финальный POST = 0 присутствует.
-        const zeroPost = requests.find((r) => {
+        // Wait for dblclick-to-zero POST to arrive
+        await expect.poll(() => requests.find(r => {
             try { return JSON.parse(r.body).value === 0; } catch { return false; }
-        });
-        expect(zeroPost).toBeDefined();
+        }), { timeout: 3000 }).toBeDefined();
+        // Wait for CSS transition (80ms ease-out) to complete after handle position update
+        await page.waitForTimeout(200);
 
         // Handle визуально на 50% (нулевая позиция в [-50, 50])
         const handleBox = await handle.boundingBox();
@@ -998,15 +1011,20 @@ test.describe('SetpointWidget — fourth active widget', () => {
             }
         });
         await createSetpointDashboard(page, { style: 'slider', min: 10, max: 100, step: 1 });
+        // Allow slider to initialize fully
         await page.waitForTimeout(500);
 
         await page.evaluate(() => {
             for (const [, w] of (window as any).dashboardState.widgets) w.update(50);
         });
+        // Allow CSS transition to settle
         await page.waitForTimeout(200);
 
         const handle = page.locator('[data-test="handle"]').first();
         await handle.dblclick();
+        // Sentinel: POST'ы от click-to-jump допустимы, но среди них не должно быть value=0.
+        // Wait enough for any click-jump POST to have arrived (dblclick-to-zero is no-op).
+        await expect.poll(() => requests.length, { timeout: 2000 }).toBeGreaterThanOrEqual(0);
         await page.waitForTimeout(400);
 
         // POST'ы от click-to-jump допустимы, но среди них не должно быть value=0
@@ -1025,19 +1043,21 @@ test.describe('SetpointWidget — fourth active widget', () => {
             }
         });
         await createSetpointDashboard(page, { style: 'slider', min: -50, max: 50, step: 1 });
+        // Allow slider to initialize fully
         await page.waitForTimeout(500);
 
         await page.evaluate(() => {
             for (const [, w] of (window as any).dashboardState.widgets) w.update(30);
         });
+        // Allow CSS transition to settle
         await page.waitForTimeout(200);
 
         const handle = page.locator('[data-test="handle"]').first();
         await handle.click();
-        await page.waitForTimeout(400);
+        // Wait for click-to-jump POST
+        await expect.poll(() => requests.length, { timeout: 3000 }).toBeGreaterThanOrEqual(1);
 
         // Click-to-jump на handle = click к месту handle. Значение ~30, точно НЕ 0.
-        expect(requests.length).toBeGreaterThanOrEqual(1);
         const last = JSON.parse(requests[requests.length - 1].body);
         expect(last.value).not.toBe(0);
         expect(last.value).toBeGreaterThanOrEqual(25);

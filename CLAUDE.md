@@ -32,6 +32,32 @@ docker compose --profile dev down
 
 Не запускать полный набор тестов после каждого единичного фикса — это долго и неэффективно.
 
+### Запрет `waitForTimeout()` в Playwright тестах
+
+`page.waitForTimeout(N)` — fixed sleep. Минимум N ms даже на быстром пути,
+суммарно создаёт значительный idle time в полном E2E прогоне (текущий baseline
+до оптимизации был ~170s суммарных fixed sleep'ов). **Не использовать новые
+`waitForTimeout`.** При написании тестов выбирать condition-based wait по
+паттерну ниже.
+
+| Сценарий | Pattern |
+|---|---|
+| Ждём появления DOM элемента | `await expect(page.locator(...)).toBeVisible({ timeout: 5000 })` |
+| Ждём перед обычной assertion | Drop sleep + увеличить assertion timeout: `expect(...).toBeVisible({ timeout: 10000 })` |
+| Ждём async state mutation (sub'ы, charts, и т.п.) | `await page.waitForFunction(() => state.X.size > 0, { timeout: 5000, polling: 100 })` |
+| Ждём перед `evaluate(() => state.X)` | `await expect.poll(async () => await page.evaluate(...), { timeout: 5000 }).toBe(...)` |
+| Stabilization (несколько проверок) | `await expect(async () => { ... }).toPass({ timeout: 5000, intervals: [100, 200, 500] })` |
+
+**Trap:** `waitForFunction(() => state.X !== undefined)` зависает на 30s timeout
+если `state.X` это `null` (`null !== undefined` → true). Использовать explicit
+type-check: `typeof state.X === 'string'` или `state.X != null`.
+
+**Когда `waitForTimeout` оправдан** (оставлять с явным комментарием **зачем**):
+- Function-coupled timing: ждать таймер `bindSingleDoubleClick` (300ms),
+  CSS transition, animation duration, `pulseWidth` у PushButtonWidget.
+- Намеренная задержка между actions (simulate user typing speed).
+- Documented bug workaround (с комментарием на issue/коммит).
+
 ## Development Server
 
 ```bash

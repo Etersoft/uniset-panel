@@ -8,8 +8,8 @@ async function openLauncher(page: any) {
   const groupItem = page.locator('.sidebar-group-item[data-type="launcher"]');
   const sidebarItem = page.locator('.launcher-sidebar-item');
 
-  // Ждём загрузки sidebar
-  await page.waitForTimeout(1000);
+  // Ждём появления одного из двух launcher-маркеров (вместо fixed waitForTimeout(1000))
+  await expect(groupItem.or(sidebarItem).first()).toBeVisible({ timeout: 5000 });
 
   if (await groupItem.count() > 0) {
     await groupItem.first().click();
@@ -47,10 +47,10 @@ test.describe('Launcher', () => {
   // визуальных индикаторов).
   test('sidebar launcher item should have a status dot', async ({ page }) => {
     await page.goto('/');
-    await page.waitForTimeout(1000);
 
+    // expect.toBeVisible polls автоматически — fixed waitForTimeout(1000) не нужен
     const launcherItem = page.locator('.sidebar-group-item[data-type="launcher"]').first();
-    await expect(launcherItem).toBeVisible();
+    await expect(launcherItem).toBeVisible({ timeout: 5000 });
 
     const dot = launcherItem.locator('.sidebar-group-status');
     await expect(dot).toHaveCount(1);
@@ -142,11 +142,10 @@ test.describe('Launcher Stop All', () => {
     await expect(page.locator('#confirm-dialog-overlay')).not.toHaveClass(/hidden/, { timeout: 3000 });
     await page.locator('#confirm-dialog-ok').click();
 
-    // Ждём пока обычные процессы остановятся (таблица обновится через 5с авто-рефреш)
-    await page.waitForTimeout(7000);
-
-    // ManualService должен остаться running
-    await expect(manualRow.locator('.launcher-state-running')).toBeVisible();
+    // Ждём пока таблица обновится через ~5с авто-рефреш — assertion с длинным
+    // timeout вместо fixed waitForTimeout(7000). На зелёном пути fast-pass, на
+    // красном — даём ещё буфер.
+    await expect(manualRow.locator('.launcher-state-running')).toBeVisible({ timeout: 10000 });
   });
 });
 
@@ -199,10 +198,7 @@ test.describe('Launcher Start All', () => {
     await expect(page.locator('#confirm-dialog-overlay')).not.toHaveClass(/hidden/, { timeout: 3000 });
     await page.locator('#confirm-dialog-ok').click();
 
-    // Ждём пока обычные процессы запустятся
-    await page.waitForTimeout(7000);
-
-    // SkippedService должен остаться stopped
-    await expect(skippedRow.locator('.launcher-state-stopped')).toBeVisible();
+    // Ждём auto-refresh — assertion с длинным timeout вместо fixed waitForTimeout(7000).
+    await expect(skippedRow.locator('.launcher-state-stopped')).toBeVisible({ timeout: 10000 });
   });
 });

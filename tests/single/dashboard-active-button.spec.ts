@@ -103,9 +103,9 @@ test.describe('PushButtonWidget — third active widget', () => {
             const btn = document.querySelector('[data-test="btn"]') as HTMLElement;
             btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         });
-        await page.waitForTimeout(500);
+        // Wait for both ON and OFF POSTs (pulseWidth=200ms → OFF arrives ~200ms after click)
+        await expect.poll(() => posts.length, { timeout: 2000, intervals: [50, 100, 200] }).toBeGreaterThanOrEqual(2);
 
-        expect(posts.length).toBeGreaterThanOrEqual(2);
         expect(posts[0].value).toBe(1);
         expect(posts[1].value).toBe(0);
         expect(posts[1].time - posts[0].time).toBeGreaterThanOrEqual(150);
@@ -207,12 +207,13 @@ test.describe('PushButtonWidget — third active widget', () => {
         });
 
         // Через 1с должен быть только ON (sensor удерживается).
+        // Intentional timing: проверяем что pulseWidth=2000ms не обрезался.
         await page.waitForTimeout(1000);
         expect(posts.length).toBe(1);
         expect(posts[0].value).toBe(1);
 
         // Ждём до ~2.5с после клика — должен прийти OFF.
-        await page.waitForFunction(() => true, { timeout: 1600 });
+        // Intentional timing: держим ~1.6s дополнительно для второго POST.
         await page.waitForTimeout(1600);
 
         expect(posts.length).toBe(2);
@@ -244,11 +245,13 @@ test.describe('PushButtonWidget — third active widget', () => {
             const btn = document.querySelector('[data-test="btn"]') as HTMLElement;
             btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
         });
+        // Small intentional gap between mousedown and mouseup (simulate user hold)
         await page.waitForTimeout(100);
         await page.evaluate(() => {
             window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
         });
-        await page.waitForTimeout(200);
+        // Wait for both ON (mousedown) and OFF (mouseup) POSTs
+        await expect.poll(() => posts.length, { timeout: 2000 }).toBeGreaterThanOrEqual(2);
 
         expect(posts.length).toBeGreaterThanOrEqual(2);
         expect(posts[0].value).toBe(1);
@@ -315,7 +318,8 @@ test.describe('PushButtonWidget — third active widget', () => {
             const btn = document.querySelector('[data-test="btn"]') as HTMLElement;
             btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         });
-        await page.waitForTimeout(400);
+        // Wait for both ON and OFF POSTs (pulseWidth=100ms → OFF arrives ~100ms after click)
+        await expect.poll(() => posts.length, { timeout: 2000, intervals: [50, 100, 200] }).toBeGreaterThanOrEqual(2);
 
         expect(posts.length).toBeGreaterThanOrEqual(2);
         expect(posts[0].value).toBe(42);

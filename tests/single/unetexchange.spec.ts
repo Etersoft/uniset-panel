@@ -53,10 +53,7 @@ test.describe('UNetExchange renderer', () => {
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
 
-    // Wait for status to load
-    await page.waitForTimeout(1000);
-
-    // Check status section has content (status-grid with items)
+    // Check status section has content (status-grid with items) — wait until rendered
     const statusGrid = page.locator(`#unet-status-${UNET_OBJECT} .status-grid`);
     await expect(statusGrid).toBeVisible({ timeout: 5000 });
 
@@ -74,10 +71,7 @@ test.describe('UNetExchange renderer', () => {
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
 
-    // Wait for receivers to load
-    await page.waitForTimeout(1000);
-
-    // Check receivers tbody
+    // Check receivers tbody — wait until rendered
     const receiversTbody = page.locator(`#unet-receivers-tbody-${UNET_OBJECT}`);
     await expect(receiversTbody).toBeVisible({ timeout: 5000 });
 
@@ -95,10 +89,7 @@ test.describe('UNetExchange renderer', () => {
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
 
-    // Wait for senders to load
-    await page.waitForTimeout(1000);
-
-    // Check senders tbody
+    // Check senders tbody — wait until rendered
     const sendersTbody = page.locator(`#unet-senders-tbody-${UNET_OBJECT}`);
     await expect(sendersTbody).toBeVisible({ timeout: 5000 });
 
@@ -115,10 +106,10 @@ test.describe('UNetExchange renderer', () => {
     await unetItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
-    await page.waitForTimeout(1000);
 
-    // Check first receiver row has expected columns
+    // Check first receiver row has expected columns — wait until row appears
     const firstRow = page.locator(`#unet-receivers-tbody-${UNET_OBJECT} tr`).first();
+    await expect(firstRow).toBeVisible({ timeout: 5000 });
 
     // Node column
     const nodeCell = firstRow.locator('.col-node');
@@ -149,9 +140,8 @@ test.describe('UNetExchange renderer', () => {
     await unetItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
-    await page.waitForTimeout(1500);
 
-    // Check Object Information section exists and has content
+    // Check Object Information section exists and has content — wait until rendered
     const objectInfoTbody = page.locator(`#object-info-${UNET_OBJECT}`);
     await expect(objectInfoTbody).toBeVisible({ timeout: 5000 });
 
@@ -225,19 +215,19 @@ test.describe('UNetExchange renderer', () => {
       const rowCount = await rows.count();
 
       if (rowCount >= 2) {
-        // Add first channel
+        const chartsContainer = page.locator(`#charts-${UNET_OBJECT}`);
+
+        // Add first channel and wait for charts to appear
         const firstLabel = rows.first().locator('.chart-toggle-label');
         await firstLabel.click();
-        await page.waitForTimeout(500);
+        await expect(chartsContainer.locator('.chart-panel')).toHaveCount(5, { timeout: 5000 });
 
-        // Add second channel
+        // Add second channel and wait for second dataset to be added
         const secondLabel = rows.nth(1).locator('.chart-toggle-label');
         await secondLabel.click();
-        await page.waitForTimeout(500);
 
         // Should still have 5 charts (not 10)
-        const chartsContainer = page.locator(`#charts-${UNET_OBJECT}`);
-        await expect(chartsContainer.locator('.chart-panel')).toHaveCount(5);
+        await expect(chartsContainer.locator('.chart-panel')).toHaveCount(5, { timeout: 3000 });
 
         // Each chart should have legend with 2 items
         const firstChart = chartsContainer.locator('.chart-panel').first();
@@ -335,11 +325,10 @@ test.describe('UNetExchange renderer', () => {
       await unetItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
-      await page.waitForTimeout(1500);
 
-      // Check LogServer section exists in DOM (may be hidden initially)
+      // Check LogServer section exists in DOM (may be hidden initially) — wait until rendered
       const logServerSection = page.locator(`#logserver-section-${UNET_OBJECT}`);
-      await expect(logServerSection).toHaveCount(1);
+      await expect(logServerSection).toHaveCount(1, { timeout: 5000 });
     });
 
     test('should display LogViewer container', async ({ page }) => {
@@ -350,9 +339,8 @@ test.describe('UNetExchange renderer', () => {
       await unetItem.click();
 
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
-      await page.waitForTimeout(1500);
 
-      // Check LogViewer container exists (uses id="logviewer-wrapper-{objectName}")
+      // Check LogViewer container exists (uses id="logviewer-wrapper-{objectName}") — wait until rendered
       const logViewerWrapper = page.locator(`#logviewer-wrapper-${UNET_OBJECT}`);
       await expect(logViewerWrapper).toBeVisible({ timeout: 5000 });
     });

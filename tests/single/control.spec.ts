@@ -54,8 +54,8 @@ test.describe('Control token (enabled mode)', () => {
 
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    // Ждём инициализации UI и получения статуса контроля через SSE
-    await page.waitForTimeout(2000);
+    // Ждём инициализации UI — control-status появляется после SSE
+    await expect(page.locator('#control-status')).toBeVisible({ timeout: 10000 });
   });
 
   test('индикатор контроля виден', async ({ page }) => {
@@ -186,7 +186,6 @@ test.describe('Control token (enabled mode)', () => {
     await smItem.click();
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
     await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
-    await page.waitForTimeout(2000);
 
     // Кнопки freeze/set должны быть disabled (не readonly строки)
     const freezeBtn = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row:not(.ionc-sensor-readonly) .ionc-btn-freeze').first();
@@ -219,11 +218,10 @@ test.describe('Control token (enabled mode)', () => {
     await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
     await page.locator('.sidebar-group-item[data-type="object"]', { hasText: 'MBTCPMaster1' }).click();
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
-    await page.waitForTimeout(1500);
 
     const saveBtn = page.locator('[id^="mb-params-save-"]').first();
     if (await saveBtn.count() > 0) {
-      await expect(saveBtn).toBeDisabled();
+      await expect(saveBtn).toBeDisabled({ timeout: 5000 });
     }
   });
 

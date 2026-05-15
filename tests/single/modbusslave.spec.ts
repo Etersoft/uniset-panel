@@ -51,12 +51,9 @@ test.describe('ModbusSlave renderer', () => {
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
 
-    // Wait for status to load
-    await page.waitForTimeout(1000);
-
     // Check status section has content
     const statusTable = page.locator(`#mbs-status-section-${MBS_OBJECT} .info-table`);
-    await expect(statusTable).toBeVisible();
+    await expect(statusTable).toBeVisible({ timeout: 5000 });
   });
 
   test('should display registers table', async ({ page }) => {
@@ -67,9 +64,6 @@ test.describe('ModbusSlave renderer', () => {
     await mbsItem.click();
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
-
-    // Wait for registers to load
-    await page.waitForTimeout(1500);
 
     // Check registers tbody
     const registersTbody = page.locator(`#mbs-registers-tbody-${MBS_OBJECT}`);
@@ -107,12 +101,9 @@ test.describe('ModbusSlave renderer', () => {
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
 
-    // Wait for registers to load
-    await page.waitForTimeout(1500);
-
     // Check that register rows exist
     const rows = page.locator(`#mbs-registers-tbody-${MBS_OBJECT} tr`);
-    await expect(rows.first()).toBeVisible();
+    await expect(rows.first()).toBeVisible({ timeout: 5000 });
 
     // Check value cell exists (last column for ModbusSlave)
     const valueCell = rows.first().locator('td:last-child');
@@ -128,14 +119,9 @@ test.describe('ModbusSlave renderer', () => {
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
 
-    // Wait for registers to load
-    await page.waitForTimeout(1500);
-
     const filterInput = page.locator(`#mbs-registers-filter-${MBS_OBJECT}`);
+    await expect(filterInput).toBeVisible({ timeout: 5000 });
     await filterInput.fill('AI');
-
-    // Wait for filter to apply
-    await page.waitForTimeout(500);
 
     // All visible registers should contain "AI" in name
     const visibleRows = page.locator(`#mbs-registers-tbody-${MBS_OBJECT} tr`);
@@ -152,14 +138,9 @@ test.describe('ModbusSlave renderer', () => {
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
 
-    // Wait for registers to load
-    await page.waitForTimeout(1500);
-
     const typeFilter = page.locator(`#mbs-type-filter-${MBS_OBJECT}`);
+    await expect(typeFilter).toBeVisible({ timeout: 5000 });
     await typeFilter.selectOption('DI');
-
-    // Wait for filter to apply
-    await page.waitForTimeout(500);
 
     // All visible registers should have DI type
     const visibleTypes = page.locator(`#mbs-registers-tbody-${MBS_OBJECT} tr .type-badge`);
@@ -405,12 +386,9 @@ test.describe('ModbusSlave renderer', () => {
       const pinToggle = firstRow.locator('.pin-toggle');
       await pinToggle.click();
 
-      // Wait for re-render
-      await page.waitForTimeout(500);
-
-      // Now should only show 1 row (the pinned one)
+      // Now should only show 1 row (the pinned one) — toHaveCount polls automatically
       const pinnedRows = page.locator(`#mbs-registers-tbody-${MBS_OBJECT} tr`);
-      await expect(pinnedRows).toHaveCount(1);
+      await expect(pinnedRows).toHaveCount(1, { timeout: 3000 });
 
       // Verify it's the same register
       const pinnedRegId = await pinnedRows.first().getAttribute('data-sensor-id');
@@ -478,40 +456,38 @@ test.describe('ModbusSlave renderer', () => {
       await pinToggle.click();
       await expect(pinToggle).toHaveClass(/pinned/);
 
-      // Wait for re-render (now only pinned register shown)
-      await page.waitForTimeout(500);
-
       // Get the value cell (6th column: Pin | Chart | ID | Name | Type | Value)
+      // toBeVisible polls automatically — no need for manual wait after pin click
       const valueCell = page.locator(`#mbs-registers-tbody-${MBS_OBJECT} tr[data-sensor-id="${registerId}"] td:nth-child(6)`);
-      await expect(valueCell).toBeVisible();
+      await expect(valueCell).toBeVisible({ timeout: 3000 });
 
       // Get initial value
       const initialValue = await valueCell.textContent();
       console.log('Initial value:', initialValue);
 
-      // Wait for SSE subscription log
-      await page.waitForTimeout(1000);
-
-      // Check that subscription happened
-      const hasSubscriptionLog = consoleMessages.some(msg =>
-        msg.includes('ModbusSlave SSE: подписка') ||
-        msg.includes('subscribe')
-      );
-
-      if (!hasSubscriptionLog) {
+      // Poll для SSE subscription log — быстрее fixed waitForTimeout(1000)
+      const hasSubscriptionLog = await expect.poll(
+        () => consoleMessages.some(msg =>
+          msg.includes('ModbusSlave SSE: подписка') ||
+          msg.includes('subscribe')
+        ),
+        { timeout: 3000, intervals: [100, 200, 500] }
+      ).toBe(true).then(() => true).catch(() => {
         console.warn('WARNING: No subscription log found. Console messages:', consoleMessages);
-      }
+        return false;
+      });
 
       // Wait for potential SSE updates (poll interval is 1000ms)
-      // We wait 5 seconds to give time for multiple polls
-      await page.waitForTimeout(5000);
-
-      // Check if we received any SSE events
-      const hasSSEEvents = consoleMessages.some(msg =>
-        msg.includes('[SSE] modbus_register_batch') ||
-        msg.includes('[ModbusSlave] handleModbusRegisterUpdates') ||
-        msg.includes('[ModbusSlave] batchRenderUpdates')
-      );
+      // Ждём SSE events через poll вместо fixed waitForTimeout(5000).
+      // Если SSE не пришли — быстрый fail (документирует current bug).
+      const hasSSEEvents = await expect.poll(
+        () => consoleMessages.some(msg =>
+          msg.includes('[SSE] modbus_register_batch') ||
+          msg.includes('[ModbusSlave] handleModbusRegisterUpdates') ||
+          msg.includes('[ModbusSlave] batchRenderUpdates')
+        ),
+        { timeout: 5000, intervals: [200, 500, 1000] }
+      ).toBe(true).then(() => true).catch(() => false);
 
       // Log all console messages for debugging
       console.log('=== Console messages captured ===');
@@ -546,13 +522,12 @@ test.describe('ModbusSlave renderer', () => {
       const pinToggle = targetRow.locator('.pin-toggle');
       await pinToggle.click();
 
-      await page.waitForTimeout(500);
-
-      // Get value cell
+      // Get value cell — wait for it to appear after pin re-render
       const valueCell = page.locator(`#mbs-registers-tbody-${MBS_OBJECT} tr[data-sensor-id="${registerId}"] td:nth-child(6)`);
+      await expect(valueCell).toBeVisible({ timeout: 3000 });
 
-      // Wait and check for value-changed class (indicates update happened)
-      // This will fail until SSE updates are working
+      // Wait and check for value-changed class (indicates SSE update happened)
+      // This will pass only when SSE updates are working (documents current state)
       await page.waitForTimeout(3000);
 
       // Check if value-changed animation was applied at any point
@@ -597,12 +572,11 @@ test.describe('ModbusSlave renderer', () => {
       await page.waitForSelector('.sidebar-group-item[data-type="object"]', { timeout: 15000 });
       await mbsItem.click();
       await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
-      await page.waitForTimeout(1000);
 
-      // Pin should be restored
+      // Pin should be restored — toHaveClass polls automatically, no need for fixed wait
       const restoredRow = page.locator(`#mbs-registers-tbody-${MBS_OBJECT} tr[data-sensor-id="${registerId}"]`);
       const restoredPinToggle = restoredRow.locator('.pin-toggle');
-      await expect(restoredPinToggle).toHaveClass(/pinned/);
+      await expect(restoredPinToggle).toHaveClass(/pinned/, { timeout: 5000 });
     });
   });
 });

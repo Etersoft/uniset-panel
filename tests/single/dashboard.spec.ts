@@ -9,18 +9,18 @@ async function switchToDashboardView(page) {
     keys.forEach(k => localStorage.removeItem(k));
   });
   await page.reload();
-  await page.waitForTimeout(1000);
+  // Ждём появления элементов интерфейса вместо фиксированной паузы
+  await expect(page.locator('#view-dashboard-btn')).toBeVisible({ timeout: 10000 });
 
   // Переключаемся на Dashboard view
   await page.locator('#view-dashboard-btn').click();
-  await page.waitForTimeout(1000);
+  await expect(page.locator('#dashboard-view')).toHaveClass(/active/, { timeout: 5000 });
 }
 
 test.describe('Dashboard — базовые операции', () => {
 
   test('серверные дашборды видны в sidebar (группы)', async ({ page }) => {
     await page.goto('/');
-    await page.waitForTimeout(2000);
 
     // Дашборды отображаются в sidebar как sidebar-group-item[data-type="dashboard"]
     const dashboardItems = page.locator('.sidebar-group-item[data-type="dashboard"]');
@@ -33,7 +33,8 @@ test.describe('Dashboard — базовые операции', () => {
 
   test('переключение в Dashboard view', async ({ page }) => {
     await page.goto('/');
-    await page.waitForTimeout(1000);
+    // Ждём готовности интерфейса
+    await expect(page.locator('#view-dashboard-btn')).toBeVisible({ timeout: 10000 });
 
     // Кликаем на кнопку Dashboard view
     await page.locator('#view-dashboard-btn').click();
@@ -56,7 +57,6 @@ test.describe('Dashboard — базовые операции', () => {
 
   test('клик на дашборд в sidebar открывает его', async ({ page }) => {
     await page.goto('/');
-    await page.waitForTimeout(2000);
 
     // Кликаем на первый дашборд в sidebar группах
     const firstDashboard = page.locator('.sidebar-group-item[data-type="dashboard"]').first();
@@ -72,10 +72,11 @@ test.describe('Dashboard — базовые операции', () => {
 
   test('дашборд содержит виджеты', async ({ page }) => {
     await page.goto('/');
-    await page.waitForTimeout(2000);
 
     // Открываем первый дашборд
-    await page.locator('.sidebar-group-item[data-type="dashboard"]').first().click();
+    const firstDashboard = page.locator('.sidebar-group-item[data-type="dashboard"]').first();
+    await expect(firstDashboard).toBeVisible({ timeout: 10000 });
+    await firstDashboard.click();
     await expect(page.locator('#dashboard-view')).toHaveClass(/active/, { timeout: 5000 });
 
     // Grid виден
@@ -135,10 +136,11 @@ test.describe('Dashboard — базовые операции', () => {
 
   test('переключение между дашбордами через select', async ({ page }) => {
     await page.goto('/');
-    await page.waitForTimeout(2000);
 
     // Открываем первый дашборд
-    await page.locator('.sidebar-group-item[data-type="dashboard"]').first().click();
+    const firstDashboard = page.locator('.sidebar-group-item[data-type="dashboard"]').first();
+    await expect(firstDashboard).toBeVisible({ timeout: 10000 });
+    await firstDashboard.click();
     await expect(page.locator('#dashboard-view')).toHaveClass(/active/, { timeout: 5000 });
 
     // Считаем виджеты
@@ -157,7 +159,8 @@ test.describe('Dashboard — базовые операции', () => {
       }
     }
 
-    await page.waitForTimeout(1000);
+    // Ждём обновления grid (может изменить набор виджетов)
+    await expect(page.locator('#dashboard-grid')).toBeVisible({ timeout: 5000 });
 
     // Виджеты могут быть другие
     const secondCount = await page.locator('#dashboard-grid .dashboard-widget').count();
@@ -175,10 +178,11 @@ test.describe('Dashboard — базовые операции', () => {
 
   test('виджеты позиционированы в сетке', async ({ page }) => {
     await page.goto('/');
-    await page.waitForTimeout(2000);
 
     // Открываем дашборд
-    await page.locator('.sidebar-group-item[data-type="dashboard"]').first().click();
+    const firstDashboard = page.locator('.sidebar-group-item[data-type="dashboard"]').first();
+    await expect(firstDashboard).toBeVisible({ timeout: 10000 });
+    await firstDashboard.click();
     await expect(page.locator('#dashboard-view')).toHaveClass(/active/, { timeout: 5000 });
 
     const widgets = page.locator('#dashboard-grid .dashboard-widget');
