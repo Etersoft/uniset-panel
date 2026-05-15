@@ -16474,6 +16474,16 @@ function setupIONCComboAutocomplete(form, prefix = '') {
     function applySingleMatchOrPreselect() {
         const all = getIONCEntries();
         if (all.length === 1) {
+            // Persistence Invariant: existing binding is user property — never overwrite automatically.
+            // Single-match auto-fill только когда config пустой (новый widget без серверной привязки).
+            // serverId — достаточный discriminator: новый widget не имеет serverId,
+            // а существующий (даже orphan) всегда имеет сохранённый serverId.
+            if (hiddenServer.value) {
+                input.disabled = false;
+                input.title = '';
+                preselectFromConfig();
+                return;
+            }
             const it = all[0];
             input.value = it.displayString;
             input.disabled = true;

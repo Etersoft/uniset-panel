@@ -189,6 +189,30 @@ describe('setupIONCComboAutocomplete', () => {
         expect(fetchMock).toHaveBeenCalled();
     });
 
+    it('single match does NOT overwrite existing binding (Persistence Invariant)', () => {
+        // Reset registry to single entry
+        const reg = (globalThis as any).state.ioncRegistry;
+        reg.servers.clear();
+        reg.servers.set('only', { serverName: 'Only', connected: true, objects: ['OnlyIONC'] });
+
+        // Widget already has saved binding to a DIFFERENT server (orphan)
+        const form = mountForm({ serverId: 'ghost-id', objectName: 'GhostObj' });
+        (globalThis as any).setupIONCComboAutocomplete(form, '');
+
+        const input = form.querySelector<HTMLInputElement>('.ionc-combo-input')!;
+        const hiddenServer = form.querySelector<HTMLInputElement>('input[name="serverId"]')!;
+        const hiddenObject = form.querySelector<HTMLInputElement>('input[name="objectName"]')!;
+
+        // Existing binding preserved
+        expect(hiddenServer.value).toBe('ghost-id');
+        expect(hiddenObject.value).toBe('GhostObj');
+        // Orphan UI shown (not single-match auto-fill)
+        expect(input.value).toBe('GhostObj @ ghost-id (offline)');
+        expect(input.dataset.orphan).toBe('true');
+        // NOT disabled (so user can still pick a different value)
+        expect(input.disabled).toBe(false);
+    });
+
     it('single match → input disabled + auto-fill', () => {
         const reg = (globalThis as any).state.ioncRegistry;
         reg.servers.clear();
