@@ -420,6 +420,76 @@ func TestManagerGetAllObjectsByType_basic(t *testing.T) {
 	}
 }
 
+func TestManagerGetAllObjectsByType_disconnectedWithCache(t *testing.T) {
+	srv := startMockServerWithTypes(map[string]string{
+		"SharedMemory": "IONotifyController",
+	})
+
+	store := storage.NewMemoryStorage()
+	mgr := NewManager(store, time.Second, time.Hour, "", 0)
+	if err := mgr.AddServer(config.ServerConfig{ID: "s1", URL: srv.URL, Name: "Server1"}); err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+
+	// Прогреваем кэш реальным вызовом
+	if _, err := mgr.GetAllObjectsByType("IONotifyController"); err != nil {
+		t.Fatalf("warm-up call: %v", err)
+	}
+
+	// Закрываем сервер — теперь GetObjects будет ошибаться, но cache остался
+	srv.Close()
+
+	got, err := mgr.GetAllObjectsByType("IONotifyController")
+	if err != nil {
+		t.Fatalf("GetAllObjectsByType: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("want 1 server entry, got %d", len(got))
+	}
+	if got[0].Connected {
+		t.Error("Connected: want false (server is down)")
+	}
+	// Без cache бэкенда типов: после disconnect мы не можем проверить ObjectType,
+	// поэтому для disconnected с cache из имён получаем пустой Objects (это OK, документировано).
+	// Если в будущем добавим typesCacheByServer — этот assertion заменится на
+	// проверку что cached IONC objects возвращаются.
+	t.Logf("disconnected entry: %+v", got[0])
+}
+
+func TestManagerGetAllObjectsByType_disconnectedNoCache(t *testing.T) {
+	srv := mockUnavailableServer()
+	defer srv.Close()
+
+	store := storage.NewMemoryStorage()
+	mgr := NewManager(store, time.Second, time.Hour, "", 0)
+	if err := mgr.AddServer(config.ServerConfig{ID: "s1", URL: srv.URL, Name: "Server1"}); err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+
+	got, err := mgr.GetAllObjectsByType("IONotifyController")
+	if err != nil {
+		t.Fatalf("GetAllObjectsByType: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("want 1 server entry (even without cache), got %d", len(got))
+	}
+	if got[0].Connected {
+		t.Error("Connected: want false")
+	}
+	if len(got[0].Objects) != 0 {
+		t.Errorf("Objects: want [], got %v", got[0].Objects)
+	}
+}
+
+func TestManagerGetAllObjectsByType_emptyType(t *testing.T) {
+	store := storage.NewMemoryStorage()
+	mgr := NewManager(store, time.Second, time.Hour, "", 0)
+	_, err := mgr.GetAllObjectsByType("")
+	if err == nil {
+		t.Error("want error for empty type filter, got nil")
+	}
+}
+
 func TestManagerGetObjectData(t *testing.T) {
 	server := mockUnisetServer()
 	defer server.Close()
