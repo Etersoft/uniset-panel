@@ -1,4 +1,4 @@
-.PHONY: build run test js-tests js-tests-multi js-tests-unit js-tests-all coverage clean app demo test-integration clickhouse-up clickhouse-down
+.PHONY: build run test js-tests js-tests-multi js-tests-unit js-tests-unit-fresh js-tests-all coverage clean app demo test-integration clickhouse-up clickhouse-down
 
 # Generate app.js from source modules
 app:
@@ -29,23 +29,23 @@ coverage:
 #        make js-tests TEST=single/foo.spec.ts  — runs only specified spec
 js-tests:
 ifeq ($(TEST),)
-	docker compose up --build --abort-on-container-exit --exit-code-from e2e
-	docker compose down
-	docker compose -f docker-compose.multi.yml up --build --abort-on-container-exit --exit-code-from e2e-multi
-	docker compose -f docker-compose.multi.yml down
+	@bash -ec 'set +e; docker compose up --build --abort-on-container-exit --exit-code-from e2e; status=$$?; docker compose down; exit $$status'
+	@bash -ec 'set +e; docker compose -f docker-compose.multi.yml up --build --abort-on-container-exit --exit-code-from e2e-multi; status=$$?; docker compose -f docker-compose.multi.yml down; exit $$status'
 else
-	docker compose run --rm e2e $(TEST)
-	docker compose down
+	@bash -ec 'set +e; docker compose up --build -d viewer; docker compose run --rm e2e $(TEST); status=$$?; docker compose down; exit $$status'
 endif
 
 # E2E tests with Playwright in Docker (multi-server)
 js-tests-multi:
-	docker compose -f docker-compose.multi.yml up --build --abort-on-container-exit --exit-code-from e2e-multi
-	docker compose -f docker-compose.multi.yml down
+	@bash -ec 'set +e; docker compose -f docker-compose.multi.yml up --build --abort-on-container-exit --exit-code-from e2e-multi; status=$$?; docker compose -f docker-compose.multi.yml down; exit $$status'
 
-# Frontend unit tests (vitest + jsdom)
+# Frontend unit tests (vitest + jsdom) — fast run, assumes node_modules already installed
 js-tests-unit:
-	cd tests/unit && npm install --no-fund --no-audit && npx vitest run
+	cd tests/unit && npx vitest run
+
+# Frontend unit tests — fresh install + run (use after pulls or dep changes)
+js-tests-unit-fresh:
+	cd tests/unit && npm ci --no-fund --no-audit && npx vitest run
 
 # All E2E + unit tests
 js-tests-all: js-tests js-tests-multi js-tests-unit
