@@ -86,7 +86,10 @@ services:
         cd /tmp
         cp -r /app/* .
         rm -rf node_modules test-results playwright-report unit/node_modules mock-server/node_modules mock-server-2/node_modules
-        npm install --no-fund --no-audit
+        # npm ci из lockfile — детерминированный install, быстрее `npm install`.
+        # Сохраняем cp -r /app/*  (tar pipe ломает chromium navigation,
+        # причина неясна; экономия ~3-5 sec не стоит риска).
+        npm ci --no-fund --no-audit
         if [ "$#" -gt 0 ]; then
           npx playwright test "$@" --reporter=list
         else
