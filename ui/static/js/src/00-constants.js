@@ -256,6 +256,8 @@ const ZONES_HISTORY_STORAGE_KEY = 'uniset.zonesHistory';   // localStorage key �
 const IONC_REGISTRY_TTL_MS    = 5 * 60 * 1000;  // 5 минут — TTL session-cache
 const IONC_COMBO_DEBOUNCE_MS  = 100;            // короче чем sensor-autocomplete (150ms),
                                                  // т.к. фильтрация локальная без fetch
+const IONC_COMBO_DROPDOWN_TOP_OFFSET_PX = 2;    // отступ dropdown'а от низа input'а
+const IONC_COMBO_DROPDOWN_MAX_HEIGHT_PX = 320;  // max-height dropdown'а (sync с CSS)
 
 if (typeof globalThis !== 'undefined') {
     Object.assign(globalThis, {
@@ -269,5 +271,7 @@ if (typeof globalThis !== 'undefined') {
         ZONES_PICKER_MAX_HEIGHT_PX,
         IONC_REGISTRY_TTL_MS,
         IONC_COMBO_DEBOUNCE_MS,
+        IONC_COMBO_DROPDOWN_TOP_OFFSET_PX,
+        IONC_COMBO_DROPDOWN_MAX_HEIGHT_PX,
     });
 }

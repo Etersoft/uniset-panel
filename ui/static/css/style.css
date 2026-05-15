@@ -9836,6 +9836,14 @@ button.rotate-quick-btn:active {
 }
 
 /* === IONC@server combobox === */
+/* Названные константы (sync с ui/static/js/src/00-constants.js):
+ *   --ionc-combo-dropdown-max-height = IONC_COMBO_DROPDOWN_MAX_HEIGHT_PX
+ *   --ionc-combo-spin-duration       — длительность ↻ animation
+ */
+.ionc-combo-row {
+    --ionc-combo-dropdown-max-height: 320px;
+    --ionc-combo-spin-duration: 0.8s;
+}
 .ionc-combo-row .ionc-combo-wrap {
     position: relative;
     display: flex;
@@ -9855,6 +9863,13 @@ button.rotate-quick-btn:active {
     border-color: #fbbf24;
     color: #fbbf24;
 }
+.ionc-combo-input[data-invalid="true"] {
+    border-color: #f87171;
+    color: #f87171;
+}
+.ionc-combo-empty.error {
+    color: #f87171;
+}
 .ionc-combo-refresh {
     background: #1f2937;
     color: #9ca3af;
@@ -9867,7 +9882,7 @@ button.rotate-quick-btn:active {
 }
 .ionc-combo-refresh:hover { color: #60a5fa; border-color: #60a5fa; }
 .ionc-combo-refresh.spinning {
-    animation: ionc-spin 0.8s linear infinite;
+    animation: ionc-spin var(--ionc-combo-spin-duration, 0.8s) linear infinite;
     pointer-events: none;
 }
 @keyframes ionc-spin {
@@ -9879,7 +9894,7 @@ button.rotate-quick-btn:active {
     background: #0b1220;
     border: 1px solid #374151;
     border-radius: 4px;
-    max-height: 320px;
+    max-height: var(--ionc-combo-dropdown-max-height, 320px);
     overflow-y: auto;
     box-shadow: 0 8px 24px rgba(0,0,0,0.5);
 }

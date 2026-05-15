@@ -20,6 +20,22 @@
 // существующие данные сохраняются для fallback.
 // ============================================================================
 
+// formatIONCComboValue — единственный источник истины для display-string'а
+// combo input'а и его dropdown items. Формат: `${objectName} @ ${serverName||serverId}`.
+// `(offline)` суффикс добавляется когда либо явно через opts.showOffline=true,
+// либо когда entry.connected === false и opts.autoOfflineSuffix !== false.
+//
+// Передавать можно либо registry-entry ({serverId, objectName, serverName, connected}),
+// либо «orphan-binding» из config'а (serverId+objectName, без serverName/connected → showOffline:true).
+function formatIONCComboValue(entry, opts = {}) {
+    if (!entry || !entry.objectName) return '';
+    const serverNameOrId = entry.serverName || entry.serverId || '';
+    const base = `${entry.objectName} @ ${serverNameOrId}`;
+    const explicitShow = opts.showOffline === true;
+    const auto = opts.autoOfflineSuffix !== false && entry.connected === false;
+    return (explicitShow || auto) ? `${base} (offline)` : base;
+}
+
 async function ensureIONCRegistry({ force = false } = {}) {
     const reg = state.ioncRegistry;
     const fresh = (Date.now() - reg.fetchedAt) < IONC_REGISTRY_TTL_MS;
@@ -50,15 +66,18 @@ async function ensureIONCRegistry({ force = false } = {}) {
 function getIONCEntries() {
     const out = [];
     state.ioncRegistry.servers.forEach((srv, serverId) => {
-        const sn = srv.serverName || serverId;
         srv.objects.forEach(objectName => {
-            out.push({
+            const entry = {
                 serverId,
                 serverName: srv.serverName,
                 connected:  srv.connected,
                 objectName,
-                displayString: `${objectName} @ ${sn}`,
-            });
+            };
+            // displayString — канонический ключ для filter/sort (БЕЗ offline-суффикса,
+            // чтобы поиск "SharedMemory" находил и offline pair'ы). Для input value
+            // используется formatIONCComboValue с autoOfflineSuffix.
+            entry.displayString = formatIONCComboValue(entry, { autoOfflineSuffix: false });
+            out.push(entry);
         });
     });
     out.sort((a, b) => {
@@ -72,11 +91,11 @@ function findIONCEntry(serverId, objectName) {
     const srv = state.ioncRegistry.servers.get(serverId);
     if (!srv) return null;
     if (!srv.objects.includes(objectName)) return null;
-    const sn = srv.serverName || serverId;
-    return {
-        serverId, serverName: srv.serverName, connected: srv.connected,
-        objectName, displayString: `${objectName} @ ${sn}`,
+    const entry = {
+        serverId, serverName: srv.serverName, connected: srv.connected, objectName,
     };
+    entry.displayString = formatIONCComboValue(entry, { autoOfflineSuffix: false });
+    return entry;
 }
 
 // setupIONCComboAutocomplete — wiring combobox'а IONC@server.
@@ -120,18 +139,18 @@ function setupIONCComboAutocomplete(form, prefix = '') {
             return;
         }
         const filterLower = currentFilter.toLowerCase();
-        const itemsHtml = currentItems.map((it, idx) => {
+        const itemsHtml = currentItems.map((entry, idx) => {
+            const isPreselected = hiddenServer.value === entry.serverId && hiddenObject.value === entry.objectName;
             const cls = [
                 'ionc-combo-item',
                 idx === activeIndex ? 'active' : '',
-                it.connected ? '' : 'offline',
-                hiddenServer.value === it.serverId && hiddenObject.value === it.objectName ? 'preselected' : '',
+                entry.connected ? '' : 'offline',
+                isPreselected ? 'preselected' : '',
             ].filter(Boolean).join(' ');
-            const offlineMark = it.connected ? '' : '<span class="ionc-combo-offline-mark">⚠ offline</span>';
-            const star = (hiddenServer.value === it.serverId && hiddenObject.value === it.objectName)
-                ? '<span class="ionc-combo-star">★</span>' : '';
+            const offlineMark = entry.connected ? '' : '<span class="ionc-combo-offline-mark">⚠ offline</span>';
+            const star = isPreselected ? '<span class="ionc-combo-star">★</span>' : '';
             return `<div class="${cls}" data-idx="${idx}">
-                ${star}<span class="ionc-combo-display">${highlightMatch(it.displayString, filterLower)}</span>${offlineMark}
+                ${star}<span class="ionc-combo-display">${highlightMatch(entry.displayString, filterLower)}</span>${offlineMark}
             </div>`;
         }).join('');
         dropdown.innerHTML = itemsHtml;
@@ -150,7 +169,7 @@ function setupIONCComboAutocomplete(form, prefix = '') {
         const rect = input.getBoundingClientRect();
         dropdown.style.position = 'fixed';
         dropdown.style.left = `${rect.left}px`;
-        dropdown.style.top = `${rect.bottom + 2}px`;
+        dropdown.style.top = `${rect.bottom + IONC_COMBO_DROPDOWN_TOP_OFFSET_PX}px`;
         dropdown.style.width = `${rect.width}px`;
         dropdown.style.zIndex = String(SENSOR_AUTOCOMPLETE_DROPDOWN_Z_INDEX);
         document.body.appendChild(dropdown);
@@ -167,12 +186,12 @@ function setupIONCComboAutocomplete(form, prefix = '') {
             filtered = all.filter(it => it.displayString.toLowerCase().includes(t));
         }
         // Preselected item (current binding) sorts first for quick re-selection.
-        const sid = hiddenServer.value;
-        const oid = hiddenObject.value;
-        if (sid && oid) {
+        const currentServerId = hiddenServer.value;
+        const currentObjectName = hiddenObject.value;
+        if (currentServerId && currentObjectName) {
             filtered = filtered.slice().sort((a, b) => {
-                const aMatch = (a.serverId === sid && a.objectName === oid) ? -1 : 0;
-                const bMatch = (b.serverId === sid && b.objectName === oid) ? -1 : 0;
+                const aMatch = (a.serverId === currentServerId && a.objectName === currentObjectName) ? -1 : 0;
+                const bMatch = (b.serverId === currentServerId && b.objectName === currentObjectName) ? -1 : 0;
                 if (aMatch !== bMatch) return aMatch - bMatch;
                 return 0; // preserve existing order (online-first + alpha from getIONCEntries)
             });
@@ -185,8 +204,14 @@ function setupIONCComboAutocomplete(form, prefix = '') {
     function pickItem(idx) {
         const item = currentItems[idx];
         if (!item) return;
-        input.value = item.displayString;
-        delete input.dataset.orphan;
+        // Offline pick: input показывает (offline) суффикс + orphan-маркер сохраняется
+        // (UI sign'ал что выбранный target недоступен). Online pick: чистый display.
+        input.value = formatIONCComboValue(item, { autoOfflineSuffix: true });
+        if (item.connected) {
+            delete input.dataset.orphan;
+        } else {
+            input.dataset.orphan = 'true';
+        }
         hiddenServer.value = item.serverId;
         hiddenObject.value = item.objectName;
         hiddenServer.dispatchEvent(new Event('change', { bubbles: true }));
@@ -200,10 +225,16 @@ function setupIONCComboAutocomplete(form, prefix = '') {
         if (!sid || !oname) return;
         const entry = findIONCEntry(sid, oname);
         if (entry) {
-            input.value = entry.displayString;
-            delete input.dataset.orphan;
+            // Если entry online — обычный display. Если offline — с суффиксом + orphan.
+            input.value = formatIONCComboValue(entry, { autoOfflineSuffix: true });
+            if (entry.connected) {
+                delete input.dataset.orphan;
+            } else {
+                input.dataset.orphan = 'true';
+            }
         } else {
-            input.value = `${oname} @ ${sid} (offline)`;
+            // Pair не в registry → orphan: показываем raw serverId/objectName + offline.
+            input.value = formatIONCComboValue({ serverId: sid, objectName: oname }, { showOffline: true });
             input.dataset.orphan = 'true';
         }
     }
@@ -221,12 +252,13 @@ function setupIONCComboAutocomplete(form, prefix = '') {
                 preselectFromConfig();
                 return;
             }
-            const it = all[0];
-            input.value = it.displayString;
+            const entry = all[0];
+            input.value = formatIONCComboValue(entry, { autoOfflineSuffix: true });
+            if (!entry.connected) input.dataset.orphan = 'true';
             input.disabled = true;
             input.title = 'Только 1 IONC@server в системе';
-            hiddenServer.value = it.serverId;
-            hiddenObject.value = it.objectName;
+            hiddenServer.value = entry.serverId;
+            hiddenObject.value = entry.objectName;
             hiddenServer.dispatchEvent(new Event('change', { bubbles: true }));
             hiddenObject.dispatchEvent(new Event('change', { bubbles: true }));
             return;
@@ -306,10 +338,10 @@ function renderSensorBindingFields(config = {}, opts = {}) {
 
     const serverId = config.serverId || '';
     const objectName = config.objectName || objectNameDefault;
-    // displayString рендерится как orphan-fallback; setupIONCComboAutocomplete
-    // переписывает после ensureIONCRegistry, если registry содержит pair.
+    // initialDisplay — orphan fallback (без serverName, registry ещё не загружена).
+    // setupIONCComboAutocomplete переписывает после ensureIONCRegistry, если pair найден.
     const initialDisplay = serverId && objectName
-        ? `${objectName} @ ${serverId}`
+        ? formatIONCComboValue({ serverId, objectName }, { autoOfflineSuffix: false })
         : '';
 
     return `
@@ -638,4 +670,5 @@ if (typeof globalThis !== 'undefined') {
     globalThis.ensureIONCRegistry = ensureIONCRegistry;
     globalThis.getIONCEntries     = getIONCEntries;
     globalThis.findIONCEntry      = findIONCEntry;
+    globalThis.formatIONCComboValue = formatIONCComboValue;
 }
