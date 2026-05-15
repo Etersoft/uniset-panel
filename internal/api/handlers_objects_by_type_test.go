@@ -70,3 +70,68 @@ func TestGetObjectsByType_basic(t *testing.T) {
 		t.Errorf("Objects: want 2, got %d (%v)", len(srv.Objects), srv.Objects)
 	}
 }
+
+func TestGetObjectsByType_emptyType(t *testing.T) {
+	store := storage.NewMemoryStorage()
+	mgr := server.NewManager(store, 5*time.Second, time.Hour, "TestProc", 0)
+	defer func() { _ = mgr }() // keep mgr alive
+	h := &Handlers{storage: store, sseHub: NewSSEHub(), pollInterval: 5 * time.Second}
+	h.SetServerManager(mgr)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/objects-by-type", nil)
+	rr := httptest.NewRecorder()
+	h.GetObjectsByType(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("status: want 400, got %d (body: %s)", rr.Code, rr.Body.String())
+	}
+}
+
+func TestGetObjectsByType_noServerMgr(t *testing.T) {
+	h := &Handlers{storage: storage.NewMemoryStorage(), sseHub: NewSSEHub(), pollInterval: 5 * time.Second}
+	// serverMgr НЕ установлен
+
+	req := httptest.NewRequest(http.MethodGet, "/api/objects-by-type?type=IONotifyController", nil)
+	rr := httptest.NewRecorder()
+	h.GetObjectsByType(rr, req)
+
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Errorf("status: want 503, got %d", rr.Code)
+	}
+}
+
+func TestGetObjectsByType_noMatches(t *testing.T) {
+	mock := startMockUnisetWithTypes(t, map[string]string{
+		"MBSlave1": "ModbusSlave",
+	})
+	defer mock.Close()
+
+	store := storage.NewMemoryStorage()
+	mgr := server.NewManager(store, 5*time.Second, time.Hour, "TestProc", 0)
+	if err := mgr.AddServer(config.ServerConfig{ID: "srv1", URL: mock.URL, Name: "S1"}); err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+	defer mgr.RemoveServer("srv1")
+
+	h := &Handlers{storage: store, sseHub: NewSSEHub(), pollInterval: 5 * time.Second}
+	h.SetServerManager(mgr)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/objects-by-type?type=IONotifyController", nil)
+	rr := httptest.NewRecorder()
+	h.GetObjectsByType(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: want 200, got %d", rr.Code)
+	}
+	var resp struct {
+		Servers []struct {
+			Objects []string `json:"objects"`
+		} `json:"servers"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.Servers) != 1 || len(resp.Servers[0].Objects) != 0 {
+		t.Errorf("expected 1 server with empty objects, got %+v", resp.Servers)
+	}
+}
