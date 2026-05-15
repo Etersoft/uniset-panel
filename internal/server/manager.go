@@ -34,6 +34,15 @@ type ServerObjects struct {
 	Objects    []string `json:"objects"`
 }
 
+// ServerObjectsByType группирует объекты заданного типа по серверам для UI.
+// Используется /api/objects-by-type для combobox'а IONC@server в widget config.
+type ServerObjectsByType struct {
+	ServerID   string   `json:"serverId"`
+	ServerName string   `json:"serverName"`
+	Connected  bool     `json:"connected"`
+	Objects    []string `json:"objects"`
+}
+
 // Manager управляет несколькими серверами UniSet2
 type Manager struct {
 	mu        sync.RWMutex
