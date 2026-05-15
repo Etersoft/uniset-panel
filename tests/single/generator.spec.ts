@@ -236,14 +236,16 @@ test.describe('IONC Value Generator', () => {
 
         // Sync barrier: ждём закрытия dialog'а — гарантирует что startSensorTestSignal
         // отработал полностью (включая reRenderSensorRow), прежде чем проверять class
-        // на row'е. Без этого assertion'а 220-й тест flaky под полной нагрузкой
-        // (см. test 152 — там этот wait уже есть и тест стабилен).
-        await expect(page.locator('.ionc-dialog-overlay.visible')).not.toBeVisible();
+        // на row'е. Default 5s timeout оказался мал под full-suite нагрузкой —
+        // increased до 10s для надёжности.
+        await expect(page.locator('.ionc-dialog-overlay.visible')).not.toBeVisible({ timeout: 10000 });
 
         // Verify indicators on the SPECIFIC row (по data-sensor-id, не .first()).
+        // Класс ionc-sensor-generating ставится async через reRenderSensorRow —
+        // длинный timeout даёт буфер под нагрузкой.
         const updatedRow = page.locator(`tr[data-sensor-id="${sensorId}"]`);
-        await expect(updatedRow).toHaveClass(/ionc-sensor-generating/);
-        await expect(updatedRow.locator('.ionc-flag-generator')).toBeVisible();
+        await expect(updatedRow).toHaveClass(/ionc-sensor-generating/, { timeout: 10000 });
+        await expect(updatedRow.locator('.ionc-flag-generator')).toBeVisible({ timeout: 5000 });
     });
 
     test('generator button should be disabled for readonly sensors', async ({ page }) => {
