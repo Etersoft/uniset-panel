@@ -417,66 +417,36 @@ function getSensorNamesFromItems(items = []) {
     return items.map(getSensorNameFromBinding).filter(Boolean);
 }
 
-// Wire'ит для одного binding-блока: token-guarded loadIONCObjects при смене
-// server, setupSensorAutocomplete с реактивным objectName/serverId.
-// Idempotent через form.dataset[`sensorBinding_${prefix}_wired`].
+// initSensorBindingHandlers — wires combobox IONC@server + sensor autocomplete.
+// Идемпотентен через form.dataset[flagKey].
 //
-// Returns: { resetSensor() }.
+// При смене hidden objectName/serverId (через pickItem combo'а) — sensor input
+// сбрасывается через ac.resetOnObjectChange() (контракт сохранён).
 function initSensorBindingHandlers(form, config = {}, opts = {}) {
     const prefix = opts.fieldPrefix || '';
     const flagKey = `sensorBinding_${prefix.replace(/[^a-z0-9]/gi, '_')}_wired`;
     if (form.dataset[flagKey] === 'true') return null;
     form.dataset[flagKey] = 'true';
 
-    const serverSelect = form.querySelector(`[name="${prefix}serverId"]`);
-    const objectSelect = form.querySelector(`[name="${prefix}objectName"]`);
+    const hiddenServer = form.querySelector(`[name="${prefix}serverId"]`);
+    const hiddenObject = form.querySelector(`[name="${prefix}objectName"]`);
     const sensorInput  = form.querySelector(`[name="${prefix}sensor"]`);
     const hiddenIdInput = form.querySelector(`[name="${prefix}sensorId"]`);
-    if (!serverSelect || !objectSelect || !sensorInput || !hiddenIdInput) return null;
+    if (!hiddenServer || !hiddenObject || !sensorInput || !hiddenIdInput) return null;
 
-    let loadToken = 0;
-    const loadIONCObjects = async (serverId) => {
-        const myToken = ++loadToken;
-        if (!serverId) {
-            objectSelect.innerHTML = '<option value="" disabled selected>(выберите Server)</option>';
-            return;
-        }
-        try {
-            const r = await fetch(`/api/objects?server=${encodeURIComponent(serverId)}&type=IONotifyController`);
-            const data = r.ok ? await r.json() : { objects: [] };
-            if (myToken !== loadToken) return;
-            const objs = data.objects || [];
-            const currentValue = objectSelect.value || config.objectName || (opts.objectNameDefault || 'SharedMemory');
-            objectSelect.innerHTML = objs.map(o => {
-                const name = typeof o === 'string' ? o : o.name;
-                return `<option value="${escapeAttr(name)}" ${name === currentValue ? 'selected' : ''}>${escapeHtml(name)}</option>`;
-            }).join('');
-            if (!objs.some(o => (typeof o === 'string' ? o : o.name) === currentValue)) {
-                const opt = document.createElement('option');
-                opt.value = currentValue;
-                opt.textContent = `${currentValue} (текущий, не найден)`;
-                opt.selected = true;
-                objectSelect.prepend(opt);
-            }
-        } catch (err) {
-            console.warn('Failed to load IONC objects:', err);
-        }
-    };
-
-    loadIONCObjects(serverSelect.value);
+    setupIONCComboAutocomplete(form, prefix);
 
     const ac = setupSensorAutocomplete(
         sensorInput,
         hiddenIdInput,
-        () => objectSelect.value,
-        () => serverSelect.value
+        () => hiddenObject.value,
+        () => hiddenServer.value
     );
 
-    serverSelect.addEventListener('change', () => {
-        loadIONCObjects(serverSelect.value);
+    hiddenServer.addEventListener('change', () => {
         if (ac && typeof ac.resetOnObjectChange === 'function') ac.resetOnObjectChange();
     });
-    objectSelect.addEventListener('change', () => {
+    hiddenObject.addEventListener('change', () => {
         if (ac && typeof ac.resetOnObjectChange === 'function') ac.resetOnObjectChange();
     });
 

@@ -203,3 +203,46 @@ describe('setupIONCComboAutocomplete', () => {
         expect(hiddenServer.value).toBe('only');
     });
 });
+
+describe('initSensorBindingHandlers — combo integration', () => {
+    beforeEach(() => {
+        loadModule();
+        document.body.innerHTML = '';
+        seedRegistry([
+            { serverId: 's1', serverName: 'Server1', connected: true, objects: ['SharedMemory'] },
+        ]);
+    });
+
+    it('wires combo and resets sensor input on object change', () => {
+        const html = (globalThis as any).renderSensorBindingFields(
+            { serverId: 's1', objectName: 'SharedMemory', sensor: 'OldSensor', sensorId: 99 }, {}
+        );
+        document.body.innerHTML = `<form>${html}</form>`;
+        const form = document.querySelector('form')! as HTMLFormElement;
+
+        (globalThis as any).initSensorBindingHandlers(form, {}, {});
+
+        const hiddenObject = form.querySelector<HTMLInputElement>('input[name="objectName"]')!;
+        const sensorInput  = form.querySelector<HTMLInputElement>('input[name="sensor"]')!;
+        const sensorIdHidden = form.querySelector<HTMLInputElement>('input[name="sensorId"]')!;
+
+        // Симулируем смену object (как делает pickItem)
+        hiddenObject.value = 'OtherObj';
+        hiddenObject.dispatchEvent(new Event('change', { bubbles: true }));
+
+        // sensor должен быть сброшен (ac.resetOnObjectChange()):
+        expect(sensorInput.value).toBe('');
+        expect(sensorIdHidden.value).toBe('');
+    });
+
+    it('idempotent — second call no-op', () => {
+        const html = (globalThis as any).renderSensorBindingFields(
+            { serverId: 's1', objectName: 'SharedMemory' }, {}
+        );
+        document.body.innerHTML = `<form>${html}</form>`;
+        const form = document.querySelector('form')! as HTMLFormElement;
+
+        (globalThis as any).initSensorBindingHandlers(form, {}, {});
+        expect(() => (globalThis as any).initSensorBindingHandlers(form, {}, {})).not.toThrow();
+    });
+});
