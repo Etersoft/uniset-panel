@@ -357,6 +357,69 @@ func TestManagerGetAllObjectsGrouped(t *testing.T) {
 	}
 }
 
+// startMockServerWithTypes создаёт httptest сервер, отдающий список объектов
+// с проставленным objectType. Используется в тестах GetAllObjectsByType.
+func startMockServerWithTypes(objects map[string]string) *httptest.Server {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v2/list", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		names := make([]string, 0, len(objects))
+		for n := range objects {
+			names = append(names, n)
+		}
+		_ = json.NewEncoder(w).Encode(names)
+	})
+	for name, objectType := range objects {
+		name, objectType := name, objectType
+		mux.HandleFunc("/api/v2/"+name, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"object": map[string]interface{}{
+					"id":         1,
+					"name":       name,
+					"objectType": objectType,
+					"isActive":   true,
+				},
+			})
+		})
+	}
+	return httptest.NewServer(mux)
+}
+
+func TestManagerGetAllObjectsByType_basic(t *testing.T) {
+	srv := startMockServerWithTypes(map[string]string{
+		"SharedMemory": "IONotifyController",
+		"MBSlave1":     "ModbusSlave",
+	})
+	defer srv.Close()
+
+	store := storage.NewMemoryStorage()
+	mgr := NewManager(store, time.Second, time.Hour, "", 0)
+	if err := mgr.AddServer(config.ServerConfig{ID: "s1", URL: srv.URL, Name: "Server1"}); err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+
+	got, err := mgr.GetAllObjectsByType("IONotifyController")
+	if err != nil {
+		t.Fatalf("GetAllObjectsByType: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("want 1 server in result, got %d", len(got))
+	}
+	if got[0].ServerID != "s1" {
+		t.Errorf("ServerID: want s1, got %s", got[0].ServerID)
+	}
+	if got[0].ServerName != "Server1" {
+		t.Errorf("ServerName: want Server1, got %s", got[0].ServerName)
+	}
+	if !got[0].Connected {
+		t.Error("Connected: want true")
+	}
+	if len(got[0].Objects) != 1 || got[0].Objects[0] != "SharedMemory" {
+		t.Errorf("Objects: want [SharedMemory], got %v", got[0].Objects)
+	}
+}
+
 func TestManagerGetObjectData(t *testing.T) {
 	server := mockUnisetServer()
 	defer server.Close()

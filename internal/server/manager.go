@@ -410,6 +410,73 @@ func (m *Manager) GetAllObjectsGrouped() ([]ServerObjects, error) {
 	return result, nil
 }
 
+// GetAllObjectsByType возвращает объекты заданного uniset-типа
+// (например "IONotifyController") сгруппированные по серверам в порядке добавления.
+//
+// Per-server: список имён через GetObjects (с fallback на cache при недоступности),
+// затем для каждого имени GetObjectData → фильтр по ObjectType. N+M uniset запросов
+// на вызов; кэширование на бэке — follow-up.
+//
+// Если сервер недоступен и кэша нет — server entry с Objects=[], Connected=false
+// (UI должен знать о существовании сервера).
+// Если конкретный объект GetObjectData падает — объект пропускается, остальные ОК.
+func (m *Manager) GetAllObjectsByType(typeFilter string) ([]ServerObjectsByType, error) {
+	if typeFilter == "" {
+		return nil, fmt.Errorf("type filter is required")
+	}
+
+	m.mu.RLock()
+	instances := make([]*Instance, 0, len(m.order))
+	for _, id := range m.order {
+		if inst, ok := m.instances[id]; ok {
+			instances = append(instances, inst)
+		}
+	}
+	m.mu.RUnlock()
+
+	result := make([]ServerObjectsByType, 0, len(instances))
+
+	for _, inst := range instances {
+		serverName := inst.Config.Name
+		entry := ServerObjectsByType{
+			ServerID:   inst.Config.ID,
+			ServerName: serverName,
+			Objects:    []string{},
+		}
+
+		names, getErr := inst.GetObjects()
+		if getErr != nil {
+			if cached := inst.GetCachedObjects(); cached != nil {
+				names = cached
+			} else {
+				names = nil
+			}
+		}
+
+		for _, name := range names {
+			data, err := inst.GetObjectData(name)
+			if err != nil || data == nil || data.Object == nil {
+				continue
+			}
+			if data.Object.ObjectType == typeFilter {
+				entry.Objects = append(entry.Objects, name)
+			}
+		}
+
+		// GetObjects успешно ответил → сервер доступен.
+		// Фоновый poller обновляет inst.connected асинхронно,
+		// поэтому используем результат непосредственного запроса.
+		if getErr == nil {
+			entry.Connected = true
+		} else {
+			entry.Connected = inst.GetStatus().Connected
+		}
+		result = append(result, entry)
+	}
+
+	return result, nil
+}
+
 // GetObjectData возвращает данные объекта с указанного сервера
 func (m *Manager) GetObjectData(serverID, objectName string) (*uniset.ObjectData, error) {
 	instance, exists := m.GetServer(serverID)
