@@ -33,3 +33,13 @@ uniset-panel-go
 
 # Memory / docs build artifacts
 docs/.build/
+
+# Directories not needed for go build — excluded to avoid invalidating Go layer cache
+# when docs/tests/specs/examples change.
+docs/
+tests/
+examples/
+demo/
+*.md
+coverage.out
+recording.db
