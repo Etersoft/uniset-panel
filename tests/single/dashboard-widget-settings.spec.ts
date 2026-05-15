@@ -20,10 +20,14 @@ async function setupDashboardEnv(page: Page) {
             body: JSON.stringify({ enabled: true, isController: true, hasController: true, timeoutSec: 60 })
         });
     });
-    await page.route('**/api/objects?server=mock-srv&type=IONotifyController', route => {
+    // IONC combo registry — один сервер → combo auto-fills (disabled=true).
+    await page.route('**/api/objects-by-type**', route => {
         route.fulfill({
             status: 200, contentType: 'application/json',
-            body: JSON.stringify({ objects: [{ name: 'SharedMemory' }] })
+            body: JSON.stringify({
+                type: 'IONotifyController',
+                servers: [{ serverId: 'mock-srv', serverName: 'Mock', connected: true, objects: ['SharedMemory'] }]
+            })
         });
     });
     await page.route('**/api/objects/SharedMemory/ionc/sensors**', route => {
@@ -109,6 +113,15 @@ async function getSavedWidgetConfig(page: Page, dashName: string, widgetIndex = 
 test.describe('Active widget settings — config dialog persistence', () => {
     test.beforeEach(async ({ page }) => {
         await setupDashboardEnv(page);
+        // Сбрасываем session-cache IONC registry — чтобы мок /api/objects-by-type
+        // вызвался заново и hidden inputs получили mock-srv.
+        await page.evaluate(() => {
+            const reg = (window as any).state.ioncRegistry;
+            reg.fetchedAt = 0;
+            reg.isFetching = false;
+            reg.fetchPromise = null;
+            reg.servers.clear();
+        });
     });
 
     test('Toggle: open → change style + labels → save persists style/labelOn/labelOff', async ({ page }) => {
@@ -285,9 +298,10 @@ test.describe('Active widget settings — config dialog persistence', () => {
 
         // Widget #2 — снова Toggle.
         cfg = await openWidgetConfigViaPicker(page, 'toggle');
-        // Server dropdown должен иметь mock-srv (initConfigHandlers вызвался
-        // повторно для свежей формы).
-        await expect(cfg.locator('[data-test="cfg-serverId"]')).toHaveValue('mock-srv');
+        // IONC combo должен автоматически выбрать mock-srv (единственный сервер в registry).
+        // Hidden serverId input заполняется async после ensureIONCRegistry; ждём через
+        // ioncCombo text input (он виден и обновляется синхронно с hidden fields).
+        await expect(cfg.locator('[data-test="cfg-ioncCombo"]')).toHaveValue('SharedMemory @ Mock', { timeout: 5000 });
 
         // Focus → autocomplete dropdown должен появиться.
         await cfg.locator('[data-test="cfg-sensor"]').click();

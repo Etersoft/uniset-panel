@@ -316,12 +316,15 @@ test.describe('ToggleWidget — first active widget', () => {
     });
 
     test('UI-flow: widget picker → Toggle → server/object/sensor select → save persists serverId+sensorId', async ({ page }) => {
-        // IONC objects list — для cfg-objectName dropdown.
-        await page.route('**/api/objects?server=mock-srv&type=IONotifyController', async (route) => {
+        // IONC combo registry — единственный объект, чтобы combo auto-fill (disabled).
+        await page.route('**/api/objects-by-type**', async (route) => {
             await route.fulfill({
                 status: 200,
                 contentType: 'application/json',
-                body: JSON.stringify({ objects: [{ name: 'SharedMemory' }, { name: 'SharedMemory2' }] })
+                body: JSON.stringify({
+                    type: 'IONotifyController',
+                    servers: [{ serverId: 'mock-srv', serverName: 'Mock', connected: true, objects: ['SharedMemory'] }]
+                })
             });
         });
         // IONC sensors search — для cfg-sensor autocomplete (focus + select).
@@ -336,6 +339,15 @@ test.describe('ToggleWidget — first active widget', () => {
                     ]
                 })
             });
+        });
+
+        // Сбрасываем session-cache IONC registry — чтобы combo fetch вызвался заново.
+        await page.evaluate(() => {
+            const reg = (window as any).state.ioncRegistry;
+            reg.fetchedAt = 0;
+            reg.isFetching = false;
+            reg.fetchPromise = null;
+            reg.servers.clear();
         });
 
         // Создаём пустой пользовательский dashboard, переключаемся в edit-mode.
@@ -357,15 +369,12 @@ test.describe('ToggleWidget — first active widget', () => {
         const cfg = page.locator('#widget-config-overlay');
         await cfg.waitFor({ state: 'visible' });
 
-        // Server dropdown — должен быть пред-выбран mock-srv (единственный connected).
+        // IONC combo auto-fills (единственный сервер в registry) →
+        // hidden inputs получают mock-srv / SharedMemory.
+        // Ждём через visible ioncCombo (обновляется синхронно с hidden inputs).
+        await expect(cfg.locator('[data-test="cfg-ioncCombo"]')).toHaveValue('SharedMemory @ Mock', { timeout: 5000 });
         await expect(cfg.locator('[data-test="cfg-serverId"]')).toHaveValue('mock-srv');
-
-        // Дождаться загрузки IONC objects dropdown.
-        await page.waitForFunction(() => {
-            const sel = document.querySelector('[data-test="cfg-objectName"]') as HTMLSelectElement;
-            return sel && sel.options.length >= 2;
-        }, { timeout: 3000 });
-        await cfg.locator('[data-test="cfg-objectName"]').selectOption('SharedMemory');
+        await expect(cfg.locator('[data-test="cfg-objectName"]')).toHaveValue('SharedMemory');
 
         // Сфокусировать sensor input — fetchAndShow('', limit:10) должен дёрнуть autocomplete.
         await cfg.locator('[data-test="cfg-sensor"]').click();

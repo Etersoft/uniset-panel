@@ -84,12 +84,18 @@ test.describe('Dashboard widget binding — multi-IONC server', () => {
     });
 
     test('Gauge UI-flow: server/object/sensor selectors render → autocomplete pick → Apply persists triplet', async ({ page }) => {
-        // Mock IONC objects list для cfg-objectName dropdown'а.
-        await page.route('**/api/objects?server=mock1&type=IONotifyController', route => {
+        // IONC combo registry — два сервера, выбираем mock1/SharedMemory через combo dropdown.
+        await page.route('**/api/objects-by-type**', route => {
             route.fulfill({
                 status: 200,
                 contentType: 'application/json',
-                body: JSON.stringify({ objects: [{ name: 'SharedMemory' }, { name: 'SharedMemory2' }] })
+                body: JSON.stringify({
+                    type: 'IONotifyController',
+                    servers: [
+                        { serverId: 'mock1', serverName: 'Mock-1', connected: true, objects: ['SharedMemory', 'SharedMemory2'] },
+                        { serverId: 'mock2', serverName: 'Mock-2', connected: true, objects: ['OtherIONC'] },
+                    ]
+                })
             });
         });
         // Mock sensor autocomplete API.
@@ -104,6 +110,15 @@ test.describe('Dashboard widget binding — multi-IONC server', () => {
                     ]
                 })
             });
+        });
+
+        // Сбрасываем session-cache IONC registry — чтобы combo fetch вызвался заново.
+        await page.evaluate(() => {
+            const reg = (window as any).state.ioncRegistry;
+            reg.fetchedAt = 0;
+            reg.isFetching = false;
+            reg.fetchPromise = null;
+            reg.servers.clear();
         });
 
         // Создаём пустой dashboard и переключаемся в edit-mode.
@@ -125,20 +140,21 @@ test.describe('Dashboard widget binding — multi-IONC server', () => {
         const cfgDialog = page.locator('#widget-config-overlay');
         await cfgDialog.waitFor({ state: 'visible' });
 
-        // Triplet selectors должны присутствовать.
-        await expect(cfgDialog.locator('[data-test="cfg-serverId"]')).toBeVisible();
-        await expect(cfgDialog.locator('[data-test="cfg-objectName"]')).toBeVisible();
+        // IONC combo + sensor input должны присутствовать.
+        await expect(cfgDialog.locator('[data-test="cfg-ioncCombo"]')).toBeVisible();
         await expect(cfgDialog.locator('[data-test="cfg-sensor"]')).toBeVisible();
 
-        // Server selector — выбираем mock1 (если ещё не выбран).
-        await cfgDialog.locator('[data-test="cfg-serverId"]').selectOption('mock1');
+        // Дождаться загрузки IONC registry (combo вызовет ensureIONCRegistry).
+        // Кликаем combo → открывается dropdown → выбираем SharedMemory @ Mock-1.
+        await cfgDialog.locator('[data-test="cfg-ioncCombo"]').click();
+        await page.waitForSelector('.ionc-combo-item', { timeout: 5000 });
+        // Выбираем первый элемент SharedMemory @ Mock-1 через mousedown.
+        const comboItem = page.locator('.ionc-combo-item', { hasText: 'SharedMemory @ Mock-1' }).first();
+        await comboItem.dispatchEvent('mousedown');
 
-        // Дождаться загрузки IONC objects dropdown'а (mock возвращает 2 шт).
-        await page.waitForFunction(() => {
-            const sel = document.querySelector('[data-test="cfg-objectName"]') as HTMLSelectElement;
-            return sel && sel.options.length >= 2;
-        }, { timeout: 3000 });
-        await cfgDialog.locator('[data-test="cfg-objectName"]').selectOption('SharedMemory');
+        // Проверяем, что hidden inputs заполнились.
+        await expect(cfgDialog.locator('[data-test="cfg-serverId"]')).toHaveValue('mock1');
+        await expect(cfgDialog.locator('[data-test="cfg-objectName"]')).toHaveValue('SharedMemory');
 
         // Сфокусировать sensor input → autocomplete dropdown появится (focus
         // дёргает fetchAndShow без search).
@@ -277,13 +293,28 @@ test.describe('Dashboard widget binding — multi-IONC server', () => {
     });
 
     test('StatusBar Add Indicator: pre-fill serverId+objectName из последнего item, sensor пустой', async ({ page }) => {
-        // Mock IONC objects list для cfg-objectName dropdown'ов rows.
-        await page.route('**/api/objects?server=mock1&type=IONotifyController', route => {
+        // IONC combo registry — mock1 с двумя объектами.
+        await page.route('**/api/objects-by-type**', route => {
             route.fulfill({
                 status: 200,
                 contentType: 'application/json',
-                body: JSON.stringify({ objects: [{ name: 'SharedMemory' }, { name: 'CustomObj' }] })
+                body: JSON.stringify({
+                    type: 'IONotifyController',
+                    servers: [
+                        { serverId: 'mock1', serverName: 'Mock-1', connected: true, objects: ['SharedMemory', 'CustomObj'] },
+                        { serverId: 'mock2', serverName: 'Mock-2', connected: true, objects: ['OtherIONC'] },
+                    ]
+                })
             });
+        });
+
+        // Сбрасываем session-cache IONC registry.
+        await page.evaluate(() => {
+            const reg = (window as any).state.ioncRegistry;
+            reg.fetchedAt = 0;
+            reg.isFetching = false;
+            reg.fetchPromise = null;
+            reg.servers.clear();
         });
 
         // Создаём пустой dashboard и переключаемся в edit-mode.
@@ -308,14 +339,15 @@ test.describe('Dashboard widget binding — multi-IONC server', () => {
         // Дождаться рендера хотя бы одной item-row (default — 1 item).
         await cfgDialog.locator('.statusbar-item').first().waitFor({ state: 'visible' });
 
-        // Установить server в первой row + дождаться появления опции CustomObj
-        // в objectName dropdown (loadIONCObjects async).
-        await cfgDialog.locator('[name="item-0-serverId"]').selectOption('mock1');
-        await page.waitForFunction(() => {
-            const sel = document.querySelector('[name="item-0-objectName"]') as HTMLSelectElement;
-            return sel && Array.from(sel.options).some(o => o.value === 'CustomObj');
-        }, { timeout: 3000 });
-        await cfgDialog.locator('[name="item-0-objectName"]').selectOption('CustomObj');
+        // Выбрать CustomObj @ Mock-1 через IONC combo в первой row.
+        await cfgDialog.locator('[name="item-0-ioncCombo"]').click();
+        await page.waitForSelector('.ionc-combo-item', { timeout: 5000 });
+        const customObjItem = page.locator('.ionc-combo-item', { hasText: 'CustomObj @ Mock-1' }).first();
+        await customObjItem.dispatchEvent('mousedown');
+
+        // Проверяем что hidden inputs заполнились.
+        await expect(cfgDialog.locator('[name="item-0-serverId"]')).toHaveValue('mock1');
+        await expect(cfgDialog.locator('[name="item-0-objectName"]')).toHaveValue('CustomObj');
 
         // Click + Add Indicator.
         await page.locator('#add-statusbar-item').click();
@@ -323,7 +355,7 @@ test.describe('Dashboard widget binding — multi-IONC server', () => {
         // Должна появиться вторая row.
         await cfgDialog.locator('.statusbar-item[data-idx="1"]').waitFor({ state: 'visible' });
 
-        // Pre-filled serverId + objectName из item-0.
+        // Pre-filled serverId + objectName из item-0 (через parseSensorItemList).
         const srvVal = await cfgDialog.locator('[name="item-1-serverId"]').inputValue();
         const objVal = await cfgDialog.locator('[name="item-1-objectName"]').inputValue();
         expect(srvVal).toBe('mock1');

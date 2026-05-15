@@ -22800,10 +22800,10 @@ class DashboardManager {
         delete content.dataset.genHandlersWired;
         delete content.dataset.chartHandlersWired;
         // Helpers из 60-widget-sensor-binding.js используют dataset-флаги
-        // sensorBinding_* и sensorItemList_*. content живёт между открытиями
-        // диалога, поэтому сбрасываем оба семейства перед новым wiring.
+        // sensorBinding_*, sensorItemList_*, ioncCombo_*. content живёт между
+        // открытиями диалога, поэтому сбрасываем все три семейства перед новым wiring.
         for (const key of Object.keys(content.dataset)) {
-            if (key.startsWith('sensorBinding') || key.startsWith('sensorItemList')) {
+            if (key.startsWith('sensorBinding') || key.startsWith('sensorItemList') || key.startsWith('ioncCombo')) {
                 delete content.dataset[key];
             }
         }
