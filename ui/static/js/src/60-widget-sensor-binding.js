@@ -117,6 +117,15 @@ function setupIONCComboAutocomplete(form, prefix = '') {
     let activeIndex = -1;
     let currentItems = [];
     let currentFilter = '';
+    // lastCommittedDisplay — последнее значение input.value, которое мы признаём
+    // «коммитнутым» (через preselect, single-match auto-fill или explicit pickItem).
+    // На blur без pick'а input.value откатывается на это значение. Hidden inputs
+    // никогда не трогаются автоматически (Persistence Invariant).
+    let lastCommittedDisplay = '';
+    function commit(displayValue) {
+        lastCommittedDisplay = displayValue;
+        delete input.dataset.invalid;
+    }
 
     function destroyDropdown() {
         if (dropdown) { dropdown.remove(); dropdown = null; }
@@ -206,12 +215,14 @@ function setupIONCComboAutocomplete(form, prefix = '') {
         if (!item) return;
         // Offline pick: input показывает (offline) суффикс + orphan-маркер сохраняется
         // (UI sign'ал что выбранный target недоступен). Online pick: чистый display.
-        input.value = formatIONCComboValue(item, { autoOfflineSuffix: true });
+        const displayValue = formatIONCComboValue(item, { autoOfflineSuffix: true });
+        input.value = displayValue;
         if (item.connected) {
             delete input.dataset.orphan;
         } else {
             input.dataset.orphan = 'true';
         }
+        commit(displayValue);
         hiddenServer.value = item.serverId;
         hiddenObject.value = item.objectName;
         hiddenServer.dispatchEvent(new Event('change', { bubbles: true }));
@@ -222,11 +233,15 @@ function setupIONCComboAutocomplete(form, prefix = '') {
     function preselectFromConfig() {
         const sid = hiddenServer.value;
         const oname = hiddenObject.value;
-        if (!sid || !oname) return;
+        if (!sid || !oname) {
+            commit(input.value || '');
+            return;
+        }
         const entry = findIONCEntry(sid, oname);
+        let displayValue;
         if (entry) {
             // Если entry online — обычный display. Если offline — с суффиксом + orphan.
-            input.value = formatIONCComboValue(entry, { autoOfflineSuffix: true });
+            displayValue = formatIONCComboValue(entry, { autoOfflineSuffix: true });
             if (entry.connected) {
                 delete input.dataset.orphan;
             } else {
@@ -234,9 +249,11 @@ function setupIONCComboAutocomplete(form, prefix = '') {
             }
         } else {
             // Pair не в registry → orphan: показываем raw serverId/objectName + offline.
-            input.value = formatIONCComboValue({ serverId: sid, objectName: oname }, { showOffline: true });
+            displayValue = formatIONCComboValue({ serverId: sid, objectName: oname }, { showOffline: true });
             input.dataset.orphan = 'true';
         }
+        input.value = displayValue;
+        commit(displayValue);
     }
 
     function applySingleMatchOrPreselect() {
@@ -253,10 +270,12 @@ function setupIONCComboAutocomplete(form, prefix = '') {
                 return;
             }
             const entry = all[0];
-            input.value = formatIONCComboValue(entry, { autoOfflineSuffix: true });
+            const displayValue = formatIONCComboValue(entry, { autoOfflineSuffix: true });
+            input.value = displayValue;
             if (!entry.connected) input.dataset.orphan = 'true';
             input.disabled = true;
             input.title = 'Только 1 IONC@server в системе';
+            commit(displayValue);
             hiddenServer.value = entry.serverId;
             hiddenObject.value = entry.objectName;
             hiddenServer.dispatchEvent(new Event('change', { bubbles: true }));
@@ -286,7 +305,18 @@ function setupIONCComboAutocomplete(form, prefix = '') {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
             buildDropdown();
-            applyFilter(input.value || '');
+            const text = input.value || '';
+            applyFilter(text);
+            // data-invalid: typed text не матчит ни одну entry's displayString.
+            // Пустой text → не invalid (пользователь стирает). Не трогаем hidden.
+            if (!text) {
+                delete input.dataset.invalid;
+            } else {
+                const lower = text.toLowerCase();
+                const hasMatch = getIONCEntries().some(e => e.displayString.toLowerCase().includes(lower));
+                if (hasMatch) delete input.dataset.invalid;
+                else          input.dataset.invalid = 'true';
+            }
         }, IONC_COMBO_DEBOUNCE_MS);
     });
 
@@ -311,7 +341,15 @@ function setupIONCComboAutocomplete(form, prefix = '') {
     });
 
     input.addEventListener('blur', () => {
-        setTimeout(destroyDropdown, SENSOR_AUTOCOMPLETE_BLUR_DELAY_MS);
+        // Откладываем revert на тот же delay что и destroyDropdown — чтобы успел
+        // отработать mousedown→pickItem (который обновит lastCommittedDisplay).
+        // Если pickItem уже committed новое значение, restore просто перезапишет
+        // input.value тем же, что там и так стоит.
+        setTimeout(() => {
+            destroyDropdown();
+            input.value = lastCommittedDisplay;
+            delete input.dataset.invalid;
+        }, SENSOR_AUTOCOMPLETE_BLUR_DELAY_MS);
     });
 
     if (refreshBtn) {

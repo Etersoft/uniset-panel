@@ -198,6 +198,87 @@ describe('setupIONCComboAutocomplete', () => {
         expect(changeFired).toBeGreaterThanOrEqual(2);
     });
 
+    it('typing junk text marks input data-invalid="true" and does NOT touch hidden inputs', async () => {
+        const form = mountForm({ serverId: 's1', objectName: 'SharedMemory' });
+        (globalThis as any).setupIONCComboAutocomplete(form, '');
+        const input = form.querySelector<HTMLInputElement>('.ionc-combo-input')!;
+        const hiddenServer = form.querySelector<HTMLInputElement>('input[name="serverId"]')!;
+        const hiddenObject = form.querySelector<HTMLInputElement>('input[name="objectName"]')!;
+
+        input.dispatchEvent(new FocusEvent('focus'));
+        input.value = 'totally-bogus-text';
+        input.dispatchEvent(new Event('input'));
+        await new Promise(r => setTimeout(r, 150));
+
+        expect(input.dataset.invalid).toBe('true');
+        // Hidden inputs untouched — Persistence Invariant
+        expect(hiddenServer.value).toBe('s1');
+        expect(hiddenObject.value).toBe('SharedMemory');
+    });
+
+    it('typing valid prefix clears data-invalid (matches an entry)', async () => {
+        const form = mountForm({ serverId: 's1', objectName: 'SharedMemory' });
+        (globalThis as any).setupIONCComboAutocomplete(form, '');
+        const input = form.querySelector<HTMLInputElement>('.ionc-combo-input')!;
+
+        input.dispatchEvent(new FocusEvent('focus'));
+        input.value = 'totally-bogus';
+        input.dispatchEvent(new Event('input'));
+        await new Promise(r => setTimeout(r, 150));
+        expect(input.dataset.invalid).toBe('true');
+
+        // Now type a substring that exists in the registry.
+        input.value = 'IMIT';
+        input.dispatchEvent(new Event('input'));
+        await new Promise(r => setTimeout(r, 150));
+        expect(input.dataset.invalid).toBeUndefined();
+    });
+
+    it('blur without picking restores last committed display and clears data-invalid', async () => {
+        const form = mountForm({ serverId: 's1', objectName: 'SharedMemory' });
+        (globalThis as any).setupIONCComboAutocomplete(form, '');
+        const input = form.querySelector<HTMLInputElement>('.ionc-combo-input')!;
+        const hiddenServer = form.querySelector<HTMLInputElement>('input[name="serverId"]')!;
+        const hiddenObject = form.querySelector<HTMLInputElement>('input[name="objectName"]')!;
+        const committed = input.value;
+        expect(committed).toBe('SharedMemory @ Server1');
+
+        input.dispatchEvent(new FocusEvent('focus'));
+        input.value = 'junkie';
+        input.dispatchEvent(new Event('input'));
+        await new Promise(r => setTimeout(r, 150));
+        expect(input.dataset.invalid).toBe('true');
+
+        input.dispatchEvent(new Event('blur'));
+        // SENSOR_AUTOCOMPLETE_BLUR_DELAY_MS = 150
+        await new Promise(r => setTimeout(r, 200));
+
+        // Restored to last committed display (preselect from config).
+        expect(input.value).toBe(committed);
+        expect(input.dataset.invalid).toBeUndefined();
+        // Hidden never touched.
+        expect(hiddenServer.value).toBe('s1');
+        expect(hiddenObject.value).toBe('SharedMemory');
+    });
+
+    it('blur after typing valid (matching) text without pickItem still reverts', async () => {
+        // Spec: only explicit pickItem commits. Even matching typed text reverts on blur.
+        const form = mountForm({ serverId: 's1', objectName: 'SharedMemory' });
+        (globalThis as any).setupIONCComboAutocomplete(form, '');
+        const input = form.querySelector<HTMLInputElement>('.ionc-combo-input')!;
+        const committed = input.value;
+
+        input.dispatchEvent(new FocusEvent('focus'));
+        input.value = 'IMIT.MBI @ Server1';  // valid display string, but never picked
+        input.dispatchEvent(new Event('input'));
+        await new Promise(r => setTimeout(r, 150));
+
+        input.dispatchEvent(new Event('blur'));
+        await new Promise(r => setTimeout(r, 200));
+
+        expect(input.value).toBe(committed);
+    });
+
     it('refresh button triggers force fetch', async () => {
         const fetchMock = vi.fn(async () => ({
             ok: true,
