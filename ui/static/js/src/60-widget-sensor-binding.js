@@ -12,6 +12,73 @@
 //   - 'item-${idx}-' — multi-sensor items
 // ============================================================================
 
+// ============================================================================
+// IONC@server registry — session-cache для combobox'а в config-форме widget'ов.
+// TTL 5 минут (IONC_REGISTRY_TTL_MS) + ручной refresh через кнопку ↻.
+// fetchPromise shared между concurrent open вызовами.
+// 5xx / network error: fetchedAt НЕ обновляется (cache не помечается fresh),
+// существующие данные сохраняются для fallback.
+// ============================================================================
+
+async function ensureIONCRegistry({ force = false } = {}) {
+    const reg = state.ioncRegistry;
+    const fresh = (Date.now() - reg.fetchedAt) < IONC_REGISTRY_TTL_MS;
+    if (!force && fresh && reg.servers.size > 0) return reg;
+    if (reg.fetchPromise) return reg.fetchPromise;
+    reg.isFetching = true;
+    reg.fetchPromise = (async () => {
+        const resp = await fetch('/api/objects-by-type?type=IONotifyController');
+        if (!resp.ok) throw new Error(`/api/objects-by-type: HTTP ${resp.status}`);
+        const data = await resp.json();
+        reg.servers.clear();
+        (data.servers || []).forEach(s => {
+            reg.servers.set(s.serverId, {
+                serverName: s.serverName || '',
+                connected:  !!s.connected,
+                objects:    Array.isArray(s.objects) ? s.objects : [],
+            });
+        });
+        reg.fetchedAt = Date.now();
+        return reg;
+    })().finally(() => {
+        reg.isFetching = false;
+        reg.fetchPromise = null;
+    });
+    return reg.fetchPromise;
+}
+
+function getIONCEntries() {
+    const out = [];
+    state.ioncRegistry.servers.forEach((srv, serverId) => {
+        const sn = srv.serverName || serverId;
+        srv.objects.forEach(objectName => {
+            out.push({
+                serverId,
+                serverName: srv.serverName,
+                connected:  srv.connected,
+                objectName,
+                displayString: `${objectName} @ ${sn}`,
+            });
+        });
+    });
+    out.sort((a, b) => {
+        if (a.connected !== b.connected) return a.connected ? -1 : 1;
+        return a.displayString.localeCompare(b.displayString);
+    });
+    return out;
+}
+
+function findIONCEntry(serverId, objectName) {
+    const srv = state.ioncRegistry.servers.get(serverId);
+    if (!srv) return null;
+    if (!srv.objects.includes(objectName)) return null;
+    const sn = srv.serverName || serverId;
+    return {
+        serverId, serverName: srv.serverName, connected: srv.connected,
+        objectName, displayString: `${objectName} @ ${sn}`,
+    };
+}
+
 function renderSensorBindingFields(config = {}, opts = {}) {
     const prefix = opts.fieldPrefix || '';
     const sensorLabel = opts.sensorLabel || 'Sensor';
@@ -379,4 +446,7 @@ if (typeof globalThis !== 'undefined') {
     globalThis.initSensorBindingHandlers = initSensorBindingHandlers;
     globalThis.initSensorItemListHandlers = initSensorItemListHandlers;
     globalThis._migrateBindingPure       = _migrateBindingPure;
+    globalThis.ensureIONCRegistry = ensureIONCRegistry;
+    globalThis.getIONCEntries     = getIONCEntries;
+    globalThis.findIONCEntry      = findIONCEntry;
 }
