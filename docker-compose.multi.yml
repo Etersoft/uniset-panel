@@ -89,6 +89,7 @@ services:
         set -e
         cd /tmp
         cp -r /app/* .
+        rm -rf node_modules test-results playwright-report unit/node_modules mock-server/node_modules mock-server-2/node_modules
         npm install --no-fund --no-audit
         if [ "$#" -gt 0 ]; then
           npx playwright test "$@" --reporter=list
