@@ -16347,33 +16347,31 @@ function renderSensorBindingFields(config = {}, opts = {}) {
     const sensorLabel = opts.sensorLabel || 'Sensor';
     const objectNameDefault = opts.objectNameDefault || 'SharedMemory';
 
-    const currentServerId = config.serverId || '';
-    let serverOptions = '';
-    if (typeof state !== 'undefined' && state?.servers) {
-        for (const [id, srv] of state.servers) {
-            if (srv.connected || id === currentServerId) {
-                const sel = id === currentServerId ? 'selected' : '';
-                serverOptions += `<option value="${escapeAttr(id)}" ${sel}>${escapeHtml(srv.name || id)}</option>`;
-            }
-        }
-    }
-    if (!serverOptions) {
-        serverOptions = '<option value="" disabled selected>(нет доступных серверов)</option>';
-    }
+    const serverId = config.serverId || '';
+    const objectName = config.objectName || objectNameDefault;
+    // displayString рендерится как orphan-fallback; setupIONCComboAutocomplete
+    // переписывает после ensureIONCRegistry, если registry содержит pair.
+    const initialDisplay = serverId && objectName
+        ? `${objectName} @ ${serverId}`
+        : '';
 
     return `
-        <div class="widget-config-field">
-            <label>Server</label>
-            <select class="widget-input" name="${prefix}serverId" data-test="cfg-${prefix}serverId">
-                ${serverOptions}
-            </select>
-        </div>
-        <div class="widget-config-field">
-            <label>IONC Object</label>
-            <select class="widget-input" name="${prefix}objectName" data-test="cfg-${prefix}objectName">
-                <option value="${escapeAttr(config.objectName || objectNameDefault)}" selected>${escapeHtml(config.objectName || objectNameDefault)}</option>
-            </select>
-            <small style="color:#6b7280">список загружается из /api/objects?type=IONotifyController</small>
+        <div class="widget-config-field ionc-combo-row">
+            <label>IONC @ Server</label>
+            <div class="ionc-combo-wrap">
+                <input type="text" class="widget-input ionc-combo-input"
+                       name="${prefix}ioncCombo" autocomplete="off"
+                       placeholder="введите для поиска…"
+                       value="${escapeAttr(initialDisplay)}"
+                       data-test="cfg-${prefix}ioncCombo">
+                <button type="button" class="ionc-combo-refresh"
+                        title="Обновить список"
+                        data-test="cfg-${prefix}ioncRefresh">↻</button>
+                <input type="hidden" name="${prefix}serverId" value="${escapeAttr(serverId)}"
+                       data-test="cfg-${prefix}serverId">
+                <input type="hidden" name="${prefix}objectName" value="${escapeAttr(objectName)}"
+                       data-test="cfg-${prefix}objectName">
+            </div>
         </div>
         <div class="widget-config-field">
             <label>${escapeHtml(sensorLabel)}</label>
