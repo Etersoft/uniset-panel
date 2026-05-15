@@ -115,6 +115,7 @@ Errors:
 
 Полу-успехи:
 - Если конкретный server недоступен и cache'а имён нет — `objects: []`, `connected: false` (запись server присутствует, чтобы UI знал о его существовании).
+- Если конкретный server недоступен, но name-cache прогрет — **MVP:** `objects: []`, `connected: false`. Backend хранит только names-cache, type-cache отсутствует, поэтому фильтрация по типу `IONotifyController` требует живого `GetObjectData(name)`. Когда сервер уйдёт offline после прогрева, имена есть, но проверить `ObjectType` нельзя — все имена пропускаются. **Follow-up:** добавить `typesCacheByServer` (`map[serverID]map[name]ObjectType`), чтобы кэшированные IONC имена возвращались с `connected:false`. Спросить maintainer'а, если эта функциональность станет hot-path.
 - Если `GetObjectData(name)` падает на отдельном объекте — этот объект пропускается, остальные включаются.
 - Порядок серверов в `servers` совпадает с `Order` из `/api/all-objects`.
 
@@ -193,7 +194,7 @@ function getIONCEntries() {
 | Событие | Поведение |
 |---|---|
 | Открытие config-формы | `ensureIONCRegistry()`. Preselect: если `(serverId, objectName)` из config есть в registry — input.value = `displayString`, hidden = config. Если нет (orphan) — input.value = `${objectName} @ ${serverId} (offline)`, `data-orphan="true"` на input. |
-| Single match (registry entries.length === 1) | input preselected, `disabled = true`, hint "только 1 IONC@server в системе". ↻ остаётся активной. |
+| Single match (registry entries.length === 1) | **Только если config пустой** (`hiddenServer.value === ''`, новый widget): input preselected, `disabled = true`, hint "только 1 IONC@server в системе". Если у widget'а уже есть сохранённый `serverId` (даже orphan) — auto-fill **не выполняется** (Persistence Invariant), input остаётся enabled, пользователь может выбрать вручную. ↻ остаётся активной в обоих случаях. |
 | Focus | Открывается dropdown. `★` маркер у preselected. Online — обычный цвет, offline — opacity 0.55 + ⚠ пометка. Online first, alphabetical. |
 | Ввод текста | Debounce 100ms. Substring-match по lowercase'нутому `displayString`. Highlighted match'и в items (re-use journal pattern: split raw → escape → wrap). |
 | ↑↓/Enter/Esc | Стандартная навигация. Pick → input.value = displayString, hidden inputs заполняются, dropdown закрывается, **`change` event** на hidden objectName и serverId триггерит существующий cascade в `initSensorBindingHandlers` (который сбрасывает sensor). |
@@ -292,6 +293,13 @@ function getIONCEntries() {
 - Не перепривязывает к "похожему" объекту по имени.
 - Не выкидывает widget из dashboard'а.
 - Не показывает диалог "ваш widget сломан, удалить?" — пользователь сам решает что делать.
+- **Не выполняет single-match auto-fill для widget'а с уже сохранённым `serverId`** — даже если в registry ровно 1 entry и он не совпадает с config'ом, мы НЕ переписываем привязку. Auto-fill+disabled срабатывает только для нового widget'а без `serverId` (`hiddenServer.value === ''`).
+- **Не трогает hidden inputs (`serverId`/`objectName`/`sensorId`) при manual edit или blur revert.** Видимый текст в combo input может быть восстановлен (см. blur revert ниже), но hidden поля меняются исключительно через явный `pickItem` пользователя.
+
+**Manual edit и blur revert:**
+- Пока пользователь набирает текст без выбора item'а из dropdown'а — hidden inputs остаются на последнем committed значении.
+- Если набранный текст не матчит ни одного `displayString` — `data-invalid="true"` на input (визуальный hint).
+- На blur (после закрытия dropdown'а) видимый текст восстанавливается до `lastCommittedDisplay` (то, что было после последнего successful pick или preselect). `data-invalid` снимается.
 
 **UI hints для orphan widget'ов** (visual только, не deletion):
 - В dashboard runtime: `data-orphan-binding="true"` на widget container — opacity 0.7, tooltip с указанием на disconnected sensor.
