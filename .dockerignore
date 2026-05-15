@@ -1,0 +1,35 @@
+.git
+.gitignore
+.gitattributes
+
+# Local agent oversight
+.claude/
+.superpowers/
+
+# Node modules cache for tests (mounted as volumes, not needed in build context)
+node_modules/
+.node_modules/
+tests/node_modules/
+tests/unit/node_modules/
+tests/mock-server/node_modules/
+tests/mock-server-2/node_modules/
+
+# Test artifacts
+tests/test-results/
+tests/playwright-report/
+.playwright-mcp/
+
+# Local screenshots and IDE
+*.png
+*.jpg
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Built binaries
+uniset-panel
+uniset-panel-go
+
+# Memory / docs build artifacts
+docs/.build/
