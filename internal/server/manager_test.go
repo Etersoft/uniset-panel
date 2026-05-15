@@ -420,7 +420,14 @@ func TestManagerGetAllObjectsByType_basic(t *testing.T) {
 	}
 }
 
-func TestManagerGetAllObjectsByType_disconnectedWithCache(t *testing.T) {
+// TestManagerGetAllObjectsByType_disconnectedNamesCachedNoTypeCache документирует
+// текущее поведение при disconnected сервере с прогретым **name-cache** (без
+// type-cache на бэке): server entry присутствует с Connected=false, но Objects=[],
+// потому что для проверки ObjectType нужен живой GetObjectData.
+//
+// Если в будущем добавим typesCacheByServer — этот тест должен будет проверять,
+// что cached IONC objects возвращаются (Objects=[name,...]).
+func TestManagerGetAllObjectsByType_disconnectedNamesCachedNoTypeCache(t *testing.T) {
 	srv := startMockServerWithTypes(map[string]string{
 		"SharedMemory": "IONotifyController",
 	})
@@ -431,12 +438,12 @@ func TestManagerGetAllObjectsByType_disconnectedWithCache(t *testing.T) {
 		t.Fatalf("AddServer: %v", err)
 	}
 
-	// Прогреваем кэш реальным вызовом
+	// Прогреваем name-cache реальным вызовом
 	if _, err := mgr.GetAllObjectsByType("IONotifyController"); err != nil {
 		t.Fatalf("warm-up call: %v", err)
 	}
 
-	// Закрываем сервер — теперь GetObjects будет ошибаться, но cache остался
+	// Закрываем сервер — теперь GetObjects будет ошибаться, но name-cache остался
 	srv.Close()
 
 	got, err := mgr.GetAllObjectsByType("IONotifyController")
@@ -449,11 +456,9 @@ func TestManagerGetAllObjectsByType_disconnectedWithCache(t *testing.T) {
 	if got[0].Connected {
 		t.Error("Connected: want false (server is down)")
 	}
-	// Без cache бэкенда типов: после disconnect мы не можем проверить ObjectType,
-	// поэтому для disconnected с cache из имён получаем пустой Objects (это OK, документировано).
-	// Если в будущем добавим typesCacheByServer — этот assertion заменится на
-	// проверку что cached IONC objects возвращаются.
-	t.Logf("disconnected entry: %+v", got[0])
+	if len(got[0].Objects) != 0 {
+		t.Errorf("Objects: want [] (no type-cache), got %v", got[0].Objects)
+	}
 }
 
 func TestManagerGetAllObjectsByType_disconnectedNoCache(t *testing.T) {

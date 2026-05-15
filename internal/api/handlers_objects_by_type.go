@@ -21,11 +21,10 @@ func (h *Handlers) GetObjectsByType(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, http.StatusBadRequest, "type parameter is required")
 		return
 	}
-	servers, err := h.serverMgr.GetAllObjectsByType(typeFilter)
-	if err != nil {
-		h.writeError(w, http.StatusBadGateway, err.Error())
-		return
-	}
+	// GetAllObjectsByType err'ит только при empty typeFilter, который мы уже отфильтровали выше —
+	// поэтому err тут unreachable. Если future-добавление backend-cache начнёт error'ить — добавить
+	// 502 ветку обратно.
+	servers, _ := h.serverMgr.GetAllObjectsByType(typeFilter)
 	h.writeJSON(w, map[string]interface{}{
 		"type":    typeFilter,
 		"servers": servers,
