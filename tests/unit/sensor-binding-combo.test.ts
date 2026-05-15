@@ -341,6 +341,69 @@ describe('setupIONCComboAutocomplete', () => {
         expect(fetchMock).toHaveBeenCalled();
     });
 
+    it('refresh disables input while fetch is in-flight, restores after', async () => {
+        // Slow fetch — controlled by external resolver
+        let resolveFetch: (v: any) => void = () => {};
+        const fetchPromise = new Promise<any>((resolve) => { resolveFetch = resolve; });
+        const fetchMock = vi.fn(() => fetchPromise);
+        vi.stubGlobal('fetch', fetchMock);
+
+        const form = mountForm({ serverId: 's1', objectName: 'SharedMemory' });
+        (globalThis as any).setupIONCComboAutocomplete(form, '');
+        const input = form.querySelector<HTMLInputElement>('.ionc-combo-input')!;
+        const refreshBtn = form.querySelector<HTMLButtonElement>('.ionc-combo-refresh')!;
+
+        // Pre-condition: input enabled (multiple entries seeded)
+        expect(input.disabled).toBe(false);
+
+        refreshBtn.click();
+        // Microtask flush so click handler can set disabled=true before await on fetch.
+        await Promise.resolve();
+        expect(input.disabled).toBe(true);
+
+        // Resolve fetch — refresh handler completes, restores enabled state.
+        resolveFetch({
+            ok: true,
+            json: async () => ({ type: 'IONotifyController', servers: [
+                { serverId: 's1', serverName: 'Server1', connected: true, objects: ['SharedMemory', 'IMIT.MBI'] },
+                { serverId: 's2', serverName: 'Server2', connected: false, objects: ['SharedMemory'] },
+            ] }),
+        });
+        // Allow ensureIONCRegistry .then + finally + applySingleMatchOrPreselect to run.
+        await new Promise(r => setTimeout(r, 10));
+
+        // Multiple entries → applySingleMatchOrPreselect leaves input enabled.
+        expect(input.disabled).toBe(false);
+    });
+
+    it('refresh keeps input disabled when single-match remains after refresh', async () => {
+        // Start single-match → input.disabled = true.
+        const reg = (globalThis as any).state.ioncRegistry;
+        reg.servers.clear();
+        reg.servers.set('only', { serverName: 'Only', connected: true, objects: ['OnlyIONC'] });
+        reg.fetchedAt = Date.now();
+
+        const form = mountForm({});
+        (globalThis as any).setupIONCComboAutocomplete(form, '');
+        const input = form.querySelector<HTMLInputElement>('.ionc-combo-input')!;
+        const refreshBtn = form.querySelector<HTMLButtonElement>('.ionc-combo-refresh')!;
+        expect(input.disabled).toBe(true);
+
+        // Refresh returns same single entry → still single-match → still disabled.
+        const fetchMock = vi.fn(async () => ({
+            ok: true,
+            json: async () => ({ type: 'IONotifyController', servers: [
+                { serverId: 'only', serverName: 'Only', connected: true, objects: ['OnlyIONC'] },
+            ] }),
+        }));
+        vi.stubGlobal('fetch', fetchMock);
+
+        refreshBtn.click();
+        await new Promise(r => setTimeout(r, 10));
+
+        expect(input.disabled).toBe(true);
+    });
+
     it('single match does NOT overwrite existing binding (Persistence Invariant)', () => {
         // Reset registry to single entry
         const reg = (globalThis as any).state.ioncRegistry;

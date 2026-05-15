@@ -276,25 +276,36 @@ function setupIONCComboAutocomplete(form, prefix = '') {
     function applySingleMatchOrPreselect() {
         const all = getIONCEntries();
         if (all.length === 1) {
+            const only = all[0];
             // Persistence Invariant: existing binding is user property — never overwrite automatically.
             // Single-match auto-fill только когда config пустой (новый widget без серверной привязки).
             // serverId — достаточный discriminator: новый widget не имеет serverId,
             // а существующий (даже orphan) всегда имеет сохранённый serverId.
             if (hiddenServer.value) {
-                input.disabled = false;
-                input.title = '';
+                // Если сохранённый binding совпадает с единственной entry registry —
+                // disable input (никакой альтернативы пользователь выбрать не может,
+                // даже после refresh). Иначе оставляем enabled, чтобы можно было
+                // перейти на правильную entry / orphan-fallback оставить виден.
+                const matchesOnly = hiddenServer.value === only.serverId
+                    && hiddenObject.value === only.objectName;
+                if (matchesOnly) {
+                    input.disabled = true;
+                    input.title = 'Только 1 IONC@server в системе';
+                } else {
+                    input.disabled = false;
+                    input.title = '';
+                }
                 preselectFromConfig();
                 return;
             }
-            const entry = all[0];
-            const displayValue = formatIONCComboValue(entry, { autoOfflineSuffix: true });
+            const displayValue = formatIONCComboValue(only, { autoOfflineSuffix: true });
             input.value = displayValue;
-            if (!entry.connected) input.dataset.orphan = 'true';
+            if (!only.connected) input.dataset.orphan = 'true';
             input.disabled = true;
             input.title = 'Только 1 IONC@server в системе';
             commit(displayValue);
-            hiddenServer.value = entry.serverId;
-            hiddenObject.value = entry.objectName;
+            hiddenServer.value = only.serverId;
+            hiddenObject.value = only.objectName;
             hiddenServer.dispatchEvent(new Event('change', { bubbles: true }));
             hiddenObject.dispatchEvent(new Event('change', { bubbles: true }));
             return;
@@ -372,13 +383,21 @@ function setupIONCComboAutocomplete(form, prefix = '') {
     if (refreshBtn) {
         refreshBtn.addEventListener('click', async () => {
             if (state.ioncRegistry.isFetching) return;
+            // Snapshot prior disabled state — на случай fetch error мы возвращаем
+            // input в исходное состояние (single-match disabled или enabled).
+            // На success applySingleMatchOrPreselect самостоятельно перезапишет disabled.
+            const wasDisabled = input.disabled;
             refreshBtn.classList.add('spinning');
+            input.disabled = true;
             try {
                 await ensureIONCRegistry({ force: true });
                 applySingleMatchOrPreselect();
                 if (dropdown) applyFilter(input.value || '');
             } catch (err) {
                 console.warn('IONC registry refresh failed:', err);
+                // На fetch error applySingleMatchOrPreselect не вызвана —
+                // restore prior disabled state, чтобы не оставить input залипшим.
+                input.disabled = wasDisabled;
             } finally {
                 refreshBtn.classList.remove('spinning');
             }
