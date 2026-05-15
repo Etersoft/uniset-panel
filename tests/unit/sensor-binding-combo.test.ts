@@ -77,3 +77,129 @@ describe('parseSensorBindingFields — preserves contract', () => {
         expect(parsed).toEqual({ serverId: 'srv7', objectName: 'MyIONC', sensor: 'Temp_S', sensorId: 123 });
     });
 });
+
+describe('setupIONCComboAutocomplete', () => {
+    beforeEach(() => {
+        loadModule();
+        document.body.innerHTML = '';
+        seedRegistry([
+            { serverId: 's1', serverName: 'Server1', connected: true,  objects: ['SharedMemory', 'IMIT.MBI'] },
+            { serverId: 's2', serverName: 'Server2', connected: false, objects: ['SharedMemory'] },
+        ]);
+    });
+
+    afterEach(() => vi.restoreAllMocks());
+
+    function mountForm(config: any = {}) {
+        const html = (globalThis as any).renderSensorBindingFields(config, {});
+        document.body.innerHTML = `<form>${html}</form>`;
+        const form = document.querySelector('form')! as HTMLFormElement;
+        return form;
+    }
+
+    it('preselects display string when (serverId, objectName) found in registry', () => {
+        const form = mountForm({ serverId: 's1', objectName: 'SharedMemory' });
+        (globalThis as any).setupIONCComboAutocomplete(form, '');
+        const input = form.querySelector<HTMLInputElement>('.ionc-combo-input')!;
+        expect(input.value).toBe('SharedMemory @ Server1');
+        expect(input.dataset.orphan).toBeUndefined();
+    });
+
+    it('marks orphan when pair not in registry', () => {
+        const form = mountForm({ serverId: 'unknown', objectName: 'GhostObj' });
+        (globalThis as any).setupIONCComboAutocomplete(form, '');
+        const input = form.querySelector<HTMLInputElement>('.ionc-combo-input')!;
+        expect(input.value).toBe('GhostObj @ unknown (offline)');
+        expect(input.dataset.orphan).toBe('true');
+    });
+
+    it('focus opens dropdown with all entries online-first', () => {
+        const form = mountForm({ serverId: 's1', objectName: 'SharedMemory' });
+        (globalThis as any).setupIONCComboAutocomplete(form, '');
+        const input = form.querySelector<HTMLInputElement>('.ionc-combo-input')!;
+        input.dispatchEvent(new FocusEvent('focus'));
+        const items = document.querySelectorAll('.ionc-combo-item');
+        expect(items.length).toBe(3);
+        expect(items[0].textContent).toContain('SharedMemory @ Server1');
+    });
+
+    it('typing filters by substring (matches both halves of @)', async () => {
+        const form = mountForm({ serverId: 's1', objectName: 'SharedMemory' });
+        (globalThis as any).setupIONCComboAutocomplete(form, '');
+        const input = form.querySelector<HTMLInputElement>('.ionc-combo-input')!;
+        input.dispatchEvent(new FocusEvent('focus'));
+        input.value = 'IMIT';
+        input.dispatchEvent(new Event('input'));
+        await new Promise(r => setTimeout(r, 150));
+        const items = document.querySelectorAll('.ionc-combo-item');
+        expect(items.length).toBe(1);
+        expect(items[0].textContent).toContain('IMIT.MBI @ Server1');
+    });
+
+    it('matches by server name half', async () => {
+        const form = mountForm({ serverId: 's1', objectName: 'SharedMemory' });
+        (globalThis as any).setupIONCComboAutocomplete(form, '');
+        const input = form.querySelector<HTMLInputElement>('.ionc-combo-input')!;
+        input.dispatchEvent(new FocusEvent('focus'));
+        input.value = 'Server2';
+        input.dispatchEvent(new Event('input'));
+        await new Promise(r => setTimeout(r, 150));
+        const items = document.querySelectorAll('.ionc-combo-item');
+        expect(items.length).toBe(1);
+        expect(items[0].textContent).toContain('Server2');
+    });
+
+    it('pickItem fills hidden inputs and fires change event', () => {
+        const form = mountForm({ serverId: 's1', objectName: 'SharedMemory' });
+        (globalThis as any).setupIONCComboAutocomplete(form, '');
+        const hiddenServer = form.querySelector<HTMLInputElement>('input[name="serverId"]')!;
+        const hiddenObject = form.querySelector<HTMLInputElement>('input[name="objectName"]')!;
+
+        let changeFired = 0;
+        hiddenServer.addEventListener('change', () => changeFired++);
+        hiddenObject.addEventListener('change', () => changeFired++);
+
+        const input = form.querySelector<HTMLInputElement>('.ionc-combo-input')!;
+        input.dispatchEvent(new FocusEvent('focus'));
+        const items = document.querySelectorAll('.ionc-combo-item');
+        const target = Array.from(items).find(el => el.textContent?.includes('IMIT.MBI'))! as HTMLElement;
+        target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+
+        expect(hiddenServer.value).toBe('s1');
+        expect(hiddenObject.value).toBe('IMIT.MBI');
+        expect(input.value).toBe('IMIT.MBI @ Server1');
+        expect(changeFired).toBeGreaterThanOrEqual(2);
+    });
+
+    it('refresh button triggers force fetch', async () => {
+        const fetchMock = vi.fn(async () => ({
+            ok: true,
+            json: async () => ({ type: 'IONotifyController', servers: [
+                { serverId: 's1', serverName: 'Server1', connected: true, objects: ['SharedMemory'] },
+            ] }),
+        }));
+        vi.stubGlobal('fetch', fetchMock);
+
+        const form = mountForm({ serverId: 's1', objectName: 'SharedMemory' });
+        (globalThis as any).setupIONCComboAutocomplete(form, '');
+        const refreshBtn = form.querySelector<HTMLButtonElement>('.ionc-combo-refresh')!;
+        refreshBtn.click();
+        await new Promise(r => setTimeout(r, 0));
+        await new Promise(r => setTimeout(r, 0));
+        expect(fetchMock).toHaveBeenCalled();
+    });
+
+    it('single match → input disabled + auto-fill', () => {
+        const reg = (globalThis as any).state.ioncRegistry;
+        reg.servers.clear();
+        reg.servers.set('only', { serverName: 'Only', connected: true, objects: ['OnlyIONC'] });
+
+        const form = mountForm({});
+        (globalThis as any).setupIONCComboAutocomplete(form, '');
+        const input = form.querySelector<HTMLInputElement>('.ionc-combo-input')!;
+        const hiddenServer = form.querySelector<HTMLInputElement>('input[name="serverId"]')!;
+        expect(input.value).toBe('OnlyIONC @ Only');
+        expect(input.disabled).toBe(true);
+        expect(hiddenServer.value).toBe('only');
+    });
+});

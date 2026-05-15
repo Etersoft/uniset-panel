@@ -79,6 +79,216 @@ function findIONCEntry(serverId, objectName) {
     };
 }
 
+// setupIONCComboAutocomplete — wiring combobox'а IONC@server.
+// Привязывает к input/hidden/refresh-кнопке. Идемпотентен через
+// form.dataset[`ioncCombo_${prefix}_wired`].
+function setupIONCComboAutocomplete(form, prefix = '') {
+    const flagKey = `ioncCombo_${prefix.replace(/[^a-z0-9]/gi, '_')}_wired`;
+    if (form.dataset[flagKey] === 'true') return;
+    form.dataset[flagKey] = 'true';
+
+    const input        = form.querySelector(`[name="${prefix}ioncCombo"]`);
+    const hiddenServer = form.querySelector(`[name="${prefix}serverId"]`);
+    const hiddenObject = form.querySelector(`[name="${prefix}objectName"]`);
+    const refreshBtn   = input?.closest('.ionc-combo-wrap')?.querySelector('.ionc-combo-refresh');
+    if (!input || !hiddenServer || !hiddenObject) return;
+
+    let dropdown = null;
+    let debounceTimer = null;
+    let activeIndex = -1;
+    let currentItems = [];
+    let currentFilter = '';
+
+    function destroyDropdown() {
+        if (dropdown) { dropdown.remove(); dropdown = null; }
+        activeIndex = -1;
+        currentItems = [];
+    }
+
+    function highlightMatch(text, filterLower) {
+        if (!filterLower) return escapeHtml(text);
+        const lower = text.toLowerCase();
+        const idx = lower.indexOf(filterLower);
+        if (idx < 0) return escapeHtml(text);
+        return `${escapeHtml(text.slice(0, idx))}<mark>${escapeHtml(text.slice(idx, idx + filterLower.length))}</mark>${escapeHtml(text.slice(idx + filterLower.length))}`;
+    }
+
+    function renderItems() {
+        if (!dropdown) return;
+        if (currentItems.length === 0) {
+            dropdown.innerHTML = '<div class="ionc-combo-empty">Нет совпадений</div>';
+            return;
+        }
+        const filterLower = currentFilter.toLowerCase();
+        const itemsHtml = currentItems.map((it, idx) => {
+            const cls = [
+                'ionc-combo-item',
+                idx === activeIndex ? 'active' : '',
+                it.connected ? '' : 'offline',
+                hiddenServer.value === it.serverId && hiddenObject.value === it.objectName ? 'preselected' : '',
+            ].filter(Boolean).join(' ');
+            const offlineMark = it.connected ? '' : '<span class="ionc-combo-offline-mark">⚠ offline</span>';
+            const star = (hiddenServer.value === it.serverId && hiddenObject.value === it.objectName)
+                ? '<span class="ionc-combo-star">★</span>' : '';
+            return `<div class="${cls}" data-idx="${idx}">
+                ${star}<span class="ionc-combo-display">${highlightMatch(it.displayString, filterLower)}</span>${offlineMark}
+            </div>`;
+        }).join('');
+        dropdown.innerHTML = itemsHtml;
+        dropdown.querySelectorAll('.ionc-combo-item').forEach(el => {
+            el.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                pickItem(parseInt(el.dataset.idx, 10));
+            });
+        });
+    }
+
+    function buildDropdown() {
+        if (dropdown) return;
+        dropdown = document.createElement('div');
+        dropdown.className = 'ionc-combo-dropdown';
+        const rect = input.getBoundingClientRect();
+        dropdown.style.position = 'fixed';
+        dropdown.style.left = `${rect.left}px`;
+        dropdown.style.top = `${rect.bottom + 2}px`;
+        dropdown.style.width = `${rect.width}px`;
+        dropdown.style.zIndex = String(SENSOR_AUTOCOMPLETE_DROPDOWN_Z_INDEX);
+        document.body.appendChild(dropdown);
+    }
+
+    function applyFilter(text) {
+        currentFilter = text;
+        const all = getIONCEntries();
+        let filtered;
+        if (!text) {
+            filtered = all;
+        } else {
+            const t = text.toLowerCase();
+            filtered = all.filter(it => it.displayString.toLowerCase().includes(t));
+        }
+        // Preselected item (current binding) sorts first for quick re-selection.
+        const sid = hiddenServer.value;
+        const oid = hiddenObject.value;
+        if (sid && oid) {
+            filtered = filtered.slice().sort((a, b) => {
+                const aMatch = (a.serverId === sid && a.objectName === oid) ? -1 : 0;
+                const bMatch = (b.serverId === sid && b.objectName === oid) ? -1 : 0;
+                if (aMatch !== bMatch) return aMatch - bMatch;
+                return 0; // preserve existing order (online-first + alpha from getIONCEntries)
+            });
+        }
+        currentItems = filtered;
+        activeIndex = -1;
+        renderItems();
+    }
+
+    function pickItem(idx) {
+        const item = currentItems[idx];
+        if (!item) return;
+        input.value = item.displayString;
+        delete input.dataset.orphan;
+        hiddenServer.value = item.serverId;
+        hiddenObject.value = item.objectName;
+        hiddenServer.dispatchEvent(new Event('change', { bubbles: true }));
+        hiddenObject.dispatchEvent(new Event('change', { bubbles: true }));
+        destroyDropdown();
+    }
+
+    function preselectFromConfig() {
+        const sid = hiddenServer.value;
+        const oname = hiddenObject.value;
+        if (!sid || !oname) return;
+        const entry = findIONCEntry(sid, oname);
+        if (entry) {
+            input.value = entry.displayString;
+            delete input.dataset.orphan;
+        } else {
+            input.value = `${oname} @ ${sid} (offline)`;
+            input.dataset.orphan = 'true';
+        }
+    }
+
+    function applySingleMatchOrPreselect() {
+        const all = getIONCEntries();
+        if (all.length === 1) {
+            const it = all[0];
+            input.value = it.displayString;
+            input.disabled = true;
+            input.title = 'Только 1 IONC@server в системе';
+            hiddenServer.value = it.serverId;
+            hiddenObject.value = it.objectName;
+            hiddenServer.dispatchEvent(new Event('change', { bubbles: true }));
+            hiddenObject.dispatchEvent(new Event('change', { bubbles: true }));
+            return;
+        }
+        input.disabled = false;
+        input.title = '';
+        preselectFromConfig();
+    }
+
+    if (state.ioncRegistry.servers.size > 0) {
+        applySingleMatchOrPreselect();
+    } else {
+        ensureIONCRegistry().then(applySingleMatchOrPreselect).catch(() => {
+            preselectFromConfig();
+        });
+    }
+
+    input.addEventListener('focus', () => {
+        if (input.disabled) return;
+        buildDropdown();
+        applyFilter('');
+    });
+
+    input.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            buildDropdown();
+            applyFilter(input.value || '');
+        }, IONC_COMBO_DEBOUNCE_MS);
+    });
+
+    input.addEventListener('keydown', (e) => {
+        if (!dropdown || currentItems.length === 0) return;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            activeIndex = Math.min(activeIndex + 1, currentItems.length - 1);
+            renderItems();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            activeIndex = Math.max(activeIndex - 1, 0);
+            renderItems();
+        } else if (e.key === 'Enter') {
+            if (activeIndex >= 0) {
+                e.preventDefault();
+                pickItem(activeIndex);
+            }
+        } else if (e.key === 'Escape') {
+            destroyDropdown();
+        }
+    });
+
+    input.addEventListener('blur', () => {
+        setTimeout(destroyDropdown, SENSOR_AUTOCOMPLETE_BLUR_DELAY_MS);
+    });
+
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', async () => {
+            if (state.ioncRegistry.isFetching) return;
+            refreshBtn.classList.add('spinning');
+            try {
+                await ensureIONCRegistry({ force: true });
+                applySingleMatchOrPreselect();
+                if (dropdown) applyFilter(input.value || '');
+            } catch (err) {
+                console.warn('IONC registry refresh failed:', err);
+            } finally {
+                refreshBtn.classList.remove('spinning');
+            }
+        });
+    }
+}
+
 function renderSensorBindingFields(config = {}, opts = {}) {
     const prefix = opts.fieldPrefix || '';
     const sensorLabel = opts.sensorLabel || 'Sensor';
@@ -431,6 +641,7 @@ function _migrateBindingPure(cfg, sensorRegistry) {
 }
 
 if (typeof globalThis !== 'undefined') {
+    globalThis.setupIONCComboAutocomplete = setupIONCComboAutocomplete;
     globalThis.renderSensorBindingFields = renderSensorBindingFields;
     globalThis.parseSensorBindingFields  = parseSensorBindingFields;
     globalThis.renderLabelField          = renderLabelField;
