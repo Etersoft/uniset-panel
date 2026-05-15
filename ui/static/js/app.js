@@ -2029,8 +2029,12 @@ function _widgetTypeDisplayName(type) {
 }
 
 function renderZonesReusePicker(currentWidgetType, currentDashboardId, currentWidgetId) {
-    const dashSources = getDashboardZoneSources(currentDashboardId, currentWidgetId || '');
+    const dashSourcesAll = getDashboardZoneSources(currentDashboardId, currentWidgetId || '');
     const history = getZonesHistory();
+    // Дедуп: если zone-set уже есть в Recent — не дублировать его ниже в
+    // type-блоках (Setpoint/Gauge/Level), иначе тот же chip виден дважды.
+    const historyKeys = new Set(history.map(h => canonicalizeZones(h.zones)));
+    const dashSources = dashSourcesAll.filter(src => !historyKeys.has(canonicalizeZones(src.zones)));
     if (dashSources.length === 0 && history.length === 0) return '';
 
     // Group dashboard sources by widget type

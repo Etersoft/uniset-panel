@@ -6135,13 +6135,16 @@ button.rotate-quick-btn:active {
 .group-divider { flex: 1; height: 1px; background: #374151; }
 
 .zone-chip {
-    display: inline-flex;
+    /* Один chip на строку — иначе при двух подряд в узком диалоге
+       второй wrapping'ится но zone-bar (flex-shrink:0) обрезается
+       за правым краем, теряется правая часть диапазона. */
+    display: flex;
     align-items: center;
     background: #111827;
     border: 1px solid #374151;
     border-radius: 4px;
     padding: 3px 6px 3px 4px;
-    margin: 0 4px 4px 0;
+    margin: 0 0 4px 0;
     cursor: pointer;
     transition: border-color 0.12s, background 0.12s, transform 0.08s;
     gap: 6px;

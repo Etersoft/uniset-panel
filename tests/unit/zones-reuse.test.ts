@@ -280,6 +280,22 @@ describe('renderZonesReusePicker', () => {
         expect(Array.isArray(parsed)).toBe(true);
         expect(parsed.length).toBeGreaterThan(0);
     });
+
+    it('dedups dashboard sources against Recent — zones already in history not shown again in type-blocks', () => {
+        // Same zone-set as wA on dash1 (color case differs; canonical key matches)
+        addZonesToHistory([{ from: 0, to: 100, color: '#AAA' }], 'gauge');
+        const html = renderZonesReusePicker('gauge', 'dash1', '');
+        const host = document.createElement('div');
+        host.innerHTML = html;
+        // Recent group present
+        expect(host.querySelector('.group-recent')).not.toBeNull();
+        // wA's zones are now ONLY in Recent — no second chip with sensor 'Temp_S' under Gauge type
+        const sourceLabels = Array.from(host.querySelectorAll('.chip-source'))
+            .map(el => el.textContent || '');
+        expect(sourceLabels.includes('Temp_S')).toBe(false);
+        // wB (different zones) still visible under Level
+        expect(sourceLabels.includes('Tank_A')).toBe(true);
+    });
 });
 
 declare const applyZonesToEditor: (form: Element, zones: any) => void;
