@@ -59,7 +59,11 @@ Notes:
 
 ## Fallback Behavior
 
-When no groups are configured (or all groups resolve to empty), the sidebar renders legacy sections (Launchers, Objects, Journals, Dashboards, Servers) as before. This ensures backward compatibility.
+When no groups are configured, the backend default resolver returns one
+unnamed group containing all entities (see `internal/sidebar/resolver.go`).
+The frontend always renders groups; legacy hardcoded sections are hidden
+(see `ui/static/js/src/99-init.js`). Backward compatibility is maintained
+through the unnamed-group fallback, not by re-enabling legacy sections.
 
 ## Non-Goals (Current Implementation)
 

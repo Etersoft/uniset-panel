@@ -447,9 +447,9 @@ Write-only momentary/pulse кнопка для команд (RESET, START, STOP,
 
 | Стиль | Назначение |
 |-------|------------|
-| `flat` (default, 2×1) | Material primary blue. Для group of buttons, частые действия |
-| `mushroom` (2×2) | SCADA-classic круглая красная объёмная. Для emergency / mode switches (STOP, EMERGENCY) |
-| `pill` (2×1) | Minimal outline pill, заполняется при нажатии. Для частых маловажных действий (ACK ALARM) |
+| `flat` (default, 3×2) | Material primary blue. Для group of buttons, частые действия |
+| `mushroom` (3×3) | SCADA-classic круглая красная объёмная. Для emergency / mode switches (STOP, EMERGENCY) |
+| `pill` (3×1) | Minimal outline pill, заполняется при нажатии. Для частых маловажных действий (ACK ALARM) |
 
 ![PushButton styles](images/widget-pushbutton.png)
 
@@ -464,7 +464,7 @@ Write-only momentary/pulse кнопка для команд (RESET, START, STOP,
 | `valueOn` / `valueOff` | Числа «нажато» / «отпущено» (default 1 / 0) |
 | `pulseWidth` | Длительность импульса в ms для pulse mode (default 500) |
 | `label` | Подпись на кнопке |
-| `requireConfirmation` | В `momentary` НЕ работает (warning в форме) |
+| `requireConfirmation` | В `momentary` применяется только к ON write; release/OFF идёт без повторного confirm (иначе actuator висел бы в ON при отказе подтверждения). Warning в форме поясняет |
 
 **Поведение:**
 - `pulse` mode: click → POST valueOn → визуальная вспышка (yellow flash 300ms) → wait pulseWidth → POST valueOff. Второй POST через `_writeValueRaw` (без confirm dialog).
@@ -587,7 +587,7 @@ Vertical orientation: top = max, bottom = min. Drag сверху вниз уме
 
 ## Цветовые зоны
 
-Цветовые зоны позволяют визуально выделять диапазоны значений на виджетах Gauge и Level.
+Цветовые зоны позволяют визуально выделять диапазоны значений на виджетах Gauge, Level и Setpoint (slider style).
 
 ### Создание зон в диалоге настроек
 

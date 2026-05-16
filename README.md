@@ -26,11 +26,12 @@
 
 ## Скриншоты
 
-### Dashboard с виджетами
-![Dashboard](docs/images/dashboard-full.png)
+Основная функциональность uniset-panel — мониторинг и управление uniset
+объектами и процессами. Dashboards — опциональная надстройка для удобного
+отображения часто используемых датчиков.
 
-### Мониторинг с графиками
-![Главная страница](docs/images/main-page.png)
+### Страница объекта (IONC SharedMemory)
+![SharedMemory](docs/images/main-page.png)
 
 ### Таблица сенсоров
 ![Сенсоры](docs/images/sensors-table.png)
@@ -45,6 +46,9 @@
 | Control mode | Read-only mode |
 |:---:|:---:|
 | ![Control](docs/images/control.png) | ![Read-only](docs/images/read_only_mode.png) |
+
+### Dashboard с виджетами
+![Dashboard](docs/images/dashboard-full.png)
 
 **Документация:**
 - [Dashboards](docs/dashboards.md) — настройка виджетов и панелей
@@ -84,6 +88,7 @@ go build -o uniset-panel ./cmd/server
 | `--dashboards-dir` | - | Директория с серверными дашбордами |
 | `--journal-url` | - | ClickHouse URL для журналов (можно несколько раз) |
 | `--sm-url` | - | SharedMemory HTTP API URL |
+| `--sm-poll-interval` | `0` (= `--poll-interval`) | Интервал опроса SharedMemory (0 = использовать `--poll-interval`) |
 | `--launcher-url` | - | Launcher HTTP API URL (можно несколько) |
 | `--control-token` | - | Токен доступа для режима управления (можно несколько) |
 | `--control-timeout` | `60s` | Таймаут сессии управления |

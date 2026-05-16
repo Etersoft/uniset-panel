@@ -46,8 +46,8 @@ UniSet2 Processes (/api/v2/...) — https://etersoft.github.io/uniset2/
 | `internal/logger` | `logger.go` | Структурированное логирование (slog) |
 | `internal/logserver` | `client.go` | TCP клиент к LogServer uniset |
 | `internal/recording` | `recording.go` | Система записи истории в SQLite |
-| `internal/dashboard` | `dashboard.go` | Серверные дашборды |
-| `internal/journal` | `journal.go` | ClickHouse журналы |
+| `internal/dashboard` | `manager.go`, `types.go`, `client.go` | Серверные дашборды |
+| `internal/journal` | `manager.go`, `poller.go`, `types.go` | ClickHouse журналы |
 | `internal/ionc` | `poller.go` | IONC poller |
 | `internal/modbus` | `poller.go` | Modbus poller |
 | `internal/opcua` | `poller.go` | OPCUA poller |
@@ -152,7 +152,7 @@ make js-tests   # запуск в Docker (single + multi-server)
 ```
 
 Файлы:
-- `tests/single/` — тесты одного сервера (22 spec файла)
+- `tests/single/` — тесты одного сервера (32 spec файла)
   - `ui.spec.ts` — базовый UI
   - `ionotifycontroller.spec.ts` — IONotifyController рендерер
   - `opcuaexchange.spec.ts` — OPCUAExchange рендерер
@@ -175,8 +175,19 @@ make js-tests   # запуск в Docker (single + multi-server)
   - `sections.spec.ts` — секции и порядок
   - `sensors.spec.ts` — датчики
   - `status-autorefresh.spec.ts` — автообновление статуса
+  - `dashboard-active-base.spec.ts` — базовый класс активных виджетов
+  - `dashboard-active-toggle.spec.ts` — Toggle виджет
+  - `dashboard-active-button.spec.ts` — PushButton виджет
+  - `dashboard-active-setpoint.spec.ts` — Setpoint виджет
+  - `dashboard-active-generator.spec.ts` — Generator виджет
+  - `dashboard-widget-settings.spec.ts` — сохранение конфигурации виджетов
+  - `dashboard-widget-binding-multi-server.spec.ts` — multi-server binding виджетов
+  - `dashboard-widget-ionc-combo.spec.ts` — IONC combobox в config form
+  - `dashboard-multi-server-isolation.spec.ts` — изоляция SSE между серверами
+  - `dashboard-zones-reuse.spec.ts` — zones reuse picker
 - `tests/multi/` — тесты мульти-сервера
   - `server.spec.ts` — multi-server поддержка
+  - `server-reconnect.spec.ts` — переподключение к серверу
 - `tests/mock-server/server.js` — mock UniSet2 API
 - `tests/playwright.config.ts` — конфигурация Playwright
 
@@ -234,12 +245,12 @@ uniset-panel/
 ├── ui/
 │   ├── embed.go             # go:embed директива
 │   ├── static/
-│   │   ├── css/style.css    # стили (~8600 строк)
-│   │   └── js/app.js        # фронтенд (~22200 строк, 9 рендереров + миксины)
+│   │   ├── css/style.css    # стили (~9950 строк)
+│   │   └── js/app.js        # фронтенд (~24500 строк)
 │   └── templates/
 │       └── index.html       # главная страница
 ├── tests/
-│   ├── ui.spec.ts           # Playwright тесты
+│   ├── single/              # e2e тесты (32 spec файла)
 │   ├── mock-server/
 │   │   └── server.js        # mock сервер
 │   ├── playwright.config.ts
