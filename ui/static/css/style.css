@@ -5775,7 +5775,10 @@ td.ionc-col-add-buttons > *:last-child {
 
 /* Widget Config */
 .widget-config-dialog {
-    width: 480px;
+    /* 720px достаточно для setpoint с цветовыми зонами (раньше 480px было тесно
+     * и zones-editor не влезал). На узких экранах падает до 92vw, чтобы не
+     * выходить за края. */
+    width: min(720px, 92vw);
 }
 
 .widget-config-content {
@@ -6200,6 +6203,20 @@ button.rotate-quick-btn:active {
     flex-direction: column;
     gap: 8px;
 }
+
+/* Список зон с прокруткой — при 5+ зонах диалог иначе вытягивается за viewport
+ * и кнопки Apply/Cancel уезжают за нижний край. max-height + overflow держит
+ * editor в разумных пределах. */
+.zones-list {
+    max-height: 280px;
+    overflow-y: auto;
+    /* Отступ справа чтобы scrollbar не наезжал на zone-remove-btn */
+    padding-right: 4px;
+}
+.zones-list::-webkit-scrollbar { width: 6px; }
+.zones-list::-webkit-scrollbar-track { background: #0f172a; border-radius: 3px; }
+.zones-list::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+.zones-list::-webkit-scrollbar-thumb:hover { background: #4b5563; }
 
 .zones-header {
     display: flex;
