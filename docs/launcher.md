@@ -61,8 +61,10 @@ launchers:
 
 В боковой панели появляется секция **Launchers** со списком настроенных Launcher'ов. При клике открывается вкладка с таблицей процессов:
 
+![Launcher страница](images/launcher.png)
+
 - Процессы сгруппированы по группам (core, io, network и т.д.)
-- Цветовая индикация состояний: RUNNING (зелёный), STOPPED (серый), FAILED (красный), RESTARTING/STARTING/STOPPING (оранжевый)
+- Цветовая индикация состояний: RUNNING (зелёный), STOPPED (серый), FAILED (красный), RESTARTING/STARTING/STOPPING (оранжевый), COMPLETED (для oneshot-задач)
 - Кнопки управления: restart (↻), stop (■), start (▶)
 - Массовые операции Stop / Start / Restart / Reload в заголовке каждой группы
 - Фильтр процессов по имени
