@@ -235,6 +235,7 @@ services:
       --uniset-url http://demo-mock-server:9393
       --sm-url http://demo-mock-server:9393
       --dashboards-dir /app/dashboards
+      --control-token admin
       --js /app/ext/app.js
       --css /app/ext/style.css
     volumes:

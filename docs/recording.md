@@ -259,5 +259,5 @@ node generate-recording-screenshots.js
 
 Требует запущенный dev-viewer:
 ```bash
-docker-compose up dev-viewer -d
+docker compose up dev-viewer -d
 ```
