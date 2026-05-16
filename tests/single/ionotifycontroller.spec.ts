@@ -31,7 +31,8 @@ async function acquireControl(page) {
         w.state.control.isController = true;
         w.state.control.hasController = true;
         w.state.control.enabled = true;
-        if (w.renderControlStatus) w.renderControlStatus();
+        if (w.updateControlUI) w.updateControlUI();
+        if (w.updateAllControlButtons) w.updateAllControlButtons();
     });
 }
 
@@ -180,10 +181,10 @@ test.describe('IONotifyController (SharedMemory)', () => {
     const firstPinToggle = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first().locator('.pin-toggle');
     await firstPinToggle.click();
 
-    // Теперь должен отображаться только 1 датчик (закреплённый)
-    await page.waitForTimeout(100);
-    const filteredCount = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count();
-    expect(filteredCount).toBe(1);
+    // Теперь должен отображаться только 1 датчик (закреплённый) — toHaveCount polls автоматически
+    const pinnedRows = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row');
+    await expect(pinnedRows).toHaveCount(1, { timeout: 2000 });
+    const filteredCount = await pinnedRows.count();
   });
 
   test('should unpin all sensors on unpin-all button click', async ({ page }) => {
@@ -198,19 +199,17 @@ test.describe('IONotifyController (SharedMemory)', () => {
     // Закрепляем первый датчик
     const firstPinToggle = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first().locator('.pin-toggle');
     await firstPinToggle.click();
-    await page.waitForTimeout(100);
 
-    // Проверяем что показывается только 1
-    expect(await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count()).toBe(1);
+    // Проверяем что показывается только 1 — toHaveCount polls автоматически
+    await expect(page.locator('.ionc-sensors-tbody tr.ionc-sensor-row')).toHaveCount(1, { timeout: 2000 });
 
     // Кликаем "снять все"
     const unpinAllBtn = page.locator('.ionc-unpin-all');
     await unpinAllBtn.click();
-    await page.waitForTimeout(100);
 
-    // Все датчики должны снова отображаться
+    // Все датчики должны снова отображаться — toHaveCount polls автоматически
+    await expect(page.locator('.ionc-sensors-tbody tr.ionc-sensor-row')).toHaveCount(initialCount, { timeout: 2000 });
     const restoredCount = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count();
-    expect(restoredCount).toBe(initialCount);
 
     // Кнопка "снять все" должна скрыться
     await expect(unpinAllBtn).not.toBeVisible();
@@ -272,18 +271,21 @@ test.describe('IONotifyController (SharedMemory)', () => {
     const firstPinToggle = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').first().locator('.pin-toggle');
     const firstSensorId = await firstPinToggle.getAttribute('data-id');
     await firstPinToggle.click();
-    await page.waitForTimeout(100);
 
-    // Теперь показывается только 1 закреплённый датчик
+    // Теперь показывается только 1 закреплённый датчик — toHaveCount polls автоматически
+    await expect(page.locator('.ionc-sensors-tbody tr.ionc-sensor-row')).toHaveCount(1, { timeout: 2000 });
     const pinnedCount = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count();
-    expect(pinnedCount).toBe(1);
 
     // Вводим поисковый запрос — должны показаться все датчики, соответствующие фильтру
     const filterInput = page.locator('.filter-input');
     await filterInput.fill('Sensor');
-    await page.waitForTimeout(400); // debounce 300ms + buffer
 
     // После ввода фильтра показываются все найденные датчики (не только закреплённые)
+    // Ждём debounce через poll вместо fixed waitForTimeout(400)
+    await expect.poll(
+      async () => await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count(),
+      { timeout: 2000, intervals: [100, 200] }
+    ).toBeGreaterThan(1);
     const filteredCount = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count();
     expect(filteredCount).toBeGreaterThan(1);
 
@@ -349,7 +351,8 @@ test.describe('IONotifyController (SharedMemory)', () => {
     const filterInput = page.locator('.filter-input');
     const sensorsContainer = page.locator('.ionc-sensors-table-container');
 
-    // Вводим фильтр
+    // Вводим фильтр — debounce 300ms, оставляем waitForTimeout(400) как намеренную паузу
+    // (poll здесь ненадёжен: Sensor150 возвращает 0 строк, 0<100 сразу true → race с debounce)
     await filterInput.fill('Sensor150');
     await page.waitForTimeout(400);
 
@@ -367,8 +370,11 @@ test.describe('IONotifyController (SharedMemory)', () => {
     // Фильтр должен сброситься
     await expect(filterInput).toHaveValue('');
 
-    // Должны показаться все датчики
-    await page.waitForTimeout(400);
+    // Должны показаться все датчики — poll вместо fixed waitForTimeout(400)
+    await expect.poll(
+      async () => await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count(),
+      { timeout: 2000, intervals: [100, 200] }
+    ).toBeGreaterThan(filteredCount);
     const restoredCount = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count();
     expect(restoredCount).toBeGreaterThan(filteredCount);
   });
@@ -396,16 +402,16 @@ test.describe('IONotifyController (SharedMemory)', () => {
     // Получаем имя первого датчика
     const firstName = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row:first-child .ionc-col-name').textContent();
 
-    // Вводим часть имени в фильтр
+    // Вводим часть имени в фильтр и ждём применения через poll вместо fixed waitForTimeout(400)
     const filterInput = page.locator('.filter-input');
     await filterInput.fill(firstName?.substring(0, 5) || 'Sensor');
 
-    // Ждём debounce и перезагрузки
-    await page.waitForTimeout(400);
-
-    // Проверяем что фильтр применился
+    // Проверяем что фильтр применился (ждём debounce через poll)
+    await expect.poll(
+      async () => await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count(),
+      { timeout: 2000, intervals: [100, 200] }
+    ).toBeLessThanOrEqual(initialCount);
     const filteredCount = await page.locator('.ionc-sensors-tbody tr.ionc-sensor-row').count();
-    expect(filteredCount).toBeLessThanOrEqual(initialCount);
   });
 
   test('should have type filter dropdown', async ({ page }) => {
@@ -425,15 +431,19 @@ test.describe('IONotifyController (SharedMemory)', () => {
   test('should filter sensors by type', async ({ page }) => {
     await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
 
-    // Выбираем тип AI
+    // Выбираем тип AI и ждём применения через poll вместо fixed waitForTimeout(400)
     const typeFilter = page.locator('.type-filter');
     await typeFilter.selectOption('AI');
 
-    // Ждём перезагрузки
-    await page.waitForTimeout(400);
-
-    // Все отображаемые датчики должны быть типа AI (или пусто)
+    // Все отображаемые датчики должны быть типа AI (или пусто) — ждём DOM стабилизации
     const rows = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row');
+    // Дебаунс фильтра — проверяем через toPass что badge'ы имеют правильный тип
+    await expect(async () => {
+      const count = await rows.count();
+      if (count > 0) {
+        await expect(page.locator('.ionc-sensors-tbody .type-badge').first()).toHaveText('AI');
+      }
+    }).toPass({ timeout: 2000, intervals: [100, 200] });
     const count = await rows.count();
 
     if (count > 0) {
@@ -712,22 +722,25 @@ test.describe('IONotifyController (SharedMemory)', () => {
     await expect(dialog).not.toBeVisible();
   });
 
-  test('should unfreeze on unfreeze button click', async ({ page }) => {
+  test('should open unfreeze dialog on single click and instant unfreeze on double click', async ({ page }) => {
     await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
 
-    // Ищем замороженный датчик
+    // Ищем замороженный датчик. Если их нет — пропускаем (early return).
     const unfreezeBtn = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row .ionc-btn-unfreeze').first();
     const btnCount = await unfreezeBtn.count();
-    if (btnCount === 0) {
-      // Нет замороженных датчиков — пропускаем
-      return;
-    }
+    if (btnCount === 0) return;
 
-    // Клик на разморозку — должен сразу разморозить без диалога
-    await unfreezeBtn.click();
+    // Single click → диалог разморозки (с показом real/frozen значений).
+    // Контракт bindSingleDoubleClick: single → showUnfreezeDialog, double → quickUnfreeze.
+    await unfreezeBtn.scrollIntoViewIfNeeded();
+    await unfreezeBtn.click({ force: true });
 
-    // Диалог не должен появиться
     const dialog = page.locator('.ionc-dialog-overlay.visible');
+    await expect(dialog).toBeVisible({ timeout: 2000 });
+    await expect(page.locator('#ionc-dialog-title')).toContainText('Unfreeze sensor');
+
+    // Закрыть диалог
+    await page.keyboard.press('Escape');
     await expect(dialog).not.toBeVisible();
   });
 
@@ -882,15 +895,14 @@ test.describe('IONotifyController (SharedMemory)', () => {
     const chartPanel = chartsSection.locator('.chart-panel').first();
     await expect(chartPanel).toBeVisible({ timeout: 5000 });
 
-    // Ждём несколько секунд для накопления данных
-    await page.waitForTimeout(3000);
-
-    // Получаем значение из таблицы
+    // Ждём появления данных в таблице и легенде (SSE обновление)
     const tableValue = firstRow.locator('.ionc-value');
-    const tableText = await tableValue.textContent();
+    await expect(tableValue).not.toBeEmpty({ timeout: 6000 });
 
-    // Получаем значение из легенды графика
     const legendValue = chartPanel.locator('.chart-panel-value');
+    await expect(legendValue).not.toBeEmpty({ timeout: 6000 });
+
+    const tableText = await tableValue.textContent();
     const legendText = await legendValue.textContent();
 
     // Оба значения должны быть непустыми (данные обновляются)
@@ -1064,7 +1076,6 @@ test.describe('IONotifyController (SharedMemory)', () => {
 
     await firstRow.locator('.chart-toggle-label').click();
     await expect(firstRow.locator('.chart-toggle input[type="checkbox"]')).toBeChecked();
-    await page.waitForTimeout(300);
 
     await secondRow.locator('.chart-toggle-label').click();
     await expect(secondRow.locator('.chart-toggle input[type="checkbox"]')).toBeChecked();
@@ -1114,8 +1125,16 @@ test.describe('IONotifyController (SharedMemory)', () => {
     await firstRow.locator('.chart-toggle-label').click();
     await expect(firstRow.locator('.chart-toggle input[type="checkbox"]')).toBeChecked();
 
-    // Ждём сохранения в localStorage
-    await page.waitForTimeout(500);
+    // Ждём сохранения в localStorage через poll вместо fixed waitForTimeout(500)
+    await expect.poll(async () => {
+      return await page.evaluate(() => {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.includes('uniset-panel-external-sensors')) return true;
+        }
+        return false;
+      });
+    }, { timeout: 3000, intervals: [100, 200] }).toBe(true);
 
     // Проверяем формат данных в localStorage
     const savedData = await page.evaluate(() => {
@@ -1253,38 +1272,95 @@ test.describe('IONotifyController (SharedMemory)', () => {
   });
 
   test('should show unfreeze dialog with both values on single click', async ({ page }) => {
+    // Используем explicit sensor id который другие parallel-тесты не используют
+    // (другие freeze first-available, обычно sensor 1). Mock-uniset state shared
+    // между fullyParallel test'ами — без unique sensor другой тест перепишет
+    // frozen value (видели "77777" вместо "99999"). 99 % 20 != 0 → initial frozen=false.
+    // Используем filter input чтобы row точно был в DOM (virtual scroll иначе скрывает).
+    const SENSOR_ID = 99;
+    const SENSOR_NAME = 'Sensor99_S';
+    const FROZEN_VALUE = '99999';
+
     await page.waitForSelector('.ionc-sensors-tbody tr.ionc-sensor-row', { timeout: 10000 });
 
-    // Сначала заморозим датчик
-    const freezeBtn = page.locator('.ionc-sensors-tbody tr.ionc-sensor-row .ionc-btn-freeze').first();
-    const btnCount = await freezeBtn.count();
-    if (btnCount === 0) return;
+    // Filter — IONC virtual scroll'ит rows, и без filter sensor 99 может быть
+    // не отрендерен в DOM. Filter сужает результат до 1 row + serverside filter.
+    const filterInput = page.locator('input.filter-input').first();
+    await filterInput.fill(SENSOR_NAME);
+    // debounce 300ms — toBeVisible below covers the wait
 
-    const row = freezeBtn.locator('xpath=ancestor::tr');
-    const sensorId = await row.getAttribute('data-sensor-id');
+    const row = page.locator(`tr[data-sensor-id="${SENSOR_ID}"]`);
+    await expect(row).toBeVisible({ timeout: 5000 });
 
-    // Замораживаем
-    await freezeBtn.click();
-    await page.waitForTimeout(300);
+    // Если sensor уже frozen (от другого теста или начальный i%20==0 — здесь нет,
+    // 199%20=19), сначала размораживаем. Иначе freeze button отсутствует.
+    const existingUnfreeze = row.locator('.ionc-btn-unfreeze');
+    if (await existingUnfreeze.count() > 0) {
+      await existingUnfreeze.scrollIntoViewIfNeeded();
+      await existingUnfreeze.click({ force: true });
+      // Закрываем dialog (single click открывает unfreeze dialog — закрываем через confirm)
+      const initDialog = page.locator('.ionc-dialog-overlay.visible');
+      await initDialog.waitFor({ state: 'visible', timeout: 2000 }).catch(() => {});
+      if (await initDialog.isVisible()) {
+        await page.locator('#ionc-unfreeze-confirm').click();
+        await expect(initDialog).not.toBeVisible({ timeout: 3000 });
+      }
+    }
+
+    // Замораживаем sensor 99. Click + wait-for-dialog + retry — row перерисовывается
+    // на каждый ionc_sensor_batch (~1s, AI/AO sensor.real_value меняется), click может
+    // уйти в detached element. Retry бьёт race без флак.
+    const freezeBtn = row.locator('.ionc-btn-freeze');
+    await expect(freezeBtn).toBeVisible({ timeout: 5000 });
 
     const freezeDialog = page.locator('.ionc-dialog-overlay.visible');
-    await expect(freezeDialog).toBeVisible();
+    let freezeOpened = false;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        await freezeBtn.scrollIntoViewIfNeeded();
+        await freezeBtn.click({ force: true, timeout: 1000 });
+      } catch {
+        // detached — retry
+      }
+      try {
+        await freezeDialog.waitFor({ state: 'visible', timeout: 1000 });
+        freezeOpened = true;
+        break;
+      } catch {
+        // dialog не открылся — retry
+      }
+    }
+    expect(freezeOpened, 'freeze dialog should open after click + retries').toBe(true);
 
-    await page.locator('#ionc-freeze-value').fill('99999');
+    await page.locator('#ionc-freeze-value').fill(FROZEN_VALUE);
     await page.locator('#ionc-freeze-confirm').click();
     await expect(freezeDialog).not.toBeVisible({ timeout: 5000 });
 
-    // Теперь проверяем диалог разморозки
-    const updatedRow = page.locator(`tr[data-sensor-id="${sensorId}"]`);
-    const unfreezeBtn = updatedRow.locator('.ionc-btn-unfreeze');
-    await expect(unfreezeBtn).toBeVisible();
+    // Проверяем диалог разморозки. unfreezeBtn ищем заново — row перерисовалась.
+    const unfreezeBtn = row.locator('.ionc-btn-unfreeze');
+    await expect(unfreezeBtn).toBeVisible({ timeout: 5000 });
 
-    // Одинарный клик — должен открыться диалог (после таймера)
-    await unfreezeBtn.click();
-    await page.waitForTimeout(300);
-
+    // Click + wait-for-dialog + retry. Row перерисовывается на каждый ionc_sensor_batch
+    // (~1s, frozen sensor real_value меняется), element может оказаться detached
+    // ровно в момент click. Retry бьёт race без флак (5 попыток x 1s = 5s budget).
     const unfreezeDialog = page.locator('.ionc-dialog-overlay.visible');
-    await expect(unfreezeDialog).toBeVisible();
+    let dialogOpened = false;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        await unfreezeBtn.scrollIntoViewIfNeeded();
+        await unfreezeBtn.click({ force: true, timeout: 1000 });
+      } catch {
+        // element detached / stale между resolve и click — retry
+      }
+      try {
+        await unfreezeDialog.waitFor({ state: 'visible', timeout: 1000 });
+        dialogOpened = true;
+        break;
+      } catch {
+        // dialog не открылся (click ушёл в detached element) — retry
+      }
+    }
+    expect(dialogOpened, 'unfreeze dialog should open after click + retries').toBe(true);
 
     // Check title
     await expect(page.locator('#ionc-dialog-title')).toContainText('Unfreeze sensor');
@@ -1292,14 +1368,12 @@ test.describe('IONotifyController (SharedMemory)', () => {
     // Check that both values are shown
     const dialogContent = page.locator('.ionc-unfreeze-values');
     await expect(dialogContent).toBeVisible();
-
-    // Check labels
     await expect(dialogContent).toContainText('Real value');
     await expect(dialogContent).toContainText('Frozen value');
 
-    // Проверяем что замороженное значение показывается с ❄
+    // Frozen value: проверяем что показывается именно наш FROZEN_VALUE (не другого теста).
     const frozenValueInDialog = dialogContent.locator('.ionc-unfreeze-frozen');
-    await expect(frozenValueInDialog).toContainText('99999');
+    await expect(frozenValueInDialog).toContainText(FROZEN_VALUE);
     await expect(frozenValueInDialog).toContainText('❄');
 
     // Закрываем диалог

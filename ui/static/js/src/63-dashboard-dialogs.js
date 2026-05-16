@@ -103,7 +103,6 @@ function setupNumberInputs(container) {
         wrapper.appendChild(arrows);
 
         // Arrow button handlers
-        const step = parseFloat(input.step) || 1;
         arrows.querySelector('.up').addEventListener('click', (e) => {
             e.preventDefault();
             input.stepUp();
@@ -134,207 +133,16 @@ function addZoneField(btn) {
     const form = btn.closest('.widget-config-form') || btn.closest('#widget-config-content');
     const minInput = form?.querySelector('[name="min"]');
     const maxInput = form?.querySelector('[name="max"]');
-    const min = parseFloat(minInput?.value) || 0;
-    const max = parseFloat(maxInput?.value) || 100;
+    const min = parseNumberOrDefault(minInput?.value, 0);
+    const max = parseNumberOrDefault(maxInput?.value, 100);
 
     const index = zonesList.children.length;
-    const zoneHtml = `
-        <div class="zone-item">
-            <input type="color" class="zone-color" name="zone-color-${index}" value="#ef4444">
-            <div class="zone-inputs">
-                <input type="number" class="zone-input" name="zone-from-${index}" value="${min}" placeholder="From">
-                <span class="zone-separator">→</span>
-                <input type="number" class="zone-input" name="zone-to-${index}" value="${max}" placeholder="To">
-            </div>
-            <button type="button" class="zone-remove-btn" onclick="removeZoneField(this)">×</button>
-        </div>
-    `;
-    zonesList.insertAdjacentHTML('beforeend', zoneHtml);
+    zonesList.insertAdjacentHTML('beforeend',
+        renderColorZoneItem({ from: min, to: max, color: '#ef4444' }, index, '#ef4444'));
 }
 
 function removeZoneField(btn) {
     btn.closest('.zone-item')?.remove();
-}
-
-// ============================================================================
-// Chart Widget Zone Helpers
-// ============================================================================
-
-function addChartZone() {
-    const editor = document.getElementById('chart-zones-editor');
-    if (!editor) return;
-
-    const zoneIdx = editor.querySelectorAll('.chart-zone-editor').length;
-    const zoneHtml = ChartWidget.renderZoneEditor({ id: `zone-${zoneIdx}`, sensors: [] }, zoneIdx);
-    editor.insertAdjacentHTML('beforeend', zoneHtml);
-
-    // Setup autocomplete for new zone
-    setupChartSensorAutocomplete(zoneIdx);
-}
-
-function removeChartZone(zoneIdx) {
-    const editor = document.querySelector(`.chart-zone-editor[data-zone-idx="${zoneIdx}"]`);
-    editor?.remove();
-
-    // Re-index remaining zones
-    document.querySelectorAll('.chart-zone-editor').forEach((zone, idx) => {
-        zone.dataset.zoneIdx = idx;
-        zone.querySelector('.chart-zone-title').textContent = `Zone ${idx + 1}`;
-        // Update remove button
-        const removeBtn = zone.querySelector('.zone-remove-btn');
-        if (removeBtn) {
-            removeBtn.onclick = () => removeChartZone(idx);
-        }
-    });
-}
-
-function removeChartSensor(zoneIdx, sensorIdx) {
-    const row = document.querySelector(`.chart-sensor-row[data-zone-idx="${zoneIdx}"][data-sensor-idx="${sensorIdx}"]`);
-    row?.remove();
-
-    // Re-index remaining sensors in this zone
-    const sensorsContainer = document.getElementById(`chart-zone-sensors-${zoneIdx}`);
-    if (sensorsContainer) {
-        sensorsContainer.querySelectorAll('.chart-sensor-row').forEach((row, idx) => {
-            row.dataset.sensorIdx = idx;
-            // Update hidden inputs names
-            row.querySelectorAll('input[type="hidden"]').forEach(input => {
-                const nameParts = input.name.split('-');
-                nameParts[2] = idx;
-                input.name = nameParts.join('-');
-            });
-        });
-    }
-}
-
-function updateChartSensorColor(zoneIdx, sensorIdx, color) {
-    const row = document.querySelector(`.chart-sensor-row[data-zone-idx="${zoneIdx}"][data-sensor-idx="${sensorIdx}"]`);
-    const colorInput = row?.querySelector('input[name$="-color"]');
-    if (colorInput) {
-        colorInput.value = color;
-    }
-}
-
-function setupChartSensorAutocomplete(zoneIdx) {
-    const input = document.querySelector(`.chart-sensor-input[data-zone-idx="${zoneIdx}"]`);
-    if (!input) return;
-
-    let autocompleteContainer = null;
-    let autocompleteResults = [];
-    let selectedIndex = 0;
-
-    input.addEventListener('input', async (e) => {
-        const query = e.target.value.trim();
-        if (query.length < 2) {
-            closeAutocomplete();
-            return;
-        }
-
-        // Search sensors (use sensorsByName to avoid duplicates from multiple servers)
-        const allSensors = Array.from(state.sensorsByName.values());
-        autocompleteResults = allSensors
-            .filter(s => s.name.toLowerCase().includes(query.toLowerCase()))
-            .slice(0, 10);
-
-        if (autocompleteResults.length === 0) {
-            closeAutocomplete();
-            return;
-        }
-
-        showAutocomplete();
-    });
-
-    input.addEventListener('keydown', (e) => {
-        if (!autocompleteContainer) return;
-
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            selectedIndex = Math.min(selectedIndex + 1, autocompleteResults.length - 1);
-            updateSelection();
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            selectedIndex = Math.max(selectedIndex - 1, 0);
-            updateSelection();
-        } else if (e.key === 'Enter') {
-            e.preventDefault();
-            if (autocompleteResults[selectedIndex]) {
-                selectSensor(autocompleteResults[selectedIndex]);
-            }
-        } else if (e.key === 'Escape') {
-            closeAutocomplete();
-        }
-    });
-
-    input.addEventListener('blur', () => {
-        setTimeout(closeAutocomplete, 200);
-    });
-
-    function showAutocomplete() {
-        if (!autocompleteContainer) {
-            autocompleteContainer = document.createElement('div');
-            autocompleteContainer.className = 'widget-autocomplete';
-            input.parentNode.style.position = 'relative';
-            input.parentNode.appendChild(autocompleteContainer);
-        }
-
-        selectedIndex = 0;
-        autocompleteContainer.innerHTML = autocompleteResults.map((s, i) => `
-            <div class="widget-autocomplete-item${i === 0 ? ' selected' : ''}" data-name="${escapeHtml(s.name)}">
-                <span class="autocomplete-name">${escapeHtml(s.name)}</span>
-                ${s.textname ? `<span class="autocomplete-desc">${escapeHtml(s.textname)}</span>` : ''}
-            </div>
-        `).join('');
-
-        autocompleteContainer.querySelectorAll('.widget-autocomplete-item').forEach((item, i) => {
-            item.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                selectSensor(autocompleteResults[i]);
-            });
-        });
-    }
-
-    function updateSelection() {
-        autocompleteContainer?.querySelectorAll('.widget-autocomplete-item').forEach((item, i) => {
-            item.classList.toggle('selected', i === selectedIndex);
-        });
-    }
-
-    function closeAutocomplete() {
-        autocompleteContainer?.remove();
-        autocompleteContainer = null;
-    }
-
-    function selectSensor(sensor) {
-        // Add sensor to zone
-        const sensorsContainer = document.getElementById(`chart-zone-sensors-${zoneIdx}`);
-        if (!sensorsContainer) return;
-
-        // Check if sensor is discrete (DI/DO) - set stepped=true, smooth=false
-        const isDiscrete = sensor.iotype === 'DI' || sensor.iotype === 'DO';
-        const sensorConfig = {
-            name: sensor.name,
-            fill: true,
-            smooth: !isDiscrete,  // smooth off for discrete
-            stepped: isDiscrete   // stepped on for discrete
-        };
-
-        const sensorIdx = sensorsContainer.querySelectorAll('.chart-sensor-row').length;
-        const sensorHtml = ChartWidget.renderSensorRow(sensorConfig, zoneIdx, sensorIdx);
-        sensorsContainer.insertAdjacentHTML('beforeend', sensorHtml);
-
-        // Clear input
-        input.value = '';
-        closeAutocomplete();
-    }
-}
-
-// Setup autocomplete when widget config dialog opens for chart widget
-function setupChartWidgetAutocomplete() {
-    const zoneEditors = document.querySelectorAll('.chart-zone-editor');
-    zoneEditors.forEach((editor) => {
-        const zoneIdx = parseInt(editor.dataset.zoneIdx);
-        setupChartSensorAutocomplete(zoneIdx);
-    });
 }
 
 // ============================================================================
@@ -345,16 +153,37 @@ function setupChartWidgetAutocomplete() {
 let addToDashboardState = {
     sensorName: null,
     sensorLabel: null,
-    selectedType: 'gauge'
+    binding: null,
+    selectedType: 'gauge',
+    cleanupListeners: null,  // вызывается в closeAddToDashboard, отвязывает onChange/onOk
 };
+
+const ADD_TO_DASHBOARD_WIDGET_TYPES = ['gauge', 'level', 'led', 'label', 'divider', 'statusbar', 'bargraph', 'digital'];
+
+function getDashboardBindingFromButton(btn) {
+    const rawSensorId = btn?.dataset?.sensorId;
+    const sensorId = rawSensorId !== undefined && rawSensorId !== ''
+        ? parseIntegerOrDefault(rawSensorId, null)
+        : null;
+    return {
+        serverId: btn?.dataset?.serverId || null,
+        objectName: btn?.dataset?.objectName || null,
+        sensorId,
+    };
+}
 
 function closeAddToDashboard() {
     document.getElementById('add-to-dashboard-overlay')?.classList.add('hidden');
+    if (typeof addToDashboardState.cleanupListeners === 'function') {
+        addToDashboardState.cleanupListeners();
+        addToDashboardState.cleanupListeners = null;
+    }
     addToDashboardState.sensorName = null;
     addToDashboardState.sensorLabel = null;
+    addToDashboardState.binding = null;
 }
 
-function showAddToDashboardDialog(sensorName, sensorLabel = null) {
+function showAddToDashboardDialog(sensorName, sensorLabel = null, binding = null) {
     const overlay = document.getElementById('add-to-dashboard-overlay');
     const sensorNameEl = document.getElementById('add-to-dashboard-sensor-name');
     const selectEl = document.getElementById('add-to-dashboard-select');
@@ -368,6 +197,7 @@ function showAddToDashboardDialog(sensorName, sensorLabel = null) {
     // Store sensor info
     addToDashboardState.sensorName = sensorName;
     addToDashboardState.sensorLabel = sensorLabel || sensorName;
+    addToDashboardState.binding = binding;
     addToDashboardState.selectedType = 'gauge';
 
     // Show sensor name
@@ -376,16 +206,17 @@ function showAddToDashboardDialog(sensorName, sensorLabel = null) {
     // Populate dashboard select
     selectEl.innerHTML = '<option value="__new__">+ Create New Dashboard</option>';
 
-    // Add user dashboards (editable)
+    // Add user dashboards (editable). Серверные дашборды (config._server) — read-only,
+    // в "Add to Dashboard" не предлагаем.
     for (const [name, dashboard] of dashboardState.dashboards) {
-        // Skip server dashboards (they're read-only)
-        if (!dashboardState.serverDashboards.some(sd => sd.meta?.name === name)) {
-            selectEl.innerHTML += `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
-        }
+        if (dashboard._server) continue;
+        selectEl.innerHTML += `<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`;
     }
 
-    // Handle select change
-    selectEl.onchange = () => {
+    // Handle select change. addEventListener (не onchange) + cleanup в close —
+    // иначе при повторных открытиях диалога старые handlers оставались бы на
+    // overlay-элементах, который не пересоздаётся.
+    const onSelectChange = () => {
         if (selectEl.value === '__new__') {
             newNameField.style.display = 'block';
             newNameInput.focus();
@@ -393,18 +224,16 @@ function showAddToDashboardDialog(sensorName, sensorLabel = null) {
             newNameField.style.display = 'none';
         }
     };
+    selectEl.addEventListener('change', onSelectChange);
 
-    // Populate widget types
-    const widgetTypes = [
-        { type: 'gauge', name: 'Gauge', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>' },
-        { type: 'level', name: 'Level', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2"/><rect x="8" y="10" width="8" height="10" fill="currentColor" opacity="0.3"/></svg>' },
-        { type: 'led', name: 'LED', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>' },
-        { type: 'label', name: 'Label', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><text x="12" y="16" text-anchor="middle" font-size="12" fill="currentColor">Aa</text></svg>' },
-        { type: 'divider', name: 'Divider', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="12" x2="20" y2="12"/></svg>' },
-        { type: 'statusbar', name: 'Status Bar', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="3" fill="#22c55e"/><circle cx="12" cy="12" r="3" fill="#ef4444"/><circle cx="19" cy="12" r="3" fill="#6b7280"/></svg>' },
-        { type: 'bargraph', name: 'Bar Graph', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="14" width="4" height="6" fill="currentColor" opacity="0.7"/><rect x="10" y="8" width="4" height="12" fill="currentColor" opacity="0.5"/><rect x="16" y="4" width="4" height="16" fill="currentColor" opacity="0.3"/></svg>' },
-        { type: 'digital', name: 'Digital', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><text x="12" y="15" text-anchor="middle" font-size="8" fill="currentColor">123</text></svg>' }
-    ];
+    const widgetTypes = ADD_TO_DASHBOARD_WIDGET_TYPES
+        .map(type => WIDGET_TYPES[type])
+        .filter(Boolean)
+        .map(WidgetClass => ({
+            type: WidgetClass.type,
+            name: WidgetClass.displayName,
+            icon: WidgetClass.icon,
+        }));
 
     typesEl.innerHTML = widgetTypes.map(w => `
         <div class="add-to-dashboard-type ${w.type === addToDashboardState.selectedType ? 'selected' : ''}"
@@ -424,7 +253,7 @@ function showAddToDashboardDialog(sensorName, sensorLabel = null) {
     });
 
     // Handle OK button
-    okBtn.onclick = () => {
+    const onOkClick = () => {
         const dashboardName = selectEl.value === '__new__'
             ? newNameInput.value.trim()
             : selectEl.value;
@@ -439,10 +268,17 @@ function showAddToDashboardDialog(sensorName, sensorLabel = null) {
             addToDashboardState.sensorLabel,
             dashboardName,
             addToDashboardState.selectedType,
-            selectEl.value === '__new__'
+            selectEl.value === '__new__',
+            addToDashboardState.binding
         );
 
         closeAddToDashboard();
+    };
+    okBtn.addEventListener('click', onOkClick);
+
+    addToDashboardState.cleanupListeners = () => {
+        selectEl.removeEventListener('change', onSelectChange);
+        okBtn.removeEventListener('click', onOkClick);
     };
 
     // Reset and show
@@ -451,7 +287,7 @@ function showAddToDashboardDialog(sensorName, sensorLabel = null) {
     overlay.classList.remove('hidden');
 }
 
-function addSensorToDashboard(sensorName, sensorLabel, dashboardName, widgetType, createNew) {
+function addSensorToDashboard(sensorName, sensorLabel, dashboardName, widgetType, createNew, binding = null) {
     if (!dashboardManager) {
         console.warn('Dashboard manager not initialized');
         return;
@@ -466,7 +302,7 @@ function addSensorToDashboard(sensorName, sensorLabel, dashboardName, widgetType
             widgets: []
         };
         dashboardState.dashboards.set(dashboardName, newDashboard);
-        dashboardManager.updateDashboardList();
+        dashboardManager.updateDashboardSelector();
     }
 
     // Get or set current dashboard
@@ -488,8 +324,11 @@ function addSensorToDashboard(sensorName, sensorLabel, dashboardName, widgetType
         config: {
             sensor: sensorName,
             label: sensorLabel,
-            min: 0,
-            max: 100,
+            ...(binding?.serverId ? { serverId: binding.serverId } : {}),
+            ...(binding?.objectName ? { objectName: binding.objectName } : {}),
+            ...(Number.isFinite(binding?.sensorId) ? { sensorId: binding.sensorId } : {}),
+            min: WIDGET_DEFAULT_MIN,
+            max: WIDGET_DEFAULT_MAX,
             unit: '',
             decimals: 1
         }
@@ -516,15 +355,26 @@ function addSensorToDashboard(sensorName, sensorLabel, dashboardName, widgetType
         dashboardState.currentDashboard = prevDashboard;
     }
 
-    console.log(`Added ${sensorName} as ${widgetType} to dashboard "${dashboardName}"`);
+    debugLog(`Added ${sensorName} as ${widgetType} to dashboard "${dashboardName}"`);
 }
 
 // Global dashboard manager instance (exposed on window for tests)
 let dashboardManager = window.dashboardManager = null;
 
-// Helper to update dashboard widgets from SSE events
-function updateDashboardWidgets(sensors, timestamp = null) {
+// Helper to update dashboard widgets from SSE events.
+// ctx: { serverId, objectName, timestamp } — нужен для построения sensorKey
+// (canonical identity sensors во frontend — см. CLAUDE.md "Sensor identity").
+function updateDashboardWidgets(sensors, ctx) {
     if (!dashboardManager || !sensors) return;
+    if (!ctx || !ctx.serverId || !ctx.objectName) {
+        console.warn('updateDashboardWidgets: ctx без serverId/objectName, skip');
+        return;
+    }
+
+    // Cold-start migration retry: если SSE прилетел ДО первого _migrateLegacyBinding
+    // (state.sensorsByKey ещё не прогрет), это была no-op миграция. Сейчас sensors[]
+    // приходит с полными triplet'ами — пробуем снова.
+    dashboardManager.tryResolvePendingMigration?.();
 
     for (const sensor of sensors) {
         const name = sensor.name;
@@ -532,7 +382,14 @@ function updateDashboardWidgets(sensors, timestamp = null) {
         const error = sensor.error || null;
 
         if (name !== undefined && value !== undefined) {
-            dashboardManager.handleSensorUpdate(name, value, error, timestamp);
+            const key = makeSensorKey(ctx.serverId, ctx.objectName, name);
+            // meta — статусные флаги датчика (frozen/blocked) для active widget'ов.
+            // Active base class смотрит meta?.frozen чтобы блокировать запись и
+            // показать ❄ marker; старые read-only widget'ы meta игнорируют.
+            const meta = (sensor.frozen || sensor.blocked)
+                ? { frozen: !!sensor.frozen, blocked: !!sensor.blocked }
+                : null;
+            dashboardManager.handleSensorUpdate(key, value, error, ctx.timestamp || null, meta);
         }
     }
 }

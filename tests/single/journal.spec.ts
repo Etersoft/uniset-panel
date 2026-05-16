@@ -282,18 +282,16 @@ test.describe('Journal UI Tests', () => {
     // Select "Alarm" filter from first select (mtype) - filters apply immediately on change
     await page.locator('.journal-select').first().selectOption('Alarm');
 
-    // Wait for table to update
-    await page.waitForTimeout(1000);
-
-    // Check that all visible rows are Alarm type
-    const rows = page.locator('.journal-table tbody tr');
-    const count = await rows.count();
-
-    for (let i = 0; i < count; i++) {
-      const badge = rows.nth(i).locator('.journal-badge');
-      const text = await badge.textContent();
-      expect(text).toBe('Alarm');
-    }
+    // Условный wait вместо waitForTimeout(1000): retry до тех пор пока ВСЕ
+    // строки таблицы не станут 'Alarm'. Filtering применяется immediately, но
+    // re-render может занять разное время на разной нагрузке.
+    await expect(async () => {
+      const badges = await page.locator('.journal-table tbody tr .journal-badge').allTextContents();
+      expect(badges.length).toBeGreaterThan(0);
+      for (const text of badges) {
+        expect(text).toBe('Alarm');
+      }
+    }).toPass({ timeout: 5000, intervals: [100, 200, 300, 500] });
   });
 
   test('should have pause/resume button', async ({ page }) => {

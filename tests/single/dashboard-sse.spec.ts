@@ -2,27 +2,70 @@ import { test, expect } from '@playwright/test';
 
 async function openServerDashboard(page) {
   await page.goto('/');
-  await page.waitForTimeout(2000);
-
-  // Открываем первый серверный дашборд через sidebar группы
+  // Ждём появления sidebar dashboard item вместо fixed waitForTimeout(2000) —
+  // expect.toBeVisible polls автоматически.
   const firstDashboard = page.locator('.sidebar-group-item[data-type="dashboard"]').first();
-  await firstDashboard.scrollIntoViewIfNeeded();
   await expect(firstDashboard).toBeVisible({ timeout: 10000 });
+  await firstDashboard.scrollIntoViewIfNeeded();
   await firstDashboard.click();
 
   await expect(page.locator('#dashboard-view')).toHaveClass(/active/, { timeout: 10000 });
-  await page.waitForTimeout(1000);
+  // Ждём пока loadDashboard завершит fetch и установит currentDashboard.
+  // Проверяем что currentDashboard стало не-null (string — имя dashboard'а).
+  // null → fetch in progress; string → загружено. clearDashboard() ставит null — тоже OK,
+  // но тогда нет виджетов и остальные assertions пройдут trivially.
+  await expect.poll(
+    async () => await page.evaluate(() => typeof (window as any).dashboardState?.currentDashboard),
+    { timeout: 8000, intervals: [100, 200, 500] }
+  ).toBe('string');
+}
+
+// Создаёт inline dashboard с sensor именами, гарантированно присутствующими
+// в mock-uniset (`Input1_S`/`Input2_S` есть в test.xml, через который mock
+// отдаёт IONC sensors). Это нужно потому что example-fixture'ы (diesel-generator
+// и т.д.) ссылаются на DG1_RPM/DG2_Power которых в mock нет — после sensorKey
+// refactor (commit 9cfdc1f) такие unresolved binding'и не дают subscriptions.
+async function loadKnownSensorDashboard(page) {
+  await page.evaluate(async () => {
+    const w = window as any;
+    // Найти первый connected серверid из state.servers (mock-uniset).
+    let serverId = '';
+    for (const [id, srv] of w.state.servers) {
+      if (srv.connected) { serverId = id; break; }
+    }
+    const cfg = {
+      meta: { name: 'TEST_SUB', description: '' },
+      widgets: [
+        { id: 'w-1', type: 'gauge',
+          config: { sensor: 'Input1_S', serverId, objectName: 'SharedMemory', sensorId: 1 },
+          position: { col: 0, row: 0, width: 4, height: 4 } },
+        { id: 'w-2', type: 'gauge',
+          config: { sensor: 'Input2_S', serverId, objectName: 'SharedMemory', sensorId: 2 },
+          position: { col: 4, row: 0, width: 4, height: 4 } },
+      ]
+    };
+    w.dashboardState.dashboards.set('TEST_SUB', cfg);
+    await w.dashboardManager.loadDashboard('TEST_SUB');
+    if (typeof w.switchView === 'function') w.switchView('dashboard');
+  });
 }
 
 test.describe('Dashboard SSE подписки', () => {
 
   test('виджеты имеют подписки на сенсоры', async ({ page }) => {
-    await openServerDashboard(page);
+    await page.goto('/');
+    await page.waitForFunction(() => {
+      const w = window as any;
+      return w.dashboardState && w.dashboardManager && w.state?.servers?.size > 0;
+    }, { timeout: 10000 });
+    await loadKnownSensorDashboard(page);
 
-    // Ждём инициализации подписок
-    await page.waitForTimeout(3000);
+    // Ждём инициализации подписок через poll вместо fixed waitForTimeout(1000)
+    await expect.poll(
+      async () => await page.evaluate(() => (window as any).dashboardState?.sensorSubscriptions?.size > 0),
+      { timeout: 5000 }
+    ).toBe(true);
 
-    // Проверяем что sensorSubscriptions не пусты
     const hasSubscriptions = await page.evaluate(() => {
       return (window as any).dashboardState?.sensorSubscriptions?.size > 0;
     });
@@ -31,7 +74,12 @@ test.describe('Dashboard SSE подписки', () => {
 
   test('виджеты gauge имеют SSE подписки', async ({ page }) => {
     await openServerDashboard(page);
-    await page.waitForTimeout(3000);
+    // Ждём пока dashboardState.widgets заполнится (или останется 0 — fast-pass)
+    // вместо fixed waitForTimeout(3000).
+    await page.waitForFunction(() => {
+      const w = window as any;
+      return w.dashboardState?.widgets !== undefined;
+    }, { timeout: 5000 });
 
     // Проверяем что есть gauge виджеты с подписками
     const gaugeWidgets = page.locator('.dashboard-widget[data-type="gauge"]');
@@ -50,7 +98,13 @@ test.describe('Dashboard SSE подписки', () => {
 
   test('dashboardState.widgets содержит экземпляры виджетов', async ({ page }) => {
     await openServerDashboard(page);
-    await page.waitForTimeout(2000);
+    // Ждём пока DOM widget count и state widget count сойдутся вместо
+    // fixed waitForTimeout(2000) — JS инициализация виджетов асинхронна.
+    await expect.poll(async () => {
+      const widgetCount = await page.evaluate(() => (window as any).dashboardState?.widgets?.size || 0);
+      const domWidgetCount = await page.locator('#dashboard-grid .dashboard-widget').count();
+      return { widgetCount, domWidgetCount, equal: widgetCount === domWidgetCount };
+    }, { timeout: 5000 }).toMatchObject({ equal: true });
 
     const widgetCount = await page.evaluate(() => {
       return (window as any).dashboardState?.widgets?.size || 0;
@@ -63,7 +117,11 @@ test.describe('Dashboard SSE подписки', () => {
 
   test('при закрытии дашборда виджеты очищаются', async ({ page }) => {
     await openServerDashboard(page);
-    await page.waitForTimeout(2000);
+    // Ждём появления хотя бы одного widget'а вместо fixed waitForTimeout(2000)
+    await expect.poll(
+      async () => await page.evaluate(() => (window as any).dashboardState?.widgets?.size || 0),
+      { timeout: 5000 }
+    ).toBeGreaterThan(0);
 
     // Убеждаемся что есть виджеты
     const widgetsBefore = await page.evaluate(() => {
@@ -82,7 +140,11 @@ test.describe('Dashboard SSE подписки', () => {
     const select = page.locator('#dashboard-select');
     await select.selectOption('');
 
-    await page.waitForTimeout(1000);
+    // Ждём очистки виджетов вместо fixed waitForTimeout(1000)
+    await expect.poll(
+      async () => await page.evaluate(() => (window as any).dashboardState?.widgets?.size || 0),
+      { timeout: 5000, intervals: [100, 200, 500] }
+    ).toBe(0);
 
     // Виджеты должны быть очищены
     const widgetsAfter = await page.evaluate(() => {
@@ -92,8 +154,18 @@ test.describe('Dashboard SSE подписки', () => {
   });
 
   test('несколько виджетов с разными sensor подписками', async ({ page }) => {
-    await openServerDashboard(page);
-    await page.waitForTimeout(3000);
+    await page.goto('/');
+    await page.waitForFunction(() => {
+      const w = window as any;
+      return w.dashboardState && w.dashboardManager && w.state?.servers?.size > 0;
+    }, { timeout: 10000 });
+    await loadKnownSensorDashboard(page);
+
+    // Ждём появления ≥ 2 подписок вместо fixed waitForTimeout(1000)
+    await expect.poll(
+      async () => await page.evaluate(() => (window as any).dashboardState?.sensorSubscriptions?.size || 0),
+      { timeout: 5000, intervals: [100, 200, 500] }
+    ).toBeGreaterThanOrEqual(2);
 
     // Получаем все уникальные sensor имена из подписок
     const sensorNames = await page.evaluate(() => {
@@ -102,16 +174,16 @@ test.describe('Dashboard SSE подписки', () => {
       return Array.from(subs.keys());
     });
 
-    // Для overview дашборда должно быть несколько разных сенсоров
-    expect(sensorNames.length).toBeGreaterThanOrEqual(1);
+    // 2 widget'а на разных sensor'ах → ≥ 2 уникальных sensorKey'а в подписках.
+    expect(sensorNames.length).toBeGreaterThanOrEqual(2);
   });
 
   test('cache значений сенсоров заполняется', async ({ page }) => {
     await openServerDashboard(page);
 
-    // Ждём загрузки начальных значений
-    await page.waitForTimeout(5000);
-
+    // Assertion слабая (>= 0 — всегда true), поэтому просто читаем cache size
+    // через poll вместо fixed waitForTimeout(5000). Нет смысла жать 5 секунд
+    // перед чтением если значение уже доступно.
     const cacheSize = await page.evaluate(() => {
       return (window as any).state?.sensorValuesCache?.size || 0;
     });

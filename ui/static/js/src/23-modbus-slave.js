@@ -84,7 +84,6 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         this.setupRegistersResize();
         this.setupSimpleInfiniteScroll({
             viewportId: `mbs-registers-viewport-${this.objectName}`,
-            threshold: 100,
         });
         this.initStatusAutoRefresh();
     }
@@ -123,6 +122,13 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             FILTER_DEBOUNCE_DELAY, null,
             () => this.renderRegisters()      // text filter → локальная фильтрация
         );
+
+        // Unpin all (persistent header element — wire'им один раз; в renderRegisters
+        // больше не трогаем).
+        const unpinBtn = this.getEl(`mbs-unpin-${this.objectName}`);
+        if (unpinBtn) {
+            unpinBtn.addEventListener('click', () => this.unpinAll());
+        }
     }
 
 
@@ -269,7 +275,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="info-label">${row.label}</td>
-                <td class="info-value">${formatValue(row.value)}</td>
+                <td class="info-value">${formatValueHtml(row.value)}</td>
             `;
             tbody.appendChild(tr);
         });
@@ -334,110 +340,50 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     }
 
     renderRegisters() {
-        const tbody = this.getEl(`mbs-registers-tbody-${this.objectName}`);
-        if (!tbody) return;
-
-        // Получаем закрепленные регистры
-        const pinnedRegisters = this.getPinned();
-        const hasPinned = pinnedRegisters.size > 0;
-
-        // Показываем/скрываем кнопку "снять все"
-        const unpinBtn = this.getEl(`mbs-unpin-${this.objectName}`);
-        if (unpinBtn) {
-            unpinBtn.style.display = hasPinned ? 'inline' : 'none';
-        }
-
-        // Фильтруем регистры используя общий метод (по name, id, mbreg)
-        // ModbusSlave: mbreg может быть в r.register.mbreg или r.mbreg
-        const mbregAccessor = (item, field) => {
-            const regInfo = item.register || {};
-            return regInfo[field] !== undefined ? regInfo[field] : item[field];
-        };
-        let registersToShow = this.applyFilters(this.allRegisters, 'name', 'iotype', null, ['mbreg'], mbregAccessor);
-
-        // Если есть закрепленные и нет фильтра — показываем только их
-        if (hasPinned && !this.filter) {
-            registersToShow = registersToShow.filter(r => pinnedRegisters.has(String(r.id)));
-        }
-
-        // Сортировка: pinned всегда вверху, остальные по выбранной колонке
-        registersToShow = this.sortItems(registersToShow, pinnedRegisters, this.sortColumnDefs);
-
-        // Обновляем счётчик с учётом фильтрации
-        this.updateItemCount(`mbs-register-count-${this.objectName}`, registersToShow.length, this.registersTotal);
-
-        // Update registerMap for chart support
-        registersToShow.forEach(reg => {
-            if (reg.id) {
-                this.registerMap.set(reg.id, reg);
-            }
+        // Orchestration (filter/sort/pin/count/listeners) — в base, тут только row-html.
+        this._renderRegistersTable({
+            tbodyId: `mbs-registers-tbody-${this.objectName}`,
+            unpinId: `mbs-unpin-${this.objectName}`,
+            countId: `mbs-register-count-${this.objectName}`,
+            countTotal: this.registersTotal,
+            // ModbusSlave: mbreg может быть в r.register.mbreg или r.mbreg
+            mbregAccessor: (item, field) => {
+                const regInfo = item.register || {};
+                return regInfo[field] !== undefined ? regInfo[field] : item[field];
+            },
+            renderRow: (reg, isPinned) => this._renderRegisterRow(reg, isPinned),
         });
-
-        // ModbusSlave формат: device - это mbaddr, register содержит mbreg/mbfunc, есть amode
-        const html = registersToShow.map(reg => {
-            const isPinned = pinnedRegisters.has(String(reg.id));
-            const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-            const pinIcon = isPinned ? '📌' : '○';
-            const pinTitle = isPinned ? 'Unpin' : 'Pin';
-
-            const mbAddr = reg.device;
-            const regInfo = reg.register || {};
-            const mbreg = regInfo.mbreg !== undefined ? regInfo.mbreg : reg.mbreg;
-            const mbfunc = regInfo.mbfunc;
-            return `
-                <tr data-sensor-id="${reg.id}">
-                    <td class="col-pin">
-                        <span class="${pinToggleClass}" data-id="${reg.id}" title="${pinTitle}">
-                            ${pinIcon}
-                        </span>
-                    </td>
-                    ${this.renderAddButtonsCell(reg.id, reg.name, 'mbsreg', reg.textname || reg.name)}
-                    <td class="col-id">${reg.id}</td>
-                    <td class="col-name" title="${escapeHtml(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
-                    <td class="col-type">${reg.iotype ? `<span class="type-badge type-${reg.iotype}">${reg.iotype}</span>` : ''}</td>
-                    <td class="col-value">${reg.value !== undefined ? reg.value : ''}</td>
-                    <td class="col-mbaddr">${mbAddr || ''}</td>
-                    <td class="col-register">${mbreg !== undefined ? mbreg : ''}</td>
-                    <td class="col-func">${mbfunc !== undefined ? mbfunc : ''}</td>
-                    <td class="col-access">${reg.amode || ''}</td>
-                </tr>
-            `;
-        }).join('');
-
-        tbody.innerHTML = html;
-
-        // Bind chart toggle events
-        this.attachChartToggleListeners(tbody, this.registerMap);
-
-        // Bind dashboard toggle events
-        this.attachDashboardToggleListeners(tbody);
-
-        // Bind pin toggle events
-        tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => this.togglePin(parseInt(toggle.dataset.id)));
-        });
-
-        // Обработчик кнопки "снять все"
-        if (unpinBtn) {
-            unpinBtn.onclick = () => this.unpinAll();
-        }
     }
 
-    // Override to use ModbusSlave SSE subscription
+    // ModbusSlave row: device = mbaddr, register содержит mbreg/mbfunc, есть amode.
+    _renderRegisterRow(reg, isPinned) {
+        const mbAddr = reg.device;
+        const regInfo = reg.register || {};
+        const mbreg = regInfo.mbreg !== undefined ? regInfo.mbreg : reg.mbreg;
+        const mbfunc = regInfo.mbfunc;
+        return `
+            <tr data-sensor-id="${reg.id}">
+                ${this.renderPinToggleCell({ id: reg.id, isPinned })}
+                ${this.renderAddButtonsCell(reg.id, reg.name, 'mbsreg', reg.textname || reg.name)}
+                <td class="col-id">${reg.id}</td>
+                <td class="col-name" title="${escapeAttr(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
+                <td class="col-type">${reg.iotype ? `<span class="type-badge type-${reg.iotype}">${reg.iotype}</span>` : ''}</td>
+                <td class="col-value">${reg.value !== undefined ? reg.value : ''}</td>
+                <td class="col-mbaddr">${mbAddr || ''}</td>
+                <td class="col-register">${mbreg !== undefined ? mbreg : ''}</td>
+                <td class="col-func">${mbfunc !== undefined ? mbfunc : ''}</td>
+                <td class="col-access">${reg.amode || ''}</td>
+            </tr>
+        `;
+    }
+
+    // ModbusSlave registers are already subscribed through main SSE
     subscribeToChartSensor(sensorId) {
-        // ModbusSlave registers are already subscribed through main SSE
-        if (!this.subscribedSensorIds.has(sensorId)) {
-            this.subscribedSensorIds.add(sensorId);
-        }
+        this.subscribeToChartSensorLocal(sensorId);
     }
 
     loadRegistersHeight() {
-        return this.loadSectionHeight('uniset-panel-mbs-registers', 320);
-    }
-
-    saveRegistersHeight(value) {
-        this.registersHeight = value;
-        this.saveSectionHeight('uniset-panel-mbs-registers', value);
+        return this.loadSectionHeight('uniset-panel-mbs-registers', DATA_TABLE_DEFAULT_HEIGHT);
     }
 
     setupRegistersResize() {
@@ -446,7 +392,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             `mbs-registers-container-${this.objectName}`,
             'uniset-panel-mbs-registers',
             'registersHeight',
-            { minHeight: 200, maxHeight: 700 }
+            { minHeight: SENSORS_CONTAINER_MIN_HEIGHT, maxHeight: DATA_TABLE_MAX_HEIGHT }
         );
     }
 
@@ -472,13 +418,6 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         // Value
         if (update.value !== undefined) {
             this._animateCellValue(row, '.col-value', String(update.value), 'value-changed');
-        }
-        // Device respond status
-        const deviceCell = row.querySelector('.col-device .mb-respond');
-        if (deviceCell && update.device !== undefined) {
-            const deviceAddr = update.device;
-            const deviceInfo = this.devicesDict ? (this.devicesDict[deviceAddr] || {}) : {};
-            deviceCell.className = `mb-respond ${deviceInfo.respond ? 'ok' : 'fail'}`;
         }
     }
 
@@ -512,4 +451,3 @@ registerRenderer('MBSlave1', ModbusSlaveRenderer);
 
 // OPCUAServerRenderer - рендерер для OPCUAServer extensionType
 // OPCUAServer - это OPC UA сервер, который предоставляет доступ к переменным через OPC UA протокол
-

@@ -56,12 +56,9 @@ test.describe('ModbusMaster renderer', () => {
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
 
-    // Wait for status to load
-    await page.waitForTimeout(1000);
-
-    // Check status section has content
+    // Check status section has content — wait until it appears
     const statusTable = page.locator(`#mb-status-section-${MB_OBJECT} .info-table`);
-    await expect(statusTable).toBeVisible();
+    await expect(statusTable).toBeVisible({ timeout: 5000 });
   });
 
   test('should display devices list', async ({ page }) => {
@@ -73,10 +70,7 @@ test.describe('ModbusMaster renderer', () => {
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
 
-    // Wait for devices to load
-    await page.waitForTimeout(1000);
-
-    // Check devices container
+    // Check devices container — wait until rendered
     const devicesContainer = page.locator(`#mb-devices-${MB_OBJECT}`);
     await expect(devicesContainer).toBeVisible({ timeout: 5000 });
 
@@ -94,10 +88,7 @@ test.describe('ModbusMaster renderer', () => {
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
 
-    // Wait for registers to load
-    await page.waitForTimeout(1500);
-
-    // Check registers tbody
+    // Check registers tbody — wait until rendered
     const registersTbody = page.locator(`#mb-registers-tbody-${MB_OBJECT}`);
     await expect(registersTbody).toBeVisible({ timeout: 5000 });
 
@@ -133,10 +124,7 @@ test.describe('ModbusMaster renderer', () => {
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
 
-    // Wait for registers to load
-    await page.waitForTimeout(1500);
-
-    // Check that register rows exist
+    // Check that register rows exist — wait until rendered
     const rows = page.locator(`#mb-registers-tbody-${MB_OBJECT} tr`);
     await expect(rows.first()).toBeVisible({ timeout: 5000 });
 
@@ -158,15 +146,15 @@ test.describe('ModbusMaster renderer', () => {
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
 
-    // Wait for registers to load
-    await page.waitForTimeout(1500);
+    // Wait for registers to appear before filtering
+    await expect(page.locator(`#mb-registers-tbody-${MB_OBJECT} tr`).first()).toBeVisible({ timeout: 5000 });
 
     // Filter now works on both mbreg AND sensor name (no checkbox needed)
     const filterInput = page.locator(`#mb-registers-filter-${MB_OBJECT}`);
     await filterInput.fill('AI');
 
-    // Wait for filter to apply
-    await page.waitForTimeout(500);
+    // Wait for filter to apply — rows should still exist
+    await expect(page.locator(`#mb-registers-tbody-${MB_OBJECT} tr`).first()).toBeVisible({ timeout: 3000 });
 
     // All visible registers should contain "AI" in name
     const visibleRows = page.locator(`#mb-registers-tbody-${MB_OBJECT} tr`);
@@ -183,15 +171,15 @@ test.describe('ModbusMaster renderer', () => {
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
 
-    // Wait for registers to load
-    await page.waitForTimeout(1500);
+    // Wait for registers to appear before filtering
+    await expect(page.locator(`#mb-registers-tbody-${MB_OBJECT} tr`).first()).toBeVisible({ timeout: 5000 });
 
     // By default, filter searches by mbreg
     const filterInput = page.locator(`#mb-registers-filter-${MB_OBJECT}`);
     await filterInput.fill('70');
 
-    // Wait for filter to apply
-    await page.waitForTimeout(500);
+    // Wait for filter to apply — rows should still exist
+    await expect(page.locator(`#mb-registers-tbody-${MB_OBJECT} tr`).first()).toBeVisible({ timeout: 3000 });
 
     // Should show registers with mbreg containing "70"
     const visibleRows = page.locator(`#mb-registers-tbody-${MB_OBJECT} tr`);
@@ -208,14 +196,14 @@ test.describe('ModbusMaster renderer', () => {
 
     await page.waitForSelector('.tab-panel.active', { timeout: 10000 });
 
-    // Wait for registers to load
-    await page.waitForTimeout(1500);
+    // Wait for registers to appear before filtering
+    await expect(page.locator(`#mb-registers-tbody-${MB_OBJECT} tr`).first()).toBeVisible({ timeout: 5000 });
 
     const typeFilter = page.locator(`#mb-type-filter-${MB_OBJECT}`);
     await typeFilter.selectOption('DI');
 
     // Wait for filter to apply
-    await page.waitForTimeout(500);
+    await expect(page.locator(`#mb-registers-tbody-${MB_OBJECT} tr`).first()).toBeVisible({ timeout: 3000 });
 
     // All visible registers should have DI type
     const visibleTypes = page.locator(`#mb-registers-tbody-${MB_OBJECT} tr .type-badge`);

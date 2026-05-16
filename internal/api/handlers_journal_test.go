@@ -9,13 +9,12 @@ import (
 	"time"
 
 	"github.com/pv/uniset-panel/internal/journal"
-	"github.com/pv/uniset-panel/internal/poller"
 	"github.com/pv/uniset-panel/internal/storage"
 )
 
 func TestGetJournals_NoManager(t *testing.T) {
 	store := storage.NewMemoryStorage()
-	handlers := NewHandlers(nil, store, nil, nil, time.Second)
+	handlers := NewHandlers(store, time.Second)
 
 	req := httptest.NewRequest("GET", "/api/journals", nil)
 	w := httptest.NewRecorder()
@@ -39,7 +38,7 @@ func TestGetJournals_NoManager(t *testing.T) {
 
 func TestGetJournals_WithManager(t *testing.T) {
 	store := storage.NewMemoryStorage()
-	handlers := NewHandlers(nil, store, nil, nil, time.Second)
+	handlers := NewHandlers(store, time.Second)
 
 	// Create empty journal manager
 	mgr := journal.NewManager(slog.Default())
@@ -67,7 +66,7 @@ func TestGetJournals_WithManager(t *testing.T) {
 
 func TestGetJournalMessages_NoManager(t *testing.T) {
 	store := storage.NewMemoryStorage()
-	handlers := NewHandlers(nil, store, nil, nil, time.Second)
+	handlers := NewHandlers(store, time.Second)
 
 	req := httptest.NewRequest("GET", "/api/journals/test123/messages", nil)
 	req.SetPathValue("id", "test123")
@@ -83,7 +82,7 @@ func TestGetJournalMessages_NoManager(t *testing.T) {
 
 func TestGetJournalMessages_NotFound(t *testing.T) {
 	store := storage.NewMemoryStorage()
-	handlers := NewHandlers(nil, store, nil, nil, time.Second)
+	handlers := NewHandlers(store, time.Second)
 
 	mgr := journal.NewManager(slog.Default())
 	handlers.SetJournalManager(mgr)
@@ -102,7 +101,7 @@ func TestGetJournalMessages_NotFound(t *testing.T) {
 
 func TestGetJournalMTypes_NoManager(t *testing.T) {
 	store := storage.NewMemoryStorage()
-	handlers := NewHandlers(nil, store, nil, nil, time.Second)
+	handlers := NewHandlers(store, time.Second)
 
 	req := httptest.NewRequest("GET", "/api/journals/test123/mtypes", nil)
 	req.SetPathValue("id", "test123")
@@ -118,7 +117,7 @@ func TestGetJournalMTypes_NoManager(t *testing.T) {
 
 func TestGetJournalMTypes_NotFound(t *testing.T) {
 	store := storage.NewMemoryStorage()
-	handlers := NewHandlers(nil, store, nil, nil, time.Second)
+	handlers := NewHandlers(store, time.Second)
 
 	mgr := journal.NewManager(slog.Default())
 	handlers.SetJournalManager(mgr)
@@ -137,7 +136,7 @@ func TestGetJournalMTypes_NotFound(t *testing.T) {
 
 func TestGetJournalMGroups_NoManager(t *testing.T) {
 	store := storage.NewMemoryStorage()
-	handlers := NewHandlers(nil, store, nil, nil, time.Second)
+	handlers := NewHandlers(store, time.Second)
 
 	req := httptest.NewRequest("GET", "/api/journals/test123/mgroups", nil)
 	req.SetPathValue("id", "test123")
@@ -153,7 +152,7 @@ func TestGetJournalMGroups_NoManager(t *testing.T) {
 
 func TestGetJournalMGroups_NotFound(t *testing.T) {
 	store := storage.NewMemoryStorage()
-	handlers := NewHandlers(nil, store, nil, nil, time.Second)
+	handlers := NewHandlers(store, time.Second)
 
 	mgr := journal.NewManager(slog.Default())
 	handlers.SetJournalManager(mgr)
@@ -217,7 +216,7 @@ func TestParseTime(t *testing.T) {
 // TestSetJournalManager tests the setter
 func TestSetJournalManager(t *testing.T) {
 	store := storage.NewMemoryStorage()
-	handlers := NewHandlers(nil, store, nil, nil, time.Second)
+	handlers := NewHandlers(store, time.Second)
 
 	if handlers.journalMgr != nil {
 		t.Error("expected journalMgr to be nil initially")
@@ -237,8 +236,7 @@ func TestSetJournalManager(t *testing.T) {
 // TestJournalRoutes_Integration tests routes via Server
 func TestJournalRoutes_Integration(t *testing.T) {
 	store := storage.NewMemoryStorage()
-	p := poller.New(nil, store, time.Second, time.Hour)
-	handlers := NewHandlers(nil, store, p, nil, time.Second)
+	handlers := NewHandlers(store, time.Second)
 
 	mgr := journal.NewManager(slog.Default())
 	handlers.SetJournalManager(mgr)

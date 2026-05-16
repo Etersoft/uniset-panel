@@ -20,7 +20,7 @@ async function loadSidebar() {
         }
         const data = await response.json();
         state.sidebarGroups = Array.isArray(data.groups) ? data.groups : [];
-        console.log(`Sidebar: ${state.sidebarGroups.length} groups loaded`);
+        debugLog(`Sidebar: ${state.sidebarGroups.length} groups loaded`);
     } catch (err) {
         console.warn('Failed to load sidebar config:', err);
         state.sidebarGroups = [];
@@ -29,23 +29,12 @@ async function loadSidebar() {
 
 // Загрузка collapse состояния групп из localStorage
 function loadGroupCollapseState() {
-    try {
-        const saved = localStorage.getItem('uniset-panel-group-collapse');
-        if (saved) {
-            state.groupCollapseState = JSON.parse(saved);
-        }
-    } catch (err) {
-        state.groupCollapseState = {};
-    }
+    state.groupCollapseState = loadJSON('uniset-panel-group-collapse', {}) || {};
 }
 
 // Сохранение collapse состояния групп в localStorage
 function saveGroupCollapseState() {
-    try {
-        localStorage.setItem('uniset-panel-group-collapse', JSON.stringify(state.groupCollapseState));
-    } catch (err) {
-        // ignore
-    }
+    saveJSON('uniset-panel-group-collapse', state.groupCollapseState);
 }
 
 // Основная функция рендеринга всех групп
@@ -119,8 +108,11 @@ function createSidebarGroupItem(item) {
         li.dataset.serverId = item.serverId;
     }
 
-    // Status dot для объектов и серверов
-    if (item.type === 'object' || item.type === 'server') {
+    // Status dot для всех сущностей с понятием connectivity
+    // (object/server — UniSet2 сервер; launcher — pRunner; journal — журнал).
+    // Dashboard — статичный конфиг, всегда «connected», dot не нужен.
+    if (item.type === 'object' || item.type === 'server'
+        || item.type === 'launcher' || item.type === 'journal') {
         const dot = document.createElement('span');
         dot.className = 'sidebar-group-status';
         li.appendChild(dot);
@@ -254,23 +246,9 @@ function applySidebarStatuses() {
 
 // Рендеринг пользовательских dashboard'ов в отдельную группу
 function renderUserDashboardsGroup(container) {
-    try {
-        const saved = localStorage.getItem('user-dashboards');
-        if (!saved) return;
+    const userDashboards = loadJSON('user-dashboards', []);
+    if (!Array.isArray(userDashboards) || userDashboards.length === 0) return;
 
-        const userDashboards = JSON.parse(saved);
-        if (!Array.isArray(userDashboards) || userDashboards.length === 0) return;
-
-        const items = userDashboards.map(name => ({
-            type: 'dashboard',
-            name: name
-        }));
-
-        renderSidebarGroup({
-            name: 'Custom',
-            items: items
-        }, container);
-    } catch (err) {
-        // ignore
-    }
+    const items = userDashboards.map(name => ({ type: 'dashboard', name }));
+    renderSidebarGroup({ name: 'Custom', items }, container);
 }

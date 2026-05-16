@@ -127,7 +127,21 @@ func (p *BasePoller[T, U]) saveToRecording(batch []U) {
 	}
 }
 
-// Subscribe подписывает на элементы объекта
+// Subscribe подписывает на элементы объекта.
+//
+// Сбрасывает lastValues для подписываемых ids, чтобы следующий poll отправил
+// SSE с актуальным значением — иначе при reload UI/dashboard'а виджеты со
+// стабильно не меняющимися датчиками остаются с initial value=null до тех пор,
+// пока значение реально не поменяется (issue: toggle сбрасывался в OFF при
+// возврате на dashboard для sensor'ов чьё значение не менялось).
+//
+// Замечание про initial value latency: max задержка = poll interval (обычно 1s).
+// Immediate replay из in-process кэша lastItems был испробован но откачен —
+// доп. callback при Subscribe ускорял первое значение, но удваивал rerender'ы
+// rows в IONC tab'ах и приводил к race с DOM-кликом в Playwright тестах
+// (см. docs/review/2026-05-06-flaky-unfreeze-dialog-test.md). Frontend
+// в любом случае имеет свой fallback через initializeWidgetValues +
+// API fetch, так что 1s задержка backend'а не критична.
 func (p *BasePoller[T, U]) Subscribe(objectName string, ids []int64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -141,6 +155,7 @@ func (p *BasePoller[T, U]) Subscribe(objectName string, ids []int64) {
 
 	for _, id := range ids {
 		p.subscriptions[objectName][id] = struct{}{}
+		delete(p.lastValues[objectName], id)
 	}
 
 	// Считаем общее количество подписок

@@ -119,11 +119,9 @@ services:
 
   # Mock uniset2 server for testing
   mock-uniset:
-    image: node:20-alpine
-    working_dir: /app
-    volumes:
-      - ./tests/mock-server:/app
-    command: sh -c "npm install --silent 2>/dev/null && node server.js"
+    build:
+      context: ./tests/mock-server
+      dockerfile: Dockerfile
     expose:
       - "9393"
     healthcheck:
@@ -166,7 +164,7 @@ services:
       clickhouse:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/objects"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/version"]
       interval: 2s
       timeout: 5s
       retries: 5
@@ -185,14 +183,27 @@ services:
     depends_on:
       viewer:
         condition: service_healthy
+    # Entrypoint passes positional args to playwright if provided.
+    # Default (no args, e.g. `docker compose up e2e`): runs single/ + integration/.
+    # Override (e.g. `docker compose run --rm e2e single/foo.spec.ts`): runs only specified specs.
     entrypoint:
       - bash
       - -lc
       - |
+        set -e
         cd /tmp
         cp -r /app/* .
-        npm install --no-fund --no-audit
-        npx playwright test single/ --reporter=list && npx playwright test integration/ --reporter=list
+        rm -rf node_modules test-results playwright-report unit/node_modules mock-server/node_modules mock-server-2/node_modules
+        # npm ci из lockfile — детерминированный install, быстрее `npm install`.
+        # Сохраняем cp -r /app/*  (tar pipe ломает chromium navigation,
+        # причина неясна; экономия ~3-5 sec не стоит риска).
+        npm ci --no-fund --no-audit
+        if [ "$#" -gt 0 ]; then
+          npx playwright test "$@" --reporter=list
+        else
+          npx playwright test single/ --reporter=list && npx playwright test integration/ --reporter=list
+        fi
+      - bash
 
   # Demo mock server - Diesel Generator Simulator
   # Usage: docker-compose --profile demo up demo-viewer

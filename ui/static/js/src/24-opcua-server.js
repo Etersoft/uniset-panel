@@ -2,6 +2,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
     static getTypeName() {
         return 'OPCUAServer';
     }
+    static loadingIdPrefix = 'opcuasrv';
 
     constructor(objectName, tabKey = null) {
         super(objectName, tabKey);
@@ -71,7 +72,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         this.setupSensorsResize();
         this.setupFullVirtualScroll({
             viewportId: `opcuasrv-sensors-viewport-${this.objectName}`,
-            threshold: 80,
+            threshold: VIRTUAL_SCROLL_PERCENT_THRESHOLD,
             thresholdType: 'percent',
         });
         this.initStatusAutoRefresh();
@@ -122,7 +123,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
     createOPCUAServerParamsSection() {
         const headerIndicator = `
-            <span class="header-indicator-dot fail" id="opcuasrv-ind-params-${this.objectName}" onclick="event.stopPropagation()" title="Parameters: loading..."></span>
+            <span class="header-indicator-dot fail" id="opcuasrv-ind-params-${this.objectName}" title="Parameters: loading..."></span>
         `;
         return this.createCollapsibleSection('opcuasrv-params', 'Server Parameters', `
             <div class="opcua-actions">
@@ -240,7 +241,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="info-label">${row.label}</td>
-                <td class="info-value">${formatValue(row.value)}</td>
+                <td class="info-value">${formatValueHtml(row.value)}</td>
             `;
             tbody.appendChild(tr);
         });
@@ -278,7 +279,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td class="info-label">${row.label}</td>
-                    <td class="info-value">${formatValue(row.value)}</td>
+                    <td class="info-value">${formatValueHtml(row.value)}</td>
                 `;
                 configTbody.appendChild(tr);
             });
@@ -306,135 +307,41 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="variable-name">${name}</td>
-                <td class="variable-value">${current !== undefined ? formatValue(current) : '—'}</td>
-                <td><input class="opcua-param-input" data-name="${name}" value="${current !== undefined ? current : ''}"></td>
+                <td class="variable-value">${current !== undefined ? formatValueHtml(current) : '—'}</td>
+                <td><input class="opcua-param-input" data-name="${escapeAttr(name)}" value="${escapeAttr(current !== undefined ? current : '')}"></td>
             `;
             tbody.appendChild(tr);
         });
     }
 
     async loadSensors() {
-        // Reset state for fresh load
-        this.allSensors = [];
-        this.hasMore = true;
-        this.startIndex = 0;
-        this.endIndex = 0;
+        return this._loadOpcuaSensorsTable({
+            viewportId: `opcuasrv-sensors-viewport-${this.objectName}`,
+            tableId:    `opcuasrv-sensors-table-${this.objectName}`,
+            noteId:     `opcuasrv-sensors-note-${this.objectName}`,
+            buildSensorParams:   () => this._buildSensorQueryParams(),
+            postProcessSensors:  (s) => s,  // OPCUAServer не имеет UI/status post-filter
+        });
+    }
 
-        // Reset viewport scroll position
-        const viewport = this.getEl(`opcuasrv-sensors-viewport-${this.objectName}`);
-        if (viewport) viewport.scrollTop = 0;
-
-        try {
-            let url = `/api/objects/${encodeURIComponent(this.objectName)}/opcua/sensors?limit=${this.chunkSize}&offset=0`;
-
-            if (this.filter) {
-                url += `&search=${encodeURIComponent(this.filter)}`;
-            }
-            if (this.typeFilter && this.typeFilter !== 'all') {
-                url += `&iotype=${this.typeFilter}`;
-            }
-
-            const data = await this.fetchJSON(url);
-            let sensors = data.sensors || [];
-            this.sensorsTotal = typeof data.total === 'number' ? data.total : sensors.length;
-
-            this.allSensors = sensors;
-            this.sensorMap.clear();
-            sensors.forEach(s => this.sensorMap.set(s.id, s));
-
-            // Если нет фильтра и есть закреплённые датчики - загрузить их отдельно
-            if (!this.filter) {
-                await this.loadPinnedSensors();
-            }
-
-            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
-            this.updateVisibleRows();
-            this.updateSensorCount();
-            this.setNote(`opcuasrv-sensors-note-${this.objectName}`, '');
-
-            // Подписываемся на SSE обновления после загрузки
-            this.subscribeToSSE();
-
-            // Обработчики сортировки
-            const table = this.getEl(`opcuasrv-sensors-table-${this.objectName}`);
-            if (table) {
-                this.attachSortHandlers(table);
-                this.updateSortHeaders();
-            }
-        } catch (err) {
-            this.setNote(`opcuasrv-sensors-note-${this.objectName}`, err.message, true);
-        }
+    // OPCUAServer: только server-side search/iotype (нет UI-mode и status filter).
+    _buildSensorQueryParams() {
+        let params = '';
+        if (this.filter) params += `&search=${encodeURIComponent(this.filter)}`;
+        if (this.typeFilter && this.typeFilter !== 'all') params += `&iotype=${this.typeFilter}`;
+        return params;
     }
 
     // Загружает закреплённые датчики, если они не в текущем списке
-    async loadPinnedSensors() {
-        const pinnedIds = this.getPinned();
-        if (pinnedIds.size === 0) return;
-
-        // Найти ID, которых нет в загруженных датчиках
-        const missingIds = [];
-        for (const idStr of pinnedIds) {
-            const id = parseInt(idStr);
-            if (!this.sensorMap.has(id)) {
-                missingIds.push(id);
-            }
-        }
-
-        if (missingIds.length === 0) return;
-
-        // Загрузить отсутствующие датчики по ID
-        try {
-            const idsParam = missingIds.join(',');
-            const url = `/api/objects/${encodeURIComponent(this.objectName)}/opcua/get?filter=${idsParam}`;
-            const response = await this.fetchJSON(url);
-            const pinnedSensors = response.sensors || [];
-
-            // Добавить закреплённые датчики в начало списка
-            for (const sensor of pinnedSensors) {
-                if (!this.sensorMap.has(sensor.id)) {
-                    this.allSensors.unshift(sensor);
-                    this.sensorMap.set(sensor.id, sensor);
-                }
-            }
-        } catch (err) {
-            console.warn('Failed to load pinned sensors:', err);
-        }
+    loadPinnedSensors() {
+        return this.loadMissingPinnedSensors('/opcua/get');
     }
 
     async loadMoreSensors() {
-        if (this.isLoadingChunk || !this.hasMore) return;
-
-        this.isLoadingChunk = true;
-        this.showLoadingIndicator(true);
-
-        try {
-            const nextOffset = this.allSensors.length;
-            let url = `/api/objects/${encodeURIComponent(this.objectName)}/opcua/sensors?limit=${this.chunkSize}&offset=${nextOffset}`;
-
-            if (this.filter) {
-                url += `&search=${encodeURIComponent(this.filter)}`;
-            }
-            if (this.typeFilter && this.typeFilter !== 'all') {
-                url += `&iotype=${this.typeFilter}`;
-            }
-
-            const data = await this.fetchJSON(url);
-            let newSensors = data.sensors || [];
-
-            // Дедупликация: добавляем только датчики которых еще нет
-            const existingIds = new Set(this.allSensors.map(s => s.id));
-            const uniqueNewSensors = newSensors.filter(s => !existingIds.has(s.id));
-
-            this.allSensors = [...this.allSensors, ...uniqueNewSensors];
-            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
-            this.updateVisibleRows();
-            this.updateSensorCount();
-        } catch (err) {
-            console.error('Failed to load more sensors:', err);
-        } finally {
-            this.isLoadingChunk = false;
-            this.showLoadingIndicator(false);
-        }
+        return this._loadMoreOpcuaSensorsTable({
+            buildSensorParams:   () => this._buildSensorQueryParams(),
+            postProcessSensors:  (s) => s,
+        });
     }
 
     renderVisibleSensors() {
@@ -456,9 +363,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         let sensorsToShow = this.applyFilters(this.allSensors, 'name', 'iotype');
 
         // Если есть закрепленные и нет фильтра — показываем только их
-        if (hasPinned && !this.filter) {
-            sensorsToShow = this.allSensors.filter(s => pinnedSensors.has(String(s.id)));
-        }
+        sensorsToShow = this.filterPinnedOnly(sensorsToShow, pinnedSensors);
 
         // Set spacer height to position visible rows correctly
         const spacerHeight = this.startIndex * this.rowHeight;
@@ -486,24 +391,16 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         // Render visible rows with type badges and chart toggle
         tbody.innerHTML = visibleSensors.map(sensor => {
             const isPinned = pinnedSensors.has(String(sensor.id));
-            const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-            const pinIcon = isPinned ? '📌' : '○';
-            const pinTitle = isPinned ? 'Unpin' : 'Pin';
-
             const iotype = sensor.iotype || sensor.type || '';
             const typeBadgeClass = iotype ? `type-badge type-${iotype}` : '';
             return `
             <tr data-sensor-id="${sensor.id || ''}">
-                <td class="col-pin">
-                    <span class="${pinToggleClass}" data-id="${sensor.id}" title="${pinTitle}">
-                        ${pinIcon}
-                    </span>
-                </td>
+                ${this.renderPinToggleCell({ id: sensor.id, isPinned })}
                 ${this.renderAddButtonsCell(sensor.id, sensor.name, 'opcuasrv', sensor.textname || sensor.name)}
                 <td>${sensor.id || ''}</td>
-                <td class="sensor-name" title="${escapeHtml(sensor.textname || sensor.comment || '')}">${sensor.name || ''}</td>
+                <td class="sensor-name" title="${escapeAttr(sensor.textname || sensor.comment || '')}">${escapeHtml(sensor.name || '')}</td>
                 <td><span class="${typeBadgeClass}">${iotype}</span></td>
-                <td class="sensor-value">${sensor.value !== undefined ? formatValue(sensor.value) : '—'}</td>
+                <td class="sensor-value">${sensor.value !== undefined ? formatValueHtml(sensor.value) : '—'}</td>
                 <td>${sensor.vtype || ''}</td>
                 <td>${sensor.precision !== undefined ? sensor.precision : ''}</td>
             </tr>
@@ -518,7 +415,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
         // Bind pin toggle events
         tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => this.togglePin(parseInt(toggle.dataset.id)));
+            toggle.addEventListener('click', () => this.togglePin(parseIntegerOrDefault(toggle.dataset.id, null)));
         });
 
         // Обработчик кнопки "снять все"
@@ -527,20 +424,11 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         }
     }
 
-    // Override to use OPCUAServer SSE subscription
+    // OPCUAServer sensors are already subscribed through main SSE
     subscribeToChartSensor(sensorId) {
-        // OPCUAServer sensors are already subscribed through main SSE
-        if (!this.subscribedSensorIds.has(sensorId)) {
-            this.subscribedSensorIds.add(sensorId);
-        }
+        this.subscribeToChartSensorLocal(sensorId);
     }
 
-    showLoadingIndicator(show) {
-        const indicator = this.getEl(`opcuasrv-loading-more-${this.objectName}`);
-        if (indicator) {
-            indicator.style.display = show ? 'block' : 'none';
-        }
-    }
 
     updateSensorCount() {
         this.updateItemCount(`opcuasrv-sensor-count-${this.objectName}`, this.allSensors.length, this.sensorsTotal);
@@ -548,11 +436,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
     loadSensorsHeight() {
         // Используем формат JSON как другие рендереры
-        return this.loadSectionHeight('uniset-panel-opcuasrv-sensors', 300);
-    }
-
-    saveSensorsHeight(height) {
-        this.saveSectionHeight('uniset-panel-opcuasrv-sensors', height);
+        return this.loadSectionHeight('uniset-panel-opcuasrv-sensors', DEFAULT_SECTION_HEIGHT);
     }
 
     setupSensorsResize() {
@@ -561,7 +445,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
             `opcuasrv-sensors-container-${this.objectName}`,
             'uniset-panel-opcuasrv-sensors',
             'sensorsHeight',
-            { minHeight: 200, maxHeight: 700 }
+            { minHeight: SENSORS_CONTAINER_MIN_HEIGHT, maxHeight: DATA_TABLE_MAX_HEIGHT }
         );
     }
 
@@ -609,4 +493,3 @@ applyMixin(OPCUAServerRenderer, TableSortMixin);
 
 // OPCUAServer рендерер (по extensionType)
 registerRenderer('OPCUAServer', OPCUAServerRenderer);
-

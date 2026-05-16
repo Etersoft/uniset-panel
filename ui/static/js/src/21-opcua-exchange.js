@@ -6,6 +6,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     static getTypeName() {
         return 'OPCUAExchange';
     }
+    static loadingIdPrefix = 'opcua';
 
     constructor(objectName, tabKey = null) {
         super(objectName, tabKey);
@@ -138,7 +139,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             `opcua-sensors-filter-${this.objectName}`,
             `opcua-type-filter-${this.objectName}`,
             () => this.loadSensors(),
-            300,
+            FILTER_DEBOUNCE_DELAY,
             `opcua-status-filter-${this.objectName}`
         );
 
@@ -161,7 +162,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     createOPCUAStatusSection() {
         const headerExtra = `
             ${this.createStatusHeaderExtra()}
-            <div class="header-channels" id="opcua-header-channels-${this.objectName}" onclick="event.stopPropagation()"></div>
+            <div class="header-channels" id="opcua-header-channels-${this.objectName}"></div>
         `;
         return this.createCollapsibleSection('opcua-status', 'OPC UA Status', `
             <div class="opcua-actions">
@@ -174,7 +175,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
     createOPCUAControlSection() {
         const headerIndicators = `
-            <div class="header-indicators" id="opcua-control-indicators-${this.objectName}" onclick="event.stopPropagation()">
+            <div class="header-indicators" id="opcua-control-indicators-${this.objectName}">
                 <div class="header-indicator">
                     <span class="header-indicator-label">Allowed</span>
                     <span class="header-indicator-dot" id="opcua-ind-allow-${this.objectName}"></span>
@@ -200,7 +201,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
     createOPCUAParamsSection() {
         const headerIndicator = `
-            <span class="header-indicator-dot fail" id="opcua-ind-params-${this.objectName}" onclick="event.stopPropagation()" title="Parameters: loading..."></span>
+            <span class="header-indicator-dot fail" id="opcua-ind-params-${this.objectName}" title="Parameters: loading..."></span>
         `;
         return this.createCollapsibleSection('opcua-params', 'Exchange Parameters', `
             <div class="opcua-actions">
@@ -321,8 +322,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         // Компактная строка статистики
         const ioSize = status.iolist_size ?? status.iolistSize ?? '—';
         const errCount = status.errorHistorySize ?? 0;
-        const errMax = status.errorHistoryMax ?? 100;
-        const errClass = errCount >= errMax ? 'error' : (errCount > 0 ? 'warn' : '');
+        const errMax = status.errorHistoryMax ?? OPCUA_ERROR_HISTORY_DEFAULT_MAX;
 
         // Определяем класс индикатора ошибок
         const errDotClass = errCount >= errMax ? 'fail' : (errCount > 0 ? 'warn' : 'ok');
@@ -393,57 +393,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     renderControl() {
-        const allow = this.status?.httpControlAllow && canControl();
-        const active = this.status?.httpControlActive;
-        const enabledParams = this.status?.httpEnabledSetParams;
-        const allowText = allow ? 'Take control' : (!canControl() ? 'Read-only mode' : 'Control not allowed');
-
-        // Обновляем индикаторы в шапке
-        const indAllow = this.getEl(`opcua-ind-allow-${this.objectName}`);
-        const indActive = this.getEl(`opcua-ind-active-${this.objectName}`);
-        const indParams = this.getEl(`opcua-ind-params-${this.objectName}`);
-
-        if (indAllow) {
-            indAllow.className = `header-indicator-dot ${allow ? 'ok' : 'fail'}`;
-            indAllow.title = allow ? 'Allowed: Yes' : 'Allowed: No';
-        }
-        if (indActive) {
-            indActive.className = `header-indicator-dot ${active ? 'ok' : 'fail'}`;
-            indActive.title = active ? 'Active: Yes' : 'Active: No';
-        }
-        if (indParams) {
-            indParams.className = `header-indicator-dot ${enabledParams ? 'ok' : 'fail'}`;
-            indParams.title = enabledParams ? 'Parameters: Yes' : 'Parameters: No';
-        }
-
-        // Обновляем кнопки
-        const takeBtn = this.getEl(`opcua-control-take-${this.objectName}`);
-        const releaseBtn = this.getEl(`opcua-control-release-${this.objectName}`);
-        const noteEl = this.getEl(`opcua-control-note-${this.objectName}`);
-
-        if (takeBtn) {
-            takeBtn.disabled = !allow;
-            takeBtn.title = allowText;
-            // Подсветка кнопки когда контроль активен
-            if (active) {
-                takeBtn.classList.add('control-active');
-            } else {
-                takeBtn.classList.remove('control-active');
-            }
-        }
-        if (releaseBtn) {
-            releaseBtn.disabled = !allow;
-            releaseBtn.title = allowText;
-        }
-
-        // Обновляем стиль сообщения
-        if (noteEl) {
-            if (active) {
-                noteEl.classList.add('control-note-success');
-            } else {
-                noteEl.classList.remove('control-note-success');
-            }
-        }
+        this.renderHttpControl('opcua');
     }
 
     formatSubscription(status) {
@@ -494,7 +444,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         this.readonlyParams.forEach(name => {
             const current = this.params[name];
             const tr = document.createElement('tr');
-            let displayValue = current !== undefined ? formatValue(current) : '—';
+            let displayValue = current !== undefined ? formatValueHtml(current) : '—';
             // Форматируем activated как Да/Нет
             if (name === 'activated') {
                 displayValue = current ? 'Yes' : 'No';
@@ -549,107 +499,40 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     async loadSensors() {
-        // Reset state for fresh load
-        this.allSensors = [];
-        this.hasMore = true;
-        this.startIndex = 0;
-        this.endIndex = 0;
+        return this._loadOpcuaSensorsTable({
+            viewportId: `opcua-sensors-viewport-${this.objectName}`,
+            tableId:    `opcua-sensors-table-${this.objectName}`,
+            noteId:     `opcua-sensors-note-${this.objectName}`,
+            buildSensorParams:   () => this._buildSensorQueryParams(),
+            postProcessSensors:  (s) => this._postProcessSensors(s),
+        });
+    }
 
-        // Reset viewport scroll position
-        const viewport = this.getEl(`opcua-sensors-viewport-${this.objectName}`);
-        if (viewport) viewport.scrollTop = 0;
-
-        // Проверяем режим фильтрации: false = серверная (default), true = UI
+    // Server-side query params (search/iotype) — только если UI-фильтр выключен.
+    _buildSensorQueryParams() {
         const useUIFilter = state.config.opcuaUISensorsFilter;
+        if (useUIFilter) return '';
+        let params = '';
+        if (this.filter) params += `&search=${encodeURIComponent(this.filter)}`;
+        if (this.typeFilter && this.typeFilter !== 'all') params += `&iotype=${this.typeFilter}`;
+        return params;
+    }
 
-        try {
-            let url = `/api/objects/${encodeURIComponent(this.objectName)}/opcua/sensors?limit=${this.chunkSize}&offset=0`;
-
-            // Серверная фильтрация (если не включена UI фильтрация)
-            if (!useUIFilter) {
-                if (this.filter) {
-                    url += `&search=${encodeURIComponent(this.filter)}`;
-                }
-                if (this.typeFilter && this.typeFilter !== 'all') {
-                    url += `&iotype=${this.typeFilter}`;
-                }
-            }
-
-            const data = await this.fetchJSON(url);
-            let sensors = data.sensors || [];
-            this.sensorsTotal = typeof data.total === 'number' ? data.total : sensors.length;
-
-            // UI фильтрация (если включена)
-            if (useUIFilter) {
-                sensors = this.applyLocalFilters(sensors);
-            } else if (this.statusFilter && this.statusFilter !== 'all') {
-                // Status filter применяем локально (сервер не поддерживает)
-                sensors = sensors.filter(s =>
-                    (s.status || '').toLowerCase() === this.statusFilter.toLowerCase()
-                );
-            }
-
-            this.allSensors = sensors;
-            this.sensorMap.clear();
-            sensors.forEach(s => this.sensorMap.set(s.id, s));
-
-            // Если нет фильтра и есть закреплённые датчики - загрузить их отдельно
-            if (!this.filter) {
-                await this.loadPinnedSensors();
-            }
-
-            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
-            this.updateVisibleRows();
-            this.updateSensorCount();
-            this.setNote(`opcua-sensors-note-${this.objectName}`, '');
-
-            // Подписываемся на SSE обновления после загрузки
-            this.subscribeToSSE();
-
-            // Обработчики сортировки
-            const table = this.getEl(`opcua-sensors-table-${this.objectName}`);
-            if (table) {
-                this.attachSortHandlers(table);
-                this.updateSortHeaders();
-            }
-        } catch (err) {
-            this.setNote(`opcua-sensors-note-${this.objectName}`, err.message, true);
+    // Local post-processing: UI-mode filter ИЛИ status filter (server не поддерживает).
+    _postProcessSensors(sensors) {
+        const useUIFilter = state.config.opcuaUISensorsFilter;
+        if (useUIFilter) return this.applyLocalFilters(sensors);
+        if (this.statusFilter && this.statusFilter !== 'all') {
+            return sensors.filter(s =>
+                (s.status || '').toLowerCase() === this.statusFilter.toLowerCase()
+            );
         }
+        return sensors;
     }
 
     // Загружает закреплённые датчики, если они не в текущем списке
-    async loadPinnedSensors() {
-        const pinnedIds = this.getPinned();
-        if (pinnedIds.size === 0) return;
-
-        // Найти ID, которых нет в загруженных датчиках
-        const missingIds = [];
-        for (const idStr of pinnedIds) {
-            const id = parseInt(idStr);
-            if (!this.sensorMap.has(id)) {
-                missingIds.push(id);
-            }
-        }
-
-        if (missingIds.length === 0) return;
-
-        // Загрузить отсутствующие датчики по ID
-        try {
-            const idsParam = missingIds.join(',');
-            const url = `/api/objects/${encodeURIComponent(this.objectName)}/opcua/get?filter=${idsParam}`;
-            const response = await this.fetchJSON(url);
-            const pinnedSensors = response.sensors || [];
-
-            // Добавить закреплённые датчики в начало списка
-            for (const sensor of pinnedSensors) {
-                if (!this.sensorMap.has(sensor.id)) {
-                    this.allSensors.unshift(sensor);
-                    this.sensorMap.set(sensor.id, sensor);
-                }
-            }
-        } catch (err) {
-            console.warn('Failed to load pinned sensors:', err);
-        }
+    loadPinnedSensors() {
+        return this.loadMissingPinnedSensors('/opcua/get');
     }
 
     applyLocalFilters(sensors) {
@@ -673,55 +556,10 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     async loadMoreSensors() {
-        if (this.isLoadingChunk || !this.hasMore) return;
-
-        this.isLoadingChunk = true;
-        this.showLoadingIndicator(true);
-
-        // Проверяем режим фильтрации: false = серверная (default), true = UI
-        const useUIFilter = state.config.opcuaUISensorsFilter;
-
-        try {
-            const nextOffset = this.allSensors.length;
-            let url = `/api/objects/${encodeURIComponent(this.objectName)}/opcua/sensors?limit=${this.chunkSize}&offset=${nextOffset}`;
-
-            // Серверная фильтрация (если не включена UI фильтрация)
-            if (!useUIFilter) {
-                if (this.filter) {
-                    url += `&search=${encodeURIComponent(this.filter)}`;
-                }
-                if (this.typeFilter && this.typeFilter !== 'all') {
-                    url += `&iotype=${this.typeFilter}`;
-                }
-            }
-
-            const data = await this.fetchJSON(url);
-            let newSensors = data.sensors || [];
-
-            // UI фильтрация (если включена)
-            if (useUIFilter) {
-                newSensors = this.applyLocalFilters(newSensors);
-            } else if (this.statusFilter && this.statusFilter !== 'all') {
-                // Status filter применяем локально (сервер не поддерживает)
-                newSensors = newSensors.filter(s =>
-                    (s.status || '').toLowerCase() === this.statusFilter.toLowerCase()
-                );
-            }
-
-            // Дедупликация: добавляем только датчики которых еще нет
-            const existingIds = new Set(this.allSensors.map(s => s.id));
-            const uniqueNewSensors = newSensors.filter(s => !existingIds.has(s.id));
-
-            this.allSensors = [...this.allSensors, ...uniqueNewSensors];
-            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
-            this.updateVisibleRows();
-            this.updateSensorCount();
-        } catch (err) {
-            console.error('Failed to load more sensors:', err);
-        } finally {
-            this.isLoadingChunk = false;
-            this.showLoadingIndicator(false);
-        }
+        return this._loadMoreOpcuaSensorsTable({
+            buildSensorParams:   () => this._buildSensorQueryParams(),
+            postProcessSensors:  (s) => this._postProcessSensors(s),
+        });
     }
 
     renderVisibleSensors() {
@@ -740,10 +578,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         }
 
         // Фильтруем датчики: если есть закрепленные — показываем только их (если нет фильтра)
-        let sensorsToShow = this.allSensors;
-        if (hasPinned && !this.filter) {
-            sensorsToShow = this.allSensors.filter(s => pinnedSensors.has(String(s.id)));
-        }
+        let sensorsToShow = this.filterPinnedOnly(this.allSensors, pinnedSensors);
 
         // Set spacer height to position visible rows correctly
         const spacerHeight = this.startIndex * this.rowHeight;
@@ -771,28 +606,20 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         // Render visible rows with type badges and chart toggle
         tbody.innerHTML = visibleSensors.map(sensor => {
             const isPinned = pinnedSensors.has(String(sensor.id));
-            const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-            const pinIcon = isPinned ? '📌' : '○';
-            const pinTitle = isPinned ? 'Unpin' : 'Pin';
-
             const iotype = sensor.iotype || sensor.type || '';
             const typeBadgeClass = iotype ? `type-badge type-${iotype}` : '';
             return `
             <tr data-sensor-id="${sensor.id || ''}">
-                <td class="col-pin">
-                    <span class="${pinToggleClass}" data-id="${sensor.id}" title="${pinTitle}">
-                        ${pinIcon}
-                    </span>
-                </td>
+                ${this.renderPinToggleCell({ id: sensor.id, isPinned })}
                 ${this.renderAddButtonsCell(sensor.id, sensor.name, 'opcua', sensor.textname || sensor.name)}
                 <td class="col-id">${sensor.id ?? '—'}</td>
-                <td class="col-name" title="${escapeHtml(sensor.textname || sensor.comment || '')}">${escapeHtml(sensor.name || '')}</td>
+                <td class="col-name" title="${escapeAttr(sensor.textname || sensor.comment || '')}">${escapeHtml(sensor.name || '')}</td>
                 <td class="col-type"><span class="${typeBadgeClass}">${iotype || '—'}</span></td>
                 <td class="col-value">${sensor.value ?? '—'}</td>
                 <td class="col-tick">${sensor.tick ?? '—'}</td>
                 <td class="col-vtype">${sensor.vtype || '—'}</td>
                 <td class="col-precision">${sensor.precision ?? '—'}</td>
-                <td class="col-status ${sensor.status && sensor.status.toLowerCase() !== 'ok' ? 'status-bad' : ''}" title="${escapeHtml(sensor.status || '')}">${escapeHtml(sensor.status || '—')}</td>
+                <td class="col-status ${sensor.status && sensor.status.toLowerCase() !== 'ok' ? 'status-bad' : ''}" title="${escapeAttr(sensor.status || '')}">${escapeHtml(sensor.status || '—')}</td>
             </tr>
         `}).join('');
 
@@ -804,7 +631,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
         // Bind pin toggle events
         tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => this.togglePin(parseInt(toggle.dataset.id)));
+            toggle.addEventListener('click', () => this.togglePin(parseIntegerOrDefault(toggle.dataset.id, null)));
         });
 
         // Обработчик кнопки "снять все"
@@ -823,25 +650,15 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         });
     }
 
-    // Override to use OPC UA SSE subscription
+    // OPCUAExchange sensors are already subscribed through main SSE
     subscribeToChartSensor(sensorId) {
-        // OPCUAExchange sensors are already subscribed through main SSE
-        // Just ensure the sensor is in our subscription list
-        if (!this.subscribedSensorIds.has(sensorId)) {
-            this.subscribedSensorIds.add(sensorId);
-        }
+        this.subscribeToChartSensorLocal(sensorId);
     }
 
     updateSensorCount() {
         this.updateItemCount(`opcua-sensor-count-${this.objectName}`, this.allSensors.length, this.sensorsTotal);
     }
 
-    showLoadingIndicator(show) {
-        const el = this.getEl(`opcua-loading-more-${this.objectName}`);
-        if (el) {
-            el.style.display = show ? 'block' : 'none';
-        }
-    }
 
     async loadSensorDetails(id) {
         try {
@@ -935,12 +752,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     loadDiagnosticsHeight() {
-        return this.loadSectionHeight('uniset-panel-opcua-diagnostics', 260);
-    }
-
-    saveDiagnosticsHeight(value) {
-        this.diagnosticsHeight = value;
-        this.saveSectionHeight('uniset-panel-opcua-diagnostics', value);
+        return this.loadSectionHeight('uniset-panel-opcua-diagnostics', OPCUA_DIAGNOSTICS_DEFAULT_HEIGHT);
     }
 
     setupDiagnosticsResize() {
@@ -949,17 +761,12 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             `opcua-diagnostics-container-${this.objectName}`,
             'uniset-panel-opcua-diagnostics',
             'diagnosticsHeight',
-            { minHeight: 160, maxHeight: 600 }
+            { minHeight: OPCUA_DIAGNOSTICS_MIN_HEIGHT, maxHeight: OPCUA_DIAGNOSTICS_MAX_HEIGHT }
         );
     }
 
     loadSensorsHeight() {
-        return this.loadSectionHeight('uniset-panel-opcua-sensors', 320);
-    }
-
-    saveSensorsHeight(value) {
-        this.sensorsHeight = value;
-        this.saveSectionHeight('uniset-panel-opcua-sensors', value);
+        return this.loadSectionHeight('uniset-panel-opcua-sensors', DATA_TABLE_DEFAULT_HEIGHT);
     }
 
     setupSensorsResize() {
@@ -968,38 +775,16 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             `opcua-sensors-container-${this.objectName}`,
             'uniset-panel-opcua-sensors',
             'sensorsHeight',
-            { minHeight: 200, maxHeight: 700 }
+            { minHeight: SENSORS_CONTAINER_MIN_HEIGHT, maxHeight: DATA_TABLE_MAX_HEIGHT }
         );
     }
 
     async takeControl() {
-        if (this.status && this.status.httpControlAllow === false) {
-            this.setNote(`opcua-control-note-${this.objectName}`, 'Control not allowed', true);
-            return;
-        }
-
-        try {
-            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/opcua/control/take`, { method: 'POST' });
-            this.setNote(`opcua-control-note-${this.objectName}`, 'HTTP control activated');
-            this.loadStatus();
-        } catch (err) {
-            this.setNote(`opcua-control-note-${this.objectName}`, err.message, true);
-        }
+        await this.takeHttpControl('opcua', 'opcua');
     }
 
     async releaseControl() {
-        if (this.status && this.status.httpControlAllow === false) {
-            this.setNote(`opcua-control-note-${this.objectName}`, 'Control not allowed', true);
-            return;
-        }
-
-        try {
-            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/opcua/control/release`, { method: 'POST' });
-            this.setNote(`opcua-control-note-${this.objectName}`, 'Control returned to sensor');
-            this.loadStatus();
-        } catch (err) {
-            this.setNote(`opcua-control-note-${this.objectName}`, err.message, true);
-        }
+        await this.releaseHttpControl('opcua', 'opcua');
     }
 
     // === SSE подписка на обновления датчиков (использует SSESubscriptionMixin) ===
@@ -1072,4 +857,3 @@ applyMixin(OPCUAExchangeRenderer, ParamsManagerMixin);
 applyMixin(OPCUAExchangeRenderer, ItemCounterMixin);
 applyMixin(OPCUAExchangeRenderer, PinManagementMixin);
 applyMixin(OPCUAExchangeRenderer, TableSortMixin);
-

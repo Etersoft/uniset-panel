@@ -39,6 +39,274 @@ function updateChartsFromBatch(tabKey, items, prefix, timestamp, options = {}) {
     }
 }
 
+function sanitizeEventSourceUrlForLog(url) {
+    return String(url).replace(/([?&]token=)[^&]*/g, '$1[redacted]');
+}
+
+// Lookup-таблица обработчиков SSE событий. Каждый handler получает уже
+// распарсенный payload (event) и работает с ним. JSON.parse + try/catch +
+// console.warn boilerplate унесён в _attachSseHandlers ниже — раньше эти
+// 14 строк повторялись на каждый listener, а unified obrabotka позволяет
+// единообразно фильтровать debug log / отправлять метрики.
+//
+// `connected` обработчик НЕ здесь — он делает много setup'а (resubscribe /
+// polling fallback / sidebar refresh) и завязан на eventSource lifecycle.
+const _sseHandlers = {
+    object_data: (event) => {
+        const { objectName, serverId, data, timestamp } = event;
+
+        // Обновляем время последнего обновления в индикаторе
+        updateSSEStatus('connected', new Date());
+
+        const tabKey = `${serverId}:${objectName}`;
+        const tabState = state.tabs.get(tabKey);
+        if (!tabState) return;
+
+        // Обновляем рендерер (таблицы, статистика и т.д.)
+        if (tabState.renderer) {
+            tabState.renderer.update(data);
+        }
+
+        // Обновляем графики напрямую из SSE данных (данные копятся всегда, отрисовка — если не на паузе)
+        const eventTimestamp = new Date(timestamp);
+        tabState.charts.forEach((chartData, varName) => {
+            // Пропускаем внешние датчики (ext:) - они обновляются через sensor_data
+            if (varName.startsWith('ext:')) return;
+
+            // Извлекаем значение из data в зависимости от типа переменной
+            let value = undefined;
+            if (varName.startsWith('io.in.')) {
+                const ioKey = varName.substring('io.in.'.length);
+                if (data.io?.in?.[ioKey]) value = data.io.in[ioKey].value;
+            } else if (varName.startsWith('io.out.')) {
+                const ioKey = varName.substring('io.out.'.length);
+                if (data.io?.out?.[ioKey]) value = data.io.out[ioKey].value;
+            }
+
+            if (value !== undefined) {
+                chartData.chart.data.datasets[0].data.push({ x: eventTimestamp, y: value });
+                if (chartData.chart.data.datasets[0].data.length > MAX_CHART_POINTS) {
+                    chartData.chart.data.datasets[0].data.shift();
+                }
+            }
+        });
+
+        // Пропускаем отрисовку если на паузе (данные уже накоплены выше)
+        if (tabState.chartsPaused) return;
+
+        syncAllChartsTimeRange(tabKey);
+
+        tabState.charts.forEach((chartData, varName) => {
+            if (!varName.startsWith('ext:')) {
+                chartData.chart.update('none');
+            }
+        });
+    },
+
+    // Backend отправляет serverId="sm" для SM событий
+    sensor_data: (event) => {
+        const { objectName, serverId } = event;
+        const sensor = event.data;
+        const tabKey = serverId
+            ? `${serverId}:${objectName}`
+            : findTabKeyByDisplayName(objectName); // fallback для legacy
+        if (!tabKey) return;
+        // Одиночный сенсор — оборачиваем в массив для общего batch-helper'а.
+        updateChartsFromBatch(tabKey, [sensor], 'ext', event.timestamp);
+    },
+
+    ionc_sensor_batch: (event) => {
+        const { objectName, serverId } = event;
+        const sensors = event.data;
+
+        // Cache sensor values for dashboard initialization (по sensorKey).
+        // frozen/blocked сохраняем для active widget'ов — иначе после reload
+        // dashboard'а они не узнают статус до следующего batch'а (~1s).
+        const now = Date.now();
+        for (const sensor of sensors) {
+            const key = makeSensorKey(serverId, objectName, sensor.name);
+            state.sensorValuesCache.set(key, {
+                value: sensor.value,
+                error: sensor.error || null,
+                frozen: !!sensor.frozen,
+                blocked: !!sensor.blocked,
+                timestamp: now
+            });
+        }
+
+        // Обновляем виджеты на dashboard (с контекстом для построения sensorKey).
+        updateDashboardWidgets(sensors, { serverId, objectName, timestamp: event.timestamp || null });
+
+        const tabKey = `${serverId}:${objectName}`;
+        const tabState = state.tabs.get(tabKey);
+        if (!tabState) return;
+
+        for (const sensor of sensors) {
+            if (tabState.renderer?.handleIONCSensorUpdate) {
+                tabState.renderer.handleIONCSensorUpdate(sensor);
+            }
+        }
+
+        updateChartsFromBatch(tabKey, sensors, 'io', event.timestamp, { showSupplier: true });
+    },
+
+    modbus_register_batch: (event) => {
+        const { objectName, serverId } = event;
+        const registers = event.data;
+
+        updateDashboardWidgets(registers, { serverId, objectName, timestamp: event.timestamp || null });
+
+        const tabKey = `${serverId}:${objectName}`;
+        const tabState = state.tabs.get(tabKey);
+        if (!tabState) return;
+
+        const renderer = tabState.renderer;
+        if (!renderer) return;
+        const isMaster = renderer.constructor.name === 'ModbusMasterRenderer';
+        const isSlave = renderer.constructor.name === 'ModbusSlaveRenderer';
+        if (!isMaster && !isSlave) return;
+
+        if (typeof renderer.handleModbusRegisterUpdates === 'function') {
+            renderer.handleModbusRegisterUpdates(registers);
+        }
+
+        updateChartsFromBatch(tabKey, registers, 'mb', event.timestamp);
+    },
+
+    opcua_sensor_batch: (event) => {
+        const { objectName, serverId } = event;
+        const sensors = event.data;
+
+        updateDashboardWidgets(sensors, { serverId, objectName, timestamp: event.timestamp || null });
+
+        const tabKey = `${serverId}:${objectName}`;
+        const tabState = state.tabs.get(tabKey);
+        if (!tabState) return;
+
+        const renderer = tabState.renderer;
+        const isExchange = renderer && renderer.constructor.name === 'OPCUAExchangeRenderer';
+        const isServer   = renderer && renderer.constructor.name === 'OPCUAServerRenderer';
+        if (!isExchange && !isServer) return;
+
+        if (typeof renderer.handleOPCUASensorUpdates === 'function') {
+            renderer.handleOPCUASensorUpdates(sensors);
+        }
+
+        updateChartsFromBatch(tabKey, sensors, 'ext', event.timestamp);
+    },
+
+    uwsgate_sensor_batch: (event) => {
+        const { objectName, serverId } = event;
+        const sensors = event.data;
+
+        updateDashboardWidgets(sensors, { serverId, objectName, timestamp: event.timestamp || null });
+
+        const tabKey = `${serverId}:${objectName}`;
+        const tabState = state.tabs.get(tabKey);
+        if (!tabState) return;
+
+        const renderer = tabState.renderer;
+        if (!renderer || renderer.constructor.name !== 'UWebSocketGateRenderer') return;
+
+        if (typeof renderer.handleSSEUpdate === 'function') {
+            renderer.handleSSEUpdate(sensors);
+        }
+
+        updateChartsFromBatch(tabKey, sensors, 'ws', event.timestamp, { showSupplier: true });
+    },
+
+    server_status: (event) => {
+        const serverId = event.serverId;
+        const connected = event.data?.connected ?? false;
+        debugLog(`SSE: server ${serverId} ${connected ? 'connected' : 'disconnected'}`);
+        updateServerStatus(serverId, connected);
+    },
+
+    objects_list: (event) => {
+        const serverId = event.serverId;
+        const objects = event.data?.objects ?? [];
+        debugLog(`SSE: server ${serverId} restored connection, objects: ${objects.length}`);
+        updateServerStatus(serverId, true);
+        refreshObjectsList();
+        if (typeof refreshSidebarGroups === 'function') {
+            refreshSidebarGroups();
+        }
+    },
+
+    control_status: async (event) => {
+        debugLog('SSE: control status changed:', event.data);
+        const status = event.data;
+        // Сохраняем isController если мы были контроллером — сервер не знает чей это токен.
+        status.isController = state.control.token &&
+            status.hasController &&
+            state.control.isController;
+        try {
+            const resp = await fetch('/api/control/status', {
+                headers: { 'X-Control-Token': state.control.token || '' }
+            });
+            const data = await resp.json();
+            updateControlStatus(data);
+        } catch (err) {
+            console.warn('Failed to refresh control status:', err);
+            updateControlStatus(status);
+        }
+    },
+
+    launcher_status: (event) => {
+        const tabKey = `launcher:${event.serverId}`;
+        const tabState = state.tabs.get(tabKey);
+        if (tabState?.renderer?.updateStatus) {
+            tabState.renderer.updateStatus(event.data);
+        }
+        updateLauncherNodeStatus(event.serverId, true);
+    },
+
+    launcher_connection: (event) => {
+        const connected = event.data?.connected ?? false;
+        updateLauncherNodeStatus(event.serverId, connected);
+        const tabKey = `launcher:${event.serverId}`;
+        const tabState = state.tabs.get(tabKey);
+        if (tabState?.renderer?.updateConnectionStatus) {
+            tabState.renderer.updateConnectionStatus(connected);
+        }
+    },
+
+    journal_connection: (event) => {
+        const journalId = event.data?.journalId;
+        const connected = event.data?.connected ?? false;
+        if (journalId && typeof updateJournalConnectionStatus === 'function') {
+            updateJournalConnectionStatus(journalId, connected);
+        }
+    },
+
+    journal_messages: (event) => {
+        const data = event.data;
+        if (data && journalManager) {
+            journalManager.handleSSEMessage(data);
+        }
+    },
+};
+
+// Подписаться на все события из _sseHandlers с единым try/catch + JSON.parse boilerplate'ом.
+function _attachSseHandlers(eventSource) {
+    for (const [evtName, handler] of Object.entries(_sseHandlers)) {
+        eventSource.addEventListener(evtName, async (e) => {
+            let payload;
+            try {
+                payload = JSON.parse(e.data);
+            } catch (err) {
+                console.warn(`SSE: failed to parse ${evtName} payload:`, err);
+                return;
+            }
+            try {
+                await handler(payload);
+            } catch (err) {
+                console.warn(`SSE: error handling ${evtName}:`, err);
+            }
+        });
+    }
+}
+
 function initSSE() {
     // Очищаем таймер переподключения (если есть)
     if (state.sse.reconnectTimerId) {
@@ -55,7 +323,7 @@ function initSSE() {
     if (state.control.token) {
         url += `?token=${encodeURIComponent(state.control.token)}`;
     }
-    console.log('SSE: Подключение к', url);
+    debugLog('SSE: Подключение к', sanitizeEventSourceUrlForLog(url));
 
     const eventSource = new EventSource(url);
     state.sse.eventSource = eventSource;
@@ -65,11 +333,11 @@ function initSSE() {
             const data = JSON.parse(e.data);
             state.sse.connected = true;
             state.sse.reconnectAttempts = 0;
-            state.sse.pollInterval = data.data?.pollInterval || 5000;
+            state.sse.pollInterval = data.data?.pollInterval || SSE_DEFAULT_POLL_INTERVAL;
 
             // Сохраняем capabilities сервера
             state.capabilities.smEnabled = data.data?.smEnabled || false;
-            console.log('SSE: Подключено, poll interval:', state.sse.pollInterval, 'ms, smEnabled:', state.capabilities.smEnabled);
+            debugLog('SSE: Подключено, poll interval:', state.sse.pollInterval, 'ms, smEnabled:', state.capabilities.smEnabled);
 
             // Обновляем статус контроля
             if (data.data?.control) {
@@ -105,362 +373,15 @@ function initSSE() {
                 applySidebarStatuses();
             }
         } catch (err) {
-            console.warn('SSE: Error парсинга connected:', err);
+            console.warn('SSE: error handling connected:', err);
         }
     });
 
-    eventSource.addEventListener('object_data', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const { objectName, serverId, data, timestamp } = event;
-
-            // Обновляем время последнего обновления в индикаторе
-            updateSSEStatus('connected', new Date());
-
-            // Формируем ключ вкладки: serverId:objectName
-            const tabKey = `${serverId}:${objectName}`;
-
-            // Обновляем UI только для открытых вкладок
-            const tabState = state.tabs.get(tabKey);
-            if (tabState) {
-                // Обновляем рендерер (таблицы, статистика и т.д.)
-                if (tabState.renderer) {
-                    tabState.renderer.update(data);
-                }
-
-                // Обновляем графики напрямую из SSE данных (данные копятся всегда, отрисовка — если не на паузе)
-                const eventTimestamp = new Date(timestamp);
-                tabState.charts.forEach((chartData, varName) => {
-                    // Пропускаем внешние датчики (ext:) - они обновляются через sensor_data
-                    if (varName.startsWith('ext:')) {
-                        return;
-                    }
-
-                    // Извлекаем значение из data в зависимости от типа переменной
-                    let value = undefined;
-
-                    // Проверяем io.in.* переменные
-                    if (varName.startsWith('io.in.')) {
-                        const ioKey = varName.substring('io.in.'.length);
-                        if (data.io?.in?.[ioKey]) {
-                            value = data.io.in[ioKey].value;
-                        }
-                    }
-                    // Проверяем io.out.* переменные
-                    else if (varName.startsWith('io.out.')) {
-                        const ioKey = varName.substring('io.out.'.length);
-                        if (data.io?.out?.[ioKey]) {
-                            value = data.io.out[ioKey].value;
-                        }
-                    }
-
-                    // Если нашли значение - добавляем точку на график
-                    if (value !== undefined) {
-                        const dataPoint = { x: eventTimestamp, y: value };
-                        chartData.chart.data.datasets[0].data.push(dataPoint);
-
-                        // Ограничиваем количество точек
-                        if (chartData.chart.data.datasets[0].data.length > MAX_CHART_POINTS) {
-                            chartData.chart.data.datasets[0].data.shift();
-                        }
-                    }
-                });
-
-                // Пропускаем отрисовку если на паузе (данные уже накоплены выше)
-                if (tabState.chartsPaused) return;
-
-                // Синхронизируем временную шкалу для всех графиков объекта
-                syncAllChartsTimeRange(tabKey);
-
-                // Обновляем все графики одним batch update
-                tabState.charts.forEach((chartData, varName) => {
-                    if (!varName.startsWith('ext:')) {
-                        chartData.chart.update('none');
-                    }
-                });
-            }
-        } catch (err) {
-            console.warn('SSE: Error обработки object_data:', err);
-        }
-    });
-
-    // Обработка обновлений внешних датчиков из SM (SharedMemory)
-    // Backend отправляет serverId="sm" для SM событий
-    eventSource.addEventListener('sensor_data', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const { objectName, serverId } = event;
-            const sensor = event.data;
-
-            // Формируем tabKey из serverId и objectName
-            const tabKey = serverId
-                ? `${serverId}:${objectName}`
-                : findTabKeyByDisplayName(objectName); // fallback для legacy
-            if (!tabKey) return;
-
-            // Обновляем график (одиночный сенсор — оборачиваем в массив)
-            updateChartsFromBatch(tabKey, [sensor], 'ext', event.timestamp);
-        } catch (err) {
-            console.warn('SSE: Error обработки sensor_data:', err);
-        }
-    });
-
-    // Обработка батча обновлений IONC датчиков (SharedMemory и подобные)
-    eventSource.addEventListener('ionc_sensor_batch', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const { objectName, serverId } = event;
-            const sensors = event.data;
-
-            // Cache sensor values for dashboard initialization
-            const now = Date.now();
-            for (const sensor of sensors) {
-                state.sensorValuesCache.set(sensor.name, {
-                    value: sensor.value,
-                    error: sensor.error || null,
-                    timestamp: now
-                });
-            }
-
-            // Обновляем виджеты на dashboard
-            updateDashboardWidgets(sensors, event.timestamp || null);
-
-            const tabKey = `${serverId}:${objectName}`;
-            const tabState = state.tabs.get(tabKey);
-            if (!tabState) return;
-
-            // Обновляем таблицу датчиков
-            for (const sensor of sensors) {
-                if (tabState.renderer?.handleIONCSensorUpdate) {
-                    tabState.renderer.handleIONCSensorUpdate(sensor);
-                }
-            }
-
-            // Обновляем графики
-            updateChartsFromBatch(tabKey, sensors, 'io', event.timestamp, { showSupplier: true });
-        } catch (err) {
-            console.warn('SSE: Error обработки ionc_sensor_batch:', err);
-        }
-    });
-
-    // Обработка батча обновлений Modbus регистров (ModbusMaster, ModbusSlave)
-    eventSource.addEventListener('modbus_register_batch', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const { objectName, serverId } = event;
-            const registers = event.data;
-
-            updateDashboardWidgets(registers, event.timestamp);
-
-            const tabKey = `${serverId}:${objectName}`;
-            const tabState = state.tabs.get(tabKey);
-            if (!tabState) return;
-
-            const renderer = tabState.renderer;
-            if (!renderer) return;
-            const isMaster = renderer.constructor.name === 'ModbusMasterRenderer';
-            const isSlave = renderer.constructor.name === 'ModbusSlaveRenderer';
-            if (!isMaster && !isSlave) return;
-
-            // Обновляем таблицу регистров
-            if (typeof renderer.handleModbusRegisterUpdates === 'function') {
-                renderer.handleModbusRegisterUpdates(registers);
-            }
-
-            // Обновляем графики
-            updateChartsFromBatch(tabKey, registers, 'mb', event.timestamp);
-        } catch (err) {
-            console.warn('SSE: Error обработки modbus_register_batch:', err);
-        }
-    });
-
-    // Обработка батча обновлений OPCUA датчиков (OPCUAExchange, OPCUAServer)
-    eventSource.addEventListener('opcua_sensor_batch', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const { objectName, serverId } = event;
-            const sensors = event.data;
-
-            updateDashboardWidgets(sensors, event.timestamp);
-
-            const tabKey = `${serverId}:${objectName}`;
-            const tabState = state.tabs.get(tabKey);
-            if (!tabState) return;
-
-            const renderer = tabState.renderer;
-            const isExchange = renderer && renderer.constructor.name === 'OPCUAExchangeRenderer';
-            const isServer = renderer && renderer.constructor.name === 'OPCUAServerRenderer';
-            if (!isExchange && !isServer) return;
-
-            // Обновляем таблицу датчиков
-            if (typeof renderer.handleOPCUASensorUpdates === 'function') {
-                renderer.handleOPCUASensorUpdates(sensors);
-            }
-
-            // Обновляем графики
-            updateChartsFromBatch(tabKey, sensors, 'ext', event.timestamp);
-        } catch (err) {
-            console.warn('SSE: Error обработки opcua_sensor_batch:', err);
-        }
-    });
-
-    // Обработка батча обновлений UWebSocketGate датчиков
-    eventSource.addEventListener('uwsgate_sensor_batch', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const { objectName, serverId } = event;
-            const sensors = event.data;
-
-            updateDashboardWidgets(sensors, event.timestamp);
-
-            const tabKey = `${serverId}:${objectName}`;
-            const tabState = state.tabs.get(tabKey);
-            if (!tabState) return;
-
-            const renderer = tabState.renderer;
-            if (!renderer || renderer.constructor.name !== 'UWebSocketGateRenderer') return;
-
-            // Обновляем таблицу датчиков
-            if (typeof renderer.handleSSEUpdate === 'function') {
-                renderer.handleSSEUpdate(sensors);
-            }
-
-            // Обновляем графики
-            updateChartsFromBatch(tabKey, sensors, 'ws', event.timestamp, { showSupplier: true });
-        } catch (err) {
-            console.warn('SSE: Error обработки uwsgate_sensor_batch:', err);
-        }
-    });
-
-    // Обработка изменений статуса серверов
-    eventSource.addEventListener('server_status', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const serverId = event.serverId;
-            const connected = event.data?.connected ?? false;
-            console.log(`SSE: Сервер ${serverId} ${connected ? 'подключен' : 'отключен'}`);
-            updateServerStatus(serverId, connected);
-        } catch (err) {
-            console.warn('SSE: Error обработки server_status:', err);
-        }
-    });
-
-    // Обработка обновления списка объектов (при восстановлении связи)
-    eventSource.addEventListener('objects_list', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const serverId = event.serverId;
-            const serverName = event.serverName;
-            const objects = event.data?.objects ?? [];
-            console.log(`SSE: Сервер ${serverId} восстановил связь, объектов: ${objects.length}`);
-
-            // Обновляем статус сервера
-            updateServerStatus(serverId, true);
-
-            // Обновляем список объектов в sidebar
-            refreshObjectsList();
-
-            // Обновляем sidebar группы (могли появиться новые объекты)
-            if (typeof refreshSidebarGroups === 'function') {
-                refreshSidebarGroups();
-            }
-        } catch (err) {
-            console.warn('SSE: Error обработки objects_list:', err);
-        }
-    });
-
-    // Обработка изменения статуса контроля
-    eventSource.addEventListener('control_status', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            console.log('SSE: Control status changed:', event.data);
-            // Обновляем isController на основе нашего токена
-            const status = event.data;
-            status.isController = state.control.token &&
-                status.hasController &&
-                state.control.isController; // сохраняем если мы были контроллером
-
-            // Сервер не знает чей это токен, нужно запросить статус
-            fetch('/api/control/status', {
-                headers: { 'X-Control-Token': state.control.token || '' }
-            })
-                .then(r => r.json())
-                .then(data => {
-                    updateControlStatus(data);
-                })
-                .catch(err => {
-                    console.warn('Failed to refresh control status:', err);
-                    // Fallback: используем данные из события
-                    updateControlStatus(status);
-                });
-        } catch (err) {
-            console.warn('SSE: Error обработки control_status:', err);
-        }
-    });
-
-    // Обработка статуса Launcher'а
-    eventSource.addEventListener('launcher_status', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const tabKey = `launcher:${event.serverId}`;
-            const tabState = state.tabs.get(tabKey);
-            if (tabState?.renderer?.updateStatus) {
-                tabState.renderer.updateStatus(event.data);
-            }
-            // Обновляем индикатор в sidebar
-            updateLauncherNodeStatus(event.serverId, true);
-        } catch (err) {
-            console.warn('SSE: Error обработки launcher_status:', err);
-        }
-    });
-
-    // Обработка connectivity Launcher'а
-    eventSource.addEventListener('launcher_connection', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const connected = event.data?.connected ?? false;
-            updateLauncherNodeStatus(event.serverId, connected);
-
-            // Обновляем renderer если вкладка открыта
-            const tabKey = `launcher:${event.serverId}`;
-            const tabState = state.tabs.get(tabKey);
-            if (tabState?.renderer?.updateConnectionStatus) {
-                tabState.renderer.updateConnectionStatus(connected);
-            }
-        } catch (err) {
-            console.warn('SSE: Error обработки launcher_connection:', err);
-        }
-    });
-
-    // Обработка изменения connectivity журнала
-    eventSource.addEventListener('journal_connection', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const journalId = event.data?.journalId;
-            const connected = event.data?.connected ?? false;
-            if (journalId && typeof updateJournalConnectionStatus === 'function') {
-                updateJournalConnectionStatus(journalId, connected);
-            }
-        } catch (err) {
-            console.warn('SSE: Error обработки journal_connection:', err);
-        }
-    });
-
-    // Обработка сообщений журнала
-    eventSource.addEventListener('journal_messages', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const data = event.data;
-            if (data && journalManager) {
-                journalManager.handleSSEMessage(data);
-            }
-        } catch (err) {
-            console.warn('SSE: Error обработки journal_messages:', err);
-        }
-    });
+    // Все остальные SSE события — единый attach через _sseHandlers lookup.
+    _attachSseHandlers(eventSource);
 
     eventSource.onerror = (e) => {
-        console.warn('SSE: Error соединения');
+        console.warn('SSE: connection error');
         state.sse.connected = false;
         stopServerStatusSync();
 
@@ -474,12 +395,12 @@ function initSSE() {
 
         if (state.sse.reconnectAttempts < state.sse.maxReconnectAttempts) {
             state.sse.reconnectAttempts++;
-            // Exponential backoff: baseDelay * 2^(attempt-1) с jitter ±10%
+            // Exponential backoff: baseDelay * 2^(attempt-1) с jitter ±SSE_RECONNECT_JITTER_RATIO
             const expDelay = state.sse.baseReconnectDelay * Math.pow(2, state.sse.reconnectAttempts - 1);
             const cappedDelay = Math.min(expDelay, state.sse.maxReconnectDelay);
-            const jitter = cappedDelay * 0.1 * (Math.random() * 2 - 1); // ±10%
+            const jitter = cappedDelay * SSE_RECONNECT_JITTER_RATIO * (Math.random() * 2 - 1);
             const delay = Math.round(cappedDelay + jitter);
-            console.log(`SSE: Переподключение через ${delay}ms (попытка ${state.sse.reconnectAttempts}/${state.sse.maxReconnectAttempts})`);
+            debugLog(`SSE: Переподключение через ${delay}ms (попытка ${state.sse.reconnectAttempts}/${state.sse.maxReconnectAttempts})`);
             updateSSEStatus('reconnecting');
             state.sse.reconnectTimerId = setTimeout(initSSE, delay);
         } else {
@@ -490,18 +411,19 @@ function initSSE() {
     };
 
     eventSource.onopen = () => {
-        console.log('SSE: Соединение открыто');
+        debugLog('SSE: Соединение открыто');
     };
 }
 
 // Включить polling как fallback при недоступности SSE
 function enablePollingFallback() {
-    console.log('Polling: Включение fallback режима');
+    debugLog('Polling: Включение fallback режима');
 
-    // Периодически обновляем sidebar (статусы серверов и список объектов)
+    // Периодически обновляем sidebar (статусы серверов и список объектов).
+    // Реже чем данные объектов — это служебная синхронизация sidebar UI.
     state.sse.sidebarPollInterval = setInterval(() => {
         refreshObjectsList();
-    }, state.sse.pollInterval * 6); // Реже чем данные объектов
+    }, state.sse.pollInterval * SSE_SIDEBAR_POLL_MULTIPLIER);
 
     state.tabs.forEach((tabState, tabKey) => {
         // Включаем polling для данных объекта
@@ -510,7 +432,7 @@ function enablePollingFallback() {
                 () => loadObjectData(tabKey),
                 state.sse.pollInterval
             );
-            console.log('Polling: Включен для', tabState.displayName, '(tab:', tabKey, ')');
+            debugLog('Polling: Включен для', tabState.displayName, '(tab:', tabKey, ')');
         }
 
         // Включаем polling для графиков
@@ -530,7 +452,7 @@ function enablePollingFallback() {
 
 // Отключить polling fallback (при восстановлении SSE)
 function disablePollingFallback() {
-    console.log('Polling: Отключение fallback режима');
+    debugLog('Polling: Отключение fallback режима');
 
     // Останавливаем polling sidebar
     if (state.sse.sidebarPollInterval) {
@@ -569,13 +491,13 @@ function disablePollingFallback() {
 function startSSERecoveryProbe() {
     if (state.sse.recoveryProbeInterval) return;
 
-    console.log('SSE: Запуск recovery probe каждые', SSE_RECOVERY_PROBE_INTERVAL, 'ms');
+    debugLog('SSE: Запуск recovery probe каждые', SSE_RECOVERY_PROBE_INTERVAL, 'ms');
 
     state.sse.recoveryProbeInterval = setInterval(async () => {
         try {
             const response = await fetch('/api/version', { method: 'HEAD' });
             if (response.ok) {
-                console.log('SSE: Сервер доступен, восстанавливаем SSE');
+                debugLog('SSE: Сервер доступен, восстанавливаем SSE');
                 disablePollingFallback();
                 state.sse.reconnectAttempts = 0;
                 initSSE();
@@ -590,33 +512,31 @@ function startSSERecoveryProbe() {
 function startServerStatusSync() {
     stopServerStatusSync();
     state.sse.statusSyncInterval = setInterval(async () => {
-        // Серверы
-        try {
-            const resp = await fetchServers();
-            if (resp?.servers) {
-                resp.servers.forEach(s => updateServerStatus(s.id, s.connected));
-            }
-        } catch (err) { /* фоновая синхронизация */ }
-
-        // Launcher'ы
-        try {
-            const lr = await fetch('/api/launchers');
-            if (lr.ok) {
+        // Все три запроса (серверы / launcher'ы / журналы) независимы — гоним
+        // параллельно через Promise.allSettled, фоновая ошибка одного не должна
+        // мешать остальным.
+        await Promise.allSettled([
+            (async () => {
+                const resp = await fetchServers();
+                if (resp?.servers) {
+                    resp.servers.forEach(s => updateServerStatus(s.id, s.connected));
+                }
+            })(),
+            (async () => {
+                const lr = await fetch('/api/launchers');
+                if (!lr.ok) return;
                 const data = await lr.json();
                 (data?.launchers || []).forEach(l => updateLauncherNodeStatus(l.id, l.connected));
-            }
-        } catch (err) { /* фоновая синхронизация */ }
-
-        // Журналы
-        try {
-            const jr = await fetch('/api/journals');
-            if (jr.ok) {
+            })(),
+            (async () => {
+                const jr = await fetch('/api/journals');
+                if (!jr.ok) return;
                 const data = await jr.json();
                 if (typeof updateJournalConnectionStatus === 'function') {
                     (data || []).forEach(j => updateJournalConnectionStatus(j.id, j.connected));
                 }
-            }
-        } catch (err) { /* фоновая синхронизация */ }
+            })(),
+        ]);
     }, SSE_RECOVERY_PROBE_INTERVAL);
 }
 
@@ -629,7 +549,7 @@ function stopServerStatusSync() {
 
 // Переподписка всех открытых вкладок после восстановления SSE
 function resubscribeAll() {
-    console.log('SSE: Переподписка всех вкладок после переподключения');
+    debugLog('SSE: Переподписка всех вкладок после переподключения');
     state.tabs.forEach((tabState, tabKey) => {
         const renderer = tabState.renderer;
         if (renderer?.resubscribeIfNeeded) {
@@ -657,4 +577,3 @@ document.addEventListener('visibilitychange', () => {
         });
     }
 });
-

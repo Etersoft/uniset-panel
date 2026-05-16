@@ -115,6 +115,51 @@ func TestBasePollerSubscribe(t *testing.T) {
 	}
 }
 
+// Re-Subscribe должен сбросить lastValues для подписываемых ids — иначе
+// после reload UI/dashboard'а виджеты со стабильно не меняющимся значением
+// не получат initial SSE update (poller считает что ничего не изменилось).
+//
+// Замечание: immediate replay в Subscribe был испробован но откачен —
+// см. комментарий в base.go.
+func TestBasePollerSubscribeResetsLastValues(t *testing.T) {
+	fetcher := &MockFetcher{
+		items: map[string][]MockItem{
+			"Object1": {{ID: 1, Value: 42}, {ID: 2, Value: 99}},
+		},
+	}
+	var batches [][]MockUpdate
+	bp := NewBasePoller[MockItem, MockUpdate](
+		time.Second, 100, fetcher,
+		func(objectName string, item MockItem, ts time.Time) MockUpdate {
+			return MockUpdate{ObjectName: objectName, Item: item, Timestamp: ts}
+		},
+		func(updates []MockUpdate) { batches = append(batches, updates) },
+		"Test",
+	)
+
+	// Initial subscribe + poll: оба значения должны прийти.
+	bp.Subscribe("Object1", []int64{1, 2})
+	bp.poll()
+	if len(batches) != 1 || len(batches[0]) != 2 {
+		t.Fatalf("first poll: want 1 batch with 2 updates, got %d batches: %+v", len(batches), batches)
+	}
+	batches = nil
+
+	// Повторный poll без изменений — никаких update'ов (lastValues защищает от спама).
+	bp.poll()
+	if len(batches) != 0 {
+		t.Fatalf("idempotent poll: want 0 batches, got %d: %+v", len(batches), batches)
+	}
+
+	// Re-Subscribe с теми же ids — должно сбросить lastValues и заставить
+	// следующий poll отправить full batch заново.
+	bp.Subscribe("Object1", []int64{1, 2})
+	bp.poll()
+	if len(batches) != 1 || len(batches[0]) != 2 {
+		t.Fatalf("re-subscribe poll: want 1 batch with 2 updates (force re-emit), got %d: %+v", len(batches), batches)
+	}
+}
+
 func TestBasePollerUnsubscribe(t *testing.T) {
 	fetcher := &MockFetcher{}
 	bp := NewBasePoller[MockItem, MockUpdate](

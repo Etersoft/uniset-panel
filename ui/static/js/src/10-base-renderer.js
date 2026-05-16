@@ -71,7 +71,7 @@ const VirtualScrollMixin = {
         const viewport = this.getEl(config.viewportId);
         if (!viewport) return;
 
-        const threshold = config.threshold || 100;
+        const threshold = config.threshold || SIMPLE_INFINITE_SCROLL_THRESHOLD;
         viewport.addEventListener('scroll', () => {
             const scrollTop = viewport.scrollTop;
             const viewportHeight = viewport.clientHeight;
@@ -114,12 +114,6 @@ const VirtualScrollMixin = {
                 this.vscrollLoadMore();
             }
         }
-    },
-
-    // Показать/скрыть индикатор загрузки
-    showVScrollLoadingIndicator(loadingId, show) {
-        const el = this.getEl(loadingId);
-        if (el) el.style.display = show ? 'block' : 'none';
     }
 };
 
@@ -155,7 +149,7 @@ const SSESubscriptionMixin = {
             });
 
             this.subscribedSensorIds = newIds;
-            console.log(`${logPrefix}: подписка на ${ids.length} элементов для ${this.objectName}`);
+            debugLog(`${logPrefix}: подписка на ${ids.length} элементов для ${this.objectName}`);
         } catch (err) {
             console.warn(`${logPrefix}: ошибка подписки:`, err);
         }
@@ -173,7 +167,7 @@ const SSESubscriptionMixin = {
                 body: JSON.stringify({ [idField]: ids })
             });
 
-            console.log(`${logPrefix}: отписка от ${ids.length} элементов для ${this.objectName}`);
+            debugLog(`${logPrefix}: отписка от ${ids.length} элементов для ${this.objectName}`);
             this.subscribedSensorIds.clear();
         } catch (err) {
             console.warn(`${logPrefix}: ошибка отписки:`, err);
@@ -189,7 +183,7 @@ const SSESubscriptionMixin = {
         const ids = [...this.subscribedSensorIds];
         const { apiPath, idField, logPrefix, extraBody } = this._sseSubscriptionParams;
 
-        console.log(`${logPrefix}: Переподписка ${ids.length} элементов для ${this.objectName}`);
+        debugLog(`${logPrefix}: Переподписка ${ids.length} элементов для ${this.objectName}`);
         this.subscribedSensorIds.clear(); // Очищаем кэш чтобы subscribeToSSEFor не пропустил
         await this.subscribeToSSEFor(apiPath, ids, idField, logPrefix, extraBody);
     }
@@ -201,27 +195,14 @@ const SSESubscriptionMixin = {
 const ResizableSectionMixin = {
     // Loading сохранённой высоты
     loadSectionHeight(storageKey, defaultHeight = DEFAULT_SECTION_HEIGHT) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            const value = saved[this.tabKey] ?? saved[this.objectName];
-            if (typeof value === 'number' && value > 0) {
-                return value;
-            }
-        } catch (err) {
-            console.warn('Failed to load section height:', err);
-        }
-        return defaultHeight;
+        const saved = loadStorageMap(storageKey);
+        const value = saved[this.tabKey] ?? saved[this.objectName];
+        return typeof value === 'number' && value > 0 ? value : defaultHeight;
     },
 
     // Сохранение высоты
     saveSectionHeight(storageKey, value) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            saved[this.tabKey] = value;
-            localStorage.setItem(storageKey, JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save section height:', err);
-        }
+        updateStorageMap(storageKey, (saved) => { saved[this.tabKey] = value; });
     },
 
     // Настройка resize для секции
@@ -240,41 +221,18 @@ const ResizableSectionMixin = {
 
         container.style.height = `${this[heightProp]}px`;
 
-        let startY = 0;
-        let startHeight = 0;
-        let isResizing = false;
-
-        const onMouseMove = (e) => {
-            if (!isResizing) return;
-            const delta = e.clientY - startY;
-            const newHeight = Math.max(minHeight, Math.min(maxHeight, startHeight + delta));
-            container.style.height = `${newHeight}px`;
-        };
-
-        const onMouseUp = () => {
-            if (!isResizing) return;
-            isResizing = false;
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-            const newHeight = parseInt(container.style.height, 10);
-            if (!Number.isNaN(newHeight)) {
-                this[heightProp] = newHeight;
-                this.saveSectionHeight(storageKey, newHeight);
-            }
-        };
-
-        handle.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            isResizing = true;
-            startY = e.clientY;
-            startHeight = container.offsetHeight;
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = 'ns-resize';
-            document.body.style.userSelect = 'none';
-        });
+        setupResizeHandle(
+            handle,
+            container,
+            minHeight,
+            (height) => {
+                this[heightProp] = height;
+                this.saveSectionHeight(storageKey, height);
+            },
+            maxHeight,
+            null,
+            { updateMaxHeight: false }
+        );
     }
 };
 
@@ -282,6 +240,24 @@ const ResizableSectionMixin = {
  * Миксин для фильтрации списка элементов
  */
 const FilterMixin = {
+    hasActiveFilters() {
+        const hasTextFilter = Boolean((this.filter || '').trim());
+        const hasTypeFilter = Boolean(this.typeFilter && this.typeFilter !== 'all');
+        const hasStatusFilter = Boolean(this.statusFilter && this.statusFilter !== 'all');
+        return hasTextFilter || hasTypeFilter || hasStatusFilter;
+    },
+
+    shouldShowPinnedOnly(hasPinned) {
+        return Boolean(hasPinned) && !FilterMixin.hasActiveFilters.call(this);
+    },
+
+    filterPinnedOnly(items, pinnedSet, idAccessor = item => item.id) {
+        if (!this.shouldShowPinnedOnly(pinnedSet.size > 0)) {
+            return items;
+        }
+        return items.filter(item => pinnedSet.has(String(idAccessor(item))));
+    },
+
     // Применение локальных фильтров к списку
     // extraFields - дополнительные поля для текстового поиска (например, ['mbreg'] для Modbus)
     // fieldAccessor - функция для получения значения поля (для вложенных объектов)
@@ -489,7 +465,7 @@ const ParamsManagerMixin = {
         // Selects (exchangeMode и др.)
         container.querySelectorAll('select[data-param], select[data-name]').forEach(select => {
             const name = select.dataset.param || select.dataset.name;
-            const newValue = parseInt(select.value);
+            const newValue = parseIntegerOrDefault(select.value, this.params[name]);
             if (this.params[name] !== newValue) {
                 changed[name] = newValue;
             }
@@ -566,12 +542,8 @@ const PinManagementMixin = {
      * @returns {Set<string>}
      */
     getPinnedItems(storageKey) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            return new Set(saved[this.tabKey] || saved[this.objectName] || []);
-        } catch (err) {
-            return new Set();
-        }
+        const saved = loadStorageMap(storageKey);
+        return new Set(saved[this.tabKey] || saved[this.objectName] || []);
     },
 
     /**
@@ -580,13 +552,7 @@ const PinManagementMixin = {
      * @param {Set<string>} pinnedSet - Множество ID закрепленных элементов
      */
     savePinnedItems(storageKey, pinnedSet) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            saved[this.tabKey] = Array.from(pinnedSet);
-            localStorage.setItem(storageKey, JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save pinned items:', err);
-        }
+        updateStorageMap(storageKey, (saved) => { saved[this.tabKey] = Array.from(pinnedSet); });
     },
 
     /**
@@ -623,6 +589,45 @@ const PinManagementMixin = {
         }
     },
 
+    async loadMissingPinnedSensors(apiPath, options = {}) {
+        const {
+            responseKey = 'sensors',
+            list = this.allSensors,
+            map = this.sensorMap,
+            idField = 'id',
+            warningMessage = 'Failed to load pinned sensors:'
+        } = options;
+        const pinnedIds = this.getPinned();
+        if (pinnedIds.size === 0 || !list || !map) return;
+
+        const missingIds = [];
+        for (const idStr of pinnedIds) {
+            const id = parseIntegerOrDefault(idStr, null);
+            if (id !== null && !map.has(id)) {
+                missingIds.push(id);
+            }
+        }
+
+        if (missingIds.length === 0) return;
+
+        try {
+            const idsParam = missingIds.join(',');
+            const separator = apiPath.includes('?') ? '&' : '?';
+            const response = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}${apiPath}${separator}filter=${idsParam}`);
+            const pinnedSensors = response[responseKey] || [];
+
+            for (const sensor of pinnedSensors) {
+                const id = sensor[idField];
+                if (!map.has(id)) {
+                    list.unshift(sensor);
+                    map.set(id, sensor);
+                }
+            }
+        } catch (err) {
+            console.warn(warningMessage, err);
+        }
+    },
+
     // Сокращённые методы, использующие this.pinStorageKey и this.renderAfterPinChange
     getPinned()    { return this.getPinnedItems(this.pinStorageKey); },
     togglePin(id)  { this.toggleItemPin(this.pinStorageKey, id, this.renderAfterPinChange); },
@@ -650,15 +655,11 @@ const TableSortMixin = {
      */
     loadSortState(storageKey) {
         this.sortStorageKey = storageKey;
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            const sortState = saved[this.tabKey] || saved[this.objectName];
-            if (sortState) {
-                this.sortColumn = sortState.column || 'name';
-                this.sortDirection = sortState.direction || 'asc';
-            }
-        } catch (err) {
-            console.warn('Failed to load sort state:', err);
+        const saved = loadStorageMap(storageKey);
+        const sortState = saved[this.tabKey] || saved[this.objectName];
+        if (sortState) {
+            this.sortColumn = sortState.column || 'name';
+            this.sortDirection = sortState.direction || 'asc';
         }
     },
 
@@ -667,16 +668,12 @@ const TableSortMixin = {
      */
     saveSortState() {
         if (!this.sortStorageKey) return;
-        try {
-            const saved = JSON.parse(localStorage.getItem(this.sortStorageKey) || '{}');
+        updateStorageMap(this.sortStorageKey, (saved) => {
             saved[this.tabKey] = {
                 column: this.sortColumn,
                 direction: this.sortDirection
             };
-            localStorage.setItem(this.sortStorageKey, JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save sort state:', err);
-        }
+        });
     },
 
     /**
@@ -881,7 +878,7 @@ const BatchRenderMixin = {
         if (!tbody) return;
 
         tbody.querySelectorAll('tr[data-sensor-id]').forEach(row => {
-            const id = parseInt(row.dataset.sensorId);
+            const id = parseIntegerOrDefault(row.dataset.sensorId, null);
             if (!id) return;
 
             const update = updateMap.get(id);
@@ -965,7 +962,7 @@ const ModbusRegistersMixin = {
                 registers.forEach(r => this.registerMap.set(r.id, r));
 
                 // Если нет фильтра и есть закреплённые регистры - загрузить их отдельно
-                if (!this.filter) {
+                if (!this.hasActiveFilters()) {
                     await this.loadPinnedRegisters();
                 }
             } else {
@@ -1006,7 +1003,7 @@ const ModbusRegistersMixin = {
         // Найти ID, которых нет в загруженных регистрах
         const missingIds = [];
         for (const idStr of pinnedIds) {
-            const id = parseInt(idStr);
+            const id = parseIntegerOrDefault(idStr, null);
             if (!this.registerMap.has(id)) {
                 missingIds.push(id);
             }
@@ -1158,7 +1155,23 @@ class BaseObjectRenderer {
         this.startStatusDisplayTimer();
     }
 
-    // Вспомогательные методы для создания секций
+    // ============================================================================
+    // Section markup helpers — без inline onclick/onchange.
+    // Click-handling — единая делегация в _setupSectionDelegation() (вызывается
+    // из 50-ui-tabs.js сразу после renderer.initialize()). Контракт CSS:
+    //   - .collapsible-header — клик → toggleSection(data-section родителя)
+    //   - .section-move-up / .section-move-down (data-section-id) — moveSectionUp/Down
+    //   - .add-sensor-btn — openSensorDialog(this.tabKey)
+    //   - .charts-pause-btn — toggleChartsPause(this.tabKey)
+    //   - .time-range-btn (data-range) — setTimeRange(parseInt(data-range))
+    //   - input#io-sequential-${objectName} change — toggleIOLayout
+    // Контейнеры с классами .section-reorder-buttons, .filter-bar,
+    //   .charts-time-range, .io-filter-wrapper, .io-sequential-toggle,
+    //   .header-indicators, .header-channels, .header-indicator-dot —
+    //   click внутри них НЕ должен toggle'ить секцию (раньше — inline
+    //   stopPropagation, теперь — explicit "no-toggle zone" в делегации).
+    // ============================================================================
+
     createCollapsibleSection(id, title, content, options = {}) {
         const { badge = false, hidden = false, headerExtra = '' } = options;
         const badgeHtml = badge ? `<span class="io-section-badge" id="${id}-count-${this.objectName}">0</span>` : '';
@@ -1167,16 +1180,16 @@ class BaseObjectRenderer {
 
         return `
             <div class="collapsible-section reorderable-section" data-section="${id}-${this.objectName}" data-section-id="${id}" id="${sectionId}" ${style}>
-                <div class="collapsible-header" onclick="toggleSection('${id}-${this.objectName}')">
+                <div class="collapsible-header">
                     <svg class="collapsible-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M6 9l6 6 6-6"/>
                     </svg>
                     <span class="collapsible-title">${title}</span>
                     ${badgeHtml}
                     ${headerExtra}
-                    <div class="section-reorder-buttons" onclick="event.stopPropagation()">
-                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.tabKey}', '${id}')" title="Move up">↑</button>
-                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.tabKey}', '${id}')" title="Move down">↓</button>
+                    <div class="section-reorder-buttons">
+                        <button class="section-move-btn section-move-up" data-move-section="${id}" title="Move up">↑</button>
+                        <button class="section-move-btn section-move-down" data-move-section="${id}" title="Move down">↓</button>
                     </div>
                 </div>
                 <div class="collapsible-content" id="section-${id}-${this.objectName}">
@@ -1189,28 +1202,24 @@ class BaseObjectRenderer {
     createChartsSection() {
         return `
             <div class="collapsible-section reorderable-section" data-section="charts-${this.objectName}" data-section-id="charts" id="charts-section-${this.objectName}">
-                <div class="collapsible-header" onclick="toggleSection('charts-${this.objectName}')">
+                <div class="collapsible-header">
                     <svg class="collapsible-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M6 9l6 6 6-6"/>
                     </svg>
                     <span class="collapsible-title">Charts</span>
                     ${this.showAddSensorButton ? `<button class="add-sensor-btn" id="add-sensor-btn-${this.objectName}"
-                            onclick="event.stopPropagation(); openSensorDialog('${this.tabKey}')"
                             ${!state.capabilities.smEnabled ? 'disabled title="SM not connected (-sm-url not set)"' : ''}>+ Sensor</button>` : ''}
-                    <div class="charts-time-range" onclick="event.stopPropagation()">
+                    <div class="charts-time-range">
                         <div class="time-range-selector">
-                            <button class="charts-pause-btn" id="charts-pause-${this.objectName}" onclick="toggleChartsPause('${this.tabKey}')" title="Pause chart updates">||</button>
-                            <button class="time-range-btn${state.timeRange === 60 ? ' active' : ''}" onclick="setTimeRange(60)">1m</button>
-                            <button class="time-range-btn${state.timeRange === 180 ? ' active' : ''}" onclick="setTimeRange(180)">3m</button>
-                            <button class="time-range-btn${state.timeRange === 300 ? ' active' : ''}" onclick="setTimeRange(300)">5m</button>
-                            <button class="time-range-btn${state.timeRange === 900 ? ' active' : ''}" onclick="setTimeRange(900)">15m</button>
-                            <button class="time-range-btn${state.timeRange === 3600 ? ' active' : ''}" onclick="setTimeRange(3600)">1h</button>
-                            <button class="time-range-btn${state.timeRange === 10800 ? ' active' : ''}" onclick="setTimeRange(10800)">3h</button>
+                            <button class="charts-pause-btn" id="charts-pause-${this.objectName}" title="Pause chart updates">||</button>
+                            ${CHART_TIME_RANGES_SECONDS.map(({ seconds, label }) => `
+                                <button class="time-range-btn${state.timeRange === seconds ? ' active' : ''}" data-range="${seconds}">${label}</button>
+                            `).join('')}
                         </div>
                     </div>
-                    <div class="section-reorder-buttons" onclick="event.stopPropagation()">
-                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.tabKey}', 'charts')" title="Move up">↑</button>
-                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.tabKey}', 'charts')" title="Move down">↓</button>
+                    <div class="section-reorder-buttons">
+                        <button class="section-move-btn section-move-up" data-move-section="charts" title="Move up">↑</button>
+                        <button class="section-move-btn section-move-down" data-move-section="charts" title="Move down">↓</button>
                     </div>
                 </div>
                 <div class="collapsible-content" id="section-charts-${this.objectName}">
@@ -1226,22 +1235,22 @@ class BaseObjectRenderer {
     createIOTimersSection() {
         return `
             <div class="collapsible-section io-timers-section reorderable-section" data-section="io-timers-${this.objectName}" data-section-id="io-timers" id="io-timers-section-${this.objectName}">
-                <div class="collapsible-header" onclick="toggleSection('io-timers-${this.objectName}')">
+                <div class="collapsible-header">
                     <svg class="collapsible-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M6 9l6 6 6-6"/>
                     </svg>
                     <span class="collapsible-title">I/O</span>
-                    <div class="io-filter-wrapper" onclick="event.stopPropagation()">
+                    <div class="io-filter-wrapper">
                         <input type="text" class="io-filter-input io-filter-global" id="io-filter-global-${this.objectName}"
                                placeholder="Filter..." data-object="${this.objectName}">
                     </div>
-                    <label class="io-sequential-toggle" onclick="event.stopPropagation()">
-                        <input type="checkbox" id="io-sequential-${this.objectName}" onchange="toggleIOLayout('${this.tabKey}', '${this.objectName}')">
+                    <label class="io-sequential-toggle">
+                        <input type="checkbox" id="io-sequential-${this.objectName}">
                         <span>Sequential</span>
                     </label>
-                    <div class="section-reorder-buttons" onclick="event.stopPropagation()">
-                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.tabKey}', 'io-timers')" title="Move up">↑</button>
-                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.tabKey}', 'io-timers')" title="Move down">↓</button>
+                    <div class="section-reorder-buttons">
+                        <button class="section-move-btn section-move-up" data-move-section="io-timers" title="Move up">↑</button>
+                        <button class="section-move-btn section-move-down" data-move-section="io-timers" title="Move down">↓</button>
                     </div>
                 </div>
                 <div class="collapsible-content" id="section-io-timers-${this.objectName}">
@@ -1253,6 +1262,68 @@ class BaseObjectRenderer {
                 </div>
             </div>
         `;
+    }
+
+    // Делегирование click/change для всех секций tab-панели. Вызывается из
+    // 50-ui-tabs.js один раз после renderer.initialize() — панель уже в DOM,
+    // listener один на всю вкладку, добавление новых .collapsible-section не
+    // требует повторной привязки.
+    _setupSectionDelegation() {
+        const panel = getTabPanel(this.tabKey);
+        if (!panel) return;
+        if (panel.dataset.sectionDelegationWired === 'true') return;
+        panel.dataset.sectionDelegationWired = 'true';
+
+        // CSS-классы внутри .collapsible-header, клик по которым НЕ toggle'ит секцию
+        // (раньше — inline onclick="event.stopPropagation()" на каждой коробке).
+        const NO_TOGGLE_ZONE_SELECTOR =
+            '.section-reorder-buttons, .filter-bar, .charts-time-range, ' +
+            '.io-filter-wrapper, .io-sequential-toggle, .add-sensor-btn, ' +
+            '.header-indicators, .header-channels, .header-indicator-dot';
+
+        panel.addEventListener('click', (e) => {
+            // 1) Конкретные кнопки секций
+            const moveUp = e.target.closest('.section-move-up');
+            if (moveUp && panel.contains(moveUp)) {
+                const id = moveUp.dataset.moveSection;
+                if (id) moveSectionUp(this.tabKey, id);
+                return;
+            }
+            const moveDown = e.target.closest('.section-move-down');
+            if (moveDown && panel.contains(moveDown)) {
+                const id = moveDown.dataset.moveSection;
+                if (id) moveSectionDown(this.tabKey, id);
+                return;
+            }
+            if (e.target.closest('.add-sensor-btn')) {
+                openSensorDialog(this.tabKey);
+                return;
+            }
+            if (e.target.closest('.charts-pause-btn')) {
+                toggleChartsPause(this.tabKey);
+                return;
+            }
+            const tr = e.target.closest('.time-range-btn');
+            if (tr && panel.contains(tr)) {
+                const seconds = parseIntegerOrDefault(tr.dataset.range, null);
+                if (seconds !== null) setTimeRange(seconds);
+                return;
+            }
+
+            // 2) Клик внутри известного "no-toggle" контейнера — игнорируем (не toggle'им секцию).
+            if (e.target.closest(NO_TOGGLE_ZONE_SELECTOR)) return;
+
+            // 3) Клик по самому header'у — toggle секции через data-section родителя.
+            const header = e.target.closest('.collapsible-header');
+            if (!header || !panel.contains(header)) return;
+            const sectionEl = header.closest('.collapsible-section');
+            const sectionAttr = sectionEl?.dataset.section;
+            if (sectionAttr) toggleSection(sectionAttr);
+        });
+
+        // change-обработчик IO sequential checkbox (один на вкладку — прямой bind).
+        const ioSeq = this.getEl(`io-sequential-${this.objectName}`);
+        ioSeq?.addEventListener('change', () => toggleIOLayout(this.tabKey, this.objectName));
     }
 
     createIOSection(type, title) {
@@ -1388,10 +1459,10 @@ class BaseObjectRenderer {
 
     // ========== Общие методы для работы с графиками ==========
 
-    // Проверить, добавлен ли датчик на график
+    // Проверить, добавлен ли датчик на график.
+    // Read по tabKey с fallback на objectName (внутри функции) для legacy данных.
     isSensorOnChart(sensorName) {
-        // Используем objectName (displayName) для localStorage - это имя объекта без serverId
-        const addedSensors = getExternalSensorsFromStorage(this.objectName);
+        const addedSensors = getExternalSensorsFromStorage(this.tabKey, this.objectName);
         return addedSensors.has(sensorName);
     }
 
@@ -1400,8 +1471,8 @@ class BaseObjectRenderer {
     toggleSensorChart(sensor) {
         if (!sensor || !sensor.name) return;
 
-        // Используем objectName (displayName) для localStorage
-        const addedSensors = getExternalSensorsFromStorage(this.objectName);
+        // Read по tabKey (с legacy fallback внутри функции).
+        const addedSensors = getExternalSensorsFromStorage(this.tabKey, this.objectName);
 
         if (addedSensors.has(sensor.name)) {
             // Удаляем с графика
@@ -1419,15 +1490,26 @@ class BaseObjectRenderer {
                 chartOptions: chartOptions
             };
 
-            // Добавляем в список внешних датчиков (сохраняем полные данные)
+            // Добавляем в список внешних датчиков (сохраняем полные данные).
+            // Write всегда по tabKey, чтобы дубликат objectName на разных серверах
+            // не смешивался.
             addedSensors.set(sensor.name, sensorForChart);
-            saveExternalSensorsToStorage(this.objectName, addedSensors);
+            saveExternalSensorsToStorage(this.tabKey, addedSensors);
 
             // Добавляем в state.sensorsByName если его там нет
             if (!state.sensorsByName.has(sensor.name)) {
                 state.sensorsByName.set(sensor.name, sensorForChart);
                 state.sensors.set(sensor.id, sensorForChart);
             }
+            // Multi-server-aware: всегда обновляем scoped запись по
+            // (serverId, this.objectName, sensor.name) — позволяет render'у
+            // подтянуть правильный textname/comment без коллизии с одноимёнными
+            // sensor'ами на других серверах.
+            const _serverId = state.tabs.get(this.tabKey)?.serverId || '';
+            state.sensorsByKey.set(
+                makeSensorKey(_serverId, this.objectName, sensor.name),
+                sensorForChart
+            );
 
             // Создаём график с опциями, специфичными для типа рендерера
             createExternalSensorChart(this.tabKey, sensorForChart, this.getChartOptions());
@@ -1450,12 +1532,50 @@ class BaseObjectRenderer {
         subscribeToIONCSensor(this.tabKey, sensorId);
     }
 
+    // Helper для renderer'ов, чьи sensor'ы уже подписаны через batch SSE
+    // (modbus_register_batch / opcua_sensor_batch и т.п.) — отдельная подписка
+    // не нужна, достаточно отметить sensorId в локальном Set'е, чтобы
+    // BaseObjectRenderer.unsubscribeFromChart знал что снимать.
+    subscribeToChartSensorLocal(sensorId) {
+        if (!this.subscribedSensorIds.has(sensorId)) {
+            this.subscribedSensorIds.add(sensorId);
+        }
+    }
+
+    // Generic show/hide индикатора загрузки. Имя элемента —
+    // `${loadingIdPrefix}-loading-more-${objectName}` (уникальный по renderer'у).
+    // Renderer задаёт префикс через static loadingIdPrefix (или instance field).
+    // Если префикс не задан — silent no-op (renderer не использует loading indicator).
+    showLoadingIndicator(show) {
+        const prefix = this.loadingIdPrefix || this.constructor.loadingIdPrefix;
+        if (!prefix) return;
+        const el = this.getEl(`${prefix}-loading-more-${this.objectName}`);
+        if (el) el.style.display = show ? 'block' : 'none';
+    }
+
+    // Стандартная ячейка пин-индикатора в IO-таблицах. Шесть row-renderer'ов
+    // (IONC/Modbus×2/OPCUA×2/UWSGate) рендерили один и тот же `<td>` с микро-
+    // расхождениями: IONC использует `ionc-col-pin` (исторически), UWSGate
+    // — `data-name=` вместо `data-id=`. cellClass / dataAttr параметризуют
+    // эти расхождения, остальной markup общий.
+    renderPinToggleCell({ id, isPinned, dataAttr = 'data-id', cellClass = 'col-pin' }) {
+        const cls = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
+        const icon = isPinned ? '📌' : '○';
+        const title = isPinned ? 'Unpin' : 'Pin';
+        return `
+            <td class="${cellClass}">
+                <span class="${cls}" ${dataAttr}="${escapeAttr(id)}" title="${title}">${icon}</span>
+            </td>
+        `;
+    }
+
     // Сгенерировать HTML для объединённой ячейки кнопок (Chart + Dashboard)
     renderAddButtonsCell(sensorId, sensorName, prefix = 'sensor', sensorLabel = null) {
         const isOnChart = this.isSensorOnChart(sensorName);
         const varName = `${prefix}-${sensorId}`;
         const checkboxId = `chart-${this.objectName}-${varName}`;
         const label = sensorLabel || sensorName;
+        const serverId = state.tabs.get(this.tabKey)?.serverId || '';
         return `
             <td class="add-buttons-col">
                 <span class="chart-toggle">
@@ -1463,7 +1583,7 @@ class BaseObjectRenderer {
                            class="chart-checkbox chart-toggle-input"
                            id="${checkboxId}"
                            data-sensor-id="${sensorId}"
-                           data-sensor-name="${escapeHtml(sensorName)}"
+                           data-sensor-name="${escapeAttr(sensorName)}"
                            ${isOnChart ? 'checked' : ''}>
                     <label class="chart-toggle-label" for="${checkboxId}" title="Add to Chart">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1473,8 +1593,11 @@ class BaseObjectRenderer {
                     </label>
                 </span>
                 <button class="dashboard-add-btn"
-                        data-sensor-name="${escapeHtml(sensorName)}"
-                        data-sensor-label="${escapeHtml(label)}"
+                        data-sensor-name="${escapeAttr(sensorName)}"
+                        data-sensor-label="${escapeAttr(label)}"
+                        data-sensor-id="${escapeAttr(sensorId)}"
+                        data-server-id="${escapeAttr(serverId)}"
+                        data-object-name="${escapeAttr(this.objectName)}"
                         title="Add to Dashboard">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="3" width="7" height="7" rx="1"/>
@@ -1489,6 +1612,140 @@ class BaseObjectRenderer {
 
     // Привязать обработчики событий для checkbox графиков
     // sensorMap - Map с данными датчиков по id
+    // ============================================================================
+    // OPCUA-таблицы (Exchange/Server) — общая paginated-load инфраструктура.
+    //
+    // OPCUAExchange и OPCUAServer почти идентично: reset state → fetchJSON
+    // /opcua/sensors → set allSensors/sensorMap → loadPinned → updateVisible →
+    // updateCount → subscribe → wire sort handlers. Различия:
+    //   - id-префиксы (opcua-* / opcuasrv-*)
+    //   - Exchange имеет UI/server filter mode + statusFilter (post-process)
+    //   - Server — только server-side filter
+    // Subclass передаёт элементы (viewport/table/note id) + два callback'а:
+    //   buildSensorParams() — query string дополнительные `&search=...&iotype=...`
+    //   postProcessSensors(sensors) — local filter (UI mode / status filter)
+    // ============================================================================
+
+    async _loadOpcuaSensorsTable(opts) {
+        const { viewportId, tableId, noteId, buildSensorParams, postProcessSensors } = opts;
+
+        // Reset state for fresh load
+        this.allSensors = [];
+        this.hasMore = true;
+        this.startIndex = 0;
+        this.endIndex = 0;
+
+        const viewport = this.getEl(viewportId);
+        if (viewport) viewport.scrollTop = 0;
+
+        try {
+            const url = this.buildPaginatedSensorsUrl('/opcua', 0) + (buildSensorParams() || '');
+            const data = await this.fetchJSON(url);
+            let sensors = data.sensors || [];
+            this.sensorsTotal = typeof data.total === 'number' ? data.total : sensors.length;
+
+            sensors = postProcessSensors(sensors);
+
+            this.allSensors = sensors;
+            this.sensorMap.clear();
+            sensors.forEach(s => this.sensorMap.set(s.id, s));
+
+            // Если нет фильтра и есть закреплённые — догрузить отдельно.
+            if (!this.hasActiveFilters()) {
+                await this.loadPinnedSensors();
+            }
+
+            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
+            this.updateVisibleRows();
+            this.updateSensorCount();
+            this.setNote(noteId, '');
+
+            this.subscribeToSSE();
+
+            const table = this.getEl(tableId);
+            if (table) {
+                this.attachSortHandlers(table);
+                this.updateSortHeaders();
+            }
+        } catch (err) {
+            this.setNote(noteId, err.message, true);
+        }
+    }
+
+    async _loadMoreOpcuaSensorsTable(opts) {
+        const { buildSensorParams, postProcessSensors } = opts;
+
+        if (this.isLoadingChunk || !this.hasMore) return;
+
+        this.isLoadingChunk = true;
+        this.showLoadingIndicator(true);
+
+        try {
+            const nextOffset = this.allSensors.length;
+            const url = this.buildPaginatedSensorsUrl('/opcua', nextOffset) + (buildSensorParams() || '');
+            const data = await this.fetchJSON(url);
+            let newSensors = data.sensors || [];
+            newSensors = postProcessSensors(newSensors);
+
+            // Дедупликация: добавляем только датчики которых ещё нет.
+            const existingIds = new Set(this.allSensors.map(s => s.id));
+            const uniqueNewSensors = newSensors.filter(s => !existingIds.has(s.id));
+
+            this.allSensors = [...this.allSensors, ...uniqueNewSensors];
+            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
+            this.updateVisibleRows();
+            this.updateSensorCount();
+        } catch (err) {
+            console.error('Failed to load more sensors:', err);
+        } finally {
+            this.isLoadingChunk = false;
+            this.showLoadingIndicator(false);
+        }
+    }
+
+    // Общая инфраструктура render'а Modbus-подобных таблиц регистров.
+    // Берёт всё кроме row-html: фильтрация, sort, pin, count, listeners.
+    // Subclass передаёт свой row-renderer (renderRow(reg, isPinned)) и
+    // mbreg-аксессор (master/slave формат датасета чуть отличается).
+    //
+    // opts:
+    //   tbodyId        — id <tbody> элемента
+    //   unpinId        — id "Unpin all" кнопки (visibility toggle)
+    //   countId        — id badge'а с числом регистров (updateItemCount)
+    //   countTotal     — total count для badge'а (this.registersTotal)
+    //   mbregAccessor  — function(item, field) — для applyFilters(['mbreg'])
+    //   renderRow      — function(reg, isPinned) -> string (HTML <tr>...</tr>)
+    _renderRegistersTable(opts) {
+        const { tbodyId, unpinId, countId, countTotal, mbregAccessor, renderRow } = opts;
+
+        const tbody = this.getEl(tbodyId);
+        if (!tbody) return;
+
+        const pinned = this.getPinned();
+
+        const unpinBtn = this.getEl(unpinId);
+        if (unpinBtn) unpinBtn.style.display = pinned.size > 0 ? 'inline' : 'none';
+
+        let toShow = this.applyFilters(this.allRegisters, 'name', 'iotype', null, ['mbreg'], mbregAccessor);
+        toShow = this.filterPinnedOnly(toShow, pinned);
+        toShow = this.sortItems(toShow, pinned, this.sortColumnDefs);
+
+        this.updateItemCount(countId, toShow.length, countTotal);
+
+        for (const reg of toShow) {
+            if (reg.id) this.registerMap.set(reg.id, reg);
+        }
+
+        tbody.innerHTML = toShow.map(reg => renderRow(reg, pinned.has(String(reg.id)))).join('');
+
+        this.attachChartToggleListeners(tbody, this.registerMap);
+        this.attachDashboardToggleListeners(tbody);
+        tbody.querySelectorAll('.pin-toggle').forEach(t => {
+            t.addEventListener('click', () => this.togglePin(parseIntegerOrDefault(t.dataset.id, null)));
+        });
+        // unpinBtn handler — caller wire'ит один раз в bindEvents (persistent).
+    }
+
     attachChartToggleListeners(container, sensorMap) {
         if (!container) return;
         container.querySelectorAll('.chart-checkbox').forEach(cb => {
@@ -1510,7 +1767,7 @@ class BaseObjectRenderer {
                 e.stopPropagation();
                 const sensorName = btn.dataset.sensorName;
                 const sensorLabel = btn.dataset.sensorLabel;
-                showAddToDashboardDialog(sensorName, sensorLabel);
+                showAddToDashboardDialog(sensorName, sensorLabel, getDashboardBindingFromButton(btn));
             });
         });
     }
@@ -1539,6 +1796,11 @@ class BaseObjectRenderer {
         return path;
     }
 
+    buildPaginatedSensorsUrl(apiPath, offset) {
+        const normalizedPath = apiPath.startsWith('/') ? apiPath : `/${apiPath}`;
+        return `/api/objects/${encodeURIComponent(this.objectName)}${normalizedPath}/sensors?limit=${this.chunkSize}&offset=${offset}`;
+    }
+
     // Выполнить запрос и вернуть JSON
     async fetchJSON(path, options = {}) {
         const url = this.buildUrl(path);
@@ -1558,39 +1820,74 @@ class BaseObjectRenderer {
         el.classList.toggle('note-error', !!(text && isError));
     }
 
-    // Базовый resize handler для секций
-    setupResize(containerSelector, handleSelector, storageKey, minHeight = 100, maxHeight = 800) {
-        const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
-        const container = panel ? panel.querySelector(containerSelector) : document.querySelector(containerSelector);
-        const handle = panel ? panel.querySelector(handleSelector) : document.querySelector(handleSelector);
-        if (!container || !handle) return;
+    renderHttpControl(prefix) {
+        const allow = this.status?.httpControlAllow && canControl();
+        const active = this.status?.httpControlActive;
+        const enabledParams = this.status?.httpEnabledSetParams;
+        const allowText = allow ? 'Take control' : (!canControl() ? 'Read-only mode' : 'Control not allowed');
 
-        let startY, startHeight;
+        const indAllow = this.getEl(`${prefix}-ind-allow-${this.objectName}`);
+        const indActive = this.getEl(`${prefix}-ind-active-${this.objectName}`);
+        const indParams = this.getEl(`${prefix}-ind-params-${this.objectName}`);
 
-        const onMouseMove = (e) => {
-            const delta = e.clientY - startY;
-            const newHeight = Math.min(maxHeight, Math.max(minHeight, startHeight + delta));
-            container.style.height = `${newHeight}px`;
-        };
+        if (indAllow) {
+            indAllow.className = `header-indicator-dot ${allow ? 'ok' : 'fail'}`;
+            indAllow.title = allow ? 'Allowed: Yes' : 'Allowed: No';
+        }
+        if (indActive) {
+            indActive.className = `header-indicator-dot ${active ? 'ok' : 'fail'}`;
+            indActive.title = active ? 'Active: Yes' : 'Active: No';
+        }
+        if (indParams) {
+            indParams.className = `header-indicator-dot ${enabledParams ? 'ok' : 'fail'}`;
+            indParams.title = enabledParams ? 'Parameters: Yes' : 'Parameters: No';
+        }
 
-        const onMouseUp = () => {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            localStorage.setItem(storageKey, container.style.height);
-        };
+        const takeBtn = this.getEl(`${prefix}-control-take-${this.objectName}`);
+        const releaseBtn = this.getEl(`${prefix}-control-release-${this.objectName}`);
+        const noteEl = this.getEl(`${prefix}-control-note-${this.objectName}`);
 
-        handle.addEventListener('mousedown', (e) => {
-            startY = e.clientY;
-            startHeight = container.offsetHeight;
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-            e.preventDefault();
-        });
+        if (takeBtn) {
+            takeBtn.disabled = !allow;
+            takeBtn.title = allowText;
+            takeBtn.classList.toggle('control-active', !!active);
+        }
+        if (releaseBtn) {
+            releaseBtn.disabled = !allow;
+            releaseBtn.title = allowText;
+        }
+        if (noteEl) {
+            noteEl.classList.toggle('control-note-success', !!active);
+        }
+    }
 
-        // Восстановить из localStorage
-        const savedHeight = localStorage.getItem(storageKey);
-        if (savedHeight) {
-            container.style.height = savedHeight;
+    async takeHttpControl(apiSegment, notePrefix) {
+        if (this.status && this.status.httpControlAllow === false) {
+            this.setNote(`${notePrefix}-control-note-${this.objectName}`, 'Control not allowed', true);
+            return;
+        }
+
+        try {
+            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/${apiSegment}/control/take`, { method: 'POST' });
+            this.setNote(`${notePrefix}-control-note-${this.objectName}`, 'HTTP control activated');
+            this.loadStatus();
+        } catch (err) {
+            this.setNote(`${notePrefix}-control-note-${this.objectName}`, err.message, true);
+        }
+    }
+
+    async releaseHttpControl(apiSegment, notePrefix) {
+        if (this.status && this.status.httpControlAllow === false) {
+            this.setNote(`${notePrefix}-control-note-${this.objectName}`, 'Control not allowed', true);
+            return;
+        }
+
+        try {
+            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/${apiSegment}/control/release`, { method: 'POST' });
+            this.setNote(`${notePrefix}-control-note-${this.objectName}`, 'Control returned to sensor');
+            this.loadStatus();
+        } catch (err) {
+            this.setNote(`${notePrefix}-control-note-${this.objectName}`, err.message, true);
         }
     }
 
@@ -1598,7 +1895,7 @@ class BaseObjectRenderer {
 
     startStatusAutoRefresh() {
         this.stopStatusAutoRefresh();
-        const interval = state.sse.pollInterval || 5000;
+        const interval = state.sse.pollInterval || SSE_DEFAULT_POLL_INTERVAL;
         if (interval <= 0) return;
         this.statusTimer = setInterval(() => this.loadStatus(), interval);
     }

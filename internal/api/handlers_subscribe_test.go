@@ -11,17 +11,13 @@ import (
 	"github.com/pv/uniset-panel/internal/ionc"
 	"github.com/pv/uniset-panel/internal/modbus"
 	"github.com/pv/uniset-panel/internal/opcua"
-	"github.com/pv/uniset-panel/internal/poller"
-	"github.com/pv/uniset-panel/internal/storage"
 	"github.com/pv/uniset-panel/internal/uniset"
 )
 
 // setupTestHandlersWithPollers creates handlers with IONC, Modbus, and OPCUA pollers.
 func setupTestHandlersWithPollers(unisetServer *httptest.Server) *Handlers {
+	handlers := setupTestHandlers(unisetServer)
 	client := uniset.NewClient(unisetServer.URL)
-	store := storage.NewMemoryStorage()
-	p := poller.New(client, store, 5*time.Second, time.Hour)
-	handlers := NewHandlers(client, store, p, nil, 5*time.Second)
 
 	ioncPoller := ionc.NewPoller(client, time.Second, 0, nil)
 	handlers.SetIONCPoller(ioncPoller)
@@ -45,7 +41,7 @@ func TestSubscribeUnsubscribeIONCSensors_All(t *testing.T) {
 
 	// First subscribe some sensors
 	body := `{"sensor_ids": [1, 2, 3]}`
-	req := httptest.NewRequest("POST", "/api/objects/TestProc/ionc/subscribe", strings.NewReader(body))
+	req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/ionc/subscribe"), strings.NewReader(body))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -57,7 +53,7 @@ func TestSubscribeUnsubscribeIONCSensors_All(t *testing.T) {
 
 	// Unsubscribe all (empty sensor_ids)
 	body = `{"sensor_ids": []}`
-	req = httptest.NewRequest("POST", "/api/objects/TestProc/ionc/unsubscribe", strings.NewReader(body))
+	req = httptest.NewRequest("POST", withQuery("/api/objects/TestProc/ionc/unsubscribe"), strings.NewReader(body))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
@@ -81,7 +77,7 @@ func TestSubscribeUnsubscribeIONCSensors_All(t *testing.T) {
 	}
 
 	// Verify subscriptions are empty
-	req = httptest.NewRequest("GET", "/api/objects/TestProc/ionc/subscriptions", nil)
+	req = httptest.NewRequest("GET", withQuery("/api/objects/TestProc/ionc/subscriptions"), nil)
 	req.SetPathValue("name", "TestProc")
 	w = httptest.NewRecorder()
 	handlers.GetIONCSubscriptions(w, req)
@@ -102,7 +98,7 @@ func TestSubscribeUnsubscribeIONCSensors_Specific(t *testing.T) {
 
 	// Subscribe sensors 1, 2, 3
 	body := `{"sensor_ids": [1, 2, 3]}`
-	req := httptest.NewRequest("POST", "/api/objects/TestProc/ionc/subscribe", strings.NewReader(body))
+	req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/ionc/subscribe"), strings.NewReader(body))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -114,7 +110,7 @@ func TestSubscribeUnsubscribeIONCSensors_Specific(t *testing.T) {
 
 	// Unsubscribe only sensor 2
 	body = `{"sensor_ids": [2]}`
-	req = httptest.NewRequest("POST", "/api/objects/TestProc/ionc/unsubscribe", strings.NewReader(body))
+	req = httptest.NewRequest("POST", withQuery("/api/objects/TestProc/ionc/unsubscribe"), strings.NewReader(body))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
@@ -133,7 +129,7 @@ func TestSubscribeUnsubscribeIONCSensors_Specific(t *testing.T) {
 	}
 
 	// Verify remaining subscriptions
-	req = httptest.NewRequest("GET", "/api/objects/TestProc/ionc/subscriptions", nil)
+	req = httptest.NewRequest("GET", withQuery("/api/objects/TestProc/ionc/subscriptions"), nil)
 	req.SetPathValue("name", "TestProc")
 	w = httptest.NewRecorder()
 	handlers.GetIONCSubscriptions(w, req)
@@ -155,7 +151,8 @@ func TestSubscribeGetIONCSubscriptions_NoPoller(t *testing.T) {
 	// Create handlers WITHOUT pollers
 	handlers := setupTestHandlers(unisetServer)
 
-	req := httptest.NewRequest("GET", "/api/objects/TestProc/ionc/subscriptions", nil)
+	// ?server=unknown — серверный poller не найдётся, fallback тоже nil → enabled=false
+	req := httptest.NewRequest("GET", "/api/objects/TestProc/ionc/subscriptions?server=unknown", nil)
 	req.SetPathValue("name", "TestProc")
 	w := httptest.NewRecorder()
 
@@ -188,7 +185,7 @@ func TestSubscribeGetIONCSubscriptions_WithPoller(t *testing.T) {
 
 	// Subscribe first
 	body := `{"sensor_ids": [10, 20, 30]}`
-	req := httptest.NewRequest("POST", "/api/objects/TestProc/ionc/subscribe", strings.NewReader(body))
+	req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/ionc/subscribe"), strings.NewReader(body))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -199,7 +196,7 @@ func TestSubscribeGetIONCSubscriptions_WithPoller(t *testing.T) {
 	}
 
 	// Get subscriptions
-	req = httptest.NewRequest("GET", "/api/objects/TestProc/ionc/subscriptions", nil)
+	req = httptest.NewRequest("GET", withQuery("/api/objects/TestProc/ionc/subscriptions"), nil)
 	req.SetPathValue("name", "TestProc")
 	w = httptest.NewRecorder()
 
@@ -232,7 +229,7 @@ func TestSubscribeIONCSensorsQuery_Success(t *testing.T) {
 
 	handlers := setupTestHandlersWithPollers(unisetServer)
 
-	req := httptest.NewRequest("GET", "/api/objects/TestProc/ionc/subscribe?sensors=1,2,3", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/objects/TestProc/ionc/subscribe?sensors=1,2,3"), nil)
 	req.SetPathValue("name", "TestProc")
 	w := httptest.NewRecorder()
 
@@ -266,7 +263,7 @@ func TestSubscribeIONCSensorsQuery_MissingSensorsParam(t *testing.T) {
 
 	handlers := setupTestHandlersWithPollers(unisetServer)
 
-	req := httptest.NewRequest("GET", "/api/objects/TestProc/ionc/subscribe", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/objects/TestProc/ionc/subscribe"), nil)
 	req.SetPathValue("name", "TestProc")
 	w := httptest.NewRecorder()
 
@@ -290,7 +287,7 @@ func TestSubscribeIONCSensorsQuery_InvalidIDs(t *testing.T) {
 	handlers := setupTestHandlersWithPollers(unisetServer)
 
 	// All IDs are non-numeric
-	req := httptest.NewRequest("GET", "/api/objects/TestProc/ionc/subscribe?sensors=abc,def", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/objects/TestProc/ionc/subscribe?sensors=abc,def"), nil)
 	req.SetPathValue("name", "TestProc")
 	w := httptest.NewRecorder()
 
@@ -317,7 +314,7 @@ func TestSubscribeUnsubscribeModbusRegisters_All(t *testing.T) {
 
 	// Subscribe first
 	body := `{"register_ids": [100, 200, 300]}`
-	req := httptest.NewRequest("POST", "/api/objects/TestProc/modbus/subscribe", strings.NewReader(body))
+	req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/modbus/subscribe"), strings.NewReader(body))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -329,7 +326,7 @@ func TestSubscribeUnsubscribeModbusRegisters_All(t *testing.T) {
 
 	// Unsubscribe all (empty register_ids)
 	body = `{"register_ids": []}`
-	req = httptest.NewRequest("POST", "/api/objects/TestProc/modbus/unsubscribe", strings.NewReader(body))
+	req = httptest.NewRequest("POST", withQuery("/api/objects/TestProc/modbus/unsubscribe"), strings.NewReader(body))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
@@ -351,7 +348,7 @@ func TestSubscribeUnsubscribeModbusRegisters_All(t *testing.T) {
 	}
 
 	// Verify subscriptions are empty
-	req = httptest.NewRequest("GET", "/api/objects/TestProc/modbus/subscriptions", nil)
+	req = httptest.NewRequest("GET", withQuery("/api/objects/TestProc/modbus/subscriptions"), nil)
 	req.SetPathValue("name", "TestProc")
 	w = httptest.NewRecorder()
 	handlers.GetModbusSubscriptions(w, req)
@@ -372,7 +369,7 @@ func TestSubscribeUnsubscribeModbusRegisters_Specific(t *testing.T) {
 
 	// Subscribe registers 100, 200, 300
 	body := `{"register_ids": [100, 200, 300]}`
-	req := httptest.NewRequest("POST", "/api/objects/TestProc/modbus/subscribe", strings.NewReader(body))
+	req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/modbus/subscribe"), strings.NewReader(body))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -384,7 +381,7 @@ func TestSubscribeUnsubscribeModbusRegisters_Specific(t *testing.T) {
 
 	// Unsubscribe only register 200
 	body = `{"register_ids": [200]}`
-	req = httptest.NewRequest("POST", "/api/objects/TestProc/modbus/unsubscribe", strings.NewReader(body))
+	req = httptest.NewRequest("POST", withQuery("/api/objects/TestProc/modbus/unsubscribe"), strings.NewReader(body))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
@@ -396,7 +393,7 @@ func TestSubscribeUnsubscribeModbusRegisters_Specific(t *testing.T) {
 	}
 
 	// Verify remaining subscriptions
-	req = httptest.NewRequest("GET", "/api/objects/TestProc/modbus/subscriptions", nil)
+	req = httptest.NewRequest("GET", withQuery("/api/objects/TestProc/modbus/subscriptions"), nil)
 	req.SetPathValue("name", "TestProc")
 	w = httptest.NewRecorder()
 	handlers.GetModbusSubscriptions(w, req)
@@ -417,7 +414,7 @@ func TestSubscribeGetModbusSubscriptions_NoPoller(t *testing.T) {
 
 	handlers := setupTestHandlers(unisetServer)
 
-	req := httptest.NewRequest("GET", "/api/objects/TestProc/modbus/subscriptions", nil)
+	req := httptest.NewRequest("GET", "/api/objects/TestProc/modbus/subscriptions?server=unknown", nil)
 	req.SetPathValue("name", "TestProc")
 	w := httptest.NewRecorder()
 
@@ -450,7 +447,7 @@ func TestSubscribeGetModbusSubscriptions_WithPoller(t *testing.T) {
 
 	// Subscribe first
 	body := `{"register_ids": [10, 20]}`
-	req := httptest.NewRequest("POST", "/api/objects/TestProc/modbus/subscribe", strings.NewReader(body))
+	req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/modbus/subscribe"), strings.NewReader(body))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -461,7 +458,7 @@ func TestSubscribeGetModbusSubscriptions_WithPoller(t *testing.T) {
 	}
 
 	// Get subscriptions
-	req = httptest.NewRequest("GET", "/api/objects/TestProc/modbus/subscriptions", nil)
+	req = httptest.NewRequest("GET", withQuery("/api/objects/TestProc/modbus/subscriptions"), nil)
 	req.SetPathValue("name", "TestProc")
 	w = httptest.NewRecorder()
 
@@ -496,7 +493,7 @@ func TestSubscribeUnsubscribeOPCUASensors_All(t *testing.T) {
 
 	// Subscribe first
 	body := `{"sensor_ids": [5, 6, 7]}`
-	req := httptest.NewRequest("POST", "/api/objects/TestProc/opcua/subscribe", strings.NewReader(body))
+	req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/opcua/subscribe"), strings.NewReader(body))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -508,7 +505,7 @@ func TestSubscribeUnsubscribeOPCUASensors_All(t *testing.T) {
 
 	// Unsubscribe all (empty sensor_ids)
 	body = `{"sensor_ids": []}`
-	req = httptest.NewRequest("POST", "/api/objects/TestProc/opcua/unsubscribe", strings.NewReader(body))
+	req = httptest.NewRequest("POST", withQuery("/api/objects/TestProc/opcua/unsubscribe"), strings.NewReader(body))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
@@ -530,7 +527,7 @@ func TestSubscribeUnsubscribeOPCUASensors_All(t *testing.T) {
 	}
 
 	// Verify subscriptions are empty
-	req = httptest.NewRequest("GET", "/api/objects/TestProc/opcua/subscriptions", nil)
+	req = httptest.NewRequest("GET", withQuery("/api/objects/TestProc/opcua/subscriptions"), nil)
 	req.SetPathValue("name", "TestProc")
 	w = httptest.NewRecorder()
 	handlers.GetOPCUASubscriptions(w, req)
@@ -551,7 +548,7 @@ func TestSubscribeUnsubscribeOPCUASensors_Specific(t *testing.T) {
 
 	// Subscribe sensors 5, 6, 7
 	body := `{"sensor_ids": [5, 6, 7]}`
-	req := httptest.NewRequest("POST", "/api/objects/TestProc/opcua/subscribe", strings.NewReader(body))
+	req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/opcua/subscribe"), strings.NewReader(body))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -563,7 +560,7 @@ func TestSubscribeUnsubscribeOPCUASensors_Specific(t *testing.T) {
 
 	// Unsubscribe only sensor 6
 	body = `{"sensor_ids": [6]}`
-	req = httptest.NewRequest("POST", "/api/objects/TestProc/opcua/unsubscribe", strings.NewReader(body))
+	req = httptest.NewRequest("POST", withQuery("/api/objects/TestProc/opcua/unsubscribe"), strings.NewReader(body))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
@@ -575,7 +572,7 @@ func TestSubscribeUnsubscribeOPCUASensors_Specific(t *testing.T) {
 	}
 
 	// Verify remaining subscriptions
-	req = httptest.NewRequest("GET", "/api/objects/TestProc/opcua/subscriptions", nil)
+	req = httptest.NewRequest("GET", withQuery("/api/objects/TestProc/opcua/subscriptions"), nil)
 	req.SetPathValue("name", "TestProc")
 	w = httptest.NewRecorder()
 	handlers.GetOPCUASubscriptions(w, req)
@@ -596,7 +593,7 @@ func TestSubscribeGetOPCUASubscriptions_NoPoller(t *testing.T) {
 
 	handlers := setupTestHandlers(unisetServer)
 
-	req := httptest.NewRequest("GET", "/api/objects/TestProc/opcua/subscriptions", nil)
+	req := httptest.NewRequest("GET", "/api/objects/TestProc/opcua/subscriptions?server=unknown", nil)
 	req.SetPathValue("name", "TestProc")
 	w := httptest.NewRecorder()
 
@@ -629,7 +626,7 @@ func TestSubscribeGetOPCUASubscriptions_WithPoller(t *testing.T) {
 
 	// Subscribe first
 	body := `{"sensor_ids": [50, 60]}`
-	req := httptest.NewRequest("POST", "/api/objects/TestProc/opcua/subscribe", strings.NewReader(body))
+	req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/opcua/subscribe"), strings.NewReader(body))
 	req.SetPathValue("name", "TestProc")
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -640,7 +637,7 @@ func TestSubscribeGetOPCUASubscriptions_WithPoller(t *testing.T) {
 	}
 
 	// Get subscriptions
-	req = httptest.NewRequest("GET", "/api/objects/TestProc/opcua/subscriptions", nil)
+	req = httptest.NewRequest("GET", withQuery("/api/objects/TestProc/opcua/subscriptions"), nil)
 	req.SetPathValue("name", "TestProc")
 	w = httptest.NewRecorder()
 

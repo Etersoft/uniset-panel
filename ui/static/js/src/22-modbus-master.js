@@ -99,7 +99,6 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         this.setupRegistersResize();
         this.setupSimpleInfiniteScroll({
             viewportId: `mb-registers-viewport-${this.objectName}`,
-            threshold: 100,
         });
         this.initStatusAutoRefresh();
     }
@@ -150,12 +149,19 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         if (releaseControl) {
             releaseControl.addEventListener('click', () => this.releaseControl());
         }
+
+        // Unpin all (persistent header element — wire'им один раз; в renderRegisters
+        // больше не трогаем).
+        const unpinBtn = this.getEl(`mb-unpin-${this.objectName}`);
+        if (unpinBtn) {
+            unpinBtn.addEventListener('click', () => this.unpinAll());
+        }
     }
 
 
     createMBControlSection() {
         const headerIndicators = `
-            <div class="header-indicators" id="mb-control-indicators-${this.objectName}" onclick="event.stopPropagation()">
+            <div class="header-indicators" id="mb-control-indicators-${this.objectName}">
                 <div class="header-indicator">
                     <span class="header-indicator-label">Allowed</span>
                     <span class="header-indicator-dot" id="mb-ind-allow-${this.objectName}"></span>
@@ -193,7 +199,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     createMBParamsSection() {
         return this.createCollapsibleSection('mb-params', 'Exchange Parameters', `
             <div class="mb-actions">
-                <button class="btn" id="mb-params-refresh-${this.objectName}">Перезагрузить</button>
+                    <button class="btn" id="mb-params-refresh-${this.objectName}">Reload</button>
                 <button class="btn primary" id="mb-params-save-${this.objectName}">Apply</button>
                 <span class="mb-note" id="mb-params-note-${this.objectName}"></span>
             </div>
@@ -250,9 +256,9 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
                                 ${this.renderSortableHeader('name', 'Name', true, 'col-name')}
                                 ${this.renderSortableHeader('type', 'Type', true, 'col-type')}
                                 ${this.renderSortableHeader('value', 'Value', true, 'col-value')}
-                                ${this.renderSortableHeader('device', 'Устройство', true, 'col-device')}
-                                ${this.renderSortableHeader('register', 'Регистр', true, 'col-register')}
-                                ${this.renderSortableHeader('func', 'Функция', true, 'col-func')}
+                                ${this.renderSortableHeader('device', 'Device', true, 'col-device')}
+                                ${this.renderSortableHeader('register', 'Register', true, 'col-register')}
+                                ${this.renderSortableHeader('func', 'Function', true, 'col-func')}
                                 <th class="col-mbval">MB Val</th>
                             </tr>
                         </thead>
@@ -308,94 +314,22 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="info-label">${row.label}</td>
-                <td class="info-value">${formatValue(row.value)}</td>
+                <td class="info-value">${formatValueHtml(row.value)}</td>
             `;
             tbody.appendChild(tr);
         });
     }
 
     renderControl() {
-        const allow = this.status?.httpControlAllow && canControl();
-        const active = this.status?.httpControlActive;
-        const enabledParams = this.status?.httpEnabledSetParams;
-        const allowText = allow ? 'Take control' : (!canControl() ? 'Read-only mode' : 'Control not allowed');
-
-        // Обновляем индикаторы в шапке
-        const indAllow = this.getEl(`mb-ind-allow-${this.objectName}`);
-        const indActive = this.getEl(`mb-ind-active-${this.objectName}`);
-        const indParams = this.getEl(`mb-ind-params-${this.objectName}`);
-
-        if (indAllow) {
-            indAllow.className = `header-indicator-dot ${allow ? 'ok' : 'fail'}`;
-            indAllow.title = allow ? 'Allowed: Yes' : 'Allowed: No';
-        }
-        if (indActive) {
-            indActive.className = `header-indicator-dot ${active ? 'ok' : 'fail'}`;
-            indActive.title = active ? 'Active: Yes' : 'Active: No';
-        }
-        if (indParams) {
-            indParams.className = `header-indicator-dot ${enabledParams ? 'ok' : 'fail'}`;
-            indParams.title = enabledParams ? 'Parameters: Yes' : 'Parameters: No';
-        }
-
-        // Обновляем кнопки
-        const takeBtn = this.getEl(`mb-control-take-${this.objectName}`);
-        const releaseBtn = this.getEl(`mb-control-release-${this.objectName}`);
-        const noteEl = this.getEl(`mb-control-note-${this.objectName}`);
-
-        if (takeBtn) {
-            takeBtn.disabled = !allow;
-            takeBtn.title = allowText;
-            // Подсветка кнопки когда контроль активен
-            if (active) {
-                takeBtn.classList.add('control-active');
-            } else {
-                takeBtn.classList.remove('control-active');
-            }
-        }
-        if (releaseBtn) {
-            releaseBtn.disabled = !allow;
-            releaseBtn.title = allowText;
-        }
-
-        // Обновляем стиль сообщения
-        if (noteEl) {
-            if (active) {
-                noteEl.classList.add('control-note-success');
-            } else {
-                noteEl.classList.remove('control-note-success');
-            }
-        }
+        this.renderHttpControl('mb');
     }
 
     async takeControl() {
-        if (this.status && this.status.httpControlAllow === false) {
-            this.setNote(`mb-control-note-${this.objectName}`, 'Control not allowed', true);
-            return;
-        }
-
-        try {
-            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/control/take`, { method: 'POST' });
-            this.setNote(`mb-control-note-${this.objectName}`, 'HTTP control activated');
-            this.loadStatus();
-        } catch (err) {
-            this.setNote(`mb-control-note-${this.objectName}`, err.message, true);
-        }
+        await this.takeHttpControl('modbus', 'mb');
     }
 
     async releaseControl() {
-        if (this.status && this.status.httpControlAllow === false) {
-            this.setNote(`mb-control-note-${this.objectName}`, 'Control not allowed', true);
-            return;
-        }
-
-        try {
-            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/control/release`, { method: 'POST' });
-            this.setNote(`mb-control-note-${this.objectName}`, 'Control returned to sensor');
-            this.loadStatus();
-        } catch (err) {
-            this.setNote(`mb-control-note-${this.objectName}`, err.message, true);
-        }
+        await this.releaseHttpControl('modbus', 'mb');
     }
 
     renderParams() {
@@ -424,7 +358,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="param-name">${paramLabels[name] || name}</td>
-                <td class="param-value">${value !== undefined ? formatValue(value) : '—'}</td>
+                <td class="param-value">${value !== undefined ? formatValueHtml(value) : '—'}</td>
                 <td class="param-input">—</td>
             `;
             tbody.appendChild(tr);
@@ -451,7 +385,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
 
             tr.innerHTML = `
                 <td class="param-name">${paramLabels[name] || name}</td>
-                <td class="param-value">${value !== undefined ? formatValue(value) : '—'}</td>
+                <td class="param-value">${value !== undefined ? formatValueHtml(value) : '—'}</td>
                 <td class="param-input">${inputHtml}</td>
             `;
             tbody.appendChild(tr);
@@ -524,105 +458,45 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     }
 
     renderRegisters() {
-        const tbody = this.getEl(`mb-registers-tbody-${this.objectName}`);
-        if (!tbody) return;
-
-        // Получаем закрепленные регистры
-        const pinnedRegisters = this.getPinned();
-        const hasPinned = pinnedRegisters.size > 0;
-
-        // Показываем/скрываем кнопку "снять все"
-        const unpinBtn = this.getEl(`mb-unpin-${this.objectName}`);
-        if (unpinBtn) {
-            unpinBtn.style.display = hasPinned ? 'inline' : 'none';
-        }
-
-        // Фильтруем регистры используя общий метод (по name, id, mbreg)
-        const mbregAccessor = (item, field) => (item.register || {})[field];
-        let registersToShow = this.applyFilters(this.allRegisters, 'name', 'iotype', null, ['mbreg'], mbregAccessor);
-
-        // Если есть закрепленные и нет фильтра — показываем только их
-        if (hasPinned && !this.filter) {
-            registersToShow = registersToShow.filter(r => pinnedRegisters.has(String(r.id)));
-        }
-
-        // Сортировка: pinned всегда вверху, остальные по выбранной колонке
-        registersToShow = this.sortItems(registersToShow, pinnedRegisters, this.sortColumnDefs);
-
-        // Обновляем счётчик с учётом фильтрации
-        this.updateItemCount(`mb-register-count-${this.objectName}`, registersToShow.length, this.registersTotal);
-
-        // Update registerMap for chart support
-        registersToShow.forEach(reg => {
-            if (reg.id) {
-                this.registerMap.set(reg.id, reg);
-            }
+        // Orchestration (filter/sort/pin/count/listeners) — в base, тут только row-html.
+        this._renderRegistersTable({
+            tbodyId: `mb-registers-tbody-${this.objectName}`,
+            unpinId: `mb-unpin-${this.objectName}`,
+            countId: `mb-register-count-${this.objectName}`,
+            countTotal: this.registersTotal,
+            mbregAccessor: (item, field) => (item.register || {})[field],
+            renderRow: (reg, isPinned) => this._renderRegisterRow(reg, isPinned),
         });
-
-        const html = registersToShow.map(reg => {
-            const isPinned = pinnedRegisters.has(String(reg.id));
-            const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-            const pinIcon = isPinned ? '📌' : '○';
-            const pinTitle = isPinned ? 'Unpin' : 'Pin';
-
-            const deviceAddr = reg.device;
-            const deviceInfo = this.devicesDict[deviceAddr] || {};
-            const regInfo = reg.register || {};
-            const respondClass = deviceInfo.respond ? 'ok' : 'fail';
-            return `
-                <tr data-sensor-id="${reg.id}">
-                    <td class="col-pin">
-                        <span class="${pinToggleClass}" data-id="${reg.id}" title="${pinTitle}">
-                            ${pinIcon}
-                        </span>
-                    </td>
-                    ${this.renderAddButtonsCell(reg.id, reg.name, 'mbreg', reg.textname || reg.name)}
-                    <td class="col-id">${reg.id}</td>
-                    <td class="col-name" title="${escapeHtml(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
-                    <td class="col-type">${reg.iotype ? `<span class="type-badge type-${reg.iotype}">${reg.iotype}</span>` : ''}</td>
-                    <td class="col-value">${reg.value !== undefined ? reg.value : ''}</td>
-                    <td class="col-device"><span class="mb-respond ${respondClass}">${deviceAddr || ''}</span></td>
-                    <td class="col-register">${regInfo.mbreg || ''}</td>
-                    <td class="col-func">${regInfo.mbfunc || ''}</td>
-                    <td class="col-mbval">${regInfo.mbval !== undefined ? regInfo.mbval : ''}</td>
-                </tr>
-            `;
-        }).join('');
-
-        tbody.innerHTML = html;
-
-        // Bind chart toggle events
-        this.attachChartToggleListeners(tbody, this.registerMap);
-
-        // Bind dashboard button events
-        this.attachDashboardToggleListeners(tbody);
-
-        // Bind pin toggle events
-        tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => this.togglePin(parseInt(toggle.dataset.id)));
-        });
-
-        // Обработчик кнопки "снять все"
-        if (unpinBtn) {
-            unpinBtn.onclick = () => this.unpinAll();
-        }
     }
 
-    // Override to use Modbus SSE subscription
+    _renderRegisterRow(reg, isPinned) {
+        const deviceAddr = reg.device;
+        const deviceInfo = this.devicesDict[deviceAddr] || {};
+        const regInfo = reg.register || {};
+        const respondClass = deviceInfo.respond ? 'ok' : 'fail';
+        return `
+            <tr data-sensor-id="${reg.id}">
+                ${this.renderPinToggleCell({ id: reg.id, isPinned })}
+                ${this.renderAddButtonsCell(reg.id, reg.name, 'mbreg', reg.textname || reg.name)}
+                <td class="col-id">${reg.id}</td>
+                <td class="col-name" title="${escapeAttr(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
+                <td class="col-type">${reg.iotype ? `<span class="type-badge type-${reg.iotype}">${reg.iotype}</span>` : ''}</td>
+                <td class="col-value">${reg.value !== undefined ? reg.value : ''}</td>
+                <td class="col-device"><span class="mb-respond ${respondClass}">${deviceAddr || ''}</span></td>
+                <td class="col-register">${regInfo.mbreg || ''}</td>
+                <td class="col-func">${regInfo.mbfunc || ''}</td>
+                <td class="col-mbval">${regInfo.mbval !== undefined ? regInfo.mbval : ''}</td>
+            </tr>
+        `;
+    }
+
+    // ModbusMaster registers are already subscribed through main SSE
     subscribeToChartSensor(sensorId) {
-        // ModbusMaster registers are already subscribed through main SSE
-        if (!this.subscribedSensorIds.has(sensorId)) {
-            this.subscribedSensorIds.add(sensorId);
-        }
+        this.subscribeToChartSensorLocal(sensorId);
     }
 
     loadRegistersHeight() {
-        return this.loadSectionHeight('uniset-panel-mb-registers', 320);
-    }
-
-    saveRegistersHeight(value) {
-        this.registersHeight = value;
-        this.saveSectionHeight('uniset-panel-mb-registers', value);
+        return this.loadSectionHeight('uniset-panel-mb-registers', DATA_TABLE_DEFAULT_HEIGHT);
     }
 
     setupRegistersResize() {
@@ -631,7 +505,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
             `mb-registers-container-${this.objectName}`,
             'uniset-panel-mb-registers',
             'registersHeight',
-            { minHeight: 200, maxHeight: 700 }
+            { minHeight: SENSORS_CONTAINER_MIN_HEIGHT, maxHeight: DATA_TABLE_MAX_HEIGHT }
         );
     }
 
@@ -710,4 +584,3 @@ registerRenderer('MBTCPMultiMaster', ModbusMasterRenderer);
 registerRenderer('MBRTUMaster', ModbusMasterRenderer);
 registerRenderer('ModbusTCPMaster', ModbusMasterRenderer);
 registerRenderer('ModbusRTUMaster', ModbusMasterRenderer);
-

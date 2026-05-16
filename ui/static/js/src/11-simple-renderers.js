@@ -112,7 +112,7 @@ class FallbackRenderer extends BaseObjectRenderer {
 
     update(data) {
         // Обновляем тип объекта в сообщении (используем tabKey для поиска панели)
-        const typeSpan = document.querySelector(`.tab-panel[data-name="${this.tabKey}"] .fallback-type`);
+        const typeSpan = getElementsInTab(this.tabKey, '.fallback-type')[0];
         const typeLabel = data.object?.extensionType || data.object?.extensionsType || data.object?.objectType;
         if (typeSpan && typeLabel) {
             typeSpan.textContent = typeLabel;
@@ -174,4 +174,3 @@ function resolveRenderer(objectInfo = {}) {
 // ============================================================================
 // IONotifyControllerRenderer - рендерер для SharedMemory и подобных объектов
 // ============================================================================
-

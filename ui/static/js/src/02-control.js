@@ -17,12 +17,12 @@ function initControlToken() {
             ? `${window.location.pathname}?${urlParams.toString()}`
             : window.location.pathname;
         window.history.replaceState({}, '', newUrl);
-        console.log('Control: Token loaded from URL');
+        debugLog('Control: Token loaded from URL');
     } else {
         // 2. Проверяем localStorage
         state.control.token = localStorage.getItem('control-token');
         if (state.control.token) {
-            console.log('Control: Token loaded from localStorage');
+            debugLog('Control: Token loaded from localStorage');
         }
     }
 }
@@ -37,13 +37,28 @@ function canControl() {
 
 // Обновление статуса контроля из данных сервера
 function updateControlStatus(status) {
+    // Equality check — control_status SSE event прилетает на каждом poll,
+    // не имеет смысла пересчитывать UI и dispatch'ить controlStatusChanged
+    // если ничего по существу не изменилось (особенно важно для активных
+    // widget'ов: каждый делает DOM mutations в _updateInteractivityClass).
+    const changed =
+        state.control.enabled       !== status.enabled       ||
+        state.control.hasController !== status.hasController ||
+        state.control.isController  !== status.isController;
+
     state.control.enabled = status.enabled;
     state.control.hasController = status.hasController;
     state.control.isController = status.isController;
-    state.control.timeoutSec = status.timeoutSec || 60;
+    state.control.timeoutSec = status.timeoutSec || CONTROL_DEFAULT_TIMEOUT_SEC;
+
+    if (!changed) return;
 
     updateControlUI();
     updateAllControlButtons();
+    // Notify active dashboard widgets so they can refresh their interactivity class.
+    document.dispatchEvent(new CustomEvent('controlStatusChanged', {
+        detail: { ...state.control }
+    }));
 }
 
 // Обновление UI контроля (компактный индикатор в шапке)
@@ -242,16 +257,21 @@ async function controlledFetch(url, options = {}) {
 
     const response = await fetch(url, options);
 
-    // Обработка ошибки контроля
+    // Обработка ошибки контроля. throw нельзя оставлять внутри try — он будет
+    // пойман этим же catch (вместе с ошибкой парсинга) и caller обработает 403
+    // как успешный ответ. Поэтому решение «нужно ли бросать» определяем внутри
+    // try, а сам throw делаем после.
     if (response.status === 403) {
+        let isControlRequired = false;
         try {
             const data = await response.clone().json();
-            if (data.code === 'CONTROL_REQUIRED') {
-                showControlRequiredNotification();
-                throw new Error('Control required');
-            }
+            if (data.code === 'CONTROL_REQUIRED') isControlRequired = true;
         } catch (e) {
-            // Игнорируем ошибку парсинга
+            // Игнорируем ошибку парсинга — body может быть не-JSON
+        }
+        if (isControlRequired) {
+            showControlRequiredNotification();
+            throw new Error('Control required');
         }
     }
 

@@ -1,22 +1,21 @@
 import { test, expect } from '@playwright/test';
 
 // Все типы виджетов
-const WIDGET_TYPES = ['gauge', 'level', 'led', 'label', 'divider', 'statusbar', 'bargraph', 'digital', 'chart'];
+const WIDGET_TYPES = ['gauge', 'level', 'led', 'label', 'divider', 'statusbar', 'bargraph', 'digital', 'toggle', 'pushbutton', 'setpoint', 'generator', 'chart'];
 
 async function openServerDashboard(page) {
   await page.goto('/');
-  await page.waitForTimeout(2000);
 
   // Открываем первый серверный дашборд через sidebar группы
   const firstDashboard = page.locator('.sidebar-group-item[data-type="dashboard"]').first();
   // Прокрутка до элемента (может быть внизу sidebar)
-  await firstDashboard.scrollIntoViewIfNeeded();
   await expect(firstDashboard).toBeVisible({ timeout: 10000 });
+  await firstDashboard.scrollIntoViewIfNeeded();
   await firstDashboard.click();
 
   await expect(page.locator('#dashboard-view')).toHaveClass(/active/, { timeout: 10000 });
-  // Ждём загрузки дашборда
-  await page.waitForTimeout(1000);
+  // Ждём появления хотя бы одного виджета (подтверждает что dashboard загружен)
+  await expect(page.locator('#dashboard-grid .dashboard-widget').first()).toBeVisible({ timeout: 8000 });
 }
 
 async function createTestDashboard(page, name = 'Widget Test') {
@@ -28,11 +27,12 @@ async function createTestDashboard(page, name = 'Widget Test') {
     keys.forEach(k => localStorage.removeItem(k));
   });
   await page.reload();
-  await page.waitForTimeout(1000);
+  // Ждём готовности UI после reload
+  await expect(page.locator('#view-dashboard-btn')).toBeVisible({ timeout: 10000 });
 
   // Переключаемся на dashboard view
   await page.locator('#view-dashboard-btn').click();
-  await page.waitForTimeout(500);
+  await expect(page.locator('#dashboard-view')).toHaveClass(/active/, { timeout: 5000 });
 
   // Создаём новый дашборд
   await page.locator('#dashboard-new-btn').click();
@@ -180,7 +180,7 @@ test.describe('Dashboard — Edit mode', () => {
 
 test.describe('Dashboard — Widget Picker', () => {
 
-  test('Widget picker показывает все 9 типов виджетов', async ({ page }) => {
+  test('Widget picker показывает все 13 типов виджетов', async ({ page }) => {
     await createTestDashboard(page);
 
     // Открываем picker
@@ -190,7 +190,7 @@ test.describe('Dashboard — Widget Picker', () => {
     await expect(pickerOverlay).not.toHaveClass(/hidden/, { timeout: 3000 });
 
     const items = page.locator('.widget-picker-item');
-    await expect(items).toHaveCount(9);
+    await expect(items).toHaveCount(13);
 
     // Проверяем все типы
     for (const type of WIDGET_TYPES) {
@@ -384,7 +384,8 @@ test.describe('Dashboard — конфигурация и удаление вид
       }
 
       await page.locator('#widget-config-apply').click();
-      await page.waitForTimeout(500);
+      // Wait for widget to appear before adding next
+      await expect(page.locator(`#dashboard-grid .dashboard-widget[data-type="${type}"]`)).toBeVisible({ timeout: 5000 });
     }
 
     const widgets = page.locator('#dashboard-grid .dashboard-widget');

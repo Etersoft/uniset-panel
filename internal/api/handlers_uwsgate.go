@@ -137,9 +137,10 @@ func (h *Handlers) GetUWSGateSensors(w http.ResponseWriter, r *http.Request) {
 			Supplier:   data.Supplier,
 		}
 
-		// Дополняем информацией из sensorconfig
-		if h.sensorConfig != nil {
-			if info := h.sensorConfig.GetByName(data.Name); info != nil {
+		// Дополняем информацией из per-server sensorconfig (если задан)
+		serverID := r.URL.Query().Get("server")
+		if cfg := h.getSensorConfig(serverID); cfg != nil {
+			if info := cfg.GetByName(data.Name); info != nil {
 				sensor.IOType = string(info.IOType)
 				sensor.TextName = info.TextName
 				sensor.IsDiscrete = info.IOType.IsDiscrete()

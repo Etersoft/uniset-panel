@@ -53,9 +53,9 @@ class LogViewer {
 
         // Reconnection settings
         this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
-        this.baseReconnectDelay = 1000; // 1 second
-        this.maxReconnectDelay = 30000; // 30 seconds
+        this.maxReconnectAttempts = LOGVIEWER_MAX_RECONNECT_ATTEMPTS;
+        this.baseReconnectDelay = LOGVIEWER_BASE_RECONNECT_DELAY;
+        this.maxReconnectDelay = LOGVIEWER_MAX_RECONNECT_DELAY;
         this.reconnectTimer = null;
 
         this.init();
@@ -80,7 +80,7 @@ class LogViewer {
                         <path d="M6 9l6 6 6-6"/>
                     </svg>
                     <span class="logviewer-title">Logs</span>
-                    <div class="logviewer-controls" onclick="event.stopPropagation()">
+                    <div class="logviewer-controls">
                         <div class="log-level-wrapper" id="log-level-wrapper-${this.objectName}">
                             <button class="log-level-btn" id="log-level-btn-${this.objectName}" title="Select log levels">
                                 Levels ▼
@@ -143,20 +143,16 @@ class LogViewer {
                         </button>
                         <button class="log-connect-btn" id="log-connect-${this.objectName}">Connect</button>
                         <select class="log-buffer-select" id="log-buffer-${this.objectName}" title="Buffer size">
-                            <option value="500">500</option>
-                            <option value="1000">1000</option>
-                            <option value="2000">2000</option>
-                            <option value="5000">5000</option>
-                            <option value="10000" selected>10000</option>
-                            <option value="20000">20000</option>
-                            <option value="50000">50000</option>
+                            ${LOGVIEWER_BUFFER_OPTIONS.map(size => `
+                                <option value="${size}" ${size === MAX_LOG_LINES ? 'selected' : ''}>${size}</option>
+                            `).join('')}
                         </select>
                         <button class="log-download-btn" id="log-download-${this.objectName}" title="Download logs">💾</button>
                         <button class="log-clear-btn" id="log-clear-${this.objectName}" title="Clear">Clear</button>
                     </div>
-                    <div class="section-reorder-buttons" onclick="event.stopPropagation()">
-                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.tabKey}', 'logviewer')" title="Move up">↑</button>
-                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.tabKey}', 'logviewer')" title="Move down">↓</button>
+                    <div class="section-reorder-buttons" id="log-reorder-${this.objectName}">
+                        <button class="section-move-btn section-move-up" id="log-move-up-${this.objectName}" title="Move up">↑</button>
+                        <button class="section-move-btn section-move-down" id="log-move-down-${this.objectName}" title="Move down">↓</button>
                     </div>
                 </div>
                 <div class="logviewer-content">
@@ -208,6 +204,14 @@ class LogViewer {
         const pauseBtn = this.getEl(`log-pause-${this.objectName}`);
         pauseBtn.addEventListener('click', () => this.togglePause());
 
+        // Section reorder buttons (раньше — inline onclick в HTML).
+        const reorderRoot = this.getEl(`log-reorder-${this.objectName}`);
+        reorderRoot?.addEventListener('click', (e) => e.stopPropagation());
+        const moveUpBtn = this.getEl(`log-move-up-${this.objectName}`);
+        moveUpBtn?.addEventListener('click', () => moveSectionUp(this.tabKey, 'logviewer'));
+        const moveDownBtn = this.getEl(`log-move-down-${this.objectName}`);
+        moveDownBtn?.addEventListener('click', () => moveSectionDown(this.tabKey, 'logviewer'));
+
         // Level dropdown
         this.setupLevelDropdown();
 
@@ -219,7 +223,7 @@ class LogViewer {
             filterTimeout = setTimeout(() => {
                 this.filter = e.target.value;
                 this.applyFilter();
-            }, 300);
+            }, LOGVIEWER_FILTER_DEBOUNCE_DELAY);
         });
 
         // Filter options
@@ -244,9 +248,11 @@ class LogViewer {
             this.applyFilter();
         });
 
-        // Hotkey "/" for filter focus, Esc for pause toggle
-        document.addEventListener('keydown', (e) => {
-            // Check if LogViewer section is visible
+        // Hotkey "/" for filter focus, Esc for pause toggle.
+        // Сохраняем ссылку на handler — нужен для removeEventListener в destroy(),
+        // иначе document держит замыкание на весь LogViewer instance + filterInput
+        // навечно (утечка на каждое открытие/закрытие вкладки).
+        this._keydownHandler = (e) => {
             const section = this.getEl(`logviewer-section-${this.objectName}`);
             if (!section || section.classList.contains('collapsed')) return;
 
@@ -256,22 +262,21 @@ class LogViewer {
             }
             if (e.key === 'Escape') {
                 if (document.activeElement === filterInput) {
-                    // Clear filter and blur
                     filterInput.value = '';
                     this.filter = '';
                     this.applyFilter();
                     filterInput.blur();
                 } else if (document.activeElement.tagName !== 'INPUT') {
-                    // Toggle pause when not in input
                     this.togglePause();
                 }
             }
-        });
+        };
+        document.addEventListener('keydown', this._keydownHandler);
 
         // Buffer size select
         const bufferSelect = this.getEl(`log-buffer-${this.objectName}`);
         bufferSelect.addEventListener('change', (e) => {
-            this.maxLines = parseInt(e.target.value);
+            this.maxLines = parseIntegerOrDefault(e.target.value, this.maxLines);
             this.saveBufferSize();
             this.updateStats();
         });
@@ -283,7 +288,7 @@ class LogViewer {
         const logContainer = this.getEl(`log-container-${this.objectName}`);
         logContainer.addEventListener('scroll', () => {
             const { scrollTop, scrollHeight, clientHeight } = logContainer;
-            this.autoScroll = scrollHeight - scrollTop - clientHeight < 50;
+            this.autoScroll = scrollHeight - scrollTop - clientHeight < LOGVIEWER_AUTOSCROLL_THRESHOLD_PX;
         });
 
         // Load saved settings
@@ -293,65 +298,46 @@ class LogViewer {
     }
 
     saveFilterOptions() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-filter-options') || '{}');
+        updateStorageMap('uniset-panel-filter-options', (saved) => {
             saved[this.tabKey] = {
                 regex: this.filterRegex,
                 case: this.filterCase,
                 only: this.filterOnlyMatches
             };
-            localStorage.setItem('uniset-panel-filter-options', JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save filter options:', err);
-        }
+        });
     }
 
     loadFilterOptions() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-filter-options') || '{}');
-            const opts = saved[this.tabKey] || saved[this.objectName];
-            if (opts) {
-                this.filterRegex = opts.regex !== undefined ? opts.regex : true;
-                this.filterCase = opts.case !== undefined ? opts.case : false;
-                this.filterOnlyMatches = opts.only !== undefined ? opts.only : false;
+        const saved = loadStorageMap('uniset-panel-filter-options');
+        const opts = saved[this.tabKey] || saved[this.objectName];
+        if (!opts) return;
 
-                // Update checkboxes
-                const regexCheckbox = this.getEl(`log-filter-regex-${this.objectName}`);
-                const caseCheckbox = this.getEl(`log-filter-case-${this.objectName}`);
-                const onlyCheckbox = this.getEl(`log-filter-only-${this.objectName}`);
+        this.filterRegex = opts.regex !== undefined ? opts.regex : true;
+        this.filterCase = opts.case !== undefined ? opts.case : false;
+        this.filterOnlyMatches = opts.only !== undefined ? opts.only : false;
 
-                if (regexCheckbox) regexCheckbox.checked = this.filterRegex;
-                if (caseCheckbox) caseCheckbox.checked = this.filterCase;
-                if (onlyCheckbox) onlyCheckbox.checked = this.filterOnlyMatches;
-            }
-        } catch (err) {
-            console.warn('Failed to load filter options:', err);
-        }
+        const regexCheckbox = this.getEl(`log-filter-regex-${this.objectName}`);
+        const caseCheckbox = this.getEl(`log-filter-case-${this.objectName}`);
+        const onlyCheckbox = this.getEl(`log-filter-only-${this.objectName}`);
+
+        if (regexCheckbox) regexCheckbox.checked = this.filterRegex;
+        if (caseCheckbox) caseCheckbox.checked = this.filterCase;
+        if (onlyCheckbox) onlyCheckbox.checked = this.filterOnlyMatches;
     }
 
     saveBufferSize() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-buffersize') || '{}');
-            saved[this.tabKey] = this.maxLines;
-            localStorage.setItem('uniset-panel-buffersize', JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save buffer size:', err);
-        }
+        updateStorageMap('uniset-panel-buffersize', (saved) => { saved[this.tabKey] = this.maxLines; });
     }
 
     loadSavedBufferSize() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-buffersize') || '{}');
-            const bufSize = saved[this.tabKey] ?? saved[this.objectName];
-            if (bufSize) {
-                this.maxLines = bufSize;
-                const bufferSelect = this.getEl(`log-buffer-${this.objectName}`);
-                if (bufferSelect) {
-                    bufferSelect.value = this.maxLines;
-                }
+        const saved = loadStorageMap('uniset-panel-buffersize');
+        const bufSize = saved[this.tabKey] ?? saved[this.objectName];
+        if (bufSize) {
+            this.maxLines = bufSize;
+            const bufferSelect = this.getEl(`log-buffer-${this.objectName}`);
+            if (bufferSelect) {
+                bufferSelect.value = this.maxLines;
             }
-        } catch (err) {
-            console.warn('Failed to load buffer size:', err);
         }
     }
 
@@ -482,76 +468,43 @@ class LogViewer {
     }
 
     saveLevels() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-loglevels') || '{}');
+        updateStorageMap('uniset-panel-loglevels', (saved) => {
             saved[this.tabKey] = Array.from(this.selectedLevels);
-            localStorage.setItem('uniset-panel-loglevels', JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save log levels:', err);
-        }
+        });
     }
 
     loadSavedLevels() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-loglevels') || '{}');
-            const levels = saved[this.tabKey] || saved[this.objectName];
-            if (levels) {
-                this.selectedLevels = new Set(levels);
-                this.updatePillsUI();
-                // Calculate mask for currentLevel
-                let mask = 0;
-                if (this.selectedLevels.has('ANY')) {
-                    mask = LOG_LEVELS.ANY;
-                } else {
-                    this.selectedLevels.forEach(level => {
-                        if (LOG_LEVELS[level]) {
-                            mask |= LOG_LEVELS[level];
-                        }
-                    });
+        const saved = loadStorageMap('uniset-panel-loglevels');
+        const levels = saved[this.tabKey] || saved[this.objectName];
+        if (!levels) return;
+
+        this.selectedLevels = new Set(levels);
+        this.updatePillsUI();
+        // Calculate mask for currentLevel
+        let mask = 0;
+        if (this.selectedLevels.has('ANY')) {
+            mask = LOG_LEVELS.ANY;
+        } else {
+            this.selectedLevels.forEach(level => {
+                if (LOG_LEVELS[level]) {
+                    mask |= LOG_LEVELS[level];
                 }
-                this.currentLevel = mask;
-            }
-        } catch (err) {
-            console.warn('Failed to load log levels:', err);
+            });
         }
+        this.currentLevel = mask;
     }
 
     setupResize() {
         const resizeHandle = this.getEl(`log-resize-${this.objectName}`);
         const logContainer = this.getEl(`log-container-${this.objectName}`);
-
-        let startY = 0;
-        let startHeight = 0;
-        let isResizing = false;
-
-        const onMouseMove = (e) => {
-            if (!isResizing) return;
-            const delta = e.clientY - startY;
-            const newHeight = Math.max(LOGVIEWER_MIN_HEIGHT, Math.min(LOGVIEWER_MAX_HEIGHT, startHeight + delta));
-            logContainer.style.height = `${newHeight}px`;
-            this.height = newHeight;
-        };
-
-        const onMouseUp = () => {
-            if (!isResizing) return;
-            isResizing = false;
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-            this.saveHeight();
-        };
-
-        resizeHandle.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            isResizing = true;
-            startY = e.clientY;
-            startHeight = logContainer.offsetHeight;
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = 'ns-resize';
-            document.body.style.userSelect = 'none';
-        });
+        setupResizeHandle(
+            resizeHandle,
+            logContainer,
+            LOGVIEWER_MIN_HEIGHT,
+            (height) => { this.height = height; this.saveHeight(); },
+            LOGVIEWER_MAX_HEIGHT,
+            (height) => { this.height = height; }
+        );
     }
 
     toggleCollapse() {
@@ -601,9 +554,9 @@ class LogViewer {
 
             try {
                 const data = JSON.parse(e.data);
-                console.log(`LogViewer: Connected to ${data.host}:${data.port}`);
+                debugLog(`LogViewer: Connected to ${data.host}:${data.port}`);
             } catch (err) {
-                console.log('LogViewer: Connected');
+                debugLog('LogViewer: Connected');
             }
         });
 
@@ -622,7 +575,7 @@ class LogViewer {
         });
 
         this.eventSource.addEventListener('disconnected', () => {
-            console.log('LogViewer: Disconnected from LogServer, will reconnect');
+            debugLog('LogViewer: Disconnected from LogServer, will reconnect');
             this.handleConnectionError();
         });
 
@@ -658,7 +611,7 @@ class LogViewer {
             const jitter = cappedDelay * 0.1 * (Math.random() * 2 - 1);
             const delay = Math.round(cappedDelay + jitter);
 
-            console.log(`LogViewer: Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+            debugLog(`LogViewer: Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
             this.updateStatus('reconnecting');
 
             // Clear any existing timer
@@ -876,9 +829,8 @@ class LogViewer {
                 const flags = this.filterCase ? 'g' : 'gi';
                 regex = new RegExp(`(${this.filter})`, flags);
             } else {
-                const escaped = this.filter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 const flags = this.filterCase ? 'g' : 'gi';
-                regex = new RegExp(`(${escaped})`, flags);
+                regex = new RegExp(`(${escapeRegex(this.filter)})`, flags);
             }
 
             if (regex.test(text)) {
@@ -1100,28 +1052,18 @@ class LogViewer {
     }
 
     saveHeight() {
-        try {
-            const heights = JSON.parse(localStorage.getItem('uniset-panel-logheights') || '{}');
-            heights[this.tabKey] = this.height;
-            localStorage.setItem('uniset-panel-logheights', JSON.stringify(heights));
-        } catch (err) {
-            console.warn('Failed to save log height:', err);
-        }
+        updateStorageMap('uniset-panel-logheights', (heights) => { heights[this.tabKey] = this.height; });
     }
 
     loadSavedHeight() {
-        try {
-            const heights = JSON.parse(localStorage.getItem('uniset-panel-logheights') || '{}');
-            const h = heights[this.tabKey] ?? heights[this.objectName];
-            if (h) {
-                this.height = h;
-                const container = this.getEl(`log-container-${this.objectName}`);
-                if (container) {
-                    container.style.height = `${this.height}px`;
-                }
+        const heights = loadStorageMap('uniset-panel-logheights');
+        const h = heights[this.tabKey] ?? heights[this.objectName];
+        if (h) {
+            this.height = h;
+            const container = this.getEl(`log-container-${this.objectName}`);
+            if (container) {
+                container.style.height = `${this.height}px`;
             }
-        } catch (err) {
-            console.warn('Failed to load log height:', err);
         }
     }
 
@@ -1140,7 +1082,10 @@ class LogViewer {
     }
 
     destroy() {
+        if (this._keydownHandler) {
+            document.removeEventListener('keydown', this._keydownHandler);
+            this._keydownHandler = null;
+        }
         this.disconnect();
     }
 }
-

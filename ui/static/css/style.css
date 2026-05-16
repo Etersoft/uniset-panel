@@ -5411,6 +5411,12 @@ td.ionc-col-add-buttons > *:last-child {
     min-height: 0;
     padding: 4px;
     z-index: 10;
+    /* В view mode header — invisible overlay, не должен ловить клики
+       (active widgets под ним должны получать клики на свои элементы). */
+    pointer-events: none;
+}
+.dashboard-widget.edit-mode .widget-header.hidden-title {
+    pointer-events: auto;
 }
 
 .widget-header.hidden-title .widget-title {
@@ -5442,11 +5448,19 @@ td.ionc-col-add-buttons > *:last-child {
     gap: 4px;
     opacity: 0;
     transition: opacity 0.2s ease;
+    /* В view mode action-кнопки невидимы (opacity:0) И не ловят клики
+       (pointer-events:none). Без pointer-events невидимая шестерёнка
+       перехватывала бы клик на active widget (например click по push button
+       открывал бы config dialog вместо триггера команды). */
+    pointer-events: none;
 }
 
-.dashboard-widget:hover .widget-actions,
+/* Action кнопки (Configure ⚙ + Remove) видны ТОЛЬКО в edit mode.
+   View mode для оператора — без отвлекающих overlay'ев при hover.
+   Стандарт SCADA: настройки доступны через переключение в Edit. */
 .dashboard-widget.edit-mode .widget-actions {
     opacity: 1;
+    pointer-events: auto;
 }
 
 .widget-action-btn {
@@ -5491,10 +5505,15 @@ td.ionc-col-add-buttons > *:last-child {
     background: linear-gradient(135deg, transparent 50%, var(--border-color) 50%);
     border-radius: 0 0 var(--comp-border-radius) 0;
     z-index: 20; /* Above chart widget internal resizers */
+    /* В view mode resize handle invisible (opacity:0). Без pointer-events:none
+       hit-test ловит его в правом нижнем углу widget'а — пользователь видит
+       курсор se-resize рядом с активной кнопкой. Включается в edit mode. */
+    pointer-events: none;
 }
 
 .edit-mode .widget-resize-handle {
     opacity: 0.6;
+    pointer-events: auto;
 }
 
 .edit-mode .widget-resize-handle:hover {
@@ -5701,6 +5720,13 @@ td.ionc-col-add-buttons > *:last-child {
     grid-template-columns: repeat(3, 1fr);
     gap: 12px;
     padding: 20px;
+    /* widget-dialog родитель имеет max-height:90vh + overflow:hidden — нужно
+       чтобы содержимое прокручивалось внутри (с 13+ widget'ами в 3 колонках
+       не помещается на маленьких экранах). flex:1 + min-height:0 — стандартный
+       trick чтобы flex child мог shrink ниже своего content height. */
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
 }
 
 .widget-picker-item {
@@ -6014,26 +6040,26 @@ button.rotate-quick-btn:active {
 }
 
 /* StatusBar Config Items */
-.statusbar-item-config {
+.statusbar-item {
     padding: 12px;
     background: var(--bg-tertiary);
     border-radius: var(--comp-border-radius);
     margin-bottom: 8px;
 }
 
-.statusbar-item-config:last-child {
+.statusbar-item:last-child {
     margin-bottom: 0;
 }
 
 /* BarGraph Config Items */
-.bargraph-item-config {
+.bargraph-item {
     padding: 12px;
     background: var(--bg-tertiary);
     border-radius: var(--comp-border-radius);
     margin-bottom: 8px;
 }
 
-.bargraph-item-config:last-child {
+.bargraph-item:last-child {
     margin-bottom: 0;
 }
 
@@ -6051,6 +6077,121 @@ button.rotate-quick-btn:active {
     font-size: 14px;
     color: var(--text-secondary);
     line-height: 1.5;
+}
+
+/* === Zones reuse picker (above .zones-editor) === */
+.reuse-picker {
+    background: rgba(59, 130, 246, 0.06);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+}
+.reuse-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: #93c5fd;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.reuse-count {
+    color: #6b7280;
+    font-size: 10px;
+    font-weight: normal;
+    text-transform: none;
+    letter-spacing: 0;
+}
+.reuse-scroll {
+    overflow-y: auto;
+    padding-right: 4px;
+}
+.reuse-scroll::-webkit-scrollbar { width: 6px; }
+.reuse-scroll::-webkit-scrollbar-track { background: #0f172a; border-radius: 3px; }
+.reuse-scroll::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+.reuse-scroll::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+
+.group-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 6px 0 4px;
+    padding: 4px 2px 2px;
+    position: sticky;
+    top: 0;
+    background: rgba(31, 41, 55, 0.95);
+    backdrop-filter: blur(4px);
+    z-index: 1;
+}
+.group-label .group-count { color: #4b5563; }
+.group-label.group-same-class { color: #93c5fd; }
+.group-label.group-recent { color: #fbbf24; }
+.group-divider { flex: 1; height: 1px; background: #374151; }
+
+.zone-chip {
+    /* Один chip на строку — иначе при двух подряд в узком диалоге
+       второй wrapping'ится но zone-bar (flex-shrink:0) обрезается
+       за правым краем, теряется правая часть диапазона. */
+    display: flex;
+    align-items: center;
+    background: #111827;
+    border: 1px solid #374151;
+    border-radius: 4px;
+    padding: 3px 6px 3px 4px;
+    margin: 0 0 4px 0;
+    cursor: pointer;
+    transition: border-color 0.12s, background 0.12s, transform 0.08s;
+    gap: 6px;
+    max-width: 100%;
+    min-width: 0;
+}
+.zone-chip:hover {
+    border-color: #60a5fa;
+    background: #1e293b;
+}
+.zone-chip:active { transform: translateY(1px); }
+.zone-bar {
+    display: inline-flex;
+    height: 14px;
+    border-radius: 2px;
+    overflow: hidden;
+    /* Бар никогда не сжимается — диапазоны from-to всегда читаемы.
+       Урезается source-name (см. .chip-source ниже). */
+    flex-shrink: 0;
+}
+.zone-bar > span {
+    display: inline-block;
+    min-width: 26px;
+    text-align: center;
+    font-size: 9px;
+    color: white;
+    line-height: 14px;
+    padding: 0 3px;
+    font-weight: 600;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.4);
+    border-right: 1px solid rgba(0,0,0,0.15);
+}
+.zone-bar > span:last-child { border-right: 0; }
+.chip-source {
+    color: #9ca3af;
+    font-size: 11px;
+    white-space: nowrap;
+    /* Source name урезается с ellipsis при недостатке места.
+       min-width:0 нужен flex-child'у чтобы overflow:hidden+ellipsis сработали. */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 0 1 auto;
+}
+.chip-source.recent-source {
+    color: #fbbf24;
+    opacity: 0.85;
 }
 
 /* Zones Editor */
@@ -8671,4 +8812,1121 @@ button.rotate-quick-btn:active {
 /* Sidebar collapsed — скрываем группы */
 .sidebar.collapsed #sidebar-groups {
     display: none;
+}
+
+/* ============================================================================
+ * Active dashboard widgets — состояния записи
+ * ============================================================================ */
+
+.dashboard-widget.active-pending {
+    /* Полупрозрачность во время POST */
+    opacity: 0.7;
+    filter: grayscale(0.3);
+    transition: opacity 0.15s, filter 0.15s;
+}
+
+/* active-success — НЕ ставим box-shadow на весь widget container
+   (раньше выглядело как «фокусная рамка вокруг всего виджета»).
+   Вместо этого подсвечиваем сам элемент ввода — input/slider/track/button —
+   через child-selectors. Так оператор видит «команда от ЭТОГО элемента дошла»
+   без визуального шума на всём widget'е. */
+
+/* Setpoint — input style: рамка вокруг input */
+.dashboard-widget.active-success .setpoint-input {
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.7) !important;
+    transition: box-shadow 0.15s;
+}
+/* Setpoint — stepper style: рамка вокруг кнопочного ряда */
+.dashboard-widget.active-success .setpoint-stepper-row {
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.7) !important;
+    transition: box-shadow 0.15s;
+}
+/* Toggle — slider style: track */
+.dashboard-widget.active-success .toggle-track {
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.7) !important;
+    transition: box-shadow 0.15s;
+}
+/* Toggle — checkbox style: квадратик */
+.dashboard-widget.active-success .toggle-cb {
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.7) !important;
+    transition: box-shadow 0.15s;
+}
+/* PushButton — кнопка */
+.dashboard-widget.active-success .pb-btn {
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.7) !important;
+    transition: box-shadow 0.15s;
+}
+/* Generator — toggle */
+.dashboard-widget.active-success .gen-toggle {
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.7) !important;
+    transition: box-shadow 0.15s;
+}
+
+.dashboard-widget.active-error,
+.dashboard-widget.transparent.active-error {
+    /* Подсветка для write-error (POST не прошёл).
+       Не используем красный — в SCADA red = процессная авария (alarm/fault),
+       а здесь это operational issue (network/permission/validation).
+       Пурпурный — визуально заметный, но семантически нейтральный. */
+    box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.85) !important;
+    transition: box-shadow 0.2s;
+}
+
+/* В edit mode активные виджеты обесцвечиваются — пользователь видит,
+   что клики не записывают, а открывают конфиг. */
+.dashboard-grid.edit-mode .dashboard-widget[data-active-widget="true"] {
+    filter: grayscale(0.5);
+    opacity: 0.85;
+}
+
+/* Когда controlToken не активен / edit mode — визуально блокированный виджет.
+   Frozen widget'ы — отдельный visual style (banner + dim на .widget-content),
+   на root opacity не ставим, иначе caskaded на ::before banner и он становится
+   полупрозрачным. */
+.dashboard-widget[data-active-widget="true"][data-control-blocked="true"],
+.dashboard-widget.active-disabled:not([data-frozen="true"]) {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* Содержимое active widget'а в blocked-state — disable клики и наследовать
+   not-allowed cursor. Без этого правила сама кнопка/track/checkbox принимали
+   клики и показывали cursor:pointer (writeValue() возвращал ранний guard,
+   но визуально оператору было непонятно почему widget полупрозрачный
+   при кликабельном контроле). Применяется только к .widget-content
+   (header с action кнопками — отдельный layer, в edit mode остаётся
+   полностью функциональным). */
+.dashboard-widget[data-active-widget="true"][data-control-blocked="true"] .widget-content,
+.dashboard-widget.active-disabled .widget-content {
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+/* Frozen state — sensor залатчен на фиксированном значении (IONC freeze).
+   Дизайн: top banner "❄ FROZEN" (cyan pill, inset 3px чтобы соседние widget'ы
+   не сливались в полосу при gap=0) + dim+grayscale на .widget-content.
+   Banner на самом widget root (::before), dim только на content — header
+   (.widget-header с config/delete) остаётся полноцветным в edit mode.
+   Feedback значение остаётся видимым (хоть и блёклым) — это критично:
+   оператор должен знать НА ЧЁМ датчик «застрял». */
+.dashboard-widget[data-active-widget="true"][data-frozen="true"] {
+    cursor: not-allowed;
+}
+.dashboard-widget[data-active-widget="true"][data-frozen="true"]::before {
+    content: "❄ FROZEN";
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    right: 4px;
+    height: 14px;
+    line-height: 14px;
+    text-align: center;
+    font-size: 8.5px;
+    letter-spacing: 1px;
+    font-weight: 700;
+    color: #fff;
+    /* Solid background (без alpha) + subtle shadow — чтобы banner был
+       одинаково контрастным на любом content фоне (mushroom red, flat blue,
+       toggle dark) и не выглядел сам полупрозрачным. */
+    background: #0284c7;
+    border-radius: 3px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    pointer-events: none;
+    /* z-index ниже header (.widget-header z-index:10) — чтобы в edit mode
+       config/delete кнопки перекрывали banner. */
+    z-index: 5;
+}
+.dashboard-widget[data-active-widget="true"][data-frozen="true"] .widget-content {
+    pointer-events: none;
+    cursor: not-allowed;
+    /* Banner высотой 14+2+4=20px сверху — добавляем top padding чтобы
+       контент widget'а не залезал под banner (label, value). */
+    padding-top: 20px;
+    box-sizing: border-box;
+    /* Dim + умеренный grayscale (0.55, не 1.0) — «выключенный» feel,
+       но цвет частично сохраняется: mushroom STOP остаётся красноватым,
+       OPEN/CLOSED valve — зеленовато-серый. Полный grayscale убивает
+       SCADA-семантику цвета (red=аварийная) — для оператора это потеря
+       информации даже в frozen state. */
+    opacity: 0.5;
+    filter: grayscale(0.55) brightness(0.9);
+    transition: opacity 0.2s, filter 0.2s;
+}
+
+/* Active widgets — убираем все focus outlines (browser default :focus borders
+   на input/slider/button). В SCADA-context эти рамки выглядят как «помехи»
+   и не нужны: широта взаимодействия — мышь / touch. Disabled inputs от
+   `_updateInteractivityClass` уже не получают focus вообще, но для интерактивных
+   тоже глушим выделение. */
+.dashboard-widget[data-active-widget="true"] input:focus,
+.dashboard-widget[data-active-widget="true"] input:focus-visible,
+.dashboard-widget[data-active-widget="true"] button:focus,
+.dashboard-widget[data-active-widget="true"] button:focus-visible,
+.dashboard-widget[data-active-widget="true"] select:focus,
+.dashboard-widget[data-active-widget="true"] select:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+}
+/* Disabled inputs/buttons в active widgets — слегка прозрачные для явного
+   "выключенного" вида. Браузерный default делает их серыми, но комбинация
+   с opacity:0.6 родителя (active-disabled) даёт правильное чтение «inert». */
+.dashboard-widget[data-active-widget="true"] input:disabled,
+.dashboard-widget[data-active-widget="true"] button:disabled,
+.dashboard-widget[data-active-widget="true"] select:disabled {
+    cursor: not-allowed;
+}
+
+/* Sensor input в config dialog active widget'ов — добавляем визуальный
+   chevron справа чтобы оператор понял что это селектор из списка
+   (по клику открывается dropdown со всеми датчиками). Раньше выглядел
+   как обычный text input — было непонятно. */
+.sensor-select-wrap {
+    position: relative;
+    display: block;
+}
+.sensor-select-wrap .sensor-select-input {
+    width: 100%;
+    padding-right: 32px !important;
+    cursor: pointer;
+    box-sizing: border-box;
+}
+.sensor-select-wrap::after {
+    content: '';
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid #9ca3af;
+    pointer-events: none;
+}
+
+/* Индикатор расхождения command vs feedback (точка в углу виджета).
+   Конкретные виджеты могут позиционировать .command-feedback-dot внутри
+   через свой layout. По умолчанию — справа сверху. */
+.command-feedback-dot {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #6b7280;          /* серый — нет команды / совпадает */
+    pointer-events: none;
+}
+.command-feedback-dot.match    { background: #22c55e; }   /* зелёный — feedback совпал с command */
+.command-feedback-dot.diverge  { background: #f59e0b; }   /* жёлтый — расхождение */
+.command-feedback-dot.errored  { background: #ef4444; }   /* красный — последняя запись с ошибкой */
+
+/* ============================================================================
+ * Sensor autocomplete dropdown (used by active widgets config form)
+ * ============================================================================ */
+.sensor-autocomplete-dropdown {
+    background: #0f172a;
+    border: 1px solid #4b5563;
+    border-radius: 4px;
+    max-height: 240px;
+    overflow-y: auto;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+}
+.sensor-autocomplete-item {
+    padding: 6px 10px;
+    cursor: pointer;
+    border-bottom: 1px solid #1f2937;
+}
+.sensor-autocomplete-item:hover,
+.sensor-autocomplete-item.active {
+    background: #1e3a5f;
+}
+.sensor-autocomplete-name {
+    color: #d8dce2;
+    font-size: 13px;
+    font-weight: 500;
+}
+.sensor-autocomplete-meta {
+    color: #9ca3af;
+    font-size: 10px;
+    margin-top: 2px;
+}
+.sensor-autocomplete-empty {
+    padding: 10px;
+    color: #6b7280;
+    font-size: 12px;
+    text-align: center;
+}
+.sensor-autocomplete-footer {
+    position: sticky;
+    bottom: 0;
+    padding: 5px 10px;
+    background: #0b1220;
+    border-top: 1px solid #1f2937;
+    color: #9ca3af;
+    font-size: 10px;
+    text-align: center;
+    pointer-events: none;
+}
+
+/* ============================================================================
+ * ToggleWidget
+ * ============================================================================ */
+
+.toggle-widget {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 100%;
+    cursor: pointer;
+}
+
+.toggle-widget .toggle-name {
+    font-size: 13px;
+    color: #d8dce2;
+    font-weight: 600;
+    text-align: center;
+    /* Длинный label обрезается с ellipsis вместо wrap'а в 2+ строки
+       (wrap съедает место, отведённое на track). */
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 0;
+}
+
+.toggle-widget .toggle-track {
+    width: 72px;
+    height: 32px;
+    border-radius: 16px;
+    position: relative;
+    transition: background 0.15s, box-shadow 0.2s;
+    /* Унифицирует размер: fb-off/unknown имеют border:1px, fb-on — без.
+       Без border-box handle позиции (рассчитанные на 74px) выезжают
+       за правую границу в fb-on состоянии. */
+    box-sizing: border-box;
+    border: 1px solid transparent;
+    /* Иначе flex-column сжимает track до нескольких пикселей если
+       name text wrapped в 2+ строки (длинный label). */
+    flex-shrink: 0;
+}
+
+.toggle-widget .toggle-track .toggle-handle {
+    position: absolute;
+    top: 2px;
+    width: 28px;
+    height: 28px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,.4);
+    transition: left 0.15s;
+}
+
+.toggle-widget .toggle-track[data-handle-pos="left"]  .toggle-handle { left: 2px; }
+.toggle-widget .toggle-track[data-handle-pos="right"] .toggle-handle { left: 42px; }
+
+.toggle-widget .toggle-track.fb-on      { background: #22c55e; }
+.toggle-widget .toggle-track.fb-off     { background: #374151; border: 1px solid #4b5563; }
+.toggle-widget .toggle-track.fb-unknown { background: #1f2937; border: 1px dashed #6b7280; }
+
+.toggle-widget .toggle-track.diverge {
+    box-shadow: 0 0 0 2px #f59e0b, 0 0 8px rgba(245,158,11,0.4);
+}
+
+.toggle-widget .toggle-state-text {
+    font-size: 11px;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+@media (max-height: 80px) {
+    .toggle-widget .toggle-state-text { display: none; }
+}
+
+/* ============================================================================
+ * ToggleWidget — checkbox style (config.style === 'checkbox')
+ * ============================================================================ */
+
+.toggle-widget.toggle-style-checkbox {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 0 12px;
+    cursor: pointer;
+}
+
+.toggle-widget .toggle-cb {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: 2px solid #6b7280;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, border-color 0.15s, box-shadow 0.2s;
+    flex-shrink: 0;
+    background: transparent;
+}
+
+.toggle-widget .toggle-cb.fb-on {
+    background: #22c55e;
+    border-color: #22c55e;
+}
+.toggle-widget .toggle-cb.fb-on::after {
+    content: '✓';
+    color: #fff;
+    font-weight: bold;
+    font-size: 16px;
+    line-height: 1;
+}
+
+.toggle-widget .toggle-cb.fb-off {
+    background: transparent;
+    border-color: #6b7280;
+}
+
+.toggle-widget .toggle-cb.fb-unknown {
+    background: #1f2937;
+    border-style: dashed;
+    border-color: #6b7280;
+}
+.toggle-widget .toggle-cb.fb-unknown::after {
+    content: '?';
+    color: #9ca3af;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+/* diverge для checkbox — на корневом .toggle-widget (а не на .toggle-cb).
+   Слайдер использует .toggle-track.diverge — это правило не пересекается. */
+.toggle-widget.toggle-style-checkbox.diverge {
+    box-shadow: 0 0 0 2px #f59e0b, 0 0 6px rgba(245, 158, 11, 0.5);
+}
+
+/* ============================================================================
+ * PushButtonWidget — base layout
+ * ============================================================================ */
+
+.pushbutton-widget {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+.pushbutton-widget .pb-btn {
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s, border-color 0.1s, box-shadow 0.2s, transform 0.05s;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    user-select: none;
+}
+
+/* === flat (default) — Material primary === */
+.pushbutton-style-flat .pb-btn {
+    padding: 10px 24px;
+    background: #3b82f6;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    box-shadow: 0 2px 4px rgba(0,0,0,.3);
+}
+.pushbutton-style-flat .pb-btn.pressed {
+    background: #2563eb;
+    transform: translateY(1px);
+    box-shadow: 0 1px 2px rgba(0,0,0,.3);
+}
+
+/* === mushroom — SCADA круглая === */
+.pushbutton-style-mushroom .pb-btn {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #ef4444, #b91c1c);
+    border: 3px solid #7f1d1d;
+    color: #fff;
+    font-size: 11px;
+    box-shadow: 0 4px 8px rgba(0,0,0,.5), inset 0 -4px 8px rgba(0,0,0,.3);
+}
+.pushbutton-style-mushroom .pb-btn.pressed {
+    box-shadow: 0 1px 3px rgba(0,0,0,.5), inset 0 4px 8px rgba(0,0,0,.4);
+    transform: translateY(2px);
+}
+
+/* === pill — Compact outline === */
+.pushbutton-style-pill .pb-btn {
+    padding: 8px 18px;
+    background: transparent;
+    color: #d8dce2;
+    border: 2px solid #6b7280;
+    border-radius: 20px;
+    font-size: 12px;
+}
+.pushbutton-style-pill .pb-btn:hover {
+    border-color: #22c55e;
+    color: #22c55e;
+}
+.pushbutton-style-pill .pb-btn.pressed {
+    background: #22c55e;
+    color: #fff;
+    border-color: #22c55e;
+}
+
+/* === pulsing — кратковременный flash для pulse mode === */
+.pb-btn.pulsing {
+    animation: pb-pulse-flash 0.3s ease-out;
+}
+@keyframes pb-pulse-flash {
+    0%   { background: #fbbf24; box-shadow: 0 0 8px rgba(251, 191, 36, 0.8); }
+    100% { /* возврат к нормали — каскадом из стиля */ }
+}
+
+/* ============================================================================
+ * SetpointWidget — base layout
+ * ============================================================================ */
+
+.setpoint-widget {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 10px;
+    box-sizing: border-box;
+    gap: 6px;
+}
+
+.setpoint-widget .setpoint-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #d8dce2;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+.setpoint-widget .setpoint-feedback {
+    font-size: 11px;
+    color: #9ca3af;
+    display: flex;
+    align-items: baseline;
+    gap: 2px;
+}
+.setpoint-widget .setpoint-feedback strong {
+    color: #22c55e;
+    font-family: monospace;
+    font-weight: 600;
+}
+.setpoint-widget .setpoint-unit {
+    font-size: 11px;
+    color: #9ca3af;
+    margin-left: 4px;
+}
+
+/* Скрыть native spin buttons у number input'ов (как в input style, так и в inline-edit) */
+.setpoint-input::-webkit-outer-spin-button,
+.setpoint-input::-webkit-inner-spin-button,
+.setpoint-inline-edit::-webkit-outer-spin-button,
+.setpoint-inline-edit::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.setpoint-input,
+.setpoint-inline-edit {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+/* === Style: input === */
+.setpoint-style-input .setpoint-input-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+.setpoint-style-input .setpoint-input {
+    width: 100px;
+    padding: 8px 10px;
+    background: #0f172a;
+    border: 2px solid #6b7280;
+    border-radius: 4px;
+    color: #d8dce2;
+    text-align: right;
+    font-family: monospace;
+    font-size: 14px;
+    font-weight: 600;
+    box-sizing: border-box;
+}
+.setpoint-widget.dirty .setpoint-input {
+    border-color: #fbbf24;
+    background: #1e293b;
+}
+
+.setpoint-apply-btn {
+    padding: 6px 12px;
+    background: #3b82f6;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 12px;
+    display: none;
+}
+.setpoint-cancel-btn {
+    padding: 6px 8px;
+    background: transparent;
+    color: #9ca3af;
+    border: 1px solid #4b5563;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    display: none;
+}
+.setpoint-widget.dirty .setpoint-apply-btn,
+.setpoint-widget.dirty .setpoint-cancel-btn {
+    display: inline-block;
+}
+
+/* === Style: slider === */
+.setpoint-style-slider {
+    width: 100%;
+    padding: 8px 14px;
+}
+
+/* === Style: stepper === */
+.setpoint-style-stepper .setpoint-stepper-row {
+    display: flex;
+    align-items: center;
+    background: #0f172a;
+    border-radius: 6px;
+    overflow: hidden;
+}
+.setpoint-style-stepper .setpoint-step-btn {
+    width: 32px;
+    height: 32px;
+    background: #374151;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    user-select: none;
+    /* Полностью отключаем визуальный focus indicator —
+       кнопки tabindex=-1 (не доступны через Tab), а mousedown.preventDefault
+       не передаёт focus при клике. Любой :focus / :focus-visible / outline
+       выглядел как мерцание после каждого клика. */
+    outline: none !important;
+}
+.setpoint-style-stepper .setpoint-step-btn:focus,
+.setpoint-style-stepper .setpoint-step-btn:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+}
+.setpoint-style-stepper .setpoint-step-btn:hover {
+    background: #4b5563;
+}
+.setpoint-style-stepper .setpoint-step-btn:active {
+    background: #1e293b;
+}
+.setpoint-style-stepper .setpoint-stepper-value {
+    padding: 0 14px;
+    min-width: 70px;
+    text-align: center;
+    color: #d8dce2;
+    font-family: monospace;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    line-height: 32px;
+    transition: background 0.1s;
+}
+.setpoint-style-stepper .setpoint-stepper-value:hover {
+    background: #1e293b;
+}
+.setpoint-widget.dirty .setpoint-stepper-value {
+    color: #fbbf24;
+}
+
+/* === Inline edit (общий для slider + stepper) === */
+.setpoint-inline-edit {
+    padding: 4px 8px;
+    background: #0f172a;
+    border: 2px solid #fbbf24;
+    border-radius: 4px;
+    color: #d8dce2;
+    font-family: monospace;
+    font-size: 14px;
+    width: 70px;
+    text-align: right;
+    outline: none;
+}
+
+/* ============================================================================
+ * GeneratorWidget — compact style
+ * ============================================================================ */
+
+.generator-widget {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    height: 100%;
+    padding: 8px 12px;
+    box-sizing: border-box;
+}
+
+.generator-widget .gen-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #d8dce2;
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.generator-widget .gen-value {
+    font-family: monospace;
+    font-size: 18px;
+    color: #6b7280;       /* серый когда stopped (--) */
+    font-weight: 600;
+    min-width: 50px;
+    text-align: right;
+    flex-shrink: 0;
+}
+.generator-widget .gen-value.running {
+    color: #22c55e;       /* зелёный когда running */
+}
+
+.generator-widget .gen-toggle {
+    width: 42px;
+    height: 24px;
+    background: #374151;
+    border-radius: 12px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.15s;
+    flex-shrink: 0;
+    user-select: none;
+}
+.generator-widget .gen-toggle:hover {
+    background: #4b5563;
+}
+.generator-widget .gen-toggle.running {
+    background: #22c55e;
+}
+.generator-widget .gen-toggle.running:hover {
+    background: #16a34a;
+}
+.generator-widget .gen-toggle .gen-handle {
+    width: 18px;
+    height: 18px;
+    background: #fff;
+    border-radius: 50%;
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    transition: left 0.15s;
+}
+.generator-widget .gen-toggle.running .gen-handle {
+    left: 21px;
+}
+
+/* ===== SetpointWidget style='slider' (custom-rendered) ===== */
+.setpoint-slider-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    justify-content: center;
+}
+/* Legacy wrapper — value moved into track-wrap as a handle-following bubble. */
+.setpoint-slider-value-row { display: none; }
+/* Value bubble — sits above the handle (h) or to the left of the handle (v),
+   tracks handle position via inline `left`/`bottom` set in renderFeedback. */
+.setpoint-slider-value {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    transform: translateX(-50%);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: text;
+    padding: 1px 6px;
+    border-radius: 3px;
+    line-height: 1.2;
+    background: rgba(17, 24, 39, 0.78);
+    color: #fff;
+    white-space: nowrap;
+    pointer-events: auto;
+    transition: left 80ms ease-out;
+    z-index: 3;
+}
+.setpoint-slider-value:hover {
+    background: rgba(17, 24, 39, 0.95);
+}
+.setpoint-widget.dirty .setpoint-slider-value {
+    color: #fbbf24;
+}
+.setpoint-slider-track-wrap {
+    position: relative;
+    /* Compact 24px — just the handle's height. Track sits centered on the
+       handle's vertical mid-line, fb-marker hangs off the bottom edge.
+       flex:0 0 prevents collapse in tight flex columns (otherwise the
+       absolutely-positioned children get dragged out of their box).
+       margin-top reserves room for the value bubble that hangs above the
+       handle (calc 24px label + 6px gap = 30px). */
+    height: 24px;
+    flex: 0 0 24px;
+    margin-top: 28px;
+    cursor: pointer;
+    user-select: none;
+}
+.setpoint-slider-track {
+    position: absolute;
+    left: 0; right: 0;
+    top: 8px;
+    height: 8px;
+    background: var(--bg-secondary, #374151);
+    border-radius: 4px;
+}
+.setpoint-slider-fill {
+    position: absolute;
+    /* `left` and `width` are set inline in renderFeedback so the fill can
+       start from zero (signed) or from the left edge depending on
+       config.fillOrigin. */
+    left: 0; top: 0; bottom: 0;
+    width: 0;
+    background: var(--accent-primary, #3b82f6);
+    border-radius: 4px;
+    transition: left 80ms ease-out, width 80ms ease-out;
+}
+.setpoint-slider-zones {
+    position: absolute;
+    left: 0; right: 0;
+    top: 8px;
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 1;
+}
+.setpoint-slider-track-wrap:has(.setpoint-slider-zones) .setpoint-slider-track {
+    background: transparent;
+}
+.setpoint-slider-zone {
+    position: absolute;
+    top: 0; bottom: 0;
+}
+.setpoint-slider-handle {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 24px;
+    height: 24px;
+    background: #fff;
+    border: 2px solid var(--accent-primary, #3b82f6);
+    border-radius: 50%;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    transform: translateX(-50%);
+    transition: left 80ms ease-out;
+    z-index: 2;
+}
+.setpoint-slider-track-wrap.dragging .setpoint-slider-handle {
+    transition: none;
+    transform: translateX(-50%) scale(1.1);
+}
+/* Kill fill transition during drag — otherwise the 80ms left/width ease-out
+   gets re-triggered on every mousemove, producing visible jitter and a
+   momentary gap between the fill and the zero tick (the fill is mid-animation
+   when fillOrigin='zero' and the user crosses zero). */
+.setpoint-slider-track-wrap.dragging .setpoint-slider-fill {
+    transition: none;
+}
+.setpoint-slider-fb-marker {
+    position: absolute;
+    top: 16px;
+    left: 0;
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-bottom: 8px solid #fbbf24;
+    transform: translateX(-50%);
+    pointer-events: none;
+    transition: left 80ms ease-out;
+    display: none;
+}
+.setpoint-widget.dirty .setpoint-slider-fb-marker {
+    display: block;
+}
+.setpoint-slider-labels {
+    /* For horizontal orientation labels are a sibling AFTER track-wrap and
+       participate in normal column flex flow. The vertical override below
+       moves them inside the wrap as absolutely-positioned. position:relative
+       so the absolutely-positioned zero label is anchored to the labels row. */
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-muted, #6b7280);
+    margin-top: 0;
+    pointer-events: none;
+}
+/* Zero tick — short notch on the track at the zero position when the scale
+   spans negative→positive (e.g. -50..+50). The notch sits across the track
+   height (3px above + 3px below) so it's visible against both the empty
+   track and the blue fill. White on dark = high contrast. */
+.setpoint-slider-zero-tick {
+    position: absolute;
+    top: 4px;
+    left: 0;
+    width: 2px;
+    height: 16px;
+    background: #e5e7eb;
+    transform: translateX(-50%);
+    pointer-events: none;
+    opacity: 0.85;
+    z-index: 2;
+}
+/* Zero label sits in the labels row at the calculated %, between min and max. */
+.setpoint-slider-zero-label {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform: translateX(-50%);
+    pointer-events: none;
+    color: var(--text-muted, #6b7280);
+}
+.setpoint-slider-no-data .setpoint-slider-handle,
+.setpoint-slider-no-data .setpoint-slider-fill {
+    opacity: 0.4;
+}
+.setpoint-slider-no-data .setpoint-slider-value {
+    opacity: 0.5;
+}
+
+/* Vertical orientation */
+.setpoint-style-slider.setpoint-slider-vertical .setpoint-slider-wrap {
+    align-items: center;
+}
+.setpoint-style-slider.setpoint-slider-vertical .setpoint-label {
+    text-align: center;
+}
+.setpoint-style-slider.setpoint-slider-vertical .setpoint-slider-value-row {
+    justify-content: center;
+}
+.setpoint-slider-vertical .setpoint-slider-track-wrap {
+    width: 24px;
+    height: auto;
+    flex: 1 1 auto;
+    min-height: 100px;
+    /* No top margin in vertical layout — the value bubble sits to the LEFT
+       of the handle, not above. margin-left widened to fit value bubble
+       (~50px wide) plus a small gap. margin-right stays at 40px for the
+       min/max labels column on the right. */
+    margin-top: 0;
+    margin-left: 60px;
+    margin-right: 40px;
+}
+/* Vertical: value bubble to the LEFT of the handle, follows handle Y. */
+.setpoint-slider-vertical .setpoint-slider-value {
+    bottom: 0;
+    left: -8px;
+    transform: translateX(-100%) translateY(50%);
+    transition: bottom 80ms ease-out;
+}
+/* Vertical zero tick — across the track horizontally at the calculated Y. */
+.setpoint-slider-vertical .setpoint-slider-zero-tick {
+    top: auto;
+    bottom: 0;
+    left: 5px;
+    width: 14px;
+    height: 2px;
+    transform: translateY(50%);
+}
+/* Vertical zero label — pinned to the right (where min/max labels live),
+   positioned by `bottom` set inline. */
+.setpoint-slider-vertical .setpoint-slider-zero-label {
+    left: auto;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    transform: translateY(50%);
+}
+.setpoint-slider-vertical .setpoint-slider-track {
+    left: 8px;
+    top: 0;
+    bottom: 0;
+    right: auto;
+    width: 8px;
+    height: auto;
+}
+.setpoint-slider-vertical .setpoint-slider-fill {
+    /* `bottom` and `height` are set inline by renderFeedback (see horizontal
+       comment above for fill-origin semantics). */
+    left: 0; right: 0; bottom: 0; top: auto;
+    width: auto;
+    height: 0;
+    transition: bottom 80ms ease-out, height 80ms ease-out;
+}
+.setpoint-slider-vertical .setpoint-slider-zones {
+    left: 8px;
+    top: 0;
+    bottom: 0;
+    right: auto;
+    width: 8px;
+    height: auto;
+}
+.setpoint-slider-vertical .setpoint-slider-zone {
+    left: 0; right: 0;
+    top: auto; bottom: 0;
+}
+.setpoint-slider-vertical .setpoint-slider-handle {
+    left: 12px;
+    top: auto;
+    bottom: 0;
+    transform: translateX(-50%) translateY(50%);
+    transition: bottom 80ms ease-out;
+}
+.setpoint-slider-vertical .setpoint-slider-track-wrap.dragging .setpoint-slider-handle {
+    transition: none;
+    transform: translateX(-50%) translateY(50%) scale(1.1);
+}
+.setpoint-slider-vertical .setpoint-slider-track-wrap.dragging .setpoint-slider-fill {
+    transition: none;
+}
+.setpoint-slider-vertical .setpoint-slider-fb-marker {
+    top: auto;
+    bottom: 0;
+    left: -2px;
+    border-left: none;
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    border-right: 8px solid #fbbf24;
+    transform: translateY(50%);
+    transition: bottom 80ms ease-out;
+}
+.setpoint-slider-vertical .setpoint-slider-labels {
+    /* Inside track-wrap (position:relative). Labels stack vertically
+       to the right of the track, max at top, min at bottom. */
+    flex-direction: column-reverse;
+    position: absolute;
+    left: 100%;
+    margin-left: 6px;
+    top: 0; bottom: 0;
+    right: auto;
+    margin-top: 0;
+    width: 60px;
+    overflow: visible;
+    white-space: nowrap;
+}
+
+/* === IONC@server combobox === */
+/* Названные константы (sync с ui/static/js/src/00-constants.js):
+ *   --ionc-combo-dropdown-max-height = IONC_COMBO_DROPDOWN_MAX_HEIGHT_PX
+ *   --ionc-combo-spin-duration       — длительность ↻ animation
+ */
+.ionc-combo-row {
+    --ionc-combo-dropdown-max-height: 320px;
+    --ionc-combo-spin-duration: 0.8s;
+}
+.ionc-combo-row .ionc-combo-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.ionc-combo-input {
+    flex: 1;
+    min-width: 0;
+}
+.ionc-combo-input:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    background: #1a202c;
+}
+.ionc-combo-input[data-orphan="true"] {
+    border-color: #fbbf24;
+    color: #fbbf24;
+}
+.ionc-combo-input[data-invalid="true"] {
+    border-color: #f87171;
+    color: #f87171;
+}
+.ionc-combo-empty.error {
+    color: #f87171;
+}
+.ionc-combo-refresh {
+    background: #1f2937;
+    color: #9ca3af;
+    border: 1px solid #374151;
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+}
+.ionc-combo-refresh:hover { color: #60a5fa; border-color: #60a5fa; }
+.ionc-combo-refresh.spinning {
+    animation: ionc-spin var(--ionc-combo-spin-duration, 0.8s) linear infinite;
+    pointer-events: none;
+}
+@keyframes ionc-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
+.ionc-combo-dropdown {
+    background: #0b1220;
+    border: 1px solid #374151;
+    border-radius: 4px;
+    max-height: var(--ionc-combo-dropdown-max-height, 320px);
+    overflow-y: auto;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+.ionc-combo-item {
+    padding: 6px 10px;
+    color: #d1d5db;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid #1f2937;
+}
+.ionc-combo-item:last-child { border-bottom: 0; }
+.ionc-combo-item:hover, .ionc-combo-item.active { background: #1e293b; color: #fff; }
+.ionc-combo-item.preselected { color: #93c5fd; }
+.ionc-combo-item.offline {
+    opacity: 0.55;
+    color: #9ca3af;
+}
+.ionc-combo-display { flex: 1; min-width: 0; }
+.ionc-combo-display mark { background: #fbbf24; color: #111827; padding: 0 2px; border-radius: 2px; }
+.ionc-combo-star { color: #fbbf24; flex: 0 0 auto; }
+.ionc-combo-offline-mark {
+    color: #fbbf24;
+    font-size: 10px;
+    flex: 0 0 auto;
+    margin-left: auto;
+}
+.ionc-combo-empty {
+    padding: 10px;
+    color: #6b7280;
+    text-align: center;
+    font-size: 12px;
+    font-style: italic;
 }

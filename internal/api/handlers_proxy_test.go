@@ -6,11 +6,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/pv/uniset-panel/internal/poller"
-	"github.com/pv/uniset-panel/internal/storage"
-	"github.com/pv/uniset-panel/internal/uniset"
 )
 
 // mockUnisetServerFull creates a test server that handles modbus and opcua endpoints
@@ -132,10 +127,7 @@ func mockUnisetServerFull() *httptest.Server {
 }
 
 func setupProxyTestHandlers(unisetServer *httptest.Server) *Handlers {
-	client := uniset.NewClient(unisetServer.URL)
-	store := storage.NewMemoryStorage()
-	p := poller.New(client, store, 5*time.Second, time.Hour)
-	return NewHandlers(client, store, p, nil, 5*time.Second)
+	return setupTestHandlers(unisetServer)
 }
 
 // --- Modbus proxy handler tests ---
@@ -156,7 +148,7 @@ func TestProxyMBSimpleGetHandlers(t *testing.T) {
 		{
 			name:       "GetMBStatus 200",
 			method:     "GET",
-			url:        "/api/objects/TestProc/modbus/status",
+			url:        withQuery("/api/objects/TestProc/modbus/status"),
 			handler:    handlers.GetMBStatus,
 			wantStatus: http.StatusOK,
 			wantKey:    "status",
@@ -164,7 +156,7 @@ func TestProxyMBSimpleGetHandlers(t *testing.T) {
 		{
 			name:       "GetMBDevices 200",
 			method:     "GET",
-			url:        "/api/objects/TestProc/modbus/devices",
+			url:        withQuery("/api/objects/TestProc/modbus/devices"),
 			handler:    handlers.GetMBDevices,
 			wantStatus: http.StatusOK,
 			wantKey:    "devices",
@@ -172,7 +164,7 @@ func TestProxyMBSimpleGetHandlers(t *testing.T) {
 		{
 			name:       "GetMBMode 200",
 			method:     "GET",
-			url:        "/api/objects/TestProc/modbus/mode",
+			url:        withQuery("/api/objects/TestProc/modbus/mode"),
 			handler:    handlers.GetMBMode,
 			wantStatus: http.StatusOK,
 			wantKey:    "mode",
@@ -180,7 +172,7 @@ func TestProxyMBSimpleGetHandlers(t *testing.T) {
 		{
 			name:       "GetMBModeSupported 200",
 			method:     "GET",
-			url:        "/api/objects/TestProc/modbus/mode/supported",
+			url:        withQuery("/api/objects/TestProc/modbus/mode/supported"),
 			handler:    handlers.GetMBModeSupported,
 			wantStatus: http.StatusOK,
 			wantKey:    "supported",
@@ -188,7 +180,7 @@ func TestProxyMBSimpleGetHandlers(t *testing.T) {
 		{
 			name:       "GetMBRegisters 200",
 			method:     "GET",
-			url:        "/api/objects/TestProc/modbus/registers",
+			url:        withQuery("/api/objects/TestProc/modbus/registers"),
 			handler:    handlers.GetMBRegisters,
 			wantStatus: http.StatusOK,
 			wantKey:    "registers",
@@ -196,7 +188,7 @@ func TestProxyMBSimpleGetHandlers(t *testing.T) {
 		{
 			name:       "GetMBRegisterValues 200",
 			method:     "GET",
-			url:        "/api/objects/TestProc/modbus/get?filter=1,2,3",
+			url:        withQuery("/api/objects/TestProc/modbus/get?filter=1,2,3"),
 			handler:    handlers.GetMBRegisterValues,
 			wantStatus: http.StatusOK,
 			wantKey:    "sensors",
@@ -299,7 +291,7 @@ func TestProxyGetMBParams(t *testing.T) {
 	handlers := setupProxyTestHandlers(unisetServer)
 
 	t.Run("happy path", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/objects/TestProc/modbus/params?name=polltime", nil)
+		req := httptest.NewRequest("GET", withQuery("/api/objects/TestProc/modbus/params?name=polltime"), nil)
 		req.SetPathValue("name", "TestProc")
 		w := httptest.NewRecorder()
 
@@ -317,7 +309,7 @@ func TestProxyGetMBParams(t *testing.T) {
 	})
 
 	t.Run("missing name parameter", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/objects/TestProc/modbus/params", nil)
+		req := httptest.NewRequest("GET", withQuery("/api/objects/TestProc/modbus/params"), nil)
 		req.SetPathValue("name", "TestProc")
 		w := httptest.NewRecorder()
 
@@ -336,7 +328,7 @@ func TestProxySetMBParams(t *testing.T) {
 
 	t.Run("happy path", func(t *testing.T) {
 		body := strings.NewReader(`{"polltime": 300}`)
-		req := httptest.NewRequest("POST", "/api/objects/TestProc/modbus/params", body)
+		req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/modbus/params"), body)
 		req.SetPathValue("name", "TestProc")
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -356,7 +348,7 @@ func TestProxySetMBParams(t *testing.T) {
 
 	t.Run("with params wrapper", func(t *testing.T) {
 		body := strings.NewReader(`{"params": {"polltime": 300}}`)
-		req := httptest.NewRequest("POST", "/api/objects/TestProc/modbus/params", body)
+		req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/modbus/params"), body)
 		req.SetPathValue("name", "TestProc")
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -370,7 +362,7 @@ func TestProxySetMBParams(t *testing.T) {
 
 	t.Run("empty body", func(t *testing.T) {
 		body := strings.NewReader(`{}`)
-		req := httptest.NewRequest("POST", "/api/objects/TestProc/modbus/params", body)
+		req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/modbus/params"), body)
 		req.SetPathValue("name", "TestProc")
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -388,7 +380,7 @@ func TestProxyGetMBRegisterValues_MissingFilter(t *testing.T) {
 	defer unisetServer.Close()
 	handlers := setupProxyTestHandlers(unisetServer)
 
-	req := httptest.NewRequest("GET", "/api/objects/TestProc/modbus/get", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/objects/TestProc/modbus/get"), nil)
 	req.SetPathValue("name", "TestProc")
 	w := httptest.NewRecorder()
 
@@ -406,7 +398,7 @@ func TestProxySetMBMode(t *testing.T) {
 
 	t.Run("happy path", func(t *testing.T) {
 		body := strings.NewReader(`{"mode": "Normal"}`)
-		req := httptest.NewRequest("POST", "/api/objects/TestProc/modbus/mode", body)
+		req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/modbus/mode"), body)
 		req.SetPathValue("name", "TestProc")
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -426,7 +418,7 @@ func TestProxySetMBMode(t *testing.T) {
 
 	t.Run("empty mode", func(t *testing.T) {
 		body := strings.NewReader(`{"mode": ""}`)
-		req := httptest.NewRequest("POST", "/api/objects/TestProc/modbus/mode", body)
+		req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/modbus/mode"), body)
 		req.SetPathValue("name", "TestProc")
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -440,7 +432,7 @@ func TestProxySetMBMode(t *testing.T) {
 
 	t.Run("missing mode field", func(t *testing.T) {
 		body := strings.NewReader(`{}`)
-		req := httptest.NewRequest("POST", "/api/objects/TestProc/modbus/mode", body)
+		req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/modbus/mode"), body)
 		req.SetPathValue("name", "TestProc")
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -466,13 +458,13 @@ func TestProxyMBControlHandlers(t *testing.T) {
 	}{
 		{
 			name:       "TakeMBControl 200",
-			url:        "/api/objects/TestProc/modbus/control/take",
+			url:        withQuery("/api/objects/TestProc/modbus/control/take"),
 			handler:    handlers.TakeMBControl,
 			wantStatus: http.StatusOK,
 		},
 		{
 			name:       "ReleaseMBControl 200",
-			url:        "/api/objects/TestProc/modbus/control/release",
+			url:        withQuery("/api/objects/TestProc/modbus/control/release"),
 			handler:    handlers.ReleaseMBControl,
 			wantStatus: http.StatusOK,
 		},
@@ -519,7 +511,7 @@ func TestProxyOPCUASimpleGetHandlers(t *testing.T) {
 		{
 			name:       "GetOPCUAStatus 200",
 			method:     "GET",
-			url:        "/api/objects/TestProc/opcua/status",
+			url:        withQuery("/api/objects/TestProc/opcua/status"),
 			handler:    handlers.GetOPCUAStatus,
 			wantStatus: http.StatusOK,
 			wantKey:    "status",
@@ -527,7 +519,7 @@ func TestProxyOPCUASimpleGetHandlers(t *testing.T) {
 		{
 			name:       "GetOPCUASensors 200",
 			method:     "GET",
-			url:        "/api/objects/TestProc/opcua/sensors",
+			url:        withQuery("/api/objects/TestProc/opcua/sensors"),
 			handler:    handlers.GetOPCUASensors,
 			wantStatus: http.StatusOK,
 			wantKey:    "sensors",
@@ -535,7 +527,7 @@ func TestProxyOPCUASimpleGetHandlers(t *testing.T) {
 		{
 			name:       "GetOPCUASensorValues 200",
 			method:     "GET",
-			url:        "/api/objects/TestProc/opcua/get?filter=10,11",
+			url:        withQuery("/api/objects/TestProc/opcua/get?filter=10,11"),
 			handler:    handlers.GetOPCUASensorValues,
 			wantStatus: http.StatusOK,
 			wantKey:    "sensors",
@@ -543,7 +535,7 @@ func TestProxyOPCUASimpleGetHandlers(t *testing.T) {
 		{
 			name:       "GetOPCUADiagnostics 200",
 			method:     "GET",
-			url:        "/api/objects/TestProc/opcua/diagnostics",
+			url:        withQuery("/api/objects/TestProc/opcua/diagnostics"),
 			handler:    handlers.GetOPCUADiagnostics,
 			wantStatus: http.StatusOK,
 			wantKey:    "summary",
@@ -642,7 +634,7 @@ func TestProxyGetOPCUASensor(t *testing.T) {
 	handlers := setupProxyTestHandlers(unisetServer)
 
 	t.Run("happy path", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/objects/TestProc/opcua/sensors/10", nil)
+		req := httptest.NewRequest("GET", withQuery("/api/objects/TestProc/opcua/sensors/10"), nil)
 		req.SetPathValue("name", "TestProc")
 		req.SetPathValue("id", "10")
 		w := httptest.NewRecorder()
@@ -661,7 +653,7 @@ func TestProxyGetOPCUASensor(t *testing.T) {
 	})
 
 	t.Run("missing object name", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/objects//opcua/sensors/10", nil)
+		req := httptest.NewRequest("GET", withQuery("/api/objects//opcua/sensors/10"), nil)
 		req.SetPathValue("id", "10")
 		w := httptest.NewRecorder()
 
@@ -673,7 +665,7 @@ func TestProxyGetOPCUASensor(t *testing.T) {
 	})
 
 	t.Run("missing sensor id", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/objects/TestProc/opcua/sensors/", nil)
+		req := httptest.NewRequest("GET", withQuery("/api/objects/TestProc/opcua/sensors/"), nil)
 		req.SetPathValue("name", "TestProc")
 		// Do NOT set "id" path value
 		w := httptest.NewRecorder()
@@ -686,7 +678,7 @@ func TestProxyGetOPCUASensor(t *testing.T) {
 	})
 
 	t.Run("invalid sensor id", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/objects/TestProc/opcua/sensors/abc", nil)
+		req := httptest.NewRequest("GET", withQuery("/api/objects/TestProc/opcua/sensors/abc"), nil)
 		req.SetPathValue("name", "TestProc")
 		req.SetPathValue("id", "abc")
 		w := httptest.NewRecorder()
@@ -705,7 +697,7 @@ func TestProxyGetOPCUAParams(t *testing.T) {
 	handlers := setupProxyTestHandlers(unisetServer)
 
 	t.Run("happy path", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/objects/TestProc/opcua/params?name=polltime", nil)
+		req := httptest.NewRequest("GET", withQuery("/api/objects/TestProc/opcua/params?name=polltime"), nil)
 		req.SetPathValue("name", "TestProc")
 		w := httptest.NewRecorder()
 
@@ -723,7 +715,7 @@ func TestProxyGetOPCUAParams(t *testing.T) {
 	})
 
 	t.Run("missing name parameter", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/objects/TestProc/opcua/params", nil)
+		req := httptest.NewRequest("GET", withQuery("/api/objects/TestProc/opcua/params"), nil)
 		req.SetPathValue("name", "TestProc")
 		w := httptest.NewRecorder()
 
@@ -742,7 +734,7 @@ func TestProxySetOPCUAParams(t *testing.T) {
 
 	t.Run("happy path", func(t *testing.T) {
 		body := strings.NewReader(`{"polltime": 300}`)
-		req := httptest.NewRequest("POST", "/api/objects/TestProc/opcua/params", body)
+		req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/opcua/params"), body)
 		req.SetPathValue("name", "TestProc")
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -762,7 +754,7 @@ func TestProxySetOPCUAParams(t *testing.T) {
 
 	t.Run("with params wrapper", func(t *testing.T) {
 		body := strings.NewReader(`{"params": {"polltime": 300}}`)
-		req := httptest.NewRequest("POST", "/api/objects/TestProc/opcua/params", body)
+		req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/opcua/params"), body)
 		req.SetPathValue("name", "TestProc")
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -776,7 +768,7 @@ func TestProxySetOPCUAParams(t *testing.T) {
 
 	t.Run("empty body", func(t *testing.T) {
 		body := strings.NewReader(`{}`)
-		req := httptest.NewRequest("POST", "/api/objects/TestProc/opcua/params", body)
+		req := httptest.NewRequest("POST", withQuery("/api/objects/TestProc/opcua/params"), body)
 		req.SetPathValue("name", "TestProc")
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -794,7 +786,7 @@ func TestProxyGetOPCUASensorValues_MissingFilter(t *testing.T) {
 	defer unisetServer.Close()
 	handlers := setupProxyTestHandlers(unisetServer)
 
-	req := httptest.NewRequest("GET", "/api/objects/TestProc/opcua/get", nil)
+	req := httptest.NewRequest("GET", withQuery("/api/objects/TestProc/opcua/get"), nil)
 	req.SetPathValue("name", "TestProc")
 	w := httptest.NewRecorder()
 
@@ -818,13 +810,13 @@ func TestProxyOPCUAControlHandlers(t *testing.T) {
 	}{
 		{
 			name:       "TakeOPCUAControl 200",
-			url:        "/api/objects/TestProc/opcua/control/take",
+			url:        withQuery("/api/objects/TestProc/opcua/control/take"),
 			handler:    handlers.TakeOPCUAControl,
 			wantStatus: http.StatusOK,
 		},
 		{
 			name:       "ReleaseOPCUAControl 200",
-			url:        "/api/objects/TestProc/opcua/control/release",
+			url:        withQuery("/api/objects/TestProc/opcua/control/release"),
 			handler:    handlers.ReleaseOPCUAControl,
 			wantStatus: http.StatusOK,
 		},
@@ -868,10 +860,10 @@ func TestProxyMBUpstreamError(t *testing.T) {
 		url     string
 		handler func(http.ResponseWriter, *http.Request)
 	}{
-		{"GetMBStatus", "GET", "/api/objects/UnknownObj/modbus/status", handlers.GetMBStatus},
-		{"GetMBDevices", "GET", "/api/objects/UnknownObj/modbus/devices", handlers.GetMBDevices},
-		{"GetOPCUAStatus", "GET", "/api/objects/UnknownObj/opcua/status", handlers.GetOPCUAStatus},
-		{"GetOPCUADiagnostics", "GET", "/api/objects/UnknownObj/opcua/diagnostics", handlers.GetOPCUADiagnostics},
+		{"GetMBStatus", "GET", withQuery("/api/objects/UnknownObj/modbus/status"), handlers.GetMBStatus},
+		{"GetMBDevices", "GET", withQuery("/api/objects/UnknownObj/modbus/devices"), handlers.GetMBDevices},
+		{"GetOPCUAStatus", "GET", withQuery("/api/objects/UnknownObj/opcua/status"), handlers.GetOPCUAStatus},
+		{"GetOPCUADiagnostics", "GET", withQuery("/api/objects/UnknownObj/opcua/diagnostics"), handlers.GetOPCUADiagnostics},
 	}
 
 	for _, tt := range tests {

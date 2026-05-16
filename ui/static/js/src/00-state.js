@@ -11,8 +11,16 @@ const state = window.state = {
     tabs: new Map(), // tabKey -> { charts, updateInterval, chartStartTime, objectType, renderer, serverId, serverName, displayName }
     activeTab: null,
     sensors: new Map(), // sensorId -> sensorInfo
+    // Legacy global registry — keyed by short sensorName. На multi-server панели
+    // первый встретившийся sensor wins, остальные с тем же именем игнорируются.
+    // Безопасен только для search/autocomplete (UI dedupe). Per-row metadata
+    // (textname в renderer'ах) должна ходить через sensorsByKey, иначе при
+    // одинаковых именах на разных серверах юзер видит metadata от чужого объекта.
     sensorsByName: new Map(), // sensorName -> sensorInfo
-    sensorValuesCache: new Map(), // sensorName -> { value, error, timestamp } - cache for dashboard init
+    // Multi-server-aware registry: key = sensorKey (`${serverId}|${objectName}|${sensorName}`).
+    // Используется в renderer'ах и точечных lookup'ах, где известен полный context.
+    sensorsByKey: new Map(), // sensorKey -> sensorInfo (см. 09-sensor-key.js)
+    sensorValuesCache: new Map(), // sensorKey -> { value, error, timestamp } — cache for dashboard init. sensorKey = `${serverId}|${objectName}|${sensorName}` (см. 09-sensor-key.js)
     timeRange: DEFAULT_CHART_TIME_RANGE, // секунды (по умолчанию 15 минут)
     sidebarCollapsed: false, // свёрнутая боковая панель
     collapsedSections: {}, // состояние спойлеров
@@ -32,11 +40,11 @@ const state = window.state = {
     sse: {
         eventSource: null,
         connected: false,
-        pollInterval: 5000, // будет обновлено с сервера
+        pollInterval: SSE_DEFAULT_POLL_INTERVAL, // будет обновлено с сервера
         reconnectAttempts: 0,
-        maxReconnectAttempts: 10,
-        baseReconnectDelay: 1000,   // начальная задержка (1s)
-        maxReconnectDelay: 30000,   // максимальная задержка (30s)
+        maxReconnectAttempts: SSE_MAX_RECONNECT_ATTEMPTS,
+        baseReconnectDelay: SSE_BASE_RECONNECT_DELAY,
+        maxReconnectDelay: SSE_MAX_RECONNECT_DELAY,
         reconnectTimerId: null,     // ID таймера переподключения (для очистки)
         statusSyncInterval: null    // ID интервала периодической синхронизации статуса серверов
     },
@@ -47,7 +55,17 @@ const state = window.state = {
         token: null,          // текущий токен (из localStorage или URL)
         isController: false,  // я контроллер?
         hasController: false, // есть активный контроллер (кто-то другой)
-        timeoutSec: 60,       // таймаут неактивности
+        timeoutSec: CONTROL_DEFAULT_TIMEOUT_SEC,
         pingIntervalId: null  // ID интервала ping
     }
+};
+
+// IONC@server registry для combobox'а в config-форме widget'ов.
+// Lazy-populated; TTL 5 минут (IONC_REGISTRY_TTL_MS); ручное обновление через кнопку ↻.
+state.ioncRegistry = {
+    fetchedAt:    0,                  // ms; 0 = never fetched
+    isFetching:   false,              // race guard для ↻ во время in-flight
+    fetchPromise: null,               // shared promise для concurrent waiters
+    servers:      new Map(),          // serverId → { serverName, connected, objects: [name,...] }
+    lastError:    null,               // string|null — последняя ошибка fetch'а (cache не cleared)
 };

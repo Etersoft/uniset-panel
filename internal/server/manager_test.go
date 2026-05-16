@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -356,6 +357,144 @@ func TestManagerGetAllObjectsGrouped(t *testing.T) {
 	}
 }
 
+// startMockServerWithTypes создаёт httptest сервер, отдающий список объектов
+// с проставленным objectType. Используется в тестах GetAllObjectsByType.
+func startMockServerWithTypes(objects map[string]string) *httptest.Server {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v2/list", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		names := make([]string, 0, len(objects))
+		for n := range objects {
+			names = append(names, n)
+		}
+		_ = json.NewEncoder(w).Encode(names)
+	})
+	for name, objectType := range objects {
+		name, objectType := name, objectType
+		mux.HandleFunc("/api/v2/"+name, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"object": map[string]interface{}{
+					"id":         1,
+					"name":       name,
+					"objectType": objectType,
+					"isActive":   true,
+				},
+			})
+		})
+	}
+	return httptest.NewServer(mux)
+}
+
+func TestManagerGetAllObjectsByType_basic(t *testing.T) {
+	srv := startMockServerWithTypes(map[string]string{
+		"SharedMemory": "IONotifyController",
+		"MBSlave1":     "ModbusSlave",
+	})
+	defer srv.Close()
+
+	store := storage.NewMemoryStorage()
+	mgr := NewManager(store, time.Second, time.Hour, "", 0)
+	if err := mgr.AddServer(config.ServerConfig{ID: "s1", URL: srv.URL, Name: "Server1"}); err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+
+	got, err := mgr.GetAllObjectsByType("IONotifyController")
+	if err != nil {
+		t.Fatalf("GetAllObjectsByType: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("want 1 server in result, got %d", len(got))
+	}
+	if got[0].ServerID != "s1" {
+		t.Errorf("ServerID: want s1, got %s", got[0].ServerID)
+	}
+	if got[0].ServerName != "Server1" {
+		t.Errorf("ServerName: want Server1, got %s", got[0].ServerName)
+	}
+	if !got[0].Connected {
+		t.Error("Connected: want true")
+	}
+	if len(got[0].Objects) != 1 || got[0].Objects[0] != "SharedMemory" {
+		t.Errorf("Objects: want [SharedMemory], got %v", got[0].Objects)
+	}
+}
+
+// TestManagerGetAllObjectsByType_disconnectedNamesCachedNoTypeCache документирует
+// текущее поведение при disconnected сервере с прогретым **name-cache** (без
+// type-cache на бэке): server entry присутствует с Connected=false, но Objects=[],
+// потому что для проверки ObjectType нужен живой GetObjectData.
+//
+// Если в будущем добавим typesCacheByServer — этот тест должен будет проверять,
+// что cached IONC objects возвращаются (Objects=[name,...]).
+func TestManagerGetAllObjectsByType_disconnectedNamesCachedNoTypeCache(t *testing.T) {
+	srv := startMockServerWithTypes(map[string]string{
+		"SharedMemory": "IONotifyController",
+	})
+
+	store := storage.NewMemoryStorage()
+	mgr := NewManager(store, time.Second, time.Hour, "", 0)
+	if err := mgr.AddServer(config.ServerConfig{ID: "s1", URL: srv.URL, Name: "Server1"}); err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+
+	// Прогреваем name-cache реальным вызовом
+	if _, err := mgr.GetAllObjectsByType("IONotifyController"); err != nil {
+		t.Fatalf("warm-up call: %v", err)
+	}
+
+	// Закрываем сервер — теперь GetObjects будет ошибаться, но name-cache остался
+	srv.Close()
+
+	got, err := mgr.GetAllObjectsByType("IONotifyController")
+	if err != nil {
+		t.Fatalf("GetAllObjectsByType: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("want 1 server entry, got %d", len(got))
+	}
+	if got[0].Connected {
+		t.Error("Connected: want false (server is down)")
+	}
+	if len(got[0].Objects) != 0 {
+		t.Errorf("Objects: want [] (no type-cache), got %v", got[0].Objects)
+	}
+}
+
+func TestManagerGetAllObjectsByType_disconnectedNoCache(t *testing.T) {
+	srv := mockUnavailableServer()
+	defer srv.Close()
+
+	store := storage.NewMemoryStorage()
+	mgr := NewManager(store, time.Second, time.Hour, "", 0)
+	if err := mgr.AddServer(config.ServerConfig{ID: "s1", URL: srv.URL, Name: "Server1"}); err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+
+	got, err := mgr.GetAllObjectsByType("IONotifyController")
+	if err != nil {
+		t.Fatalf("GetAllObjectsByType: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("want 1 server entry (even without cache), got %d", len(got))
+	}
+	if got[0].Connected {
+		t.Error("Connected: want false")
+	}
+	if len(got[0].Objects) != 0 {
+		t.Errorf("Objects: want [], got %v", got[0].Objects)
+	}
+}
+
+func TestManagerGetAllObjectsByType_emptyType(t *testing.T) {
+	store := storage.NewMemoryStorage()
+	mgr := NewManager(store, time.Second, time.Hour, "", 0)
+	_, err := mgr.GetAllObjectsByType("")
+	if err == nil {
+		t.Error("want error for empty type filter, got nil")
+	}
+}
+
 func TestManagerGetObjectData(t *testing.T) {
 	server := mockUnisetServer()
 	defer server.Close()
@@ -595,4 +734,42 @@ func TestManagerCallbacksPassedToInstance(t *testing.T) {
 	if !called {
 		t.Error("status callback was not called - callback may not have been passed to instance")
 	}
+}
+
+func TestGetServerObjects(t *testing.T) {
+	srv := mockUnisetServer()
+	defer srv.Close()
+
+	store := storage.NewMemoryStorage()
+	mgr := NewManager(store, 5*time.Second, time.Hour, "TestProc", 0)
+
+	cfg := config.ServerConfig{
+		ID:   "srv1",
+		URL:  srv.URL,
+		Name: "Test Server 1",
+	}
+	if err := mgr.AddServer(cfg); err != nil {
+		t.Fatalf("AddServer: %v", err)
+	}
+	defer mgr.RemoveServer("srv1")
+
+	t.Run("found", func(t *testing.T) {
+		names, err := mgr.GetServerObjects("srv1")
+		if err != nil {
+			t.Fatalf("err: %v", err)
+		}
+		if len(names) != 2 {
+			t.Fatalf("want 2 names, got %d (%v)", len(names), names)
+		}
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		_, err := mgr.GetServerObjects("nonexistent")
+		if err == nil {
+			t.Fatal("expected error for nonexistent server, got nil")
+		}
+		if !strings.Contains(err.Error(), "not found") {
+			t.Errorf("expected 'not found' in error, got: %v", err)
+		}
+	})
 }

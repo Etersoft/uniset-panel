@@ -202,19 +202,9 @@ class JournalRenderer {
             return;
         }
 
-        const multipliers = {
-            '15m': 15 * 60 * 1000,
-            '1h': 60 * 60 * 1000,
-            '3h': 3 * 60 * 60 * 1000,
-            '10h': 10 * 60 * 60 * 1000,
-            '1d': 24 * 60 * 60 * 1000,
-            '3d': 3 * 24 * 60 * 60 * 1000,
-            '1w': 7 * 24 * 60 * 60 * 1000,
-            '1M': 30 * 24 * 60 * 60 * 1000
-        };
-
-        if (multipliers[range]) {
-            from = new Date(now.getTime() - multipliers[range]);
+        const offset = JOURNAL_TIME_RANGE_MS[range];
+        if (offset) {
+            from = new Date(now.getTime() - offset);
         }
 
         this.filters.from = from ? from.toISOString() : null;
@@ -229,8 +219,7 @@ class JournalRenderer {
             if (this.isLoading || !this.hasMore) return;
 
             const { scrollTop, scrollHeight, clientHeight } = wrapper;
-            // Load more when scrolled to 80% of the content
-            if (scrollTop + clientHeight >= scrollHeight * 0.8) {
+            if (scrollTop + clientHeight >= scrollHeight * JOURNAL_SCROLL_LOAD_RATIO) {
                 this.loadMore();
             }
         });
@@ -239,32 +228,14 @@ class JournalRenderer {
     setupResize() {
         const handle = document.getElementById(`journal-resize-${this.journalId}`);
         const container = document.getElementById(`journal-container-${this.journalId}`);
-        if (!handle || !container) return;
-
-        let startY, startHeight;
-
-        const onMouseMove = (e) => {
-            const delta = e.clientY - startY;
-            const newHeight = Math.max(150, Math.min(800, startHeight + delta));
-            container.style.height = `${newHeight}px`;
-            container.style.flex = 'none'; // Override flex: 1 to allow fixed height
-        };
-
-        const onMouseUp = () => {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-        };
-
-        handle.addEventListener('mousedown', (e) => {
-            startY = e.clientY;
-            startHeight = container.offsetHeight;
-            document.body.style.cursor = 'ns-resize';
-            document.body.style.userSelect = 'none';
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-        });
+        setupResizeHandle(
+            handle,
+            container,
+            JOURNAL_CONTAINER_MIN_HEIGHT,
+            null,
+            JOURNAL_CONTAINER_MAX_HEIGHT,
+            () => { container.style.flex = 'none'; }
+        );
     }
 
     async loadMTypes() {
@@ -380,7 +351,30 @@ class JournalRenderer {
     }
 
     renderMessageRow(msg) {
-        const time = new Date(msg.timestamp);
+        return `
+            <tr class="journal-row ${this.getMTypeClass(msg.mtype)}">
+                ${this.renderMessageCells(msg)}
+            </tr>
+        `;
+    }
+
+    renderMessageCells(msg) {
+        const { displayTime, titleTime } = this.getMessageTimeParts(msg.timestamp);
+        const mtypeClass = this.getMTypeClass(msg.mtype);
+
+        return `
+            <td class="col-time" title="${escapeAttr(titleTime)}">${escapeHtml(displayTime)}</td>
+            <td class="col-type"><span class="journal-badge ${mtypeClass}">${escapeHtml(msg.mtype || '')}</span></td>
+            <td class="col-message" title="${escapeAttr(msg.message || '')}">${this.highlightText(msg.message)}</td>
+            <td class="col-code">${this.highlightText(msg.mcode)}</td>
+            <td class="col-group">${this.highlightText(msg.mgroup)}</td>
+            <td class="col-name" title="${escapeAttr(msg.name || '')}">${this.highlightText(msg.name)}</td>
+            <td class="col-value">${escapeHtml(msg.value ?? '')}</td>
+        `;
+    }
+
+    getMessageTimeParts(timestamp) {
+        const time = new Date(timestamp);
         const today = new Date();
         const isToday = time.toDateString() === today.toDateString();
 
@@ -397,33 +391,28 @@ class JournalRenderer {
 
         // Show date if not today
         const displayTime = isToday ? timeStr : `${dateStr} ${timeStr}`;
-
-        const mtypeClass = this.getMTypeClass(msg.mtype);
-        const searchTerm = this.filters.search;
-
-        // Highlight search matches
-        const highlightText = (text) => {
-            if (!searchTerm || !text) return this.escapeHtml(text || '');
-            const escaped = this.escapeHtml(text);
-            const regex = new RegExp(`(${this.escapeRegex(searchTerm)})`, 'gi');
-            return escaped.replace(regex, '<mark class="journal-highlight">$1</mark>');
+        return {
+            displayTime,
+            titleTime: time.toLocaleString('ru-RU')
         };
-
-        return `
-            <tr class="journal-row ${mtypeClass}">
-                <td class="col-time" title="${time.toLocaleString('ru-RU')}">${displayTime}</td>
-                <td class="col-type"><span class="journal-badge ${mtypeClass}">${this.escapeHtml(msg.mtype || '')}</span></td>
-                <td class="col-message" title="${this.escapeHtml(msg.message || '')}">${highlightText(msg.message)}</td>
-                <td class="col-code">${highlightText(msg.mcode)}</td>
-                <td class="col-group">${highlightText(msg.mgroup)}</td>
-                <td class="col-name" title="${this.escapeHtml(msg.name || '')}">${highlightText(msg.name)}</td>
-                <td class="col-value">${msg.value !== undefined ? msg.value : ''}</td>
-            </tr>
-        `;
     }
 
-    escapeRegex(str) {
-        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    highlightText(text) {
+        if (text === null || text === undefined) return '';
+        const raw = String(text);
+        const searchTerm = this.filters.search;
+        if (!searchTerm || raw === '') return escapeHtml(raw);
+
+        // Сплитим raw по совпадениям, escapeHtml каждый фрагмент. Раньше regex
+        // применялся к escaped-строке — поиск по '<', '>', '&', '"', '=' в тексте
+        // вроде "value >= 5" не находил совпадение, потому что ищем в "value &gt;= 5".
+        const regex = new RegExp(`(${escapeRegex(searchTerm)})`, 'gi');
+        const parts = raw.split(regex);
+        return parts.map((part, i) =>
+            i % 2 === 1
+                ? `<mark class="journal-highlight">${escapeHtml(part)}</mark>`
+                : escapeHtml(part)
+        ).join('');
     }
 
     getMTypeClass(mtype) {
@@ -491,7 +480,7 @@ class JournalRenderer {
 
             const row = document.createElement('tr');
             row.className = `journal-row ${this.getMTypeClass(msg.mtype)} journal-new`;
-            row.innerHTML = this.renderMessageRowContent(msg);
+            row.innerHTML = this.renderMessageCells(msg);
             tbody.insertBefore(row, tbody.firstChild);
 
             setTimeout(() => row.classList.remove('journal-new'), JOURNAL_HIGHLIGHT_DURATION);
@@ -515,44 +504,6 @@ class JournalRenderer {
         return true;
     }
 
-    renderMessageRowContent(msg) {
-        const time = new Date(msg.timestamp);
-        const today = new Date();
-        const isToday = time.toDateString() === today.toDateString();
-
-        const timeStr = time.toLocaleTimeString('ru-RU', {
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-        });
-
-        const dateStr = time.toLocaleDateString('ru-RU', {
-            day: '2-digit',
-            month: '2-digit'
-        });
-
-        const displayTime = isToday ? timeStr : `${dateStr} ${timeStr}`;
-        const mtypeClass = this.getMTypeClass(msg.mtype);
-        const searchTerm = this.filters.search;
-
-        const highlightText = (text) => {
-            if (!searchTerm || !text) return this.escapeHtml(text || '');
-            const escaped = this.escapeHtml(text);
-            const regex = new RegExp(`(${this.escapeRegex(searchTerm)})`, 'gi');
-            return escaped.replace(regex, '<mark class="journal-highlight">$1</mark>');
-        };
-
-        return `
-            <td class="col-time" title="${time.toLocaleString('ru-RU')}">${displayTime}</td>
-            <td class="col-type"><span class="journal-badge ${mtypeClass}">${this.escapeHtml(msg.mtype || '')}</span></td>
-            <td class="col-message" title="${this.escapeHtml(msg.message || '')}">${highlightText(msg.message)}</td>
-            <td class="col-code">${highlightText(msg.mcode)}</td>
-            <td class="col-group">${highlightText(msg.mgroup)}</td>
-            <td class="col-name" title="${this.escapeHtml(msg.name || '')}">${highlightText(msg.name)}</td>
-            <td class="col-value">${msg.value !== undefined ? msg.value : ''}</td>
-        `;
-    }
-
     updatePendingCount() {
         const pendingEl = document.getElementById(`journal-pending-${this.journalId}`);
         if (pendingEl) {
@@ -565,14 +516,8 @@ class JournalRenderer {
     showError(message) {
         const tbody = document.getElementById(`journal-tbody-${this.journalId}`);
         if (tbody) {
-            tbody.innerHTML = `<tr class="journal-error"><td colspan="7">${this.escapeHtml(message)}</td></tr>`;
+            tbody.innerHTML = `<tr class="journal-error"><td colspan="7">${escapeHtml(message)}</td></tr>`;
         }
-    }
-
-    escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
     }
 
     destroy() {
@@ -628,8 +573,8 @@ class JournalManager {
                         <polyline points="10 9 9 9 8 9"/>
                     </svg>
                 </span>
-                <span class="journal-item-name">${this.escapeHtml(j.name)}</span>
-                <span class="journal-item-status ${j.status}">${j.status}</span>
+                <span class="journal-item-name">${escapeHtml(j.name)}</span>
+                <span class="journal-item-status ${escapeAttr(j.status)}">${escapeHtml(j.status)}</span>
             </li>
         `).join('');
 
@@ -663,6 +608,11 @@ class JournalManager {
         if (!renderer) {
             renderer = new JournalRenderer(journalId, journal.name);
             this.renderers.set(journalId, renderer);
+        } else {
+            // При повторном открытии: очистить timer'ы старого инстанса перед
+            // переинициализацией. content.innerHTML ниже выкинет старый DOM,
+            // но searchDebounceTimer / SSE-пингинг могут жить ещё ~debounce ms.
+            renderer.destroy();
         }
 
         // Render journal panel
@@ -681,11 +631,6 @@ class JournalManager {
         }
     }
 
-    escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
-    }
 }
 
 // Global journal manager instance

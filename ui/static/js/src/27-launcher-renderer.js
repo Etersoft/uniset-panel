@@ -34,7 +34,7 @@ class LauncherRenderer {
                     </div>
                     <div class="launcher-header-right">
                         <span class="launcher-control-info" id="launcher-control-${this.nodeId}">${takeBtn}</span>
-                        ${this.launcherUrl ? `<a class="launcher-link" href="${escapeHtml(this.launcherUrl)}" target="_blank" rel="noopener noreferrer">Open Launcher UI</a>` : ''}
+                        ${this.launcherUrl ? `<a class="launcher-link" href="${escapeAttr(this.launcherUrl)}" target="_blank" rel="noopener noreferrer">Open Launcher UI</a>` : ''}
                     </div>
                 </div>
                 <div class="launcher-filter">

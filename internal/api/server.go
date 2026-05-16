@@ -52,6 +52,7 @@ func (s *Server) setupRoutes(staticFS fs.FS) {
 	// API routes
 	s.mux.HandleFunc("GET /api/version", s.handlers.GetVersion)
 	s.mux.HandleFunc("GET /api/objects", s.handlers.GetObjects)
+	s.mux.HandleFunc("GET /api/objects-by-type", s.handlers.GetObjectsByType)
 	s.mux.HandleFunc("GET /api/objects/{name}", s.handlers.GetObjectData)
 	s.mux.HandleFunc("POST /api/objects/{name}/watch", s.handlers.WatchObject)
 	s.mux.HandleFunc("DELETE /api/objects/{name}/watch", s.handlers.UnwatchObject)

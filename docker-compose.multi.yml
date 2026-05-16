@@ -4,14 +4,12 @@
 services:
   # First mock UniSet2 server (objects: TestProc, SharedMemory)
   mock-uniset-1:
-    image: node:20-alpine
-    working_dir: /app
-    volumes:
-      - ./tests/mock-server:/app
+    build:
+      context: ./tests/mock-server
+      dockerfile: Dockerfile
     environment:
       - PORT=9393
       - SERVER_NAME=Server1
-    command: sh -c "npm install --silent 2>/dev/null && node server.js"
     expose:
       - "9393"
     healthcheck:
@@ -22,14 +20,12 @@ services:
 
   # Second mock UniSet2 server (different objects)
   mock-uniset-2:
-    image: node:20-alpine
-    working_dir: /app
-    volumes:
-      - ./tests/mock-server-2:/app
+    build:
+      context: ./tests/mock-server-2
+      dockerfile: Dockerfile
     environment:
       - PORT=9394
       - SERVER_NAME=Server2
-    command: sh -c "npm install --silent 2>/dev/null && node server.js"
     expose:
       - "9394"
     healthcheck:
@@ -59,7 +55,7 @@ services:
       mock-uniset-2:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/objects"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/version"]
       interval: 2s
       timeout: 5s
       retries: 5
@@ -79,11 +75,24 @@ services:
     depends_on:
       viewer-multi:
         condition: service_healthy
+    # Entrypoint passes positional args to playwright if provided.
+    # Default (no args, e.g. `docker compose -f docker-compose.multi.yml up e2e-multi`): runs multi/.
+    # Override (e.g. `docker compose run --rm e2e-multi multi/foo.spec.ts`): runs only specified specs.
     entrypoint:
       - bash
       - -lc
       - |
+        set -e
         cd /tmp
         cp -r /app/* .
-        npm install --no-fund --no-audit
-        npx playwright test multi/ --reporter=list
+        rm -rf node_modules test-results playwright-report unit/node_modules mock-server/node_modules mock-server-2/node_modules
+        # npm ci из lockfile — детерминированный install, быстрее `npm install`.
+        # Сохраняем cp -r /app/*  (tar pipe ломает chromium navigation,
+        # причина неясна; экономия ~3-5 sec не стоит риска).
+        npm ci --no-fund --no-audit
+        if [ "$#" -gt 0 ]; then
+          npx playwright test "$@" --reporter=list
+        else
+          npx playwright test multi/ --reporter=list
+        fi
+      - bash

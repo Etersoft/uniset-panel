@@ -34,6 +34,15 @@ type ServerObjects struct {
 	Objects    []string `json:"objects"`
 }
 
+// ServerObjectsByType группирует объекты заданного типа по серверам для UI.
+// Используется /api/objects-by-type для combobox'а IONC@server в widget config.
+type ServerObjectsByType struct {
+	ServerID   string   `json:"serverId"`
+	ServerName string   `json:"serverName"`
+	Connected  bool     `json:"connected"`
+	Objects    []string `json:"objects"`
+}
+
 // Manager управляет несколькими серверами UniSet2
 type Manager struct {
 	mu        sync.RWMutex
@@ -231,6 +240,25 @@ func (m *Manager) GetServer(id string) (*Instance, bool) {
 	return instance, exists
 }
 
+// GetServerObjects возвращает имена объектов на одном сервере без итерации
+// всех (в отличие от GetAllObjectsGrouped). Возвращает кеш если сервер
+// недоступен (но кеш есть). Ошибка если сервер не найден или недоступен и
+// кеша нет.
+func (m *Manager) GetServerObjects(serverID string) ([]string, error) {
+	instance, exists := m.GetServer(serverID)
+	if !exists {
+		return nil, fmt.Errorf("server %q not found", serverID)
+	}
+	objects, err := instance.GetObjects()
+	if err != nil {
+		if cached := instance.GetCachedObjects(); cached != nil {
+			return cached, nil
+		}
+		return nil, err
+	}
+	return objects, nil
+}
+
 // GetServerByURL ищет сервер по URL
 func (m *Manager) GetServerByURL(url string) (*Instance, bool) {
 	m.mu.RLock()
@@ -377,6 +405,73 @@ func (m *Manager) GetAllObjectsGrouped() ([]ServerObjects, error) {
 	// Возвращаем результат даже если некоторые серверы недоступны
 	if len(errors) > 0 && len(result) == 0 {
 		return nil, errors[0]
+	}
+
+	return result, nil
+}
+
+// GetAllObjectsByType возвращает объекты заданного uniset-типа
+// (например "IONotifyController") сгруппированные по серверам в порядке добавления.
+//
+// Per-server: список имён через GetObjects (с fallback на cache при недоступности),
+// затем для каждого имени GetObjectData → фильтр по ObjectType. N+M uniset запросов
+// на вызов; кэширование на бэке — follow-up.
+//
+// Если сервер недоступен и кэша нет — server entry с Objects=[], Connected=false
+// (UI должен знать о существовании сервера).
+// Если конкретный объект GetObjectData падает — объект пропускается, остальные ОК.
+func (m *Manager) GetAllObjectsByType(typeFilter string) ([]ServerObjectsByType, error) {
+	if typeFilter == "" {
+		return nil, fmt.Errorf("type filter is required")
+	}
+
+	m.mu.RLock()
+	instances := make([]*Instance, 0, len(m.order))
+	for _, id := range m.order {
+		if inst, ok := m.instances[id]; ok {
+			instances = append(instances, inst)
+		}
+	}
+	m.mu.RUnlock()
+
+	result := make([]ServerObjectsByType, 0, len(instances))
+
+	for _, inst := range instances {
+		serverName := inst.Config.Name
+		entry := ServerObjectsByType{
+			ServerID:   inst.Config.ID,
+			ServerName: serverName,
+			Objects:    []string{},
+		}
+
+		names, getErr := inst.GetObjects()
+		if getErr != nil {
+			if cached := inst.GetCachedObjects(); cached != nil {
+				names = cached
+			} else {
+				names = nil
+			}
+		}
+
+		for _, name := range names {
+			data, err := inst.GetObjectData(name)
+			if err != nil || data == nil || data.Object == nil {
+				continue
+			}
+			if data.Object.ObjectType == typeFilter {
+				entry.Objects = append(entry.Objects, name)
+			}
+		}
+
+		// GetObjects успешно ответил → сервер доступен.
+		// Фоновый poller обновляет inst.connected асинхронно,
+		// поэтому используем результат непосредственного запроса.
+		if getErr == nil {
+			entry.Connected = true
+		} else {
+			entry.Connected = inst.GetStatus().Connected
+		}
+		result = append(result, entry)
 	}
 
 	return result, nil

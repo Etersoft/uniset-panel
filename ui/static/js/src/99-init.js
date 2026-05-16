@@ -31,26 +31,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Загружаем sidebar конфигурацию (группы)
     await loadSidebar();
 
-    // Загружаем список объектов (заполняет state.servers)
+    // Загружаем список объектов (fire-and-forget — НЕ блокируем DOMContentLoaded
+    // init: dashboardManager и прочие должны быть готовы сразу. Тесты опираются
+    // на быструю инициализацию window.dashboardManager независимо от fetch).
     fetchObjects()
         .then(data => {
             renderObjectsList(data);
-            // Загружаем конфигурацию сенсоров per-server (после того как state.servers заполнен)
-            loadSensorsConfig().catch(err => {
-                console.warn('Не удалось загрузить конфигурацию сенсоров:', err);
-            });
+            // Per-server конфигурация сенсоров — после заполнения state.servers
+            return loadSensorsConfig();
         })
         .catch(err => {
-            console.error('Error загрузки объектов:', err);
-            document.getElementById('objects-list').innerHTML =
-                '<li class="alert alert-error">Error loading objects</li>';
+            console.error('Failed to load objects:', err);
+            const list = document.getElementById('objects-list');
+            if (list) list.innerHTML = '<li class="alert alert-error">Error loading objects</li>';
         });
 
     // Кнопка обновления
-    document.getElementById('refresh-objects').addEventListener('click', () => {
-        fetchObjects()
-            .then(renderObjectsList)
-            .catch(console.error);
+    document.getElementById('refresh-objects').addEventListener('click', async () => {
+        try {
+            renderObjectsList(await fetchObjects());
+        } catch (err) {
+            console.error('Failed to refresh objects:', err);
+        }
     });
 
     // Кнопка очистки кэша
@@ -81,14 +83,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Инициализация Dashboard Manager
     dashboardManager = window.dashboardManager = new DashboardManager();
 
-    // Загрузка Launcher нод (не блокируем)
-    loadLauncherNodes().catch(err => {
-        console.warn('Failed to load launcher nodes:', err);
-    });
-
-    // Инициализация Journals (не блокируем)
-    initJournals().catch(err => {
-        console.warn('Failed to initialize journals:', err);
+    // Загрузка Launcher нод и инициализация Journals — fire-and-forget,
+    // не ждём (Promise rejection логируем).
+    Promise.allSettled([
+        loadLauncherNodes(),
+        initJournals(),
+    ]).then(([lr, jr]) => {
+        if (lr.status === 'rejected') console.warn('Failed to load launcher nodes:', lr.reason);
+        if (jr.status === 'rejected') console.warn('Failed to initialize journals:', jr.reason);
     });
 
     // Показываем sidebar группы, скрываем hardcoded секции
@@ -124,13 +126,13 @@ function initPollIntervalSelector() {
         setActive(savedInterval);
     } else {
         // По умолчанию 1s
-        setActive(1000);
+        setActive(POLL_INTERVAL_SELECTOR_DEFAULT_MS);
     }
 
     // Обработчики кликов
     buttons.forEach(btn => {
         btn.addEventListener('click', async () => {
-            const interval = parseInt(btn.dataset.interval);
+            const interval = parseIntegerOrDefault(btn.dataset.interval, state.sse.pollInterval);
             setActive(interval);
             localStorage.setItem('pollInterval', interval);
 
@@ -150,12 +152,12 @@ function initPollIntervalSelector() {
                     body: JSON.stringify({ interval })
                 });
                 if (response.ok) {
-                    console.log(`Poll interval изменён на ${interval}ms`);
+                    debugLog(`Poll interval изменён на ${interval}ms`);
                 } else {
                     console.warn('Не удалось изменить poll interval');
                 }
             } catch (err) {
-                console.error('Error изменения poll interval:', err);
+                console.error('Failed to change poll interval:', err);
             }
         });
     });

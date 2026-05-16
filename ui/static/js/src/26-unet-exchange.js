@@ -147,13 +147,13 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
     }
 
     async loadStatus() {
-        const serverParam = this.getServerParam();
-
         try {
-            const response = await fetch(`/api/objects/${this.objectName}/unet/status?${serverParam}`);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-            this.status = await response.json();
+            // fetchJSON прокидывает server=... через buildUrl и кидает на !ok —
+            // ручной fetch + getServerParam здесь дублировал бы базу и забывал
+            // encodeURIComponent для objectName.
+            this.status = await this.fetchJSON(
+                `/api/objects/${encodeURIComponent(this.objectName)}/unet/status`
+            );
             this.updateStatusTimestamp();
 
             // Распаковываем receivers и senders из status
@@ -219,7 +219,7 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
     renderStatusError(message) {
         const container = this.getEl(`unet-status-${this.objectName}`);
         if (container) {
-            container.innerHTML = `<div class="status-error">Error: ${message}</div>`;
+            container.innerHTML = `<div class="status-error">Error: ${escapeHtml(message)}</div>`;
         }
     }
 
@@ -263,10 +263,10 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
                         <td class="col-add-buttons add-buttons-col">
                             <span class="chart-toggle">
                                 <input type="checkbox"
-                                       class="chart-checkbox chart-toggle-input"
+                                       class="chart-checkbox chart-toggle-input unet-chart-toggle"
                                        id="chart-${this.objectName}-recv-${nodeIndex}-${chanKey}"
-                                       ${isEnabled ? 'checked' : ''}
-                                       onchange="toggleUNetChannel('${this.tabKey}', 'recv', '${channelId}', this.checked)">
+                                       data-unet-type="recv" data-unet-channel="${escapeAttr(channelId)}"
+                                       ${isEnabled ? 'checked' : ''}>
                                 <label class="chart-toggle-label" for="chart-${this.objectName}-recv-${nodeIndex}-${chanKey}" title="Add to Charts">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M3 3v18h18"/>
@@ -289,7 +289,19 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
         });
 
         tbody.innerHTML = rows.join('');
+        this._wireChartToggles(tbody);
         if (countEl) countEl.textContent = totalChannels.toString();
+    }
+
+    // Привязывает change-handler к unet-chart-toggle чекбоксам в указанном root.
+    // Извлекает type и channelId из data-* атрибутов (избегая inline onchange=
+    // с интерполяцией tabKey/channelId — содержит ':' и ломает JS-контекст атрибута).
+    _wireChartToggles(root) {
+        root.querySelectorAll('.unet-chart-toggle').forEach(cb => {
+            cb.addEventListener('change', () => {
+                toggleUNetChannel(this.tabKey, cb.dataset.unetType, cb.dataset.unetChannel, cb.checked);
+            });
+        });
     }
 
     renderSenders() {
@@ -319,10 +331,10 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
                     <td class="col-add-buttons add-buttons-col">
                         <span class="chart-toggle">
                             <input type="checkbox"
-                                   class="chart-checkbox chart-toggle-input"
+                                   class="chart-checkbox chart-toggle-input unet-chart-toggle"
                                    id="chart-${this.objectName}-send-${chanKey}"
-                                   ${isEnabled ? 'checked' : ''}
-                                   onchange="toggleUNetChannel('${this.tabKey}', 'send', '${channelId}', this.checked)">
+                                   data-unet-type="send" data-unet-channel="${escapeAttr(channelId)}"
+                                   ${isEnabled ? 'checked' : ''}>
                             <label class="chart-toggle-label" for="chart-${this.objectName}-send-${chanKey}" title="Add to Charts">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M3 3v18h18"/>
@@ -342,6 +354,7 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
         });
 
         tbody.innerHTML = rows.join('');
+        this._wireChartToggles(tbody);
         if (countEl) countEl.textContent = channels.length.toString();
     }
 
@@ -370,10 +383,10 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
                 <div class="chart-panel-header">
                     <div class="chart-panel-info">
                         <span class="chart-panel-badge">UNET</span>
-                        <span class="chart-panel-title">${type === 'recv' ? 'Recv' : 'Send'}: ${metricLabel}</span>
+                        <span class="chart-panel-title">${type === 'recv' ? 'Recv' : 'Send'}: ${escapeHtml(metricLabel)}</span>
                     </div>
                     <div class="chart-panel-right">
-                        <button class="btn-icon" title="Close" onclick="removeUNetMetricChart('${this.tabKey}', '${chartKey}')">
+                        <button class="btn-icon unet-metric-close" title="Close" data-unet-chart-key="${escapeAttr(chartKey)}">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M18 6L6 18M6 6l12 12"/>
                             </svg>
@@ -385,38 +398,26 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
                 </div>
             `;
             chartsGrid.appendChild(chartContainer);
+            chartContainer.querySelector('.unet-metric-close').addEventListener('click', () => {
+                removeUNetMetricChart(this.tabKey, chartKey);
+            });
 
             const canvas = this.getEl(`chart-canvas-${this.objectName}-${safeChartKey}`);
-            const chart = new Chart(canvas, {
-                type: 'line',
-                data: {
-                    datasets: []
-                },
+            const chart = new Chart(canvas, createLineChartConfig({
+                datasets: [],
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    animation: false,
-                    scales: {
-                        x: {
-                            type: 'time',
-                            time: {
-                                displayFormats: { second: 'HH:mm:ss' }
-                            },
-                            ticks: { maxTicksLimit: 6 }
-                        },
-                        y: {
-                            beginAtZero: true
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            display: true,
-                            position: 'bottom',
-                            labels: { boxWidth: 12, padding: 8 }
+                    discreteYAxis: true,
+                    xMaxTicksLimit: UNET_CHART_X_MAX_TICKS,
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        labels: {
+                            boxWidth: CHART_LEGEND_BOX_WIDTH,
+                            padding: CHART_LEGEND_PADDING
                         }
                     }
                 }
-            });
+            }));
 
             tabState.charts.set(chartKey, {
                 chart: chart,
@@ -441,9 +442,9 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
             data: [],
             borderColor: color,
             backgroundColor: 'transparent',
-            borderWidth: 1.5,
+            borderWidth: CHART_LINE_BORDER_WIDTH,
             pointRadius: 0,
-            tension: 0.1
+            tension: UNET_CHART_LINE_TENSION
         });
 
         chartData.channels.set(channelId, datasetIndex);
@@ -537,7 +538,7 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
         if (!tabState || !tabState.charts) return;
 
         const now = Date.now();
-        const maxPoints = 300;
+        const maxPoints = UNET_CHART_MAX_POINTS;
 
         // Обновляем графики receivers
         UNET_RECV_METRICS.forEach(metric => {

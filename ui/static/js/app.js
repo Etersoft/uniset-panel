@@ -9,38 +9,71 @@
 // === Таймауты и интервалы (мс) ===
 const FILTER_DEBOUNCE_DELAY = 300;
 const DOUBLE_CLICK_THRESHOLD = 250;
-const RESUBSCRIBE_DELAY = 1000;
 const SIDEBAR_STATUS_REAPPLY_DELAY = 3000;
 const ANIMATION_REMOVAL_DELAY = 500;
 const AUTOCOMPLETE_DEBOUNCE_DELAY = 150;
 const JOURNAL_SEARCH_DEBOUNCE_DELAY = 300;
 const JOURNAL_HIGHLIGHT_DURATION = 2000;
+const JOURNAL_SCROLL_LOAD_RATIO = 0.8;
+const TIMER_UPDATE_INTERVAL_MS = 100;
 const LAUNCHER_AUTO_REFRESH_INTERVAL = 5000;
 const LAUNCHER_ACTION_REFRESH_DELAY = 1000;
 const LAUNCHER_BULK_ACTION_REFRESH_DELAY = 1500;
 const STATUS_DISPLAY_UPDATE_INTERVAL = 1000;
 const RECORDING_STATUS_POLL_INTERVAL = 5000;
 const CONTROL_PING_INTERVAL = 30000;
+const CONTROL_DEFAULT_TIMEOUT_SEC = 60;
 const SETTINGS_FILTER_DEBOUNCE_DELAY = 200;
+const SENSOR_AUTOCOMPLETE_BLUR_DELAY_MS = 150;
+const IONC_DIALOG_FOCUS_DELAY_MS = 50;
+const UI_DEBUG_LOG_STORAGE_KEY = 'uniset-ui-debug-log';
 
 // === SSE ===
+const SSE_DEFAULT_POLL_INTERVAL = 5000;
 const SSE_RESUBSCRIBE_DELAY = 1000;
 const SSE_RECOVERY_PROBE_INTERVAL = 30000;
+const SSE_MAX_RECONNECT_ATTEMPTS = 10;
+const SSE_BASE_RECONNECT_DELAY = 1000;
+const SSE_MAX_RECONNECT_DELAY = 30000;
+const SSE_RECONNECT_JITTER_RATIO = 0.1;       // ±10% jitter на reconnect delay
+const SSE_SIDEBAR_POLL_MULTIPLIER = 6;        // sidebar polling реже чем данные
+const POLL_INTERVAL_SELECTOR_DEFAULT_MS = 1000;
+
+// === LogViewer ===
+const LOGVIEWER_MAX_RECONNECT_ATTEMPTS = 5;
+const LOGVIEWER_BASE_RECONNECT_DELAY = 1000;
+const LOGVIEWER_MAX_RECONNECT_DELAY = 30000;
+const LOGVIEWER_FILTER_DEBOUNCE_DELAY = 300;
+const LOGVIEWER_AUTOSCROLL_THRESHOLD_PX = 50;
+const LOGVIEWER_BUFFER_OPTIONS = [500, 1000, 2000, 5000, 10000, 20000, 50000];
 
 // === Retry ===
-const RESTORE_SENSORS_MAX_ATTEMPTS = 30; // × 100ms = 3s max wait for tab init
+const RESTORE_SENSORS_RETRY_DELAY_MS = 100;
+const RESTORE_SENSORS_INITIAL_DELAY_MS = 200;
+const RESTORE_SENSORS_MAX_ATTEMPTS = 30; // × RESTORE_SENSORS_RETRY_DELAY_MS = 3s max wait for tab init
 
 // === Лимиты данных ===
 const MAX_CHART_POINTS = 1000;
 const MAX_LOG_LINES = 10000;
 const VIRTUAL_SCROLL_CHUNK_SIZE = 200;
 const JOURNAL_DEFAULT_LIMIT = 100;
-const AUTOCOMPLETE_MIN_QUERY = 2;
+const SENSOR_AUTOCOMPLETE_LIMIT = 20;          // legacy alias (используется в bootstrap dashboard'а)
+const SENSOR_AUTOCOMPLETE_FOCUS_LIMIT = 10;    // legacy alias
+const SENSOR_AUTOCOMPLETE_CHUNK_SIZE = 50;     // chunk pagination для infinite-scroll dropdown
+const SENSOR_AUTOCOMPLETE_SCROLL_THRESHOLD_PX = 80; // load-more срабатывает в N px от низа
+const DASHBOARD_SENSOR_REGISTRY_FETCH_LIMIT = 10000;
+const DASHBOARD_SENSOR_CACHE_TTL_MS = 60000;
+const DEFAULT_VARIABLE_HISTORY_COUNT = 100;
+const OPCUA_ERROR_HISTORY_DEFAULT_MAX = 100;
+const BYTES_PER_KIB = 1024;
+const BYTE_UNITS = ['B', 'KB', 'MB', 'GB'];
 
 // === Виртуальный скролл (px) ===
 const DEFAULT_ROW_HEIGHT = 32;
 const DEFAULT_BUFFER_ROWS = 10;
 const VIRTUAL_SCROLL_LOAD_THRESHOLD = 200;
+const VIRTUAL_SCROLL_PERCENT_THRESHOLD = 80;
+const SIMPLE_INFINITE_SCROLL_THRESHOLD = 100;
 
 // === Высоты секций (px) ===
 const DEFAULT_SECTION_HEIGHT = 300;
@@ -50,20 +83,202 @@ const LOGVIEWER_DEFAULT_HEIGHT = 200;
 const LOGVIEWER_MIN_HEIGHT = 100;
 const LOGVIEWER_MAX_HEIGHT = 600;
 const CHARTS_CONTAINER_MIN_HEIGHT = 150;
-const CHARTS_CONTAINER_DEFAULT_HEIGHT = 300;
 const SENSORS_CONTAINER_MIN_HEIGHT = 200;
+const JOURNAL_CONTAINER_MIN_HEIGHT = 150;
+const JOURNAL_CONTAINER_MAX_HEIGHT = 800;
+const DATA_TABLE_DEFAULT_HEIGHT = 320;
+const DATA_TABLE_MAX_HEIGHT = 700;
+const UWSGATE_SENSORS_DEFAULT_HEIGHT = 400;
+const OPCUA_DIAGNOSTICS_DEFAULT_HEIGHT = 260;
+const OPCUA_DIAGNOSTICS_MIN_HEIGHT = 160;
+const OPCUA_DIAGNOSTICS_MAX_HEIGHT = 600;
 
 // === Dashboard сетка ===
 const DASHBOARD_GRID_COLS = 48;
 const DASHBOARD_GRID_ROW_HEIGHT = 30;
 const DASHBOARD_GRID_GAP = 4;
+const DASHBOARD_POSITION_SCAN_ROWS = 100;
+const DASHBOARD_MAX_WIDGET_HEIGHT = 20;
+const DASHBOARD_DEFAULT_WIDGET_WIDTH = 2;
+const DASHBOARD_DEFAULT_WIDGET_HEIGHT = 1;
+const DASHBOARD_DRAG_Z_INDEX = 1000;
+const DASHBOARD_FINE_MOVE_STEP_PX = 1;
+
+// === Sensor autocomplete dropdown ===
+const SENSOR_AUTOCOMPLETE_DROPDOWN_Z_INDEX = 10000;
+
+// === Recording export ===
+const RECORDING_EXPORT_URLS = {
+    sqlite: '/api/export/database',
+    csv:    '/api/export/csv',
+    json:   '/api/export/json',
+};
+
+// === Journal time ranges (мс) ===
+// '1M' = 30 дней (фиксированный «месяц» для real-time журнала, не календарный).
+const JOURNAL_TIME_RANGE_MS = {
+    '15m': 15 * 60 * 1000,
+    '1h':  60 * 60 * 1000,
+    '3h':  3 * 60 * 60 * 1000,
+    '10h': 10 * 60 * 60 * 1000,
+    '1d':  24 * 60 * 60 * 1000,
+    '3d':  3 * 24 * 60 * 60 * 1000,
+    '1w':  7 * 24 * 60 * 60 * 1000,
+    '1M':  30 * 24 * 60 * 60 * 1000,
+};
 
 // === Временные диапазоны (сек) ===
 const DEFAULT_CHART_TIME_RANGE = 900;
+const CHART_TIME_RANGES_SECONDS = [
+    { seconds: 60, label: '1m' },
+    { seconds: 180, label: '3m' },
+    { seconds: 300, label: '5m' },
+    { seconds: 900, label: '15m' },
+    { seconds: 3600, label: '1h' },
+    { seconds: 10800, label: '3h' }
+];
+const CHART_TIME_RANGES_MS = CHART_TIME_RANGES_SECONDS.map(({ seconds, label }) => ({
+    value: seconds * 1000,
+    label
+}));
 
 // === Пороги formatTimeAgo ===
 const TIME_AGO_MIN_SECONDS = 5;
 const TIME_AGO_MINUTES_THRESHOLD = 60;
+
+// ============================================================================
+// Active dashboard widgets — состояния записи
+// ============================================================================
+
+// Сколько ждать ответа от POST /ionc/set до показа состояния error.
+const WRITE_PENDING_TIMEOUT_MS = 5000;
+
+// Сколько отображать состояние "success" (зелёный индикатор) после удачной записи,
+// прежде чем вернуться в idle. Сделано короткой вспышкой — раньше 1500ms
+// читалось как «фокусная рамка осталась», теперь 400ms — мгновенный flash.
+const WRITE_SUCCESS_DISPLAY_MS = 400;
+
+// === PushButtonWidget ===
+const PUSHBUTTON_DEFAULT_PULSE_WIDTH_MS = 500;
+const PUSHBUTTON_MIN_PULSE_WIDTH_MS = 50;
+const PUSHBUTTON_FLASH_MS = 300;
+
+// === SetpointWidget ===
+const SETPOINT_AUTO_APPLY_DEBOUNCE_MS = 500;
+const SETPOINT_DEFAULT_MIN = 0;
+const SETPOINT_DEFAULT_MAX = 100;
+const SETPOINT_DEFAULT_STEP = 1;
+
+// === Signal Generator ===
+const GENERATOR_DEFAULT_MIN = 0;
+const GENERATOR_DEFAULT_MAX = 100;
+const GENERATOR_DEFAULT_STEP = 10;
+const GENERATOR_DEFAULT_PAUSE_MS = 200;
+const GENERATOR_DEFAULT_PULSE_WIDTH_MS = 500;
+const GENERATOR_DEFAULT_SQUARE_PAUSE_MS = 500;
+const GENERATOR_DEFAULT_PERIOD_MS = 1000;
+const GENERATOR_DEFAULT_WAVE_MIN = -50;
+const GENERATOR_DEFAULT_WAVE_MAX = 50;
+const GENERATOR_DEFAULT_WAVE_PAUSE_MS = 100;
+const GENERATOR_DEFAULT_WAVE_POINTS = 100;
+const GENERATOR_DEFAULT_LINEAR_STEP = 1;
+const GENERATOR_DEFAULT_RANDOM_PERIOD_MS = 5000;
+const GENERATOR_DEFAULT_IONC_SQUARE_PULSE_WIDTH_MS = 2000;
+const GENERATOR_DEFAULT_IONC_SQUARE_PAUSE_MS = 2000;
+const GENERATOR_MIN_PAUSE_MS = 1;
+const GENERATOR_MIN_PULSE_WIDTH_MS = 1;
+const GENERATOR_MIN_PERIOD_MS = 100;
+const GENERATOR_MIN_WAVE_PAUSE_MS = 10;
+const GENERATOR_MIN_WAVE_POINTS = 4;
+const SIGNAL_GENERATOR_MIN_UPDATE_INTERVAL_MS = 50;
+const SIGNAL_GENERATOR_TICKS_PER_PERIOD = 20;
+
+// === ChartWidget ===
+const CHART_WIDGET_DEFAULT_TABLE_HEIGHT = 100;
+const CHART_WIDGET_TABLE_MIN_HEIGHT = 50;
+const CHART_WIDGET_TABLE_MAX_HEIGHT = 300;
+const CHART_WIDGET_DEFAULT_ZONES_HEIGHT = 150;
+const CHART_WIDGET_ZONES_MIN_HEIGHT = 80;
+const CHART_WIDGET_ZONES_MAX_HEIGHT = 500;
+const CHART_WIDGET_SYNC_INTERVAL_MS = 2000;
+const CHART_WIDGET_DEFAULT_TIME_RANGE_MS = DEFAULT_CHART_TIME_RANGE * 1000;
+const CHART_WIDGET_TIME_WINDOW_SHIFT_RATIO = 0.9;
+const CHART_WIDGET_HISTORY_LIMIT = 200;
+const CHART_WIDGET_X_MAX_TICKS = 6;
+const CHART_WIDGET_Y_MAX_TICKS = 5;
+const OBJECT_CHART_HISTORY_LIMIT = 200;
+const CHART_LINE_TENSION = 0.3;
+const CHART_LINE_BORDER_WIDTH = 1.5;
+const CHART_STEPPED_LINE_BORDER_WIDTH = 2;
+const UNET_CHART_LINE_TENSION = 0.1;
+const UNET_CHART_MAX_POINTS = 300;
+const UNET_CHART_X_MAX_TICKS = 6;
+const CHART_LEGEND_BOX_WIDTH = 12;
+const CHART_LEGEND_PADDING = 8;
+const GAUGE_FALLBACK_MAJOR_STEP = 2000;
+const STATUS_WIDGET_DEFAULT_THRESHOLD = 0.5;
+const DIGITAL_SEGMENT_WIDTH = 16;
+const DIGITAL_SEGMENT_HEIGHT = 32;
+const DIGITAL_SEGMENT_THICKNESS = 3;
+const DIGITAL_DIGIT_SLOT_WIDTH = 24;
+const DIGITAL_SPECIAL_CHAR_ADVANCE = 8;
+const DIGITAL_DIGIT_ADVANCE = 22;
+const DIGITAL_VIEWBOX_PADDING = 10;
+const DIGITAL_VIEWBOX_HEIGHT = 48;
+const SPEEDOMETER_DEFAULT_MAX_RPM = 4000;
+
+// === Widget config defaults (диапазон значений по умолчанию для UI-полей min/max) ===
+// Используется во всех widget'ах, где пользователь задаёт диапазон значений
+// (Gauge, Level, Bar, Speedometer, RangeBars, BarGraph, Setpoint).
+const WIDGET_DEFAULT_MIN = 0;
+const WIDGET_DEFAULT_MAX = 100;
+
+// Преднастроенные углы поворота, доступные через quick-buttons в widget config dialog.
+const ROTATE_QUICK_ANGLES = [0, 90, 180, 270];
+
+// === Chart theme (Chart.js) ===
+// 8-цветная палитра для серий (циклически назначается через colorIndex).
+const CHART_COLORS = [
+    '#3274d9', '#73bf69', '#ff9830', '#f2495c',
+    '#b877d9', '#5794f2', '#fade2a', '#ff6eb4'
+];
+
+// Единая dark-тема для tooltip / grid / ticks. Используется в createLineChartConfig().
+const CHART_THEME = {
+    tooltipBg:   '#22252a',
+    tooltipText: '#d8dce2',
+    gridLine:    '#333840',
+    tickColor:   '#8a9099',
+};
+
+// === Zones reuse picker ===
+const ZONES_HISTORY_MAX = 10;                              // FIFO cap для localStorage history
+const ZONES_PICKER_MAX_HEIGHT_PX = 220;                    // max-height scrollable area
+const ZONES_HISTORY_STORAGE_KEY = 'uniset.zonesHistory';   // localStorage key для recent zones
+
+// === IONC@server combobox ===
+const IONC_REGISTRY_TTL_MS    = 5 * 60 * 1000;  // 5 минут — TTL session-cache
+const IONC_COMBO_DEBOUNCE_MS  = 100;            // короче чем sensor-autocomplete (150ms),
+                                                 // т.к. фильтрация локальная без fetch
+const IONC_COMBO_DROPDOWN_TOP_OFFSET_PX = 2;    // отступ dropdown'а от низа input'а
+const IONC_COMBO_DROPDOWN_MAX_HEIGHT_PX = 320;  // max-height dropdown'а (sync с CSS)
+
+if (typeof globalThis !== 'undefined') {
+    Object.assign(globalThis, {
+        CHART_LINE_TENSION,
+        CHART_LINE_BORDER_WIDTH,
+        CHART_STEPPED_LINE_BORDER_WIDTH,
+        UNET_CHART_LINE_TENSION,
+        CHART_THEME,
+        ZONES_HISTORY_MAX,
+        ZONES_HISTORY_STORAGE_KEY,
+        ZONES_PICKER_MAX_HEIGHT_PX,
+        IONC_REGISTRY_TTL_MS,
+        IONC_COMBO_DEBOUNCE_MS,
+        IONC_COMBO_DROPDOWN_TOP_OFFSET_PX,
+        IONC_COMBO_DROPDOWN_MAX_HEIGHT_PX,
+    });
+}
 
 
 // === 00-state.js ===
@@ -80,8 +295,16 @@ const state = window.state = {
     tabs: new Map(), // tabKey -> { charts, updateInterval, chartStartTime, objectType, renderer, serverId, serverName, displayName }
     activeTab: null,
     sensors: new Map(), // sensorId -> sensorInfo
+    // Legacy global registry — keyed by short sensorName. На multi-server панели
+    // первый встретившийся sensor wins, остальные с тем же именем игнорируются.
+    // Безопасен только для search/autocomplete (UI dedupe). Per-row metadata
+    // (textname в renderer'ах) должна ходить через sensorsByKey, иначе при
+    // одинаковых именах на разных серверах юзер видит metadata от чужого объекта.
     sensorsByName: new Map(), // sensorName -> sensorInfo
-    sensorValuesCache: new Map(), // sensorName -> { value, error, timestamp } - cache for dashboard init
+    // Multi-server-aware registry: key = sensorKey (`${serverId}|${objectName}|${sensorName}`).
+    // Используется в renderer'ах и точечных lookup'ах, где известен полный context.
+    sensorsByKey: new Map(), // sensorKey -> sensorInfo (см. 09-sensor-key.js)
+    sensorValuesCache: new Map(), // sensorKey -> { value, error, timestamp } — cache for dashboard init. sensorKey = `${serverId}|${objectName}|${sensorName}` (см. 09-sensor-key.js)
     timeRange: DEFAULT_CHART_TIME_RANGE, // секунды (по умолчанию 15 минут)
     sidebarCollapsed: false, // свёрнутая боковая панель
     collapsedSections: {}, // состояние спойлеров
@@ -101,11 +324,11 @@ const state = window.state = {
     sse: {
         eventSource: null,
         connected: false,
-        pollInterval: 5000, // будет обновлено с сервера
+        pollInterval: SSE_DEFAULT_POLL_INTERVAL, // будет обновлено с сервера
         reconnectAttempts: 0,
-        maxReconnectAttempts: 10,
-        baseReconnectDelay: 1000,   // начальная задержка (1s)
-        maxReconnectDelay: 30000,   // максимальная задержка (30s)
+        maxReconnectAttempts: SSE_MAX_RECONNECT_ATTEMPTS,
+        baseReconnectDelay: SSE_BASE_RECONNECT_DELAY,
+        maxReconnectDelay: SSE_MAX_RECONNECT_DELAY,
         reconnectTimerId: null,     // ID таймера переподключения (для очистки)
         statusSyncInterval: null    // ID интервала периодической синхронизации статуса серверов
     },
@@ -116,9 +339,19 @@ const state = window.state = {
         token: null,          // текущий токен (из localStorage или URL)
         isController: false,  // я контроллер?
         hasController: false, // есть активный контроллер (кто-то другой)
-        timeoutSec: 60,       // таймаут неактивности
+        timeoutSec: CONTROL_DEFAULT_TIMEOUT_SEC,
         pingIntervalId: null  // ID интервала ping
     }
+};
+
+// IONC@server registry для combobox'а в config-форме widget'ов.
+// Lazy-populated; TTL 5 минут (IONC_REGISTRY_TTL_MS); ручное обновление через кнопку ↻.
+state.ioncRegistry = {
+    fetchedAt:    0,                  // ms; 0 = never fetched
+    isFetching:   false,              // race guard для ↻ во время in-flight
+    fetchPromise: null,               // shared promise для concurrent waiters
+    servers:      new Map(),          // serverId → { serverName, connected, objects: [name,...] }
+    lastError:    null,               // string|null — последняя ошибка fetch'а (cache не cleared)
 };
 
 
@@ -267,12 +500,12 @@ function initControlToken() {
             ? `${window.location.pathname}?${urlParams.toString()}`
             : window.location.pathname;
         window.history.replaceState({}, '', newUrl);
-        console.log('Control: Token loaded from URL');
+        debugLog('Control: Token loaded from URL');
     } else {
         // 2. Проверяем localStorage
         state.control.token = localStorage.getItem('control-token');
         if (state.control.token) {
-            console.log('Control: Token loaded from localStorage');
+            debugLog('Control: Token loaded from localStorage');
         }
     }
 }
@@ -287,13 +520,28 @@ function canControl() {
 
 // Обновление статуса контроля из данных сервера
 function updateControlStatus(status) {
+    // Equality check — control_status SSE event прилетает на каждом poll,
+    // не имеет смысла пересчитывать UI и dispatch'ить controlStatusChanged
+    // если ничего по существу не изменилось (особенно важно для активных
+    // widget'ов: каждый делает DOM mutations в _updateInteractivityClass).
+    const changed =
+        state.control.enabled       !== status.enabled       ||
+        state.control.hasController !== status.hasController ||
+        state.control.isController  !== status.isController;
+
     state.control.enabled = status.enabled;
     state.control.hasController = status.hasController;
     state.control.isController = status.isController;
-    state.control.timeoutSec = status.timeoutSec || 60;
+    state.control.timeoutSec = status.timeoutSec || CONTROL_DEFAULT_TIMEOUT_SEC;
+
+    if (!changed) return;
 
     updateControlUI();
     updateAllControlButtons();
+    // Notify active dashboard widgets so they can refresh their interactivity class.
+    document.dispatchEvent(new CustomEvent('controlStatusChanged', {
+        detail: { ...state.control }
+    }));
 }
 
 // Обновление UI контроля (компактный индикатор в шапке)
@@ -492,16 +740,21 @@ async function controlledFetch(url, options = {}) {
 
     const response = await fetch(url, options);
 
-    // Обработка ошибки контроля
+    // Обработка ошибки контроля. throw нельзя оставлять внутри try — он будет
+    // пойман этим же catch (вместе с ошибкой парсинга) и caller обработает 403
+    // как успешный ответ. Поэтому решение «нужно ли бросать» определяем внутри
+    // try, а сам throw делаем после.
     if (response.status === 403) {
+        let isControlRequired = false;
         try {
             const data = await response.clone().json();
-            if (data.code === 'CONTROL_REQUIRED') {
-                showControlRequiredNotification();
-                throw new Error('Control required');
-            }
+            if (data.code === 'CONTROL_REQUIRED') isControlRequired = true;
         } catch (e) {
-            // Игнорируем ошибку парсинга
+            // Игнорируем ошибку парсинга — body может быть не-JSON
+        }
+        if (isControlRequired) {
+            showControlRequiredNotification();
+            throw new Error('Control required');
         }
     }
 
@@ -530,10 +783,8 @@ const recordingState = {
 // Format bytes to human readable
 function formatBytes(bytes) {
     if (bytes === 0) return '0B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + sizes[i];
+    const i = Math.floor(Math.log(bytes) / Math.log(BYTES_PER_KIB));
+    return parseFloat((bytes / Math.pow(BYTES_PER_KIB, i)).toFixed(1)) + BYTE_UNITS[i];
 }
 
 // Format number with abbreviation
@@ -604,19 +855,8 @@ function initRecordingUI() {
         }
 
         if (format) {
-            // Download export file
-            let url;
-            switch (format) {
-                case 'sqlite':
-                    url = '/api/export/database';
-                    break;
-                case 'csv':
-                    url = '/api/export/csv';
-                    break;
-                case 'json':
-                    url = '/api/export/json';
-                    break;
-            }
+            // Download export file (URLs централизованы в 00-constants.js)
+            const url = RECORDING_EXPORT_URLS[format];
             if (url) {
                 window.location.href = url;
             }
@@ -727,6 +967,274 @@ function updateChartsFromBatch(tabKey, items, prefix, timestamp, options = {}) {
     }
 }
 
+function sanitizeEventSourceUrlForLog(url) {
+    return String(url).replace(/([?&]token=)[^&]*/g, '$1[redacted]');
+}
+
+// Lookup-таблица обработчиков SSE событий. Каждый handler получает уже
+// распарсенный payload (event) и работает с ним. JSON.parse + try/catch +
+// console.warn boilerplate унесён в _attachSseHandlers ниже — раньше эти
+// 14 строк повторялись на каждый listener, а unified obrabotka позволяет
+// единообразно фильтровать debug log / отправлять метрики.
+//
+// `connected` обработчик НЕ здесь — он делает много setup'а (resubscribe /
+// polling fallback / sidebar refresh) и завязан на eventSource lifecycle.
+const _sseHandlers = {
+    object_data: (event) => {
+        const { objectName, serverId, data, timestamp } = event;
+
+        // Обновляем время последнего обновления в индикаторе
+        updateSSEStatus('connected', new Date());
+
+        const tabKey = `${serverId}:${objectName}`;
+        const tabState = state.tabs.get(tabKey);
+        if (!tabState) return;
+
+        // Обновляем рендерер (таблицы, статистика и т.д.)
+        if (tabState.renderer) {
+            tabState.renderer.update(data);
+        }
+
+        // Обновляем графики напрямую из SSE данных (данные копятся всегда, отрисовка — если не на паузе)
+        const eventTimestamp = new Date(timestamp);
+        tabState.charts.forEach((chartData, varName) => {
+            // Пропускаем внешние датчики (ext:) - они обновляются через sensor_data
+            if (varName.startsWith('ext:')) return;
+
+            // Извлекаем значение из data в зависимости от типа переменной
+            let value = undefined;
+            if (varName.startsWith('io.in.')) {
+                const ioKey = varName.substring('io.in.'.length);
+                if (data.io?.in?.[ioKey]) value = data.io.in[ioKey].value;
+            } else if (varName.startsWith('io.out.')) {
+                const ioKey = varName.substring('io.out.'.length);
+                if (data.io?.out?.[ioKey]) value = data.io.out[ioKey].value;
+            }
+
+            if (value !== undefined) {
+                chartData.chart.data.datasets[0].data.push({ x: eventTimestamp, y: value });
+                if (chartData.chart.data.datasets[0].data.length > MAX_CHART_POINTS) {
+                    chartData.chart.data.datasets[0].data.shift();
+                }
+            }
+        });
+
+        // Пропускаем отрисовку если на паузе (данные уже накоплены выше)
+        if (tabState.chartsPaused) return;
+
+        syncAllChartsTimeRange(tabKey);
+
+        tabState.charts.forEach((chartData, varName) => {
+            if (!varName.startsWith('ext:')) {
+                chartData.chart.update('none');
+            }
+        });
+    },
+
+    // Backend отправляет serverId="sm" для SM событий
+    sensor_data: (event) => {
+        const { objectName, serverId } = event;
+        const sensor = event.data;
+        const tabKey = serverId
+            ? `${serverId}:${objectName}`
+            : findTabKeyByDisplayName(objectName); // fallback для legacy
+        if (!tabKey) return;
+        // Одиночный сенсор — оборачиваем в массив для общего batch-helper'а.
+        updateChartsFromBatch(tabKey, [sensor], 'ext', event.timestamp);
+    },
+
+    ionc_sensor_batch: (event) => {
+        const { objectName, serverId } = event;
+        const sensors = event.data;
+
+        // Cache sensor values for dashboard initialization (по sensorKey).
+        // frozen/blocked сохраняем для active widget'ов — иначе после reload
+        // dashboard'а они не узнают статус до следующего batch'а (~1s).
+        const now = Date.now();
+        for (const sensor of sensors) {
+            const key = makeSensorKey(serverId, objectName, sensor.name);
+            state.sensorValuesCache.set(key, {
+                value: sensor.value,
+                error: sensor.error || null,
+                frozen: !!sensor.frozen,
+                blocked: !!sensor.blocked,
+                timestamp: now
+            });
+        }
+
+        // Обновляем виджеты на dashboard (с контекстом для построения sensorKey).
+        updateDashboardWidgets(sensors, { serverId, objectName, timestamp: event.timestamp || null });
+
+        const tabKey = `${serverId}:${objectName}`;
+        const tabState = state.tabs.get(tabKey);
+        if (!tabState) return;
+
+        for (const sensor of sensors) {
+            if (tabState.renderer?.handleIONCSensorUpdate) {
+                tabState.renderer.handleIONCSensorUpdate(sensor);
+            }
+        }
+
+        updateChartsFromBatch(tabKey, sensors, 'io', event.timestamp, { showSupplier: true });
+    },
+
+    modbus_register_batch: (event) => {
+        const { objectName, serverId } = event;
+        const registers = event.data;
+
+        updateDashboardWidgets(registers, { serverId, objectName, timestamp: event.timestamp || null });
+
+        const tabKey = `${serverId}:${objectName}`;
+        const tabState = state.tabs.get(tabKey);
+        if (!tabState) return;
+
+        const renderer = tabState.renderer;
+        if (!renderer) return;
+        const isMaster = renderer.constructor.name === 'ModbusMasterRenderer';
+        const isSlave = renderer.constructor.name === 'ModbusSlaveRenderer';
+        if (!isMaster && !isSlave) return;
+
+        if (typeof renderer.handleModbusRegisterUpdates === 'function') {
+            renderer.handleModbusRegisterUpdates(registers);
+        }
+
+        updateChartsFromBatch(tabKey, registers, 'mb', event.timestamp);
+    },
+
+    opcua_sensor_batch: (event) => {
+        const { objectName, serverId } = event;
+        const sensors = event.data;
+
+        updateDashboardWidgets(sensors, { serverId, objectName, timestamp: event.timestamp || null });
+
+        const tabKey = `${serverId}:${objectName}`;
+        const tabState = state.tabs.get(tabKey);
+        if (!tabState) return;
+
+        const renderer = tabState.renderer;
+        const isExchange = renderer && renderer.constructor.name === 'OPCUAExchangeRenderer';
+        const isServer   = renderer && renderer.constructor.name === 'OPCUAServerRenderer';
+        if (!isExchange && !isServer) return;
+
+        if (typeof renderer.handleOPCUASensorUpdates === 'function') {
+            renderer.handleOPCUASensorUpdates(sensors);
+        }
+
+        updateChartsFromBatch(tabKey, sensors, 'ext', event.timestamp);
+    },
+
+    uwsgate_sensor_batch: (event) => {
+        const { objectName, serverId } = event;
+        const sensors = event.data;
+
+        updateDashboardWidgets(sensors, { serverId, objectName, timestamp: event.timestamp || null });
+
+        const tabKey = `${serverId}:${objectName}`;
+        const tabState = state.tabs.get(tabKey);
+        if (!tabState) return;
+
+        const renderer = tabState.renderer;
+        if (!renderer || renderer.constructor.name !== 'UWebSocketGateRenderer') return;
+
+        if (typeof renderer.handleSSEUpdate === 'function') {
+            renderer.handleSSEUpdate(sensors);
+        }
+
+        updateChartsFromBatch(tabKey, sensors, 'ws', event.timestamp, { showSupplier: true });
+    },
+
+    server_status: (event) => {
+        const serverId = event.serverId;
+        const connected = event.data?.connected ?? false;
+        debugLog(`SSE: server ${serverId} ${connected ? 'connected' : 'disconnected'}`);
+        updateServerStatus(serverId, connected);
+    },
+
+    objects_list: (event) => {
+        const serverId = event.serverId;
+        const objects = event.data?.objects ?? [];
+        debugLog(`SSE: server ${serverId} restored connection, objects: ${objects.length}`);
+        updateServerStatus(serverId, true);
+        refreshObjectsList();
+        if (typeof refreshSidebarGroups === 'function') {
+            refreshSidebarGroups();
+        }
+    },
+
+    control_status: async (event) => {
+        debugLog('SSE: control status changed:', event.data);
+        const status = event.data;
+        // Сохраняем isController если мы были контроллером — сервер не знает чей это токен.
+        status.isController = state.control.token &&
+            status.hasController &&
+            state.control.isController;
+        try {
+            const resp = await fetch('/api/control/status', {
+                headers: { 'X-Control-Token': state.control.token || '' }
+            });
+            const data = await resp.json();
+            updateControlStatus(data);
+        } catch (err) {
+            console.warn('Failed to refresh control status:', err);
+            updateControlStatus(status);
+        }
+    },
+
+    launcher_status: (event) => {
+        const tabKey = `launcher:${event.serverId}`;
+        const tabState = state.tabs.get(tabKey);
+        if (tabState?.renderer?.updateStatus) {
+            tabState.renderer.updateStatus(event.data);
+        }
+        updateLauncherNodeStatus(event.serverId, true);
+    },
+
+    launcher_connection: (event) => {
+        const connected = event.data?.connected ?? false;
+        updateLauncherNodeStatus(event.serverId, connected);
+        const tabKey = `launcher:${event.serverId}`;
+        const tabState = state.tabs.get(tabKey);
+        if (tabState?.renderer?.updateConnectionStatus) {
+            tabState.renderer.updateConnectionStatus(connected);
+        }
+    },
+
+    journal_connection: (event) => {
+        const journalId = event.data?.journalId;
+        const connected = event.data?.connected ?? false;
+        if (journalId && typeof updateJournalConnectionStatus === 'function') {
+            updateJournalConnectionStatus(journalId, connected);
+        }
+    },
+
+    journal_messages: (event) => {
+        const data = event.data;
+        if (data && journalManager) {
+            journalManager.handleSSEMessage(data);
+        }
+    },
+};
+
+// Подписаться на все события из _sseHandlers с единым try/catch + JSON.parse boilerplate'ом.
+function _attachSseHandlers(eventSource) {
+    for (const [evtName, handler] of Object.entries(_sseHandlers)) {
+        eventSource.addEventListener(evtName, async (e) => {
+            let payload;
+            try {
+                payload = JSON.parse(e.data);
+            } catch (err) {
+                console.warn(`SSE: failed to parse ${evtName} payload:`, err);
+                return;
+            }
+            try {
+                await handler(payload);
+            } catch (err) {
+                console.warn(`SSE: error handling ${evtName}:`, err);
+            }
+        });
+    }
+}
+
 function initSSE() {
     // Очищаем таймер переподключения (если есть)
     if (state.sse.reconnectTimerId) {
@@ -743,7 +1251,7 @@ function initSSE() {
     if (state.control.token) {
         url += `?token=${encodeURIComponent(state.control.token)}`;
     }
-    console.log('SSE: Подключение к', url);
+    debugLog('SSE: Подключение к', sanitizeEventSourceUrlForLog(url));
 
     const eventSource = new EventSource(url);
     state.sse.eventSource = eventSource;
@@ -753,11 +1261,11 @@ function initSSE() {
             const data = JSON.parse(e.data);
             state.sse.connected = true;
             state.sse.reconnectAttempts = 0;
-            state.sse.pollInterval = data.data?.pollInterval || 5000;
+            state.sse.pollInterval = data.data?.pollInterval || SSE_DEFAULT_POLL_INTERVAL;
 
             // Сохраняем capabilities сервера
             state.capabilities.smEnabled = data.data?.smEnabled || false;
-            console.log('SSE: Подключено, poll interval:', state.sse.pollInterval, 'ms, smEnabled:', state.capabilities.smEnabled);
+            debugLog('SSE: Подключено, poll interval:', state.sse.pollInterval, 'ms, smEnabled:', state.capabilities.smEnabled);
 
             // Обновляем статус контроля
             if (data.data?.control) {
@@ -793,362 +1301,15 @@ function initSSE() {
                 applySidebarStatuses();
             }
         } catch (err) {
-            console.warn('SSE: Error парсинга connected:', err);
+            console.warn('SSE: error handling connected:', err);
         }
     });
 
-    eventSource.addEventListener('object_data', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const { objectName, serverId, data, timestamp } = event;
-
-            // Обновляем время последнего обновления в индикаторе
-            updateSSEStatus('connected', new Date());
-
-            // Формируем ключ вкладки: serverId:objectName
-            const tabKey = `${serverId}:${objectName}`;
-
-            // Обновляем UI только для открытых вкладок
-            const tabState = state.tabs.get(tabKey);
-            if (tabState) {
-                // Обновляем рендерер (таблицы, статистика и т.д.)
-                if (tabState.renderer) {
-                    tabState.renderer.update(data);
-                }
-
-                // Обновляем графики напрямую из SSE данных (данные копятся всегда, отрисовка — если не на паузе)
-                const eventTimestamp = new Date(timestamp);
-                tabState.charts.forEach((chartData, varName) => {
-                    // Пропускаем внешние датчики (ext:) - они обновляются через sensor_data
-                    if (varName.startsWith('ext:')) {
-                        return;
-                    }
-
-                    // Извлекаем значение из data в зависимости от типа переменной
-                    let value = undefined;
-
-                    // Проверяем io.in.* переменные
-                    if (varName.startsWith('io.in.')) {
-                        const ioKey = varName.substring('io.in.'.length);
-                        if (data.io?.in?.[ioKey]) {
-                            value = data.io.in[ioKey].value;
-                        }
-                    }
-                    // Проверяем io.out.* переменные
-                    else if (varName.startsWith('io.out.')) {
-                        const ioKey = varName.substring('io.out.'.length);
-                        if (data.io?.out?.[ioKey]) {
-                            value = data.io.out[ioKey].value;
-                        }
-                    }
-
-                    // Если нашли значение - добавляем точку на график
-                    if (value !== undefined) {
-                        const dataPoint = { x: eventTimestamp, y: value };
-                        chartData.chart.data.datasets[0].data.push(dataPoint);
-
-                        // Ограничиваем количество точек
-                        if (chartData.chart.data.datasets[0].data.length > MAX_CHART_POINTS) {
-                            chartData.chart.data.datasets[0].data.shift();
-                        }
-                    }
-                });
-
-                // Пропускаем отрисовку если на паузе (данные уже накоплены выше)
-                if (tabState.chartsPaused) return;
-
-                // Синхронизируем временную шкалу для всех графиков объекта
-                syncAllChartsTimeRange(tabKey);
-
-                // Обновляем все графики одним batch update
-                tabState.charts.forEach((chartData, varName) => {
-                    if (!varName.startsWith('ext:')) {
-                        chartData.chart.update('none');
-                    }
-                });
-            }
-        } catch (err) {
-            console.warn('SSE: Error обработки object_data:', err);
-        }
-    });
-
-    // Обработка обновлений внешних датчиков из SM (SharedMemory)
-    // Backend отправляет serverId="sm" для SM событий
-    eventSource.addEventListener('sensor_data', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const { objectName, serverId } = event;
-            const sensor = event.data;
-
-            // Формируем tabKey из serverId и objectName
-            const tabKey = serverId
-                ? `${serverId}:${objectName}`
-                : findTabKeyByDisplayName(objectName); // fallback для legacy
-            if (!tabKey) return;
-
-            // Обновляем график (одиночный сенсор — оборачиваем в массив)
-            updateChartsFromBatch(tabKey, [sensor], 'ext', event.timestamp);
-        } catch (err) {
-            console.warn('SSE: Error обработки sensor_data:', err);
-        }
-    });
-
-    // Обработка батча обновлений IONC датчиков (SharedMemory и подобные)
-    eventSource.addEventListener('ionc_sensor_batch', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const { objectName, serverId } = event;
-            const sensors = event.data;
-
-            // Cache sensor values for dashboard initialization
-            const now = Date.now();
-            for (const sensor of sensors) {
-                state.sensorValuesCache.set(sensor.name, {
-                    value: sensor.value,
-                    error: sensor.error || null,
-                    timestamp: now
-                });
-            }
-
-            // Обновляем виджеты на dashboard
-            updateDashboardWidgets(sensors, event.timestamp || null);
-
-            const tabKey = `${serverId}:${objectName}`;
-            const tabState = state.tabs.get(tabKey);
-            if (!tabState) return;
-
-            // Обновляем таблицу датчиков
-            for (const sensor of sensors) {
-                if (tabState.renderer?.handleIONCSensorUpdate) {
-                    tabState.renderer.handleIONCSensorUpdate(sensor);
-                }
-            }
-
-            // Обновляем графики
-            updateChartsFromBatch(tabKey, sensors, 'io', event.timestamp, { showSupplier: true });
-        } catch (err) {
-            console.warn('SSE: Error обработки ionc_sensor_batch:', err);
-        }
-    });
-
-    // Обработка батча обновлений Modbus регистров (ModbusMaster, ModbusSlave)
-    eventSource.addEventListener('modbus_register_batch', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const { objectName, serverId } = event;
-            const registers = event.data;
-
-            updateDashboardWidgets(registers, event.timestamp);
-
-            const tabKey = `${serverId}:${objectName}`;
-            const tabState = state.tabs.get(tabKey);
-            if (!tabState) return;
-
-            const renderer = tabState.renderer;
-            if (!renderer) return;
-            const isMaster = renderer.constructor.name === 'ModbusMasterRenderer';
-            const isSlave = renderer.constructor.name === 'ModbusSlaveRenderer';
-            if (!isMaster && !isSlave) return;
-
-            // Обновляем таблицу регистров
-            if (typeof renderer.handleModbusRegisterUpdates === 'function') {
-                renderer.handleModbusRegisterUpdates(registers);
-            }
-
-            // Обновляем графики
-            updateChartsFromBatch(tabKey, registers, 'mb', event.timestamp);
-        } catch (err) {
-            console.warn('SSE: Error обработки modbus_register_batch:', err);
-        }
-    });
-
-    // Обработка батча обновлений OPCUA датчиков (OPCUAExchange, OPCUAServer)
-    eventSource.addEventListener('opcua_sensor_batch', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const { objectName, serverId } = event;
-            const sensors = event.data;
-
-            updateDashboardWidgets(sensors, event.timestamp);
-
-            const tabKey = `${serverId}:${objectName}`;
-            const tabState = state.tabs.get(tabKey);
-            if (!tabState) return;
-
-            const renderer = tabState.renderer;
-            const isExchange = renderer && renderer.constructor.name === 'OPCUAExchangeRenderer';
-            const isServer = renderer && renderer.constructor.name === 'OPCUAServerRenderer';
-            if (!isExchange && !isServer) return;
-
-            // Обновляем таблицу датчиков
-            if (typeof renderer.handleOPCUASensorUpdates === 'function') {
-                renderer.handleOPCUASensorUpdates(sensors);
-            }
-
-            // Обновляем графики
-            updateChartsFromBatch(tabKey, sensors, 'ext', event.timestamp);
-        } catch (err) {
-            console.warn('SSE: Error обработки opcua_sensor_batch:', err);
-        }
-    });
-
-    // Обработка батча обновлений UWebSocketGate датчиков
-    eventSource.addEventListener('uwsgate_sensor_batch', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const { objectName, serverId } = event;
-            const sensors = event.data;
-
-            updateDashboardWidgets(sensors, event.timestamp);
-
-            const tabKey = `${serverId}:${objectName}`;
-            const tabState = state.tabs.get(tabKey);
-            if (!tabState) return;
-
-            const renderer = tabState.renderer;
-            if (!renderer || renderer.constructor.name !== 'UWebSocketGateRenderer') return;
-
-            // Обновляем таблицу датчиков
-            if (typeof renderer.handleSSEUpdate === 'function') {
-                renderer.handleSSEUpdate(sensors);
-            }
-
-            // Обновляем графики
-            updateChartsFromBatch(tabKey, sensors, 'ws', event.timestamp, { showSupplier: true });
-        } catch (err) {
-            console.warn('SSE: Error обработки uwsgate_sensor_batch:', err);
-        }
-    });
-
-    // Обработка изменений статуса серверов
-    eventSource.addEventListener('server_status', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const serverId = event.serverId;
-            const connected = event.data?.connected ?? false;
-            console.log(`SSE: Сервер ${serverId} ${connected ? 'подключен' : 'отключен'}`);
-            updateServerStatus(serverId, connected);
-        } catch (err) {
-            console.warn('SSE: Error обработки server_status:', err);
-        }
-    });
-
-    // Обработка обновления списка объектов (при восстановлении связи)
-    eventSource.addEventListener('objects_list', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const serverId = event.serverId;
-            const serverName = event.serverName;
-            const objects = event.data?.objects ?? [];
-            console.log(`SSE: Сервер ${serverId} восстановил связь, объектов: ${objects.length}`);
-
-            // Обновляем статус сервера
-            updateServerStatus(serverId, true);
-
-            // Обновляем список объектов в sidebar
-            refreshObjectsList();
-
-            // Обновляем sidebar группы (могли появиться новые объекты)
-            if (typeof refreshSidebarGroups === 'function') {
-                refreshSidebarGroups();
-            }
-        } catch (err) {
-            console.warn('SSE: Error обработки objects_list:', err);
-        }
-    });
-
-    // Обработка изменения статуса контроля
-    eventSource.addEventListener('control_status', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            console.log('SSE: Control status changed:', event.data);
-            // Обновляем isController на основе нашего токена
-            const status = event.data;
-            status.isController = state.control.token &&
-                status.hasController &&
-                state.control.isController; // сохраняем если мы были контроллером
-
-            // Сервер не знает чей это токен, нужно запросить статус
-            fetch('/api/control/status', {
-                headers: { 'X-Control-Token': state.control.token || '' }
-            })
-                .then(r => r.json())
-                .then(data => {
-                    updateControlStatus(data);
-                })
-                .catch(err => {
-                    console.warn('Failed to refresh control status:', err);
-                    // Fallback: используем данные из события
-                    updateControlStatus(status);
-                });
-        } catch (err) {
-            console.warn('SSE: Error обработки control_status:', err);
-        }
-    });
-
-    // Обработка статуса Launcher'а
-    eventSource.addEventListener('launcher_status', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const tabKey = `launcher:${event.serverId}`;
-            const tabState = state.tabs.get(tabKey);
-            if (tabState?.renderer?.updateStatus) {
-                tabState.renderer.updateStatus(event.data);
-            }
-            // Обновляем индикатор в sidebar
-            updateLauncherNodeStatus(event.serverId, true);
-        } catch (err) {
-            console.warn('SSE: Error обработки launcher_status:', err);
-        }
-    });
-
-    // Обработка connectivity Launcher'а
-    eventSource.addEventListener('launcher_connection', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const connected = event.data?.connected ?? false;
-            updateLauncherNodeStatus(event.serverId, connected);
-
-            // Обновляем renderer если вкладка открыта
-            const tabKey = `launcher:${event.serverId}`;
-            const tabState = state.tabs.get(tabKey);
-            if (tabState?.renderer?.updateConnectionStatus) {
-                tabState.renderer.updateConnectionStatus(connected);
-            }
-        } catch (err) {
-            console.warn('SSE: Error обработки launcher_connection:', err);
-        }
-    });
-
-    // Обработка изменения connectivity журнала
-    eventSource.addEventListener('journal_connection', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const journalId = event.data?.journalId;
-            const connected = event.data?.connected ?? false;
-            if (journalId && typeof updateJournalConnectionStatus === 'function') {
-                updateJournalConnectionStatus(journalId, connected);
-            }
-        } catch (err) {
-            console.warn('SSE: Error обработки journal_connection:', err);
-        }
-    });
-
-    // Обработка сообщений журнала
-    eventSource.addEventListener('journal_messages', (e) => {
-        try {
-            const event = JSON.parse(e.data);
-            const data = event.data;
-            if (data && journalManager) {
-                journalManager.handleSSEMessage(data);
-            }
-        } catch (err) {
-            console.warn('SSE: Error обработки journal_messages:', err);
-        }
-    });
+    // Все остальные SSE события — единый attach через _sseHandlers lookup.
+    _attachSseHandlers(eventSource);
 
     eventSource.onerror = (e) => {
-        console.warn('SSE: Error соединения');
+        console.warn('SSE: connection error');
         state.sse.connected = false;
         stopServerStatusSync();
 
@@ -1162,12 +1323,12 @@ function initSSE() {
 
         if (state.sse.reconnectAttempts < state.sse.maxReconnectAttempts) {
             state.sse.reconnectAttempts++;
-            // Exponential backoff: baseDelay * 2^(attempt-1) с jitter ±10%
+            // Exponential backoff: baseDelay * 2^(attempt-1) с jitter ±SSE_RECONNECT_JITTER_RATIO
             const expDelay = state.sse.baseReconnectDelay * Math.pow(2, state.sse.reconnectAttempts - 1);
             const cappedDelay = Math.min(expDelay, state.sse.maxReconnectDelay);
-            const jitter = cappedDelay * 0.1 * (Math.random() * 2 - 1); // ±10%
+            const jitter = cappedDelay * SSE_RECONNECT_JITTER_RATIO * (Math.random() * 2 - 1);
             const delay = Math.round(cappedDelay + jitter);
-            console.log(`SSE: Переподключение через ${delay}ms (попытка ${state.sse.reconnectAttempts}/${state.sse.maxReconnectAttempts})`);
+            debugLog(`SSE: Переподключение через ${delay}ms (попытка ${state.sse.reconnectAttempts}/${state.sse.maxReconnectAttempts})`);
             updateSSEStatus('reconnecting');
             state.sse.reconnectTimerId = setTimeout(initSSE, delay);
         } else {
@@ -1178,18 +1339,19 @@ function initSSE() {
     };
 
     eventSource.onopen = () => {
-        console.log('SSE: Соединение открыто');
+        debugLog('SSE: Соединение открыто');
     };
 }
 
 // Включить polling как fallback при недоступности SSE
 function enablePollingFallback() {
-    console.log('Polling: Включение fallback режима');
+    debugLog('Polling: Включение fallback режима');
 
-    // Периодически обновляем sidebar (статусы серверов и список объектов)
+    // Периодически обновляем sidebar (статусы серверов и список объектов).
+    // Реже чем данные объектов — это служебная синхронизация sidebar UI.
     state.sse.sidebarPollInterval = setInterval(() => {
         refreshObjectsList();
-    }, state.sse.pollInterval * 6); // Реже чем данные объектов
+    }, state.sse.pollInterval * SSE_SIDEBAR_POLL_MULTIPLIER);
 
     state.tabs.forEach((tabState, tabKey) => {
         // Включаем polling для данных объекта
@@ -1198,7 +1360,7 @@ function enablePollingFallback() {
                 () => loadObjectData(tabKey),
                 state.sse.pollInterval
             );
-            console.log('Polling: Включен для', tabState.displayName, '(tab:', tabKey, ')');
+            debugLog('Polling: Включен для', tabState.displayName, '(tab:', tabKey, ')');
         }
 
         // Включаем polling для графиков
@@ -1218,7 +1380,7 @@ function enablePollingFallback() {
 
 // Отключить polling fallback (при восстановлении SSE)
 function disablePollingFallback() {
-    console.log('Polling: Отключение fallback режима');
+    debugLog('Polling: Отключение fallback режима');
 
     // Останавливаем polling sidebar
     if (state.sse.sidebarPollInterval) {
@@ -1257,13 +1419,13 @@ function disablePollingFallback() {
 function startSSERecoveryProbe() {
     if (state.sse.recoveryProbeInterval) return;
 
-    console.log('SSE: Запуск recovery probe каждые', SSE_RECOVERY_PROBE_INTERVAL, 'ms');
+    debugLog('SSE: Запуск recovery probe каждые', SSE_RECOVERY_PROBE_INTERVAL, 'ms');
 
     state.sse.recoveryProbeInterval = setInterval(async () => {
         try {
             const response = await fetch('/api/version', { method: 'HEAD' });
             if (response.ok) {
-                console.log('SSE: Сервер доступен, восстанавливаем SSE');
+                debugLog('SSE: Сервер доступен, восстанавливаем SSE');
                 disablePollingFallback();
                 state.sse.reconnectAttempts = 0;
                 initSSE();
@@ -1278,33 +1440,31 @@ function startSSERecoveryProbe() {
 function startServerStatusSync() {
     stopServerStatusSync();
     state.sse.statusSyncInterval = setInterval(async () => {
-        // Серверы
-        try {
-            const resp = await fetchServers();
-            if (resp?.servers) {
-                resp.servers.forEach(s => updateServerStatus(s.id, s.connected));
-            }
-        } catch (err) { /* фоновая синхронизация */ }
-
-        // Launcher'ы
-        try {
-            const lr = await fetch('/api/launchers');
-            if (lr.ok) {
+        // Все три запроса (серверы / launcher'ы / журналы) независимы — гоним
+        // параллельно через Promise.allSettled, фоновая ошибка одного не должна
+        // мешать остальным.
+        await Promise.allSettled([
+            (async () => {
+                const resp = await fetchServers();
+                if (resp?.servers) {
+                    resp.servers.forEach(s => updateServerStatus(s.id, s.connected));
+                }
+            })(),
+            (async () => {
+                const lr = await fetch('/api/launchers');
+                if (!lr.ok) return;
                 const data = await lr.json();
                 (data?.launchers || []).forEach(l => updateLauncherNodeStatus(l.id, l.connected));
-            }
-        } catch (err) { /* фоновая синхронизация */ }
-
-        // Журналы
-        try {
-            const jr = await fetch('/api/journals');
-            if (jr.ok) {
+            })(),
+            (async () => {
+                const jr = await fetch('/api/journals');
+                if (!jr.ok) return;
                 const data = await jr.json();
                 if (typeof updateJournalConnectionStatus === 'function') {
                     (data || []).forEach(j => updateJournalConnectionStatus(j.id, j.connected));
                 }
-            }
-        } catch (err) { /* фоновая синхронизация */ }
+            })(),
+        ]);
     }, SSE_RECOVERY_PROBE_INTERVAL);
 }
 
@@ -1317,7 +1477,7 @@ function stopServerStatusSync() {
 
 // Переподписка всех открытых вкладок после восстановления SSE
 function resubscribeAll() {
-    console.log('SSE: Переподписка всех вкладок после переподключения');
+    debugLog('SSE: Переподписка всех вкладок после переподключения');
     state.tabs.forEach((tabState, tabKey) => {
         const renderer = tabState.renderer;
         if (renderer?.resubscribeIfNeeded) {
@@ -1347,7 +1507,6 @@ document.addEventListener('visibilitychange', () => {
 });
 
 
-
 // === 06-utils.js ===
 // ============================================================================
 // Общие утилиты
@@ -1355,22 +1514,65 @@ document.addEventListener('visibilitychange', () => {
 
 // Экранирование HTML для безопасной вставки текста
 function escapeHtml(text) {
-    if (!text) return '';
+    if (text === null || text === undefined) return '';
     const div = document.createElement('div');
-    div.textContent = text;
+    div.textContent = String(text);
     return div.innerHTML;
 }
 
+// Экранирование строки для вставки внутрь HTML-атрибута (`attr="..."`).
+// escapeHtml() не покрывает кавычки/апострофы (textContent → innerHTML
+// сериализует только <, >, &), поэтому в attribute context кавычка в
+// значении ломает разметку. Используй здесь, когда подставляешь dynamic
+// данные внутрь quoted attribute.
+function escapeAttr(text) {
+    if (text === null || text === undefined) return '';
+    const s = String(text);
+    if (s === '') return '';
+    return s
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+if (typeof globalThis !== 'undefined') {
+    globalThis.escapeHtml = escapeHtml;
+    globalThis.escapeAttr = escapeAttr;
+}
+
+function buildObjectUrl(objectName, objectPath = '', serverId = null, query = null) {
+    const normalizedPath = objectPath
+        ? (objectPath.startsWith('/') ? objectPath : `/${objectPath}`)
+        : '';
+    const params = [];
+    Object.entries(query || {}).forEach(([key, value]) => {
+        if (value !== null && value !== undefined) {
+            params.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+        }
+    });
+    if (serverId) {
+        params.push(`server=${encodeURIComponent(serverId)}`);
+    }
+    const queryString = params.length > 0 ? `?${params.join('&')}` : '';
+    return `/api/objects/${encodeURIComponent(objectName)}${normalizedPath}${queryString}`;
+}
+
 // Универсальный resize-handle: mousedown → mousemove → mouseup паттерн
-function setupResizeHandle(handle, container, minHeight, onSave) {
+function setupResizeHandle(handle, container, minHeight, onSave, maxHeight = Infinity, onResize = null, options = {}) {
     if (!handle || !container) return;
     let startY = 0, startHeight = 0, isResizing = false;
+    const direction = options.direction === -1 ? -1 : 1;
+    const updateMaxHeight = options.updateMaxHeight !== false;
 
     const onMouseMove = (e) => {
         if (!isResizing) return;
-        const newHeight = Math.max(minHeight, startHeight + e.clientY - startY);
+        const delta = (e.clientY - startY) * direction;
+        const newHeight = Math.max(minHeight, Math.min(maxHeight, startHeight + delta));
         container.style.height = `${newHeight}px`;
-        container.style.maxHeight = `${newHeight}px`;
+        if (updateMaxHeight) container.style.maxHeight = `${newHeight}px`;
+        if (onResize) onResize(newHeight);
     };
     const onMouseUp = () => {
         if (!isResizing) return;
@@ -1379,7 +1581,7 @@ function setupResizeHandle(handle, container, minHeight, onSave) {
         document.removeEventListener('mouseup', onMouseUp);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
-        onSave(container.offsetHeight);
+        if (onSave) onSave(container.offsetHeight);
     };
     handle.addEventListener('mousedown', (e) => {
         e.preventDefault();
@@ -1401,6 +1603,928 @@ function debounce(fn, delay) {
         timer = setTimeout(() => fn.apply(this, args), delay);
     };
 }
+
+// Возвращает id первого подключённого сервера из state.servers,
+// или null если такого нет (или state ещё не инициализирован).
+// Используется dashboard'ом и активными widget'ами для legacy fallback.
+function getFirstConnectedServerId() {
+    if (typeof state === 'undefined' || !state.servers) return null;
+    for (const [id, server] of state.servers) {
+        if (server.connected) return id;
+    }
+    return null;
+}
+
+// Возвращает массив id всех connected серверов в порядке state.servers.
+// Используется для bootstrap-обходов (загрузка sensors per server, IONC objects).
+function getConnectedServerIds() {
+    if (typeof state === 'undefined' || !state.servers) return [];
+    const ids = [];
+    for (const [id, server] of state.servers) {
+        if (server?.connected) ids.push(id);
+    }
+    return ids;
+}
+
+// === localStorage helpers ===
+//
+// Каждый из этих helpers глотает SyntaxError/SecurityError и логирует через
+// console.warn — в SCADA-UI lost-write для пользовательской настройки лучше
+// тихого падения, но не должен валить остальной flow.
+
+// Прочитать JSON-объект из localStorage. Возвращает fallback при отсутствии
+// ключа, broken-JSON или недоступности storage (private mode).
+function loadJSON(key, fallback = null) {
+    try {
+        const raw = localStorage.getItem(key);
+        if (raw === null) return fallback;
+        return JSON.parse(raw);
+    } catch (err) {
+        console.warn(`loadJSON("${key}") failed:`, err);
+        return fallback;
+    }
+}
+
+// Записать JSON-объект в localStorage. true при успехе, false при ошибке.
+function saveJSON(key, value) {
+    try {
+        localStorage.setItem(key, JSON.stringify(value));
+        return true;
+    } catch (err) {
+        console.warn(`saveJSON("${key}") failed:`, err);
+        return false;
+    }
+}
+
+// Прочитать map-объект `{[k]: v}` из localStorage. Если значение есть, но не
+// объект (массив/число/строка) — вернёт defaults (это защита от старого
+// несовместимого формата).
+function loadStorageMap(key, defaults = {}) {
+    const v = loadJSON(key, defaults);
+    if (v === null || typeof v !== 'object' || Array.isArray(v)) return { ...defaults };
+    return v;
+}
+
+// Прочитать map-объект, передать его в mutator(map) для in-place мутации,
+// записать обратно. Удобно для save-merge паттерна (saved[key] = value).
+// Возвращает true при успехе.
+function updateStorageMap(key, mutator) {
+    const map = loadStorageMap(key);
+    mutator(map);
+    return saveJSON(key, map);
+}
+
+// Regex-escape: спрятать в literal-строке метасимволы regex'а.
+// Используется при построении динамического pattern из user input
+// (журнал highlight, log-viewer search).
+function escapeRegex(str) {
+    return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Универсальный fetch с проверкой ok и парсингом JSON.
+// Бросает Error('errPrefix: <details>') при HTTP-ошибке или сетевом сбое.
+// Используется тонким обёртом в helpers модулях (40-charts.js, base-renderer fetchJSON).
+async function fetchJSONOrThrow(url, opts = {}, errPrefix = 'Request') {
+    const response = await fetch(url, opts);
+    if (!response.ok) throw new Error(`${errPrefix}: HTTP ${response.status}`);
+    return response.json();
+}
+
+function parseNumberOrDefault(value, fallback) {
+    if (value === null || value === undefined || String(value).trim() === '') return fallback;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+}
+
+function parseDecimalInputOrDefault(value, fallback) {
+    if (value === null || value === undefined || String(value).trim() === '') return fallback;
+    const normalized = String(value).trim().replace(',', '.');
+    const n = Number(normalized);
+    return Number.isFinite(n) ? n : fallback;
+}
+
+function parseIntegerOrDefault(value, fallback) {
+    if (value === null || value === undefined || String(value).trim() === '') return fallback;
+    const n = parseInt(value, 10);
+    return Number.isFinite(n) ? n : fallback;
+}
+
+function percentInRange(value, min, max, scale = 1) {
+    const range = max - min;
+    if (!Number.isFinite(value) || !Number.isFinite(range) || range <= 0) return 0;
+    return Math.max(0, Math.min(scale, ((value - min) / range) * scale));
+}
+
+function createLineChartDataset(dataset) {
+    const color = dataset.color || dataset.borderColor || '#3274d9';
+    const isStepped = dataset.isDiscrete || dataset.stepped === true || dataset.stepped === 'before';
+    const stepped = dataset.stepped !== undefined
+        ? (dataset.stepped === true ? 'before' : dataset.stepped)
+        : (dataset.isDiscrete ? 'before' : false);
+
+    return {
+        label: dataset.label,
+        data: dataset.data || [],
+        borderColor: color,
+        backgroundColor: dataset.backgroundColor || `${color}20`,
+        fill: dataset.fill !== undefined ? dataset.fill : true,
+        tension: dataset.tension !== undefined ? dataset.tension : (isStepped ? 0 : CHART_LINE_TENSION),
+        stepped,
+        pointRadius: dataset.pointRadius ?? 0,
+        borderWidth: dataset.borderWidth !== undefined ? dataset.borderWidth : (isStepped ? CHART_STEPPED_LINE_BORDER_WIDTH : CHART_LINE_BORDER_WIDTH)
+    };
+}
+
+function createLineChartConfig({ datasets = [], timeRange = {}, options = {} }) {
+    const discreteYAxis = options.discreteYAxis !== undefined
+        ? options.discreteYAxis
+        : datasets.length === 1 && Boolean(datasets[0]?.isDiscrete);
+
+    const tooltip = {
+        backgroundColor: CHART_THEME.tooltipBg,
+        titleColor: CHART_THEME.tooltipText,
+        bodyColor: CHART_THEME.tooltipText,
+        borderColor: CHART_THEME.gridLine,
+        borderWidth: 1
+    };
+    if (options.tooltipEnabled !== undefined) {
+        tooltip.enabled = options.tooltipEnabled;
+    }
+
+    const plugins = {
+        legend: options.legend || { display: false },
+        tooltip
+    };
+    if (options.decimation) {
+        plugins.decimation = {
+            enabled: true,
+            algorithm: options.decimationAlgorithm || 'min-max'
+        };
+    }
+
+    const chartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: {
+            intersect: false,
+            mode: options.interactionMode || 'index'
+        },
+        scales: {
+            x: {
+                type: 'time',
+                display: true,
+                grid: {
+                    color: CHART_THEME.gridLine,
+                    drawBorder: false
+                },
+                ticks: {
+                    color: CHART_THEME.tickColor,
+                    maxTicksLimit: options.xMaxTicksLimit ?? 10,
+                    display: options.xTicksDisplay ?? true
+                },
+                time: {
+                    displayFormats: {
+                        second: 'HH:mm:ss',
+                        minute: 'HH:mm',
+                        hour: 'HH:mm'
+                    }
+                },
+                min: timeRange.min,
+                max: timeRange.max
+            },
+            y: {
+                display: true,
+                position: 'left',
+                beginAtZero: discreteYAxis ? true : undefined,
+                suggestedMin: discreteYAxis ? 0 : undefined,
+                suggestedMax: discreteYAxis ? 1.1 : undefined,
+                grid: {
+                    color: CHART_THEME.gridLine,
+                    drawBorder: false
+                },
+                ticks: {
+                    color: CHART_THEME.tickColor,
+                    stepSize: discreteYAxis ? 1 : undefined
+                }
+            }
+        },
+        plugins
+    };
+
+    if (options.yMaxTicksLimit !== undefined) {
+        chartOptions.scales.y.ticks.maxTicksLimit = options.yMaxTicksLimit;
+    }
+    if (options.autoSkip !== undefined) {
+        chartOptions.scales.x.ticks.autoSkip = options.autoSkip;
+    }
+    if (options.tickSource !== undefined) {
+        chartOptions.scales.x.ticks.source = options.tickSource;
+    }
+    ['normalized', 'parsing', 'spanGaps'].forEach((key) => {
+        if (options[key] !== undefined) {
+            chartOptions[key] = options[key];
+        }
+    });
+
+    return {
+        type: 'line',
+        data: {
+            datasets: datasets.map(createLineChartDataset)
+        },
+        options: chartOptions
+    };
+}
+
+function bindSingleDoubleClick(element, onSingle, onDouble, delay = DOUBLE_CLICK_THRESHOLD) {
+    if (!element) return () => {};
+    let clickTimer = null;
+    const handler = () => {
+        if (clickTimer) {
+            clearTimeout(clickTimer);
+            clickTimer = null;
+            onDouble();
+            return;
+        }
+        clickTimer = setTimeout(() => {
+            clickTimer = null;
+            onSingle();
+        }, delay);
+    };
+    element.addEventListener('click', handler);
+    return () => {
+        if (clickTimer) clearTimeout(clickTimer);
+        element.removeEventListener('click', handler);
+    };
+}
+
+function isDebugLogEnabled() {
+    try {
+        return window.UNISET_UI_DEBUG === true
+            || localStorage.getItem(UI_DEBUG_LOG_STORAGE_KEY) === 'true';
+    } catch (e) {
+        return false;
+    }
+}
+
+function debugLog(...args) {
+    if (isDebugLogEnabled()) {
+        console.log(...args);
+    }
+}
+
+// computeSensorChunkPagination — общая семантика IONC sensor list response.
+// Backend возвращает { count, size, sensors[] } где:
+//   data.size  — TOTAL count датчиков на объекте
+//   data.count — размер текущего chunk'а (НЕ total, НЕ используется здесь)
+//   data.sensors — items этого chunk'а
+// Если backend не вернул size — fallback heuristic: получили ровно chunkSize
+// items → возможно есть ещё (доберём; если нет — empty chunk остановит цикл).
+//
+// Используется setupSensorAutocomplete (41-sensor-autocomplete.js) и SM-renderer
+// (20-ionc-renderer.js). Возвращает { total, hasMore } — caller сам управляет
+// state'ом (currentItems, currentOffset).
+function computeSensorChunkPagination(currentItemsLength, data, chunkSize) {
+    const reportedTotal = (data && typeof data.size === 'number' && data.size > 0)
+        ? data.size : null;
+    const lastChunkSize = (data && Array.isArray(data.sensors)) ? data.sensors.length : 0;
+    if (reportedTotal !== null) {
+        return { total: reportedTotal, hasMore: currentItemsLength < reportedTotal };
+    }
+    const probablyMore = lastChunkSize === chunkSize;
+    return {
+        total: currentItemsLength + (probablyMore ? 1 : 0),
+        hasMore: probablyMore,
+    };
+}
+
+function renderColorZoneItem(zone = {}, index = 0, defaultColor = '#ef4444') {
+    return `
+        <div class="zone-item">
+            <input type="color" class="zone-color" name="zone-color-${index}" value="${escapeAttr(zone.color || defaultColor)}">
+            <div class="zone-inputs">
+                <input type="number" class="zone-input" name="zone-from-${index}" value="${escapeAttr(zone.from ?? WIDGET_DEFAULT_MIN)}" placeholder="From">
+                <span class="zone-separator">→</span>
+                <input type="number" class="zone-input" name="zone-to-${index}" value="${escapeAttr(zone.to ?? WIDGET_DEFAULT_MAX)}" placeholder="To">
+            </div>
+            <button type="button" class="zone-remove-btn" onclick="removeZoneField(this)">×</button>
+        </div>
+    `;
+}
+
+function renderColorZonesEditor(zones = [], defaultColor = '#ef4444') {
+    return `
+        <div class="zones-editor">
+            <div class="zones-header">
+                <label>Color Zones</label>
+                <button type="button" class="zones-add-btn" onclick="addZoneField(this)">+ Add Zone</button>
+            </div>
+            <div class="zones-list" id="zones-list">
+                ${zones.map((zone, index) => renderColorZoneItem(zone, index, defaultColor)).join('')}
+            </div>
+        </div>
+    `;
+}
+
+function parseColorZones(container) {
+    const zones = [];
+    container.querySelectorAll('.zone-item').forEach((item) => {
+        const color = item.querySelector('.zone-color')?.value;
+        const inputs = item.querySelectorAll('.zone-input');
+        const from = parseFloat(inputs[0]?.value);
+        const to = parseFloat(inputs[1]?.value);
+        if (color && !isNaN(from) && !isNaN(to)) zones.push({ from, to, color });
+    });
+    return zones;
+}
+
+function canonicalizeZones(zones) {
+    if (!Array.isArray(zones)) return '';
+    const normalized = zones
+        .map(z => ({
+            from:  Number(Number(z.from).toFixed(6)),
+            to:    Number(Number(z.to).toFixed(6)),
+            color: String(z.color || '').toLowerCase(),
+        }))
+        .sort((a, b) => a.from - b.from);
+    return JSON.stringify(normalized);
+}
+
+function getZonesHistory() {
+    try {
+        const raw = localStorage.getItem(ZONES_HISTORY_STORAGE_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+}
+
+function addZonesToHistory(zones, sourceWidgetType) {
+    if (!Array.isArray(zones) || zones.length === 0) return;
+    const normalized = zones.map(z => ({
+        from:  Number(Number(z.from).toFixed(6)),
+        to:    Number(Number(z.to).toFixed(6)),
+        color: String(z.color || '').toLowerCase(),
+    }));
+    const key = canonicalizeZones(normalized);
+    const history = getZonesHistory();
+    const filtered = history.filter(item => canonicalizeZones(item.zones) !== key);
+    filtered.unshift({
+        zones:            normalized,
+        timestamp:        Date.now(),
+        sourceWidgetType: sourceWidgetType || '',
+    });
+    const capped = filtered.slice(0, ZONES_HISTORY_MAX);
+    try {
+        localStorage.setItem(ZONES_HISTORY_STORAGE_KEY, JSON.stringify(capped));
+    } catch (e) {
+        console.warn('addZonesToHistory: localStorage write failed', e);
+    }
+}
+
+function renderZoneChipBar(zones) {
+    if (!Array.isArray(zones) || zones.length === 0) {
+        return '<span class="zone-bar"></span>';
+    }
+    const spans = zones.map(z => {
+        const weight = Math.max(1, Number(z.to) - Number(z.from));
+        const color = escapeAttr(String(z.color || '#888'));
+        // flex: <weight> 0 auto — grow proportionally, do NOT shrink, basis=natural-content.
+        // Иначе при длинных labels (например '-180–0') flex-basis:0 + shrink:1 + overflow:hidden
+        // на parent .zone-bar обрезали бы текст в узких диалогах.
+        return `<span style="background:${color};flex:${weight} 0 auto">${escapeHtml(`${z.from}–${z.to}`)}</span>`;
+    }).join('');
+    return `<span class="zone-bar">${spans}</span>`;
+}
+
+function getDashboardZoneSources(currentDashboardId, excludeWidgetId) {
+    const state = globalThis.dashboardState;
+    if (!state || !state.dashboards) return [];
+    const dash = state.dashboards.get(currentDashboardId);
+    if (!dash || !Array.isArray(dash.widgets)) return [];
+    // Dedup по canonical key — несколько widget'ов с одинаковыми zones
+    // отображаются одним chip'ом (label = первый встреченный sensor).
+    const seen = new Set();
+    const result = [];
+    for (const w of dash.widgets) {
+        if (w.id === excludeWidgetId) continue;
+        if (!Array.isArray(w.config?.zones) || w.config.zones.length === 0) continue;
+        const key = canonicalizeZones(w.config.zones);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        result.push({
+            widgetId: w.id,
+            widgetType: w.type,
+            sensorLabel: w.config.sensor || w.config.label || w.id,
+            zones: w.config.zones,
+        });
+    }
+    return result;
+}
+
+function _renderZoneChipFromSource(zones, sourceLabel, sourceClass) {
+    const json = escapeAttr(JSON.stringify(zones));
+    const labelHtml = escapeHtml(sourceLabel);
+    const labelClass = sourceClass === 'recent' ? 'chip-source recent-source' : 'chip-source';
+    return `<div class="zone-chip" data-zones-json="${json}" role="button" tabindex="0">${renderZoneChipBar(zones)}<span class="${labelClass}">${labelHtml}</span></div>`;
+}
+
+function _formatRelativeTime(timestamp) {
+    const diff = Date.now() - timestamp;
+    const sec = Math.floor(diff / 1000);
+    if (sec < 60) return 'just now';
+    const min = Math.floor(sec / 60);
+    if (min < 60) return `${min}m ago`;
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return `${hr}h ago`;
+    const day = Math.floor(hr / 24);
+    if (day < 30) return `${day}d ago`;
+    return new Date(timestamp).toISOString().slice(0, 10);
+}
+
+function _widgetTypeDisplayName(type) {
+    const types = globalThis.WIDGET_TYPES || {};
+    return types[type]?.displayName || type;
+}
+
+function renderZonesReusePicker(currentWidgetType, currentDashboardId, currentWidgetId) {
+    const dashSourcesAll = getDashboardZoneSources(currentDashboardId, currentWidgetId || '');
+    const history = getZonesHistory();
+    // Дедуп: если zone-set уже есть в Recent — не дублировать его ниже в
+    // type-блоках (Setpoint/Gauge/Level), иначе тот же chip виден дважды.
+    const historyKeys = new Set(history.map(h => canonicalizeZones(h.zones)));
+    const dashSources = dashSourcesAll.filter(src => !historyKeys.has(canonicalizeZones(src.zones)));
+    if (dashSources.length === 0 && history.length === 0) return '';
+
+    // Group dashboard sources by widget type
+    const byType = new Map();
+    dashSources.forEach(src => {
+        if (!byType.has(src.widgetType)) byType.set(src.widgetType, []);
+        byType.get(src.widgetType).push(src);
+    });
+
+    // Order: current-type first, then alphabetical by displayName
+    const orderedTypes = Array.from(byType.keys()).sort((a, b) => {
+        if (a === currentWidgetType) return -1;
+        if (b === currentWidgetType) return 1;
+        return _widgetTypeDisplayName(a).localeCompare(_widgetTypeDisplayName(b));
+    });
+
+    const totalCount = dashSources.length + history.length;
+
+    let groupsHtml = '';
+
+    if (history.length > 0) {
+        const recentChips = history.map(item => {
+            const label = _formatRelativeTime(item.timestamp);
+            return _renderZoneChipFromSource(item.zones, label, 'recent');
+        }).join('');
+        groupsHtml += `
+            <div class="group-label group-recent">
+                <span>★ Recent</span>
+                <span class="group-count">(${history.length})</span>
+                <span class="group-divider"></span>
+            </div>
+            <div>${recentChips}</div>
+        `;
+    }
+
+    orderedTypes.forEach(type => {
+        const list = byType.get(type);
+        const isSame = type === currentWidgetType;
+        const labelClass = isSame ? 'group-label group-same-class' : 'group-label';
+        const typeName = escapeHtml(_widgetTypeDisplayName(type));
+        const suffix = isSame ? ` · same type` : '';
+        const chips = list.map(src => _renderZoneChipFromSource(src.zones, src.sensorLabel, '')).join('');
+        groupsHtml += `
+            <div class="${labelClass}">
+                <span>${typeName}</span>
+                <span class="group-count">(${list.length})${suffix}</span>
+                <span class="group-divider"></span>
+            </div>
+            <div>${chips}</div>
+        `;
+    });
+
+    return `
+        <div class="reuse-picker">
+            <div class="reuse-header">
+                <span>Reuse zones</span>
+                <span class="reuse-count">${totalCount} saved</span>
+            </div>
+            <div class="reuse-scroll" style="max-height:${ZONES_PICKER_MAX_HEIGHT_PX}px">${groupsHtml}</div>
+        </div>
+    `;
+}
+
+function applyZonesToEditor(form, zones) {
+    if (!form || !Array.isArray(zones)) return;
+    const list = form.querySelector('.zones-list');
+    if (!list) return;
+    list.innerHTML = zones.map((z, idx) => renderColorZoneItem(z, idx, '#888')).join('');
+}
+
+function setupZonesReusePicker(form) {
+    if (!form || form.dataset.zonesPickerWired === '1') return;
+    form.dataset.zonesPickerWired = '1';
+    form.addEventListener('click', (e) => {
+        const chip = e.target.closest('.zone-chip');
+        if (!chip || !form.contains(chip)) return;
+        const raw = chip.dataset.zonesJson;
+        if (!raw) return;
+        let zones;
+        try { zones = JSON.parse(raw); } catch { return; }
+        if (!Array.isArray(zones)) return;
+        applyZonesToEditor(form, zones);
+    });
+}
+
+function mountZonesReusePicker(form, widgetType) {
+    if (!form) return;
+    const dashId = globalThis.dashboardState?.currentDashboard ?? '';
+    const widgetId = form.dataset.widgetId || '';
+    const html = renderZonesReusePicker(widgetType, dashId, widgetId);
+    // Render target: replace existing .reuse-picker (legacy placement) OR insert before .zones-editor.
+    const existing = form.querySelector('.reuse-picker');
+    if (existing) {
+        existing.outerHTML = html;
+    } else if (html) {
+        const editor = form.querySelector('.zones-editor');
+        if (editor) editor.insertAdjacentHTML('beforebegin', html);
+    }
+    setupZonesReusePicker(form);
+}
+
+if (typeof globalThis !== 'undefined') {
+    globalThis.parseNumberOrDefault = parseNumberOrDefault;
+    globalThis.parseDecimalInputOrDefault = parseDecimalInputOrDefault;
+    globalThis.parseIntegerOrDefault = parseIntegerOrDefault;
+    globalThis.createLineChartConfig = createLineChartConfig;
+    globalThis.setupResizeHandle = setupResizeHandle;
+    globalThis.bindSingleDoubleClick = bindSingleDoubleClick;
+    globalThis.renderColorZoneItem = renderColorZoneItem;
+    globalThis.renderColorZonesEditor = renderColorZonesEditor;
+    globalThis.parseColorZones = parseColorZones;
+    globalThis.getFirstConnectedServerId = getFirstConnectedServerId;
+    globalThis.getConnectedServerIds = getConnectedServerIds;
+    globalThis.loadJSON = loadJSON;
+    globalThis.saveJSON = saveJSON;
+    globalThis.loadStorageMap = loadStorageMap;
+    globalThis.updateStorageMap = updateStorageMap;
+    globalThis.escapeRegex = escapeRegex;
+    globalThis.fetchJSONOrThrow = fetchJSONOrThrow;
+    globalThis.computeSensorChunkPagination = computeSensorChunkPagination;
+    globalThis.canonicalizeZones = canonicalizeZones;
+    globalThis.getZonesHistory = getZonesHistory;
+    globalThis.addZonesToHistory = addZonesToHistory;
+    globalThis.getDashboardZoneSources = getDashboardZoneSources;
+    globalThis.renderZoneChipBar = renderZoneChipBar;
+    globalThis.renderZonesReusePicker = renderZonesReusePicker;
+    globalThis.applyZonesToEditor = applyZonesToEditor;
+    globalThis.setupZonesReusePicker = setupZonesReusePicker;
+    globalThis.mountZonesReusePicker = mountZonesReusePicker;
+}
+
+
+// === 08-signal-generator.js ===
+// ============================================================================
+// SignalGenerator — общий движок генерации сигналов
+// (square/sin/cos/linear/random) с lifecycle тиков.
+//
+// Используется IONC renderer'ом (20-ionc-renderer.js) и активными виджетами
+// dashboard'а (61-active-generator.js).
+//
+// Контракт: pure value-functions + setInterval-менеджер + onTick колбэк.
+// ============================================================================
+
+const SIGNAL_GENERATOR_ALLOWED_TYPES = new Set(['square', 'sin', 'cos', 'linear', 'random']);
+
+function getSignalGeneratorType(rawType) {
+    return SIGNAL_GENERATOR_ALLOWED_TYPES.has(rawType) ? rawType : 'square';
+}
+
+function readSignalGeneratorNumber(raw, name, fallback) {
+    return parseDecimalInputOrDefault(raw[name], fallback);
+}
+
+const SIGNAL_GENERATOR_TYPE_RULES = {
+    linear: {
+        validate({ readNumber, min, max }) {
+            const pause = readNumber('pause');
+            const step = readNumber('step');
+            if (!Number.isFinite(pause) || !Number.isFinite(step)) {
+                return 'Пауза и Шаг должны быть числами';
+            }
+            if (pause < GENERATOR_MIN_WAVE_PAUSE_MS) {
+                return `Пауза должна быть не менее ${GENERATOR_MIN_WAVE_PAUSE_MS}мс`;
+            }
+            if (step === 0) {
+                return 'Шаг не может быть равен 0';
+            }
+            if (Math.abs(step) > (max - min)) {
+                return 'Шаг должен быть меньше или равен разности Max - Min';
+            }
+            return '';
+        },
+        normalize({ readNumber }) {
+            const step = readNumber('step', GENERATOR_DEFAULT_LINEAR_STEP);
+            return {
+                step: step !== 0 ? step : GENERATOR_DEFAULT_LINEAR_STEP,
+                pause: Math.max(GENERATOR_MIN_WAVE_PAUSE_MS, readNumber('pause', GENERATOR_DEFAULT_WAVE_PAUSE_MS)),
+            };
+        },
+    },
+    sin: {
+        validate: validateWaveSignalGeneratorConfig,
+        normalize: normalizeWaveSignalGeneratorConfig,
+    },
+    cos: {
+        validate: validateWaveSignalGeneratorConfig,
+        normalize: normalizeWaveSignalGeneratorConfig,
+    },
+    square: {
+        validate({ readNumber }) {
+            const pulseWidth = readNumber('pulseWidth');
+            const pause = readNumber('pause');
+            if (!Number.isFinite(pulseWidth) || !Number.isFinite(pause)) {
+                return 'Ширина импульса и Пауза должны быть числами';
+            }
+            if (pulseWidth < GENERATOR_MIN_PULSE_WIDTH_MS) {
+                return 'Ширина импульса должна быть больше 0';
+            }
+            if (pause < GENERATOR_MIN_PAUSE_MS) {
+                return 'Пауза должна быть больше 0';
+            }
+            return '';
+        },
+        normalize({ readNumber }) {
+            return {
+                pulseWidth: Math.max(
+                    GENERATOR_MIN_PULSE_WIDTH_MS,
+                    readNumber('pulseWidth', GENERATOR_DEFAULT_PULSE_WIDTH_MS)
+                ),
+                pause: Math.max(GENERATOR_MIN_PAUSE_MS, readNumber('pause', GENERATOR_DEFAULT_SQUARE_PAUSE_MS)),
+            };
+        },
+    },
+    random: {
+        validate({ readNumber }) {
+            const period = readNumber('period');
+            if (!Number.isFinite(period)) {
+                return 'Период должен быть числом';
+            }
+            if (period < GENERATOR_MIN_PERIOD_MS) {
+                return `Период должен быть не менее ${GENERATOR_MIN_PERIOD_MS}мс`;
+            }
+            return '';
+        },
+        normalize({ readNumber }) {
+            return {
+                period: Math.max(GENERATOR_MIN_PERIOD_MS, readNumber('period', GENERATOR_DEFAULT_RANDOM_PERIOD_MS)),
+            };
+        },
+    },
+};
+
+function validateWaveSignalGeneratorConfig({ readNumber }) {
+    const pause = readNumber('pause');
+    const step = readNumber('step');
+    if (!Number.isFinite(pause) || !Number.isFinite(step)) {
+        return 'Шаг обновления и Количество точек должны быть числами';
+    }
+    if (pause < GENERATOR_MIN_WAVE_PAUSE_MS) {
+        return `Шаг обновления должен быть не менее ${GENERATOR_MIN_WAVE_PAUSE_MS}мс`;
+    }
+    if (step < GENERATOR_MIN_WAVE_POINTS) {
+        return `Количество точек должно быть не менее ${GENERATOR_MIN_WAVE_POINTS}`;
+    }
+    return '';
+}
+
+function normalizeWaveSignalGeneratorConfig({ readNumber }) {
+    const points = Math.floor(Math.abs(readNumber('step', GENERATOR_DEFAULT_WAVE_POINTS)));
+    return {
+        step: Math.max(GENERATOR_MIN_WAVE_POINTS, points),
+        pause: Math.max(GENERATOR_MIN_WAVE_PAUSE_MS, readNumber('pause', GENERATOR_DEFAULT_WAVE_PAUSE_MS)),
+    };
+}
+
+function validateSignalGeneratorConfig(raw = {}) {
+    const type = getSignalGeneratorType(raw.type);
+    const readNumber = (name) => readSignalGeneratorNumber(raw, name, NaN);
+
+    const min = readNumber('min');
+    const max = readNumber('max');
+    if (!Number.isFinite(min) || !Number.isFinite(max)) {
+        return 'Min и Max должны быть числами';
+    }
+    if (min >= max) {
+        return 'Min должен быть меньше Max';
+    }
+
+    return SIGNAL_GENERATOR_TYPE_RULES[type].validate({ readNumber, min, max });
+}
+
+function normalizeSignalGeneratorConfig(raw = {}) {
+    const type = getSignalGeneratorType(raw.type);
+    const readNumber = (name, fallback) => readSignalGeneratorNumber(raw, name, fallback);
+
+    const minRaw = readNumber('min', GENERATOR_DEFAULT_MIN);
+    const maxRaw = readNumber('max', GENERATOR_DEFAULT_MAX);
+    const min = Math.min(minRaw, maxRaw);
+    let max = Math.max(minRaw, maxRaw);
+    if (max === min) max = min + 1;
+
+    return {
+        type,
+        min,
+        max,
+        ...SIGNAL_GENERATOR_TYPE_RULES[type].normalize({ readNumber, min, max }),
+    };
+}
+
+class SignalGenerator {
+    /**
+     * @param {Object} cfg
+     * @param {string} cfg.type   'square' | 'sin' | 'cos' | 'linear' | 'random'
+     * @param {number} cfg.min
+     * @param {number} cfg.max
+     * @param {number} [cfg.step]         для linear/sin/cos
+     * @param {number} [cfg.pause]        для linear/sin/cos/square (мс)
+     * @param {number} [cfg.pulseWidth]   для square (мс)
+     * @param {number} [cfg.period]       для random (мс)
+     * @param {Function} cfg.onTick       (value) => void
+     */
+    constructor(cfg) {
+        this.type = cfg.type;
+        this.min = cfg.min;
+        this.max = cfg.max;
+        this.step = cfg.step;
+        this.pause = cfg.pause;
+        this.pulseWidth = cfg.pulseWidth;
+        this.period = cfg.period;
+        this.onTick = cfg.onTick;
+
+        this.intervalId = null;
+        this.startTime = 0;
+    }
+
+    // Интервал обновления подбирается по типу — ~20 обновлений за период.
+    computeUpdateInterval() {
+        if (this.type === 'square') {
+            return Math.max(
+                SIGNAL_GENERATOR_MIN_UPDATE_INTERVAL_MS,
+                Math.floor((this.pulseWidth + this.pause) / SIGNAL_GENERATOR_TICKS_PER_PERIOD)
+            );
+        }
+        if (this.type === 'linear' || this.type === 'sin' || this.type === 'cos') {
+            return Math.max(this.pause, SIGNAL_GENERATOR_MIN_UPDATE_INTERVAL_MS);
+        }
+        // random
+        return Math.max(
+            SIGNAL_GENERATOR_MIN_UPDATE_INTERVAL_MS,
+            Math.floor(this.period / SIGNAL_GENERATOR_TICKS_PER_PERIOD)
+        );
+    }
+
+    // Чистая функция — текущее значение по elapsed-ms от startTime.
+    computeValue(elapsed) {
+        const range = this.max - this.min;
+        let value;
+
+        switch (this.type) {
+            case 'sin':
+            case 'cos': {
+                const numPoints = this.step;
+                const fullCycle = numPoints * this.pause;
+                const positionInCycle = elapsed % fullCycle;
+                const pointIndex = Math.floor(positionInCycle / this.pause);
+                const phase = (pointIndex / numPoints) * 2 * Math.PI;
+                const wave = this.type === 'sin' ? Math.sin(phase) : Math.cos(phase);
+                value = Math.round(this.min + (wave + 1) / 2 * range);
+                break;
+            }
+            case 'linear': {
+                const absStep = Math.abs(this.step);
+                const numStepsFirst = Math.floor(range / absStep) + 1;
+                const numStepsSecond = Math.floor(range / absStep) - 1;
+                const totalSteps = numStepsFirst + numStepsSecond;
+                const fullCycle = totalSteps * this.pause;
+                const positionInCycle = elapsed % fullCycle;
+                const stepNumber = Math.floor(positionInCycle / this.pause);
+
+                if (this.step > 0) {
+                    if (stepNumber < numStepsFirst) {
+                        value = this.min + stepNumber * absStep;
+                    } else {
+                        const downStepNumber = stepNumber - numStepsFirst;
+                        value = this.max - (downStepNumber + 1) * absStep;
+                    }
+                } else {
+                    if (stepNumber < numStepsFirst) {
+                        value = this.max - stepNumber * absStep;
+                    } else {
+                        const upStepNumber = stepNumber - numStepsFirst;
+                        value = this.min + (upStepNumber + 1) * absStep;
+                    }
+                }
+                break;
+            }
+            case 'random': {
+                value = Math.round(this.min + Math.random() * range);
+                break;
+            }
+            case 'square': {
+                const totalPeriod = this.pulseWidth + this.pause;
+                const positionInCycle = elapsed % totalPeriod;
+                value = positionInCycle < this.pulseWidth ? this.max : this.min;
+                break;
+            }
+            default:
+                value = this.min;
+        }
+
+        return Math.max(this.min, Math.min(this.max, value));
+    }
+
+    start() {
+        if (this.intervalId !== null) return; // уже запущен
+        this.startTime = Date.now();
+
+        const tick = () => {
+            const value = this.computeValue(Date.now() - this.startTime);
+            try {
+                this.onTick(value);
+            } catch (e) {
+                console.error('SignalGenerator: onTick error', e);
+            }
+        };
+
+        this.intervalId = setInterval(tick, this.computeUpdateInterval());
+        tick(); // первое значение сразу
+    }
+
+    stop() {
+        if (this.intervalId !== null) {
+            clearInterval(this.intervalId);
+            this.intervalId = null;
+        }
+    }
+
+    isRunning() {
+        return this.intervalId !== null;
+    }
+}
+
+// Экспорт в глобальную область (соответствует style остальных файлов src/)
+window.SignalGenerator = SignalGenerator;
+window.validateSignalGeneratorConfig = validateSignalGeneratorConfig;
+window.normalizeSignalGeneratorConfig = normalizeSignalGeneratorConfig;
+
+
+// === 09-sensor-key.js ===
+// ============================================================================
+// Sensor key — canonical identity для датчика во frontend.
+// Формат: ${serverId}|${objectName}|${sensorName}
+// Разделитель `|` (не `:`), чтобы не путать с tabKey (serverId:objectName).
+// Используется как ключ в dashboard cache/subscription Map'ах и SSE update routing.
+// См. CLAUDE.md "Sensor identity (multi-server)" + spec
+// docs/superpowers/specs/2026-04-28-dashboard-multi-server-isolation-design.md
+// ============================================================================
+
+function makeSensorKey(serverId, objectName, sensorName) {
+    return `${serverId}|${objectName}|${sensorName}`;
+}
+
+function parseSensorKey(key) {
+    if (typeof key !== 'string') return null;
+    const parts = key.split('|');
+    if (parts.length !== 3) return null;
+    return { serverId: parts[0], objectName: parts[1], sensorName: parts[2] };
+}
+
+// Group key — две части (serverId|objectName), без sensorName. Используется
+// для batch-операций над датчиками одного объекта (subscribe, fetchSensorValues).
+// `objectName` теоретически может содержать `|` — поэтому слайсим по первому
+// разделителю, а не split().
+function makeGroupKey(serverId, objectName) {
+    return `${serverId}|${objectName}`;
+}
+
+function parseGroupKey(key) {
+    if (typeof key !== 'string') return null;
+    const sepIdx = key.indexOf('|');
+    if (sepIdx < 0) return null;
+    return { serverId: key.slice(0, sepIdx), objectName: key.slice(sepIdx + 1) };
+}
+
+// Прикрепляем к globalThis (работает в browser и node test env).
+globalThis.makeSensorKey = makeSensorKey;
+globalThis.parseSensorKey = parseSensorKey;
+globalThis.makeGroupKey = makeGroupKey;
+globalThis.parseGroupKey = parseGroupKey;
 
 
 // === 10-base-renderer.js ===
@@ -1477,7 +2601,7 @@ const VirtualScrollMixin = {
         const viewport = this.getEl(config.viewportId);
         if (!viewport) return;
 
-        const threshold = config.threshold || 100;
+        const threshold = config.threshold || SIMPLE_INFINITE_SCROLL_THRESHOLD;
         viewport.addEventListener('scroll', () => {
             const scrollTop = viewport.scrollTop;
             const viewportHeight = viewport.clientHeight;
@@ -1520,12 +2644,6 @@ const VirtualScrollMixin = {
                 this.vscrollLoadMore();
             }
         }
-    },
-
-    // Показать/скрыть индикатор загрузки
-    showVScrollLoadingIndicator(loadingId, show) {
-        const el = this.getEl(loadingId);
-        if (el) el.style.display = show ? 'block' : 'none';
     }
 };
 
@@ -1561,7 +2679,7 @@ const SSESubscriptionMixin = {
             });
 
             this.subscribedSensorIds = newIds;
-            console.log(`${logPrefix}: подписка на ${ids.length} элементов для ${this.objectName}`);
+            debugLog(`${logPrefix}: подписка на ${ids.length} элементов для ${this.objectName}`);
         } catch (err) {
             console.warn(`${logPrefix}: ошибка подписки:`, err);
         }
@@ -1579,7 +2697,7 @@ const SSESubscriptionMixin = {
                 body: JSON.stringify({ [idField]: ids })
             });
 
-            console.log(`${logPrefix}: отписка от ${ids.length} элементов для ${this.objectName}`);
+            debugLog(`${logPrefix}: отписка от ${ids.length} элементов для ${this.objectName}`);
             this.subscribedSensorIds.clear();
         } catch (err) {
             console.warn(`${logPrefix}: ошибка отписки:`, err);
@@ -1595,7 +2713,7 @@ const SSESubscriptionMixin = {
         const ids = [...this.subscribedSensorIds];
         const { apiPath, idField, logPrefix, extraBody } = this._sseSubscriptionParams;
 
-        console.log(`${logPrefix}: Переподписка ${ids.length} элементов для ${this.objectName}`);
+        debugLog(`${logPrefix}: Переподписка ${ids.length} элементов для ${this.objectName}`);
         this.subscribedSensorIds.clear(); // Очищаем кэш чтобы subscribeToSSEFor не пропустил
         await this.subscribeToSSEFor(apiPath, ids, idField, logPrefix, extraBody);
     }
@@ -1607,27 +2725,14 @@ const SSESubscriptionMixin = {
 const ResizableSectionMixin = {
     // Loading сохранённой высоты
     loadSectionHeight(storageKey, defaultHeight = DEFAULT_SECTION_HEIGHT) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            const value = saved[this.tabKey] ?? saved[this.objectName];
-            if (typeof value === 'number' && value > 0) {
-                return value;
-            }
-        } catch (err) {
-            console.warn('Failed to load section height:', err);
-        }
-        return defaultHeight;
+        const saved = loadStorageMap(storageKey);
+        const value = saved[this.tabKey] ?? saved[this.objectName];
+        return typeof value === 'number' && value > 0 ? value : defaultHeight;
     },
 
     // Сохранение высоты
     saveSectionHeight(storageKey, value) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            saved[this.tabKey] = value;
-            localStorage.setItem(storageKey, JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save section height:', err);
-        }
+        updateStorageMap(storageKey, (saved) => { saved[this.tabKey] = value; });
     },
 
     // Настройка resize для секции
@@ -1646,41 +2751,18 @@ const ResizableSectionMixin = {
 
         container.style.height = `${this[heightProp]}px`;
 
-        let startY = 0;
-        let startHeight = 0;
-        let isResizing = false;
-
-        const onMouseMove = (e) => {
-            if (!isResizing) return;
-            const delta = e.clientY - startY;
-            const newHeight = Math.max(minHeight, Math.min(maxHeight, startHeight + delta));
-            container.style.height = `${newHeight}px`;
-        };
-
-        const onMouseUp = () => {
-            if (!isResizing) return;
-            isResizing = false;
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-            const newHeight = parseInt(container.style.height, 10);
-            if (!Number.isNaN(newHeight)) {
-                this[heightProp] = newHeight;
-                this.saveSectionHeight(storageKey, newHeight);
-            }
-        };
-
-        handle.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            isResizing = true;
-            startY = e.clientY;
-            startHeight = container.offsetHeight;
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = 'ns-resize';
-            document.body.style.userSelect = 'none';
-        });
+        setupResizeHandle(
+            handle,
+            container,
+            minHeight,
+            (height) => {
+                this[heightProp] = height;
+                this.saveSectionHeight(storageKey, height);
+            },
+            maxHeight,
+            null,
+            { updateMaxHeight: false }
+        );
     }
 };
 
@@ -1688,6 +2770,24 @@ const ResizableSectionMixin = {
  * Миксин для фильтрации списка элементов
  */
 const FilterMixin = {
+    hasActiveFilters() {
+        const hasTextFilter = Boolean((this.filter || '').trim());
+        const hasTypeFilter = Boolean(this.typeFilter && this.typeFilter !== 'all');
+        const hasStatusFilter = Boolean(this.statusFilter && this.statusFilter !== 'all');
+        return hasTextFilter || hasTypeFilter || hasStatusFilter;
+    },
+
+    shouldShowPinnedOnly(hasPinned) {
+        return Boolean(hasPinned) && !FilterMixin.hasActiveFilters.call(this);
+    },
+
+    filterPinnedOnly(items, pinnedSet, idAccessor = item => item.id) {
+        if (!this.shouldShowPinnedOnly(pinnedSet.size > 0)) {
+            return items;
+        }
+        return items.filter(item => pinnedSet.has(String(idAccessor(item))));
+    },
+
     // Применение локальных фильтров к списку
     // extraFields - дополнительные поля для текстового поиска (например, ['mbreg'] для Modbus)
     // fieldAccessor - функция для получения значения поля (для вложенных объектов)
@@ -1895,7 +2995,7 @@ const ParamsManagerMixin = {
         // Selects (exchangeMode и др.)
         container.querySelectorAll('select[data-param], select[data-name]').forEach(select => {
             const name = select.dataset.param || select.dataset.name;
-            const newValue = parseInt(select.value);
+            const newValue = parseIntegerOrDefault(select.value, this.params[name]);
             if (this.params[name] !== newValue) {
                 changed[name] = newValue;
             }
@@ -1972,12 +3072,8 @@ const PinManagementMixin = {
      * @returns {Set<string>}
      */
     getPinnedItems(storageKey) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            return new Set(saved[this.tabKey] || saved[this.objectName] || []);
-        } catch (err) {
-            return new Set();
-        }
+        const saved = loadStorageMap(storageKey);
+        return new Set(saved[this.tabKey] || saved[this.objectName] || []);
     },
 
     /**
@@ -1986,13 +3082,7 @@ const PinManagementMixin = {
      * @param {Set<string>} pinnedSet - Множество ID закрепленных элементов
      */
     savePinnedItems(storageKey, pinnedSet) {
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            saved[this.tabKey] = Array.from(pinnedSet);
-            localStorage.setItem(storageKey, JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save pinned items:', err);
-        }
+        updateStorageMap(storageKey, (saved) => { saved[this.tabKey] = Array.from(pinnedSet); });
     },
 
     /**
@@ -2029,6 +3119,45 @@ const PinManagementMixin = {
         }
     },
 
+    async loadMissingPinnedSensors(apiPath, options = {}) {
+        const {
+            responseKey = 'sensors',
+            list = this.allSensors,
+            map = this.sensorMap,
+            idField = 'id',
+            warningMessage = 'Failed to load pinned sensors:'
+        } = options;
+        const pinnedIds = this.getPinned();
+        if (pinnedIds.size === 0 || !list || !map) return;
+
+        const missingIds = [];
+        for (const idStr of pinnedIds) {
+            const id = parseIntegerOrDefault(idStr, null);
+            if (id !== null && !map.has(id)) {
+                missingIds.push(id);
+            }
+        }
+
+        if (missingIds.length === 0) return;
+
+        try {
+            const idsParam = missingIds.join(',');
+            const separator = apiPath.includes('?') ? '&' : '?';
+            const response = await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}${apiPath}${separator}filter=${idsParam}`);
+            const pinnedSensors = response[responseKey] || [];
+
+            for (const sensor of pinnedSensors) {
+                const id = sensor[idField];
+                if (!map.has(id)) {
+                    list.unshift(sensor);
+                    map.set(id, sensor);
+                }
+            }
+        } catch (err) {
+            console.warn(warningMessage, err);
+        }
+    },
+
     // Сокращённые методы, использующие this.pinStorageKey и this.renderAfterPinChange
     getPinned()    { return this.getPinnedItems(this.pinStorageKey); },
     togglePin(id)  { this.toggleItemPin(this.pinStorageKey, id, this.renderAfterPinChange); },
@@ -2056,15 +3185,11 @@ const TableSortMixin = {
      */
     loadSortState(storageKey) {
         this.sortStorageKey = storageKey;
-        try {
-            const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-            const sortState = saved[this.tabKey] || saved[this.objectName];
-            if (sortState) {
-                this.sortColumn = sortState.column || 'name';
-                this.sortDirection = sortState.direction || 'asc';
-            }
-        } catch (err) {
-            console.warn('Failed to load sort state:', err);
+        const saved = loadStorageMap(storageKey);
+        const sortState = saved[this.tabKey] || saved[this.objectName];
+        if (sortState) {
+            this.sortColumn = sortState.column || 'name';
+            this.sortDirection = sortState.direction || 'asc';
         }
     },
 
@@ -2073,16 +3198,12 @@ const TableSortMixin = {
      */
     saveSortState() {
         if (!this.sortStorageKey) return;
-        try {
-            const saved = JSON.parse(localStorage.getItem(this.sortStorageKey) || '{}');
+        updateStorageMap(this.sortStorageKey, (saved) => {
             saved[this.tabKey] = {
                 column: this.sortColumn,
                 direction: this.sortDirection
             };
-            localStorage.setItem(this.sortStorageKey, JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save sort state:', err);
-        }
+        });
     },
 
     /**
@@ -2287,7 +3408,7 @@ const BatchRenderMixin = {
         if (!tbody) return;
 
         tbody.querySelectorAll('tr[data-sensor-id]').forEach(row => {
-            const id = parseInt(row.dataset.sensorId);
+            const id = parseIntegerOrDefault(row.dataset.sensorId, null);
             if (!id) return;
 
             const update = updateMap.get(id);
@@ -2371,7 +3492,7 @@ const ModbusRegistersMixin = {
                 registers.forEach(r => this.registerMap.set(r.id, r));
 
                 // Если нет фильтра и есть закреплённые регистры - загрузить их отдельно
-                if (!this.filter) {
+                if (!this.hasActiveFilters()) {
                     await this.loadPinnedRegisters();
                 }
             } else {
@@ -2412,7 +3533,7 @@ const ModbusRegistersMixin = {
         // Найти ID, которых нет в загруженных регистрах
         const missingIds = [];
         for (const idStr of pinnedIds) {
-            const id = parseInt(idStr);
+            const id = parseIntegerOrDefault(idStr, null);
             if (!this.registerMap.has(id)) {
                 missingIds.push(id);
             }
@@ -2564,7 +3685,23 @@ class BaseObjectRenderer {
         this.startStatusDisplayTimer();
     }
 
-    // Вспомогательные методы для создания секций
+    // ============================================================================
+    // Section markup helpers — без inline onclick/onchange.
+    // Click-handling — единая делегация в _setupSectionDelegation() (вызывается
+    // из 50-ui-tabs.js сразу после renderer.initialize()). Контракт CSS:
+    //   - .collapsible-header — клик → toggleSection(data-section родителя)
+    //   - .section-move-up / .section-move-down (data-section-id) — moveSectionUp/Down
+    //   - .add-sensor-btn — openSensorDialog(this.tabKey)
+    //   - .charts-pause-btn — toggleChartsPause(this.tabKey)
+    //   - .time-range-btn (data-range) — setTimeRange(parseInt(data-range))
+    //   - input#io-sequential-${objectName} change — toggleIOLayout
+    // Контейнеры с классами .section-reorder-buttons, .filter-bar,
+    //   .charts-time-range, .io-filter-wrapper, .io-sequential-toggle,
+    //   .header-indicators, .header-channels, .header-indicator-dot —
+    //   click внутри них НЕ должен toggle'ить секцию (раньше — inline
+    //   stopPropagation, теперь — explicit "no-toggle zone" в делегации).
+    // ============================================================================
+
     createCollapsibleSection(id, title, content, options = {}) {
         const { badge = false, hidden = false, headerExtra = '' } = options;
         const badgeHtml = badge ? `<span class="io-section-badge" id="${id}-count-${this.objectName}">0</span>` : '';
@@ -2573,16 +3710,16 @@ class BaseObjectRenderer {
 
         return `
             <div class="collapsible-section reorderable-section" data-section="${id}-${this.objectName}" data-section-id="${id}" id="${sectionId}" ${style}>
-                <div class="collapsible-header" onclick="toggleSection('${id}-${this.objectName}')">
+                <div class="collapsible-header">
                     <svg class="collapsible-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M6 9l6 6 6-6"/>
                     </svg>
                     <span class="collapsible-title">${title}</span>
                     ${badgeHtml}
                     ${headerExtra}
-                    <div class="section-reorder-buttons" onclick="event.stopPropagation()">
-                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.tabKey}', '${id}')" title="Move up">↑</button>
-                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.tabKey}', '${id}')" title="Move down">↓</button>
+                    <div class="section-reorder-buttons">
+                        <button class="section-move-btn section-move-up" data-move-section="${id}" title="Move up">↑</button>
+                        <button class="section-move-btn section-move-down" data-move-section="${id}" title="Move down">↓</button>
                     </div>
                 </div>
                 <div class="collapsible-content" id="section-${id}-${this.objectName}">
@@ -2595,28 +3732,24 @@ class BaseObjectRenderer {
     createChartsSection() {
         return `
             <div class="collapsible-section reorderable-section" data-section="charts-${this.objectName}" data-section-id="charts" id="charts-section-${this.objectName}">
-                <div class="collapsible-header" onclick="toggleSection('charts-${this.objectName}')">
+                <div class="collapsible-header">
                     <svg class="collapsible-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M6 9l6 6 6-6"/>
                     </svg>
                     <span class="collapsible-title">Charts</span>
                     ${this.showAddSensorButton ? `<button class="add-sensor-btn" id="add-sensor-btn-${this.objectName}"
-                            onclick="event.stopPropagation(); openSensorDialog('${this.tabKey}')"
                             ${!state.capabilities.smEnabled ? 'disabled title="SM not connected (-sm-url not set)"' : ''}>+ Sensor</button>` : ''}
-                    <div class="charts-time-range" onclick="event.stopPropagation()">
+                    <div class="charts-time-range">
                         <div class="time-range-selector">
-                            <button class="charts-pause-btn" id="charts-pause-${this.objectName}" onclick="toggleChartsPause('${this.tabKey}')" title="Pause chart updates">||</button>
-                            <button class="time-range-btn${state.timeRange === 60 ? ' active' : ''}" onclick="setTimeRange(60)">1m</button>
-                            <button class="time-range-btn${state.timeRange === 180 ? ' active' : ''}" onclick="setTimeRange(180)">3m</button>
-                            <button class="time-range-btn${state.timeRange === 300 ? ' active' : ''}" onclick="setTimeRange(300)">5m</button>
-                            <button class="time-range-btn${state.timeRange === 900 ? ' active' : ''}" onclick="setTimeRange(900)">15m</button>
-                            <button class="time-range-btn${state.timeRange === 3600 ? ' active' : ''}" onclick="setTimeRange(3600)">1h</button>
-                            <button class="time-range-btn${state.timeRange === 10800 ? ' active' : ''}" onclick="setTimeRange(10800)">3h</button>
+                            <button class="charts-pause-btn" id="charts-pause-${this.objectName}" title="Pause chart updates">||</button>
+                            ${CHART_TIME_RANGES_SECONDS.map(({ seconds, label }) => `
+                                <button class="time-range-btn${state.timeRange === seconds ? ' active' : ''}" data-range="${seconds}">${label}</button>
+                            `).join('')}
                         </div>
                     </div>
-                    <div class="section-reorder-buttons" onclick="event.stopPropagation()">
-                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.tabKey}', 'charts')" title="Move up">↑</button>
-                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.tabKey}', 'charts')" title="Move down">↓</button>
+                    <div class="section-reorder-buttons">
+                        <button class="section-move-btn section-move-up" data-move-section="charts" title="Move up">↑</button>
+                        <button class="section-move-btn section-move-down" data-move-section="charts" title="Move down">↓</button>
                     </div>
                 </div>
                 <div class="collapsible-content" id="section-charts-${this.objectName}">
@@ -2632,22 +3765,22 @@ class BaseObjectRenderer {
     createIOTimersSection() {
         return `
             <div class="collapsible-section io-timers-section reorderable-section" data-section="io-timers-${this.objectName}" data-section-id="io-timers" id="io-timers-section-${this.objectName}">
-                <div class="collapsible-header" onclick="toggleSection('io-timers-${this.objectName}')">
+                <div class="collapsible-header">
                     <svg class="collapsible-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M6 9l6 6 6-6"/>
                     </svg>
                     <span class="collapsible-title">I/O</span>
-                    <div class="io-filter-wrapper" onclick="event.stopPropagation()">
+                    <div class="io-filter-wrapper">
                         <input type="text" class="io-filter-input io-filter-global" id="io-filter-global-${this.objectName}"
                                placeholder="Filter..." data-object="${this.objectName}">
                     </div>
-                    <label class="io-sequential-toggle" onclick="event.stopPropagation()">
-                        <input type="checkbox" id="io-sequential-${this.objectName}" onchange="toggleIOLayout('${this.tabKey}', '${this.objectName}')">
+                    <label class="io-sequential-toggle">
+                        <input type="checkbox" id="io-sequential-${this.objectName}">
                         <span>Sequential</span>
                     </label>
-                    <div class="section-reorder-buttons" onclick="event.stopPropagation()">
-                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.tabKey}', 'io-timers')" title="Move up">↑</button>
-                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.tabKey}', 'io-timers')" title="Move down">↓</button>
+                    <div class="section-reorder-buttons">
+                        <button class="section-move-btn section-move-up" data-move-section="io-timers" title="Move up">↑</button>
+                        <button class="section-move-btn section-move-down" data-move-section="io-timers" title="Move down">↓</button>
                     </div>
                 </div>
                 <div class="collapsible-content" id="section-io-timers-${this.objectName}">
@@ -2659,6 +3792,68 @@ class BaseObjectRenderer {
                 </div>
             </div>
         `;
+    }
+
+    // Делегирование click/change для всех секций tab-панели. Вызывается из
+    // 50-ui-tabs.js один раз после renderer.initialize() — панель уже в DOM,
+    // listener один на всю вкладку, добавление новых .collapsible-section не
+    // требует повторной привязки.
+    _setupSectionDelegation() {
+        const panel = getTabPanel(this.tabKey);
+        if (!panel) return;
+        if (panel.dataset.sectionDelegationWired === 'true') return;
+        panel.dataset.sectionDelegationWired = 'true';
+
+        // CSS-классы внутри .collapsible-header, клик по которым НЕ toggle'ит секцию
+        // (раньше — inline onclick="event.stopPropagation()" на каждой коробке).
+        const NO_TOGGLE_ZONE_SELECTOR =
+            '.section-reorder-buttons, .filter-bar, .charts-time-range, ' +
+            '.io-filter-wrapper, .io-sequential-toggle, .add-sensor-btn, ' +
+            '.header-indicators, .header-channels, .header-indicator-dot';
+
+        panel.addEventListener('click', (e) => {
+            // 1) Конкретные кнопки секций
+            const moveUp = e.target.closest('.section-move-up');
+            if (moveUp && panel.contains(moveUp)) {
+                const id = moveUp.dataset.moveSection;
+                if (id) moveSectionUp(this.tabKey, id);
+                return;
+            }
+            const moveDown = e.target.closest('.section-move-down');
+            if (moveDown && panel.contains(moveDown)) {
+                const id = moveDown.dataset.moveSection;
+                if (id) moveSectionDown(this.tabKey, id);
+                return;
+            }
+            if (e.target.closest('.add-sensor-btn')) {
+                openSensorDialog(this.tabKey);
+                return;
+            }
+            if (e.target.closest('.charts-pause-btn')) {
+                toggleChartsPause(this.tabKey);
+                return;
+            }
+            const tr = e.target.closest('.time-range-btn');
+            if (tr && panel.contains(tr)) {
+                const seconds = parseIntegerOrDefault(tr.dataset.range, null);
+                if (seconds !== null) setTimeRange(seconds);
+                return;
+            }
+
+            // 2) Клик внутри известного "no-toggle" контейнера — игнорируем (не toggle'им секцию).
+            if (e.target.closest(NO_TOGGLE_ZONE_SELECTOR)) return;
+
+            // 3) Клик по самому header'у — toggle секции через data-section родителя.
+            const header = e.target.closest('.collapsible-header');
+            if (!header || !panel.contains(header)) return;
+            const sectionEl = header.closest('.collapsible-section');
+            const sectionAttr = sectionEl?.dataset.section;
+            if (sectionAttr) toggleSection(sectionAttr);
+        });
+
+        // change-обработчик IO sequential checkbox (один на вкладку — прямой bind).
+        const ioSeq = this.getEl(`io-sequential-${this.objectName}`);
+        ioSeq?.addEventListener('change', () => toggleIOLayout(this.tabKey, this.objectName));
     }
 
     createIOSection(type, title) {
@@ -2794,10 +3989,10 @@ class BaseObjectRenderer {
 
     // ========== Общие методы для работы с графиками ==========
 
-    // Проверить, добавлен ли датчик на график
+    // Проверить, добавлен ли датчик на график.
+    // Read по tabKey с fallback на objectName (внутри функции) для legacy данных.
     isSensorOnChart(sensorName) {
-        // Используем objectName (displayName) для localStorage - это имя объекта без serverId
-        const addedSensors = getExternalSensorsFromStorage(this.objectName);
+        const addedSensors = getExternalSensorsFromStorage(this.tabKey, this.objectName);
         return addedSensors.has(sensorName);
     }
 
@@ -2806,8 +4001,8 @@ class BaseObjectRenderer {
     toggleSensorChart(sensor) {
         if (!sensor || !sensor.name) return;
 
-        // Используем objectName (displayName) для localStorage
-        const addedSensors = getExternalSensorsFromStorage(this.objectName);
+        // Read по tabKey (с legacy fallback внутри функции).
+        const addedSensors = getExternalSensorsFromStorage(this.tabKey, this.objectName);
 
         if (addedSensors.has(sensor.name)) {
             // Удаляем с графика
@@ -2825,15 +4020,26 @@ class BaseObjectRenderer {
                 chartOptions: chartOptions
             };
 
-            // Добавляем в список внешних датчиков (сохраняем полные данные)
+            // Добавляем в список внешних датчиков (сохраняем полные данные).
+            // Write всегда по tabKey, чтобы дубликат objectName на разных серверах
+            // не смешивался.
             addedSensors.set(sensor.name, sensorForChart);
-            saveExternalSensorsToStorage(this.objectName, addedSensors);
+            saveExternalSensorsToStorage(this.tabKey, addedSensors);
 
             // Добавляем в state.sensorsByName если его там нет
             if (!state.sensorsByName.has(sensor.name)) {
                 state.sensorsByName.set(sensor.name, sensorForChart);
                 state.sensors.set(sensor.id, sensorForChart);
             }
+            // Multi-server-aware: всегда обновляем scoped запись по
+            // (serverId, this.objectName, sensor.name) — позволяет render'у
+            // подтянуть правильный textname/comment без коллизии с одноимёнными
+            // sensor'ами на других серверах.
+            const _serverId = state.tabs.get(this.tabKey)?.serverId || '';
+            state.sensorsByKey.set(
+                makeSensorKey(_serverId, this.objectName, sensor.name),
+                sensorForChart
+            );
 
             // Создаём график с опциями, специфичными для типа рендерера
             createExternalSensorChart(this.tabKey, sensorForChart, this.getChartOptions());
@@ -2856,12 +4062,50 @@ class BaseObjectRenderer {
         subscribeToIONCSensor(this.tabKey, sensorId);
     }
 
+    // Helper для renderer'ов, чьи sensor'ы уже подписаны через batch SSE
+    // (modbus_register_batch / opcua_sensor_batch и т.п.) — отдельная подписка
+    // не нужна, достаточно отметить sensorId в локальном Set'е, чтобы
+    // BaseObjectRenderer.unsubscribeFromChart знал что снимать.
+    subscribeToChartSensorLocal(sensorId) {
+        if (!this.subscribedSensorIds.has(sensorId)) {
+            this.subscribedSensorIds.add(sensorId);
+        }
+    }
+
+    // Generic show/hide индикатора загрузки. Имя элемента —
+    // `${loadingIdPrefix}-loading-more-${objectName}` (уникальный по renderer'у).
+    // Renderer задаёт префикс через static loadingIdPrefix (или instance field).
+    // Если префикс не задан — silent no-op (renderer не использует loading indicator).
+    showLoadingIndicator(show) {
+        const prefix = this.loadingIdPrefix || this.constructor.loadingIdPrefix;
+        if (!prefix) return;
+        const el = this.getEl(`${prefix}-loading-more-${this.objectName}`);
+        if (el) el.style.display = show ? 'block' : 'none';
+    }
+
+    // Стандартная ячейка пин-индикатора в IO-таблицах. Шесть row-renderer'ов
+    // (IONC/Modbus×2/OPCUA×2/UWSGate) рендерили один и тот же `<td>` с микро-
+    // расхождениями: IONC использует `ionc-col-pin` (исторически), UWSGate
+    // — `data-name=` вместо `data-id=`. cellClass / dataAttr параметризуют
+    // эти расхождения, остальной markup общий.
+    renderPinToggleCell({ id, isPinned, dataAttr = 'data-id', cellClass = 'col-pin' }) {
+        const cls = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
+        const icon = isPinned ? '📌' : '○';
+        const title = isPinned ? 'Unpin' : 'Pin';
+        return `
+            <td class="${cellClass}">
+                <span class="${cls}" ${dataAttr}="${escapeAttr(id)}" title="${title}">${icon}</span>
+            </td>
+        `;
+    }
+
     // Сгенерировать HTML для объединённой ячейки кнопок (Chart + Dashboard)
     renderAddButtonsCell(sensorId, sensorName, prefix = 'sensor', sensorLabel = null) {
         const isOnChart = this.isSensorOnChart(sensorName);
         const varName = `${prefix}-${sensorId}`;
         const checkboxId = `chart-${this.objectName}-${varName}`;
         const label = sensorLabel || sensorName;
+        const serverId = state.tabs.get(this.tabKey)?.serverId || '';
         return `
             <td class="add-buttons-col">
                 <span class="chart-toggle">
@@ -2869,7 +4113,7 @@ class BaseObjectRenderer {
                            class="chart-checkbox chart-toggle-input"
                            id="${checkboxId}"
                            data-sensor-id="${sensorId}"
-                           data-sensor-name="${escapeHtml(sensorName)}"
+                           data-sensor-name="${escapeAttr(sensorName)}"
                            ${isOnChart ? 'checked' : ''}>
                     <label class="chart-toggle-label" for="${checkboxId}" title="Add to Chart">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2879,8 +4123,11 @@ class BaseObjectRenderer {
                     </label>
                 </span>
                 <button class="dashboard-add-btn"
-                        data-sensor-name="${escapeHtml(sensorName)}"
-                        data-sensor-label="${escapeHtml(label)}"
+                        data-sensor-name="${escapeAttr(sensorName)}"
+                        data-sensor-label="${escapeAttr(label)}"
+                        data-sensor-id="${escapeAttr(sensorId)}"
+                        data-server-id="${escapeAttr(serverId)}"
+                        data-object-name="${escapeAttr(this.objectName)}"
                         title="Add to Dashboard">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="3" y="3" width="7" height="7" rx="1"/>
@@ -2895,6 +4142,140 @@ class BaseObjectRenderer {
 
     // Привязать обработчики событий для checkbox графиков
     // sensorMap - Map с данными датчиков по id
+    // ============================================================================
+    // OPCUA-таблицы (Exchange/Server) — общая paginated-load инфраструктура.
+    //
+    // OPCUAExchange и OPCUAServer почти идентично: reset state → fetchJSON
+    // /opcua/sensors → set allSensors/sensorMap → loadPinned → updateVisible →
+    // updateCount → subscribe → wire sort handlers. Различия:
+    //   - id-префиксы (opcua-* / opcuasrv-*)
+    //   - Exchange имеет UI/server filter mode + statusFilter (post-process)
+    //   - Server — только server-side filter
+    // Subclass передаёт элементы (viewport/table/note id) + два callback'а:
+    //   buildSensorParams() — query string дополнительные `&search=...&iotype=...`
+    //   postProcessSensors(sensors) — local filter (UI mode / status filter)
+    // ============================================================================
+
+    async _loadOpcuaSensorsTable(opts) {
+        const { viewportId, tableId, noteId, buildSensorParams, postProcessSensors } = opts;
+
+        // Reset state for fresh load
+        this.allSensors = [];
+        this.hasMore = true;
+        this.startIndex = 0;
+        this.endIndex = 0;
+
+        const viewport = this.getEl(viewportId);
+        if (viewport) viewport.scrollTop = 0;
+
+        try {
+            const url = this.buildPaginatedSensorsUrl('/opcua', 0) + (buildSensorParams() || '');
+            const data = await this.fetchJSON(url);
+            let sensors = data.sensors || [];
+            this.sensorsTotal = typeof data.total === 'number' ? data.total : sensors.length;
+
+            sensors = postProcessSensors(sensors);
+
+            this.allSensors = sensors;
+            this.sensorMap.clear();
+            sensors.forEach(s => this.sensorMap.set(s.id, s));
+
+            // Если нет фильтра и есть закреплённые — догрузить отдельно.
+            if (!this.hasActiveFilters()) {
+                await this.loadPinnedSensors();
+            }
+
+            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
+            this.updateVisibleRows();
+            this.updateSensorCount();
+            this.setNote(noteId, '');
+
+            this.subscribeToSSE();
+
+            const table = this.getEl(tableId);
+            if (table) {
+                this.attachSortHandlers(table);
+                this.updateSortHeaders();
+            }
+        } catch (err) {
+            this.setNote(noteId, err.message, true);
+        }
+    }
+
+    async _loadMoreOpcuaSensorsTable(opts) {
+        const { buildSensorParams, postProcessSensors } = opts;
+
+        if (this.isLoadingChunk || !this.hasMore) return;
+
+        this.isLoadingChunk = true;
+        this.showLoadingIndicator(true);
+
+        try {
+            const nextOffset = this.allSensors.length;
+            const url = this.buildPaginatedSensorsUrl('/opcua', nextOffset) + (buildSensorParams() || '');
+            const data = await this.fetchJSON(url);
+            let newSensors = data.sensors || [];
+            newSensors = postProcessSensors(newSensors);
+
+            // Дедупликация: добавляем только датчики которых ещё нет.
+            const existingIds = new Set(this.allSensors.map(s => s.id));
+            const uniqueNewSensors = newSensors.filter(s => !existingIds.has(s.id));
+
+            this.allSensors = [...this.allSensors, ...uniqueNewSensors];
+            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
+            this.updateVisibleRows();
+            this.updateSensorCount();
+        } catch (err) {
+            console.error('Failed to load more sensors:', err);
+        } finally {
+            this.isLoadingChunk = false;
+            this.showLoadingIndicator(false);
+        }
+    }
+
+    // Общая инфраструктура render'а Modbus-подобных таблиц регистров.
+    // Берёт всё кроме row-html: фильтрация, sort, pin, count, listeners.
+    // Subclass передаёт свой row-renderer (renderRow(reg, isPinned)) и
+    // mbreg-аксессор (master/slave формат датасета чуть отличается).
+    //
+    // opts:
+    //   tbodyId        — id <tbody> элемента
+    //   unpinId        — id "Unpin all" кнопки (visibility toggle)
+    //   countId        — id badge'а с числом регистров (updateItemCount)
+    //   countTotal     — total count для badge'а (this.registersTotal)
+    //   mbregAccessor  — function(item, field) — для applyFilters(['mbreg'])
+    //   renderRow      — function(reg, isPinned) -> string (HTML <tr>...</tr>)
+    _renderRegistersTable(opts) {
+        const { tbodyId, unpinId, countId, countTotal, mbregAccessor, renderRow } = opts;
+
+        const tbody = this.getEl(tbodyId);
+        if (!tbody) return;
+
+        const pinned = this.getPinned();
+
+        const unpinBtn = this.getEl(unpinId);
+        if (unpinBtn) unpinBtn.style.display = pinned.size > 0 ? 'inline' : 'none';
+
+        let toShow = this.applyFilters(this.allRegisters, 'name', 'iotype', null, ['mbreg'], mbregAccessor);
+        toShow = this.filterPinnedOnly(toShow, pinned);
+        toShow = this.sortItems(toShow, pinned, this.sortColumnDefs);
+
+        this.updateItemCount(countId, toShow.length, countTotal);
+
+        for (const reg of toShow) {
+            if (reg.id) this.registerMap.set(reg.id, reg);
+        }
+
+        tbody.innerHTML = toShow.map(reg => renderRow(reg, pinned.has(String(reg.id)))).join('');
+
+        this.attachChartToggleListeners(tbody, this.registerMap);
+        this.attachDashboardToggleListeners(tbody);
+        tbody.querySelectorAll('.pin-toggle').forEach(t => {
+            t.addEventListener('click', () => this.togglePin(parseIntegerOrDefault(t.dataset.id, null)));
+        });
+        // unpinBtn handler — caller wire'ит один раз в bindEvents (persistent).
+    }
+
     attachChartToggleListeners(container, sensorMap) {
         if (!container) return;
         container.querySelectorAll('.chart-checkbox').forEach(cb => {
@@ -2916,7 +4297,7 @@ class BaseObjectRenderer {
                 e.stopPropagation();
                 const sensorName = btn.dataset.sensorName;
                 const sensorLabel = btn.dataset.sensorLabel;
-                showAddToDashboardDialog(sensorName, sensorLabel);
+                showAddToDashboardDialog(sensorName, sensorLabel, getDashboardBindingFromButton(btn));
             });
         });
     }
@@ -2945,6 +4326,11 @@ class BaseObjectRenderer {
         return path;
     }
 
+    buildPaginatedSensorsUrl(apiPath, offset) {
+        const normalizedPath = apiPath.startsWith('/') ? apiPath : `/${apiPath}`;
+        return `/api/objects/${encodeURIComponent(this.objectName)}${normalizedPath}/sensors?limit=${this.chunkSize}&offset=${offset}`;
+    }
+
     // Выполнить запрос и вернуть JSON
     async fetchJSON(path, options = {}) {
         const url = this.buildUrl(path);
@@ -2964,39 +4350,74 @@ class BaseObjectRenderer {
         el.classList.toggle('note-error', !!(text && isError));
     }
 
-    // Базовый resize handler для секций
-    setupResize(containerSelector, handleSelector, storageKey, minHeight = 100, maxHeight = 800) {
-        const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
-        const container = panel ? panel.querySelector(containerSelector) : document.querySelector(containerSelector);
-        const handle = panel ? panel.querySelector(handleSelector) : document.querySelector(handleSelector);
-        if (!container || !handle) return;
+    renderHttpControl(prefix) {
+        const allow = this.status?.httpControlAllow && canControl();
+        const active = this.status?.httpControlActive;
+        const enabledParams = this.status?.httpEnabledSetParams;
+        const allowText = allow ? 'Take control' : (!canControl() ? 'Read-only mode' : 'Control not allowed');
 
-        let startY, startHeight;
+        const indAllow = this.getEl(`${prefix}-ind-allow-${this.objectName}`);
+        const indActive = this.getEl(`${prefix}-ind-active-${this.objectName}`);
+        const indParams = this.getEl(`${prefix}-ind-params-${this.objectName}`);
 
-        const onMouseMove = (e) => {
-            const delta = e.clientY - startY;
-            const newHeight = Math.min(maxHeight, Math.max(minHeight, startHeight + delta));
-            container.style.height = `${newHeight}px`;
-        };
+        if (indAllow) {
+            indAllow.className = `header-indicator-dot ${allow ? 'ok' : 'fail'}`;
+            indAllow.title = allow ? 'Allowed: Yes' : 'Allowed: No';
+        }
+        if (indActive) {
+            indActive.className = `header-indicator-dot ${active ? 'ok' : 'fail'}`;
+            indActive.title = active ? 'Active: Yes' : 'Active: No';
+        }
+        if (indParams) {
+            indParams.className = `header-indicator-dot ${enabledParams ? 'ok' : 'fail'}`;
+            indParams.title = enabledParams ? 'Parameters: Yes' : 'Parameters: No';
+        }
 
-        const onMouseUp = () => {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            localStorage.setItem(storageKey, container.style.height);
-        };
+        const takeBtn = this.getEl(`${prefix}-control-take-${this.objectName}`);
+        const releaseBtn = this.getEl(`${prefix}-control-release-${this.objectName}`);
+        const noteEl = this.getEl(`${prefix}-control-note-${this.objectName}`);
 
-        handle.addEventListener('mousedown', (e) => {
-            startY = e.clientY;
-            startHeight = container.offsetHeight;
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-            e.preventDefault();
-        });
+        if (takeBtn) {
+            takeBtn.disabled = !allow;
+            takeBtn.title = allowText;
+            takeBtn.classList.toggle('control-active', !!active);
+        }
+        if (releaseBtn) {
+            releaseBtn.disabled = !allow;
+            releaseBtn.title = allowText;
+        }
+        if (noteEl) {
+            noteEl.classList.toggle('control-note-success', !!active);
+        }
+    }
 
-        // Восстановить из localStorage
-        const savedHeight = localStorage.getItem(storageKey);
-        if (savedHeight) {
-            container.style.height = savedHeight;
+    async takeHttpControl(apiSegment, notePrefix) {
+        if (this.status && this.status.httpControlAllow === false) {
+            this.setNote(`${notePrefix}-control-note-${this.objectName}`, 'Control not allowed', true);
+            return;
+        }
+
+        try {
+            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/${apiSegment}/control/take`, { method: 'POST' });
+            this.setNote(`${notePrefix}-control-note-${this.objectName}`, 'HTTP control activated');
+            this.loadStatus();
+        } catch (err) {
+            this.setNote(`${notePrefix}-control-note-${this.objectName}`, err.message, true);
+        }
+    }
+
+    async releaseHttpControl(apiSegment, notePrefix) {
+        if (this.status && this.status.httpControlAllow === false) {
+            this.setNote(`${notePrefix}-control-note-${this.objectName}`, 'Control not allowed', true);
+            return;
+        }
+
+        try {
+            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/${apiSegment}/control/release`, { method: 'POST' });
+            this.setNote(`${notePrefix}-control-note-${this.objectName}`, 'Control returned to sensor');
+            this.loadStatus();
+        } catch (err) {
+            this.setNote(`${notePrefix}-control-note-${this.objectName}`, err.message, true);
         }
     }
 
@@ -3004,7 +4425,7 @@ class BaseObjectRenderer {
 
     startStatusAutoRefresh() {
         this.stopStatusAutoRefresh();
-        const interval = state.sse.pollInterval || 5000;
+        const interval = state.sse.pollInterval || SSE_DEFAULT_POLL_INTERVAL;
         if (interval <= 0) return;
         this.statusTimer = setInterval(() => this.loadStatus(), interval);
     }
@@ -3140,7 +4561,7 @@ class FallbackRenderer extends BaseObjectRenderer {
 
     update(data) {
         // Обновляем тип объекта в сообщении (используем tabKey для поиска панели)
-        const typeSpan = document.querySelector(`.tab-panel[data-name="${this.tabKey}"] .fallback-type`);
+        const typeSpan = getElementsInTab(this.tabKey, '.fallback-type')[0];
         const typeLabel = data.object?.extensionType || data.object?.extensionsType || data.object?.objectType;
         if (typeSpan && typeLabel) {
             typeSpan.textContent = typeLabel;
@@ -3204,7 +4625,6 @@ function resolveRenderer(objectInfo = {}) {
 // ============================================================================
 
 
-
 // === 20-ionc-renderer.js ===
 // ============================================================================
 // IONotifyControllerRenderer - рендерер для SharedMemory и подобных объектов
@@ -3214,6 +4634,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     static getTypeName() {
         return 'IONotifyController';
     }
+    static loadingIdPrefix = 'ionc';
 
     constructor(objectName, tabKey = null) {
         super(objectName, tabKey);
@@ -3235,8 +4656,9 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         this.allSensors = [];
         this.initVirtualScrollProps();
 
-        // Генераторы значений: Map<sensorId, GeneratorState>
-        this.activeGenerators = new Map();
+        // Активные тестовые сигналы (sin/cos/square/...): Map<sensorId, state>.
+        // Methods — в 20-ionc-test-signal.js (mixin).
+        this.activeSensorTestSignals = new Map();
 
         // Инициализация сортировки
         this.initSortProps();
@@ -3248,6 +4670,10 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             type: { field: 'type', type: 'string' },
             value: { field: 'value', type: 'number' }
         };
+
+        // Pin management
+        this.pinStorageKey = 'uniset-panel-ionc-pinned';
+        this.renderAfterPinChange = this.renderSensorsTable;
     }
 
     // IONotifyController датчики - показываем badge "IO" и prefix "io"
@@ -3286,13 +4712,13 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     createSensorsSection() {
         return `
             <div class="collapsible-section reorderable-section ionc-sensors-section" data-section="ionc-sensors-${this.objectName}" data-section-id="ionc-sensors">
-                <div class="collapsible-header" onclick="toggleSection('ionc-sensors-${this.objectName}')">
+                <div class="collapsible-header">
                     <svg class="collapsible-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M6 9l6 6 6-6"/>
                     </svg>
                     <span class="collapsible-title">Sensors</span>
                     <span class="sensor-count" id="ionc-sensor-count-${this.objectName}">0</span>
-                    <div class="filter-bar" onclick="event.stopPropagation()">
+                    <div class="filter-bar">
                         <input type="text" class="filter-input" id="ionc-filter-${this.objectName}" placeholder="Filter...">
                         <select class="type-filter" id="ionc-type-filter-${this.objectName}">
                             <option value="all">All</option>
@@ -3302,9 +4728,9 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                             <option value="DO">DO</option>
                         </select>
                     </div>
-                    <div class="section-reorder-buttons" onclick="event.stopPropagation()">
-                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.tabKey}', 'ionc-sensors')" title="Move up">↑</button>
-                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.tabKey}', 'ionc-sensors')" title="Move down">↓</button>
+                    <div class="section-reorder-buttons">
+                        <button class="section-move-btn section-move-up" data-move-section="ionc-sensors" title="Move up">↑</button>
+                        <button class="section-move-btn section-move-down" data-move-section="ionc-sensors" title="Move down">↓</button>
                     </div>
                 </div>
                 <div class="collapsible-content" id="section-ionc-sensors-${this.objectName}">
@@ -3365,6 +4791,13 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             () => this.loadSensors()
         );
 
+        // Unpin all (persistent header element — wire'им один раз; в
+        // renderVisibleSensors больше не трогаем).
+        const unpinBtn = this.getEl(`ionc-unpin-${this.objectName}`);
+        if (unpinBtn) {
+            unpinBtn.addEventListener('click', () => this.unpinAll());
+        }
+
         // Делегирование событий для кнопки добавления на dashboard
         // устанавливается в setupDashboardClickHandler после загрузки данных
     }
@@ -3377,7 +4810,11 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                 const btn = e.target.closest('.dashboard-add-btn');
                 if (btn) {
                     e.stopPropagation();
-                    showAddToDashboardDialog(btn.dataset.sensorName, btn.dataset.sensorLabel);
+                    showAddToDashboardDialog(
+                        btn.dataset.sensorName,
+                        btn.dataset.sensorLabel,
+                        getDashboardBindingFromButton(btn)
+                    );
                 }
             });
             tbody._dashboardClickHandlerAttached = true;
@@ -3437,11 +4874,12 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             sensors.forEach(s => this.sensorMap.set(s.id, s));
 
             // Если нет фильтра и есть закреплённые датчики - загрузить их отдельно
-            if (!this.filter) {
+            if (!this.hasActiveFilters()) {
                 await this.loadPinnedSensors();
             }
 
-            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
+            // hasMore — общий хелпер semantically'ного парсинга backend response.
+            this.hasMore = computeSensorChunkPagination(sensors.length, data, this.chunkSize).hasMore;
             this.updateVisibleRows();
             this.updateSensorCount();
 
@@ -3457,7 +4895,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         } catch (err) {
             console.error('Error loading IONC sensors:', err);
             if (tbody) {
-                tbody.innerHTML = `<tr><td colspan="9" class="ionc-error">Error загрузки: ${err.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" class="ionc-error">Error загрузки: ${escapeHtml(err.message)}</td></tr>`;
             }
         } finally {
             this.loading = false;
@@ -3465,41 +4903,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     // Загружает закреплённые датчики, если они не в текущем списке
-    async loadPinnedSensors() {
-        const pinnedIds = this.getPinnedSensors();
-        if (pinnedIds.size === 0) return;
-
-        // Найти ID, которых нет в загруженных датчиках
-        const missingIds = [];
-        for (const idStr of pinnedIds) {
-            const id = parseInt(idStr);
-            if (!this.sensorMap.has(id)) {
-                missingIds.push(id);
-            }
-        }
-
-        if (missingIds.length === 0) return;
-
-        // Загрузить отсутствующие датчики по ID (используем /ionc/get с filter)
-        try {
-            const idsParam = missingIds.join(',');
-            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/get?filter=${idsParam}`);
-            const response = await fetch(url);
-            if (!response.ok) return;
-
-            const data = await response.json();
-            const pinnedSensors = data.sensors || [];
-
-            // Добавить закреплённые датчики в начало списка
-            for (const sensor of pinnedSensors) {
-                if (!this.sensorMap.has(sensor.id)) {
-                    this.allSensors.unshift(sensor);
-                    this.sensorMap.set(sensor.id, sensor);
-                }
-            }
-        } catch (err) {
-            console.warn('Failed to load pinned sensors:', err);
-        }
+    loadPinnedSensors() {
+        return this.loadMissingPinnedSensors('/ionc/get');
     }
 
     applyLocalFilters(sensors) {
@@ -3560,7 +4965,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             this.sensors = this.allSensors; // Для совместимости
             uniqueNewSensors.forEach(s => this.sensorMap.set(s.id, s));
 
-            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
+            this.hasMore = computeSensorChunkPagination(this.allSensors.length, data, this.chunkSize).hasMore;
             this.updateVisibleRows();
             this.updateSensorCount();
         } catch (err) {
@@ -3569,11 +4974,6 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             this.isLoadingChunk = false;
             this.showLoadingIndicator(false);
         }
-    }
-
-    showLoadingIndicator(show) {
-        const el = this.getEl(`ionc-loading-more-${this.objectName}`);
-        if (el) el.style.display = show ? 'block' : 'none';
     }
 
     renderVisibleSensors() {
@@ -3585,7 +4985,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         spacer.style.height = `${this.startIndex * this.rowHeight}px`;
 
         // Получаем закреплённые датчики
-        const pinnedSensors = this.getPinnedSensors();
+        const pinnedSensors = this.getPinned();
         const hasPinned = pinnedSensors.size > 0;
 
         // Показываем/скрываем кнопку "снять все"
@@ -3598,9 +4998,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         // - если есть текстовый фильтр — показываем все (для поиска новых датчиков)
         // - иначе если есть закреплённые — показываем только их
         let sensorsToShow = this.allSensors;
-        if (!this.filter && hasPinned) {
-            sensorsToShow = this.allSensors.filter(s => pinnedSensors.has(String(s.id)));
-        }
+        sensorsToShow = this.filterPinnedOnly(sensorsToShow, pinnedSensors);
 
         // Сортировка: pinned всегда вверху, остальные по выбранной колонке
         sensorsToShow = this.sortItems(sensorsToShow, pinnedSensors, this.sortColumnDefs);
@@ -3618,66 +5016,32 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         // Привязать события к строкам
         this.bindRowEvents(tbody);
 
-        // Обработчик кнопки "снять все"
-        if (unpinBtn) {
-            unpinBtn.onclick = () => this.unpinAll();
-        }
+        // unpinBtn handler — в setupEventListeners() (persistent элемент,
+        // не пересоздаётся; раньше тут было .onclick — переехало для consistency
+        // с modbus-master/slave).
     }
 
     bindRowEvents(tbody) {
         // Добавляем обработчики событий
         tbody.querySelectorAll('.ionc-btn-set').forEach(btn => {
-            btn.addEventListener('click', () => this.showSetDialog(parseInt(btn.dataset.id)));
+            btn.addEventListener('click', () => this.showSetDialog(parseInt(btn.dataset.id, 10)));
         });
-        // Кнопка заморозки: одинарный клик = диалог, двойной клик = быстрая заморозка
-        tbody.querySelectorAll('.ionc-btn-freeze').forEach(btn => {
-            let clickTimer = null;
-            const sensorId = parseInt(btn.dataset.id);
-            btn.addEventListener('click', () => {
-                if (clickTimer) {
-                    clearTimeout(clickTimer);
-                    clickTimer = null;
-                    this.quickFreeze(sensorId);
-                } else {
-                    clickTimer = setTimeout(() => {
-                        clickTimer = null;
-                        this.showFreezeDialog(sensorId);
-                    }, DOUBLE_CLICK_THRESHOLD);
-                }
-            });
-        });
-        // Кнопка разморозки: одинарный клик = диалог, двойной клик = быстрая разморозка
-        tbody.querySelectorAll('.ionc-btn-unfreeze').forEach(btn => {
-            let clickTimer = null;
-            const sensorId = parseInt(btn.dataset.id);
-            btn.addEventListener('click', () => {
-                if (clickTimer) {
-                    clearTimeout(clickTimer);
-                    clickTimer = null;
-                    this.quickUnfreeze(sensorId);
-                } else {
-                    clickTimer = setTimeout(() => {
-                        clickTimer = null;
-                        this.showUnfreezeDialog(sensorId);
-                    }, DOUBLE_CLICK_THRESHOLD);
-                }
-            });
-        });
+        this.bindFreezeToggleButtons(tbody);
         tbody.querySelectorAll('.ionc-btn-consumers').forEach(btn => {
-            btn.addEventListener('click', () => this.showConsumersDialog(parseInt(btn.dataset.id)));
+            btn.addEventListener('click', () => this.showConsumersDialog(parseInt(btn.dataset.id, 10)));
         });
-        // Кнопки генератора
+        // Кнопки тестового сигнала (диагностика)
         tbody.querySelectorAll('.ionc-btn-gen').forEach(btn => {
-            btn.addEventListener('click', () => this.showGeneratorDialog(parseInt(btn.dataset.id)));
+            btn.addEventListener('click', () => this.showSensorTestSignalDialog(parseInt(btn.dataset.id, 10)));
         });
         tbody.querySelectorAll('.ionc-btn-gen-stop').forEach(btn => {
-            btn.addEventListener('click', () => this.stopGenerator(parseInt(btn.dataset.id)));
+            btn.addEventListener('click', () => this.stopSensorTestSignal(parseInt(btn.dataset.id, 10)));
         });
         tbody.querySelectorAll('.pin-toggle').forEach(btn => {
-            btn.addEventListener('click', () => this.togglePin(parseInt(btn.dataset.id)));
+            btn.addEventListener('click', () => this.togglePin(parseInt(btn.dataset.id, 10)));
         });
         tbody.querySelectorAll('.ionc-chart-checkbox').forEach(cb => {
-            cb.addEventListener('change', () => this.toggleSensorChartById(parseInt(cb.dataset.id)));
+            cb.addEventListener('change', () => this.toggleSensorChartById(parseIntegerOrDefault(cb.dataset.id, null)));
         });
         // Кнопки добавления на dashboard обрабатываются через делегирование в setupDashboardClickHandler
     }
@@ -3691,21 +5055,24 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     sortRenderVisible() { this.renderVisibleSensors(); }
 
     renderSensorRow(sensor, isPinned) {
-        // Получаем textname из справочника сенсоров (конфигурации)
-        const sensorInfo = state.sensorsByName.get(sensor.name);
+        // Multi-server-aware lookup: те же sensor.name могут существовать на
+        // разных серверах с разными textname. Берём scoped запись по
+        // (serverId, objectName, name); fallback на legacy by-name внутри helper.
+        const serverId = state.tabs.get(this.tabKey)?.serverId || '';
+        const sensorInfo = getSensorInfoByKey(serverId, this.objectName, sensor.name);
         const textname = sensorInfo?.textname || sensor.textname || '';
 
         const frozenClass = sensor.frozen ? 'ionc-sensor-frozen' : '';
         const blockedClass = sensor.blocked ? 'ionc-sensor-blocked' : '';
         const readonlyClass = sensor.readonly ? 'ionc-sensor-readonly' : '';
 
-        // Проверяем активный генератор
-        const hasGenerator = this.activeGenerators.has(sensor.id);
+        // Проверяем активный тестовый сигнал
+        const hasGenerator = this.activeSensorTestSignals.has(sensor.id);
         const generatorClass = hasGenerator ? 'ionc-sensor-generating' : '';
-        const genState = hasGenerator ? this.activeGenerators.get(sensor.id) : null;
+        const genState = hasGenerator ? this.activeSensorTestSignals.get(sensor.id) : null;
 
         const flags = [];
-        if (hasGenerator) flags.push(`<span class="ionc-flag ionc-flag-generator" title="Генератор: ${genState.type} (${genState.min}-${genState.max})">⟳</span>`);
+        if (hasGenerator) flags.push(`<span class="ionc-flag ionc-flag-generator" title="Тестовый сигнал: ${genState.type} (${genState.min}-${genState.max})">⟳</span>`);
         if (sensor.frozen) flags.push('<span class="ionc-flag ionc-flag-frozen" title="Frozen">❄</span>');
         if (sensor.blocked) flags.push('<span class="ionc-flag ionc-flag-blocked" title="Blocked">🔒</span>');
         if (sensor.readonly) flags.push('<span class="ionc-flag ionc-flag-readonly" title="Read only">👁</span>');
@@ -3725,11 +5092,6 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             ? `<button class="ionc-btn ionc-btn-gen-stop" data-id="${sensor.id}" title="${ctrlTitle || 'Остановить генератор'}" ${ctrlDisabled}>⏹</button>`
             : `<button class="ionc-btn ionc-btn-gen" data-id="${sensor.id}" title="${ctrlTitle || 'Генератор значений'}" ${sensor.readonly || !canCtrl ? 'disabled' : ''}>⟳</button>`;
 
-        // Кнопка закрепления (pin)
-        const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-        const pinIcon = isPinned ? '📌' : '○';
-        const pinTitle = isPinned ? 'Unpin' : 'Pin';
-
         // Checkbox для графика
         const isOnChart = this.isSensorOnChart(sensor.name);
         const varName = `ionc-${sensor.id}`;
@@ -3739,18 +5101,14 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         return `
             <tr class="ionc-sensor-row ${frozenClass} ${blockedClass} ${readonlyClass} ${generatorClass}" data-sensor-id="${sensor.id}">
-                <td class="ionc-col-pin">
-                    <span class="${pinToggleClass}" data-id="${sensor.id}" title="${pinTitle}">
-                        ${pinIcon}
-                    </span>
-                </td>
+                ${this.renderPinToggleCell({ id: sensor.id, isPinned, cellClass: 'ionc-col-pin' })}
                 <td class="ionc-col-add-buttons add-buttons-col">
                     <span class="chart-toggle">
                         <input type="checkbox"
                                class="ionc-chart-checkbox chart-toggle-input"
                                id="ionc-chart-${this.objectName}-${varName}"
                                data-id="${sensor.id}"
-                               data-name="${escapeHtml(sensor.name)}"
+                               data-name="${escapeAttr(sensor.name)}"
                                ${isOnChart ? 'checked' : ''}>
                         <label class="chart-toggle-label" for="ionc-chart-${this.objectName}-${varName}" title="Add to Chart">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -3760,8 +5118,11 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                         </label>
                     </span>
                     <button class="dashboard-add-btn"
-                            data-sensor-name="${escapeHtml(sensor.name)}"
-                            data-sensor-label="${escapeHtml(textname || sensor.name)}"
+                            data-sensor-name="${escapeAttr(sensor.name)}"
+                            data-sensor-label="${escapeAttr(textname || sensor.name)}"
+                            data-sensor-id="${escapeAttr(sensor.id)}"
+                            data-server-id="${escapeAttr(serverId)}"
+                            data-object-name="${escapeAttr(this.objectName)}"
                             title="Add to Dashboard">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <rect x="3" y="3" width="7" height="7" rx="1"/>
@@ -3771,21 +5132,21 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                         </svg>
                     </button>
                 </td>
-                <td class="ionc-col-id">${sensor.id}</td>
-                <td class="ionc-col-name" title="${escapeHtml(textname)}">${escapeHtml(sensor.name)}</td>
-                <td class="ionc-col-type"><span class="type-badge type-${sensor.type}">${sensor.type}</span></td>
+                <td class="ionc-col-id">${escapeHtml(sensor.id ?? '')}</td>
+                <td class="ionc-col-name" title="${escapeAttr(textname)}">${escapeHtml(sensor.name)}</td>
+                <td class="ionc-col-type"><span class="type-badge type-${escapeAttr(sensor.type || '')}">${escapeHtml(sensor.type || '')}</span></td>
                 <td class="ionc-col-value">
                     ${sensor.frozen && sensor.real_value !== undefined && sensor.real_value !== sensor.value
-                        ? `<span class="ionc-value ionc-value-frozen" id="ionc-value-${this.objectName}-${sensor.id}">
-                               <span class="ionc-real-value">${sensor.real_value}</span>
+                        ? `<span class="ionc-value ionc-value-frozen" id="ionc-value-${escapeAttr(this.objectName)}-${escapeAttr(sensor.id)}">
+                               <span class="ionc-real-value">${formatValueHtml(sensor.real_value)}</span>
                                <span class="ionc-frozen-arrow">→</span>
-                               <span class="ionc-frozen-value">${sensor.value}❄</span>
+                               <span class="ionc-frozen-value">${formatValueHtml(sensor.value)}❄</span>
                            </span>`
-                        : `<span class="ionc-value" id="ionc-value-${this.objectName}-${sensor.id}">${sensor.value}</span>`
+                        : `<span class="ionc-value" id="ionc-value-${escapeAttr(this.objectName)}-${escapeAttr(sensor.id)}">${formatValueHtml(sensor.value)}</span>`
                     }
                 </td>
                 <td class="ionc-col-flags">${flags.join(' ') || '—'}</td>
-                <td class="ionc-col-supplier" id="ionc-supplier-${this.objectName}-${sensor.id}" title="${escapeHtml(supplierValue)}">${escapeHtml(supplierValue)}</td>
+                <td class="ionc-col-supplier" id="ionc-supplier-${this.objectName}-${sensor.id}" title="${escapeAttr(supplierValue)}">${escapeHtml(supplierValue)}</td>
                 <td class="ionc-col-consumers">
                     <button class="ionc-btn ionc-btn-consumers" data-id="${sensor.id}" title="Show consumers">👥</button>
                 </td>
@@ -3796,45 +5157,6 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                 </td>
             </tr>
         `;
-    }
-
-    // Управление закреплёнными датчиками
-    getPinnedSensors() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-ionc-pinned') || '{}');
-            return new Set(saved[this.tabKey] || saved[this.objectName] || []);
-        } catch (err) {
-            return new Set();
-        }
-    }
-
-    savePinnedSensors(pinnedSet) {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-ionc-pinned') || '{}');
-            saved[this.tabKey] = Array.from(pinnedSet);
-            localStorage.setItem('uniset-panel-ionc-pinned', JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save pinned sensors:', err);
-        }
-    }
-
-    togglePin(sensorId) {
-        const pinned = this.getPinnedSensors();
-        const idStr = String(sensorId);
-
-        if (pinned.has(idStr)) {
-            pinned.delete(idStr);
-        } else {
-            pinned.add(idStr);
-        }
-
-        this.savePinnedSensors(pinned);
-        this.renderSensorsTable();
-    }
-
-    unpinAll() {
-        this.savePinnedSensors(new Set());
-        this.renderSensorsTable();
     }
 
     // Используем метод toggleSensorChart из базового класса
@@ -3882,41 +5204,23 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         const doSetValue = async () => {
             const input = document.getElementById('ionc-set-value');
-            const value = parseInt(input.value, 10);
+            const value = parseIntegerOrDefault(input.value, NaN);
 
-            if (isNaN(value)) {
+            if (Number.isNaN(value)) {
                 showIoncDialogError('Enter an integer');
                 input.classList.add('error');
                 return;
             }
 
-            try {
-                const url = self.buildUrl(`/api/objects/${encodeURIComponent(objectName)}/ionc/set`);
-                const response = await controlledFetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sensor_id: sensorId, value: value })
-                });
-
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.error || 'Failed to set value');
-                }
-
-                // Обновляем локально
-                if (sensor.frozen) {
-                    // Если заморожен - обновляем real_value (значение SM), value остаётся замороженным
-                    sensor.real_value = value;
-                } else {
-                    sensor.value = value;
-                }
-                // Перерисовываем строку для корректного отображения формата
-                self.reRenderSensorRow(sensorId);
-
-                closeIoncDialog();
-            } catch (err) {
-                showIoncDialogError(`Error: ${err.message}`);
-            }
+            await self._ioncSensorAction(
+                sensorId, 'set', { value },
+                (s, body) => {
+                    // Если заморожен — обновляем real_value (значение SM), value остаётся замороженным.
+                    if (s.frozen) s.real_value = body.value;
+                    else          s.value      = body.value;
+                },
+                { errorPrefix: 'Failed to set value', autoCloseDialog: true }
+            );
         };
 
         openIoncDialog({
@@ -3958,37 +5262,25 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         const doFreeze = async () => {
             const input = document.getElementById('ionc-freeze-value');
-            const value = parseInt(input.value, 10);
+            const value = parseIntegerOrDefault(input.value, NaN);
 
-            if (isNaN(value)) {
+            if (Number.isNaN(value)) {
                 showIoncDialogError('Enter an integer');
                 input.classList.add('error');
                 return;
             }
 
-            try {
-                const url = self.buildUrl(`/api/objects/${encodeURIComponent(objectName)}/ionc/freeze`);
-                const response = await controlledFetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sensor_id: sensorId, value: value })
-                });
-
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.error || 'Failed to freeze');
-                }
-
-                // Локальное обновление для мгновенной обратной связи
-                // SSE обновления подтвердят состояние из API
-                sensor.real_value = sensor.value;
-                sensor.frozen = true;
-                sensor.value = value;
-                self.reRenderSensorRow(sensorId);
-                closeIoncDialog();
-            } catch (err) {
-                showIoncDialogError(`Error: ${err.message}`);
-            }
+            await self._ioncSensorAction(
+                sensorId, 'freeze', { value },
+                (s, body) => {
+                    // Локальное обновление для мгновенной обратной связи —
+                    // SSE update подтвердит state из API.
+                    s.real_value = s.value;
+                    s.frozen = true;
+                    s.value = body.value;
+                },
+                { errorPrefix: 'Failed to freeze', autoCloseDialog: true }
+            );
         };
 
         openIoncDialog({
@@ -4002,31 +5294,42 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         document.getElementById('ionc-freeze-confirm').addEventListener('click', doFreeze);
     }
 
+    // Internal: общий POST к ionc-эндпоинту с локальным sensor mutate + перерисовкой.
+    // endpoint: 'set' | 'freeze' | 'unfreeze'
+    // body: payload для POST (sensor_id будет добавлен)
+    // mutateSensor(sensor, body): функция локального обновления sensor для мгновенной FB
+    // opts.errorPrefix — дефолтный msg если err.error пустой (по умолчанию `Failed to ${endpoint}`)
+    // opts.autoCloseDialog — закрыть IONC dialog после успеха (для dialog-driven actions).
+    async _ioncSensorAction(sensorId, endpoint, body, mutateSensor, opts = {}) {
+        const sensor = this.sensorMap.get(sensorId);
+        if (!sensor) return;
+        try {
+            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/${endpoint}`);
+            const response = await controlledFetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sensor_id: sensorId, ...body })
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || opts.errorPrefix || `Failed to ${endpoint}`);
+            }
+            mutateSensor(sensor, body);
+            this.reRenderSensorRow(sensorId);
+            if (opts.autoCloseDialog) closeIoncDialog();
+        } catch (err) {
+            showIoncDialogError(`Error: ${err.message}`);
+        }
+    }
+
     // Быстрая заморозка на текущем значении (двойной клик на ❄)
     async quickFreeze(sensorId) {
         const sensor = this.sensorMap.get(sensorId);
         if (!sensor) return;
-
-        try {
-            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/freeze`);
-            const response = await controlledFetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sensor_id: sensorId, value: sensor.value })
-            });
-
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.error || 'Failed to freeze');
-            }
-
-            // Локальное обновление для мгновенной обратной связи
-            sensor.real_value = sensor.value;
-            sensor.frozen = true;
-            this.reRenderSensorRow(sensorId);
-        } catch (err) {
-            showIoncDialogError(`Error: ${err.message}`);
-        }
+        await this._ioncSensorAction(sensorId, 'freeze',
+            { value: sensor.value },
+            (s) => { s.real_value = s.value; s.frozen = true; },
+            { errorPrefix: 'Failed to freeze' });
     }
 
     // Показать диалог разморозки (клик на 🔥)
@@ -4063,29 +5366,14 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
         `;
 
         const doUnfreeze = async () => {
-            try {
-                const url = self.buildUrl(`/api/objects/${encodeURIComponent(objectName)}/ionc/unfreeze`);
-                const response = await controlledFetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sensor_id: sensorId })
-                });
-
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.error || 'Failed to unfreeze');
-                }
-
-                // Локальное обновление для мгновенной обратной связи
-                sensor.frozen = false;
-                if (sensor.real_value !== undefined) {
-                    sensor.value = sensor.real_value;
-                }
-                self.reRenderSensorRow(sensorId);
-                closeIoncDialog();
-            } catch (err) {
-                showIoncDialogError(`Error: ${err.message}`);
-            }
+            await self._ioncSensorAction(
+                sensorId, 'unfreeze', {},
+                (s) => {
+                    s.frozen = false;
+                    if (s.real_value !== undefined) s.value = s.real_value;
+                },
+                { errorPrefix: 'Failed to unfreeze', autoCloseDialog: true }
+            );
         };
 
         openIoncDialog({
@@ -4101,612 +5389,25 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
     // Быстрая разморозка (двойной клик на 🔥)
     async quickUnfreeze(sensorId) {
-        const sensor = this.sensorMap.get(sensorId);
-        if (!sensor) return;
-
-        try {
-            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/unfreeze`);
-            const response = await controlledFetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sensor_id: sensorId })
-            });
-
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.error || 'Failed to unfreeze');
-            }
-
-            // Локальное обновление для мгновенной обратной связи
-            sensor.frozen = false;
-            if (sensor.real_value !== undefined) {
-                sensor.value = sensor.real_value;
-            }
-            this.reRenderSensorRow(sensorId);
-        } catch (err) {
-            showIoncDialogError(`Error: ${err.message}`);
-        }
+        await this._ioncSensorAction(sensorId, 'unfreeze',
+            {},
+            (s) => {
+                s.frozen = false;
+                if (s.real_value !== undefined) s.value = s.real_value;
+            },
+            'Failed to unfreeze');
     }
 
-    // ===== Генератор значений =====
-
-    // Значения по умолчанию для параметров генератора
-    getDefaultGeneratorParams() {
-        return {
-            sin: { min: -50, max: 50, pause: 100, step: 100 },
-            cos: { min: -50, max: 50, pause: 100, step: 100 },
-            linear: { min: 0, max: 100, pause: 100, step: 1 },
-            random: { min: 0, max: 100, period: 5000 },
-            square: { min: 0, max: 100, pulseWidth: 2000, pause: 2000 }
-        };
-    }
-
-    // Загрузка preferences из localStorage с миграцией
-    loadGeneratorPreferences() {
-        const newPrefs = localStorage.getItem('ionc-gen-preferences');
-
-        if (newPrefs) {
-            try {
-                return JSON.parse(newPrefs);
-            } catch (e) {
-                console.error('Failed to parse generator preferences:', e);
-            }
-        }
-
-        // Миграция со старого формата
-        const oldType = localStorage.getItem('ionc-gen-last-type');
-        if (oldType) {
-            const prefs = {
-                lastType: oldType,
-                params: this.getDefaultGeneratorParams()
-            };
-            localStorage.setItem('ionc-gen-preferences', JSON.stringify(prefs));
-            localStorage.removeItem('ionc-gen-last-type');
-            return prefs;
-        }
-
-        // Первый запуск - используем defaults
-        return {
-            lastType: 'sin',
-            params: this.getDefaultGeneratorParams()
-        };
-    }
-
-    // Сохранение preferences в localStorage
-    saveGeneratorPreferences(type, params) {
-        const prefs = this.loadGeneratorPreferences();
-        prefs.lastType = type;
-        prefs.params[type] = params;
-        localStorage.setItem('ionc-gen-preferences', JSON.stringify(prefs));
-    }
-
-    // Обновление расчётного периода для sin/cos
-    updateCalculatedPeriod() {
-        const calcPeriodValue = document.getElementById('ionc-gen-calc-period-value');
-        const pauseInput = document.getElementById('ionc-gen-period');
-        const pointsInput = document.getElementById('ionc-gen-step');
-
-        if (!calcPeriodValue || !pauseInput || !pointsInput) return;
-
-        const pause = parseInt(pauseInput.value, 10) || 0;
-        const points = parseInt(pointsInput.value, 10) || 0;
-        const totalPeriod = pause * points;
-
-        if (totalPeriod > 0) {
-            const seconds = (totalPeriod / 1000).toFixed(1);
-            calcPeriodValue.textContent = `${totalPeriod} мс (${seconds} сек)`;
-        } else {
-            calcPeriodValue.textContent = '-';
-        }
-    }
-
-    // Управление видимостью полей формы в зависимости от типа функции
-    updateFormFieldsVisibility(type) {
-        const periodField = document.getElementById('ionc-gen-period-field');
-        const stepField = document.getElementById('ionc-gen-step-field');
-        const pulseFields = document.getElementById('ionc-gen-pulse-fields');
-        const calcPeriodField = document.getElementById('ionc-gen-calc-period');
-        const periodLabel = document.getElementById('ionc-gen-period-label');
-        const periodHint = document.getElementById('ionc-gen-period-hint');
-        const stepLabel = document.getElementById('ionc-gen-step-label');
-        const stepHint = document.getElementById('ionc-gen-step-hint');
-
-        if (!periodField || !stepField || !pulseFields) return;
-
-        // Скрываем все условные поля
-        periodField.style.display = 'none';
-        stepField.style.display = 'none';
-        pulseFields.style.display = 'none';
-        if (calcPeriodField) calcPeriodField.style.display = 'none';
-
-        // Показываем нужные поля в зависимости от типа
-        if (type === 'linear') {
-            // linear: пилообразный с шагом-инкрементом
-            periodField.style.display = 'block';
-            stepField.style.display = 'block';
-            if (periodLabel) periodLabel.textContent = 'Пауза между шагами (мс)';
-            if (periodHint) periodHint.textContent = 'Задержка перед следующим шагом. Мин: 10мс';
-            if (stepLabel) stepLabel.textContent = 'Шаг';
-            if (stepHint) stepHint.textContent = 'Размер одного шага изменения значения';
-        } else if (type === 'sin' || type === 'cos') {
-            // sin/cos: синусоида с заданным количеством точек
-            periodField.style.display = 'block';
-            stepField.style.display = 'block';
-            if (calcPeriodField) calcPeriodField.style.display = 'block';
-            if (periodLabel) periodLabel.textContent = 'Шаг обновления (мс)';
-            if (periodHint) periodHint.textContent = 'Время между обновлениями значения. Мин: 10мс';
-            if (stepLabel) stepLabel.textContent = 'Количество точек на период';
-            if (stepHint) stepHint.textContent = 'Сколько точек отрисует синусоида за один полный период';
-            // Обновляем расчётный период
-            this.updateCalculatedPeriod();
-        } else if (type === 'square') {
-            pulseFields.style.display = 'block';
-        } else {
-            // random
-            periodField.style.display = 'block';
-            // Восстанавливаем подпись для периода
-            if (periodLabel) periodLabel.textContent = 'Период (мс)';
-            if (periodHint) periodHint.textContent = 'Длительность полного цикла. Мин: 100мс';
-        }
-    }
-
-    showGeneratorDialog(sensorId) {
-        const sensor = this.sensorMap.get(sensorId);
-        if (!sensor) return;
-
-        const self = this;
-        const existingGen = this.activeGenerators.get(sensorId);
-
-        // Предупреждение если датчик заморожен
-        const frozenWarning = sensor.frozen
-            ? `<div class="ionc-dialog-warning">Датчик заморожен. Значения будут записываться в SM, но не отобразятся до разморозки.</div>`
-            : '';
-
-        const body = `
-            <div class="ionc-dialog-info">
-                Датчик: <strong>${escapeHtml(sensor.name)}</strong> (ID: ${sensorId})<br>
-                Текущее значение: <strong>${sensor.value}</strong>
-            </div>
-            ${frozenWarning}
-            ${existingGen ? (() => {
-                const genInfo = `${existingGen.type} (min: ${existingGen.min}, max: ${existingGen.max}`;
-                const timing = existingGen.type === 'square'
-                    ? `, импульс: ${existingGen.pulseWidth}мс, пауза: ${existingGen.pause}мс)`
-                    : (existingGen.type === 'linear' || existingGen.type === 'sin' || existingGen.type === 'cos')
-                    ? `, пауза: ${existingGen.pause}мс, шаг: ${existingGen.step})`
-                    : `, период: ${existingGen.period}мс)`;
-
-                return `
-                <div class="ionc-dialog-warning ionc-dialog-warning-active">
-                    <strong>Генератор активен:</strong> ${genInfo}${timing}
-                </div>
-            `;
-            })() : (() => {
-                // Загружаем preferences из localStorage
-                const prefs = this.loadGeneratorPreferences();
-                const lastType = prefs.lastType;
-                const params = prefs.params[lastType] || this.getDefaultGeneratorParams()[lastType];
-
-                const options = [
-                    { value: 'sin', label: 'sin(t) - Синусоида' },
-                    { value: 'cos', label: 'cos(t) - Косинусоида' },
-                    { value: 'linear', label: 'linear - Пилообразный' },
-                    { value: 'random', label: 'random - Случайные значения' },
-                    { value: 'square', label: 'square - Прямоугольный' }
-                ];
-                const optionsHtml = options.map(o =>
-                    `<option value="${o.value}"${o.value === lastType ? ' selected' : ''}>${o.label}</option>`
-                ).join('');
-                return `
-                <div class="ionc-dialog-field">
-                    <label for="ionc-gen-type">Тип функции:</label>
-                    <select id="ionc-gen-type" class="ionc-dialog-select">
-                        ${optionsHtml}
-                    </select>
-                </div>
-                <div class="ionc-dialog-field-row">
-                    <div class="ionc-dialog-field ionc-dialog-field-half">
-                        <label for="ionc-gen-min">Min:</label>
-                        <input type="number" id="ionc-gen-min" value="${params.min}">
-                    </div>
-                    <div class="ionc-dialog-field ionc-dialog-field-half">
-                        <label for="ionc-gen-max">Max:</label>
-                        <input type="number" id="ionc-gen-max" value="${params.max}">
-                    </div>
-                </div>
-                <div class="ionc-dialog-field" id="ionc-gen-period-field">
-                    <label for="ionc-gen-period"><span id="ionc-gen-period-label">Период (мс)</span>:</label>
-                    <input type="number" id="ionc-gen-period" value="${params.period || params.pause || 5000}" step="100">
-                    <div class="ionc-dialog-hint" id="ionc-gen-period-hint">Длительность полного цикла. Мин: 100мс</div>
-                </div>
-                <div class="ionc-dialog-field" id="ionc-gen-step-field" style="display: none;">
-                    <label for="ionc-gen-step"><span id="ionc-gen-step-label">Шаг</span>:</label>
-                    <input type="number" id="ionc-gen-step" value="${params.step || 20}" step="1">
-                    <div class="ionc-dialog-hint" id="ionc-gen-step-hint">Размер одного шага изменения значения</div>
-                </div>
-                <div class="ionc-dialog-field" id="ionc-gen-calc-period" style="display: none;">
-                    <div class="ionc-dialog-hint" style="color: #4a9eff; font-weight: 500;">
-                        💡 Полный период: <span id="ionc-gen-calc-period-value">-</span>
-                    </div>
-                </div>
-                <div id="ionc-gen-pulse-fields" style="display: none;">
-                    <div class="ionc-dialog-field-row">
-                        <div class="ionc-dialog-field ionc-dialog-field-half">
-                            <label for="ionc-gen-pulse-width">Ширина импульса (мс):</label>
-                            <input type="number" id="ionc-gen-pulse-width" value="${params.pulseWidth || 2500}" step="100" min="1">
-                        </div>
-                        <div class="ionc-dialog-field ionc-dialog-field-half">
-                            <label for="ionc-gen-pause">Пауза (мс):</label>
-                            <input type="number" id="ionc-gen-pause" value="${params.pause || 2500}" step="100" min="1">
-                        </div>
-                    </div>
-                    <div class="ionc-dialog-hint">Период = Ширина импульса + Пауза</div>
-                </div>
-            `;
-            })()}
-        `;
-
-        const footer = existingGen ? `
-            <button class="ionc-dialog-btn ionc-dialog-btn-cancel" onclick="closeIoncDialog()">Закрыть</button>
-            <button class="ionc-dialog-btn ionc-dialog-btn-danger" id="ionc-gen-stop">Остановить</button>
-        ` : `
-            <button class="ionc-dialog-btn ionc-dialog-btn-cancel" onclick="closeIoncDialog()">Отмена</button>
-            <button class="ionc-dialog-btn ionc-dialog-btn-primary" id="ionc-gen-start">Запустить</button>
-        `;
-
-        openIoncDialog({
-            title: existingGen ? 'Генератор активен' : 'Генератор значений',
-            body,
-            footer,
-            focusInput: !existingGen
-        });
-
-        // Обработчики кнопок
-        if (existingGen) {
-            document.getElementById('ionc-gen-stop')?.addEventListener('click', () => {
-                this.stopGenerator(sensorId);
-                closeIoncDialog();
-            });
-        } else {
-            document.getElementById('ionc-gen-start')?.addEventListener('click', () => {
-                this.startGenerator(sensorId);
-            });
-
-            // Обработчик смены типа функции
-            const typeSelect = document.getElementById('ionc-gen-type');
-            if (typeSelect) {
-                typeSelect.addEventListener('change', (e) => {
-                    this.updateFormFieldsVisibility(e.target.value);
-                });
-
-                // Устанавливаем начальную видимость полей
-                this.updateFormFieldsVisibility(typeSelect.value);
-            }
-
-            // Обработчики для автоматического расчёта периода (sin/cos)
-            const pauseInput = document.getElementById('ionc-gen-period');
-            const pointsInput = document.getElementById('ionc-gen-step');
-            if (pauseInput && pointsInput) {
-                const updateCalc = () => this.updateCalculatedPeriod();
-                pauseInput.addEventListener('input', updateCalc);
-                pointsInput.addEventListener('input', updateCalc);
-            }
-        }
-    }
-
-    startGenerator(sensorId) {
-        const sensor = this.sensorMap.get(sensorId);
-        if (!sensor) return;
-
-        // Парсим значения формы
-        const type = document.getElementById('ionc-gen-type').value;
-        const min = parseInt(document.getElementById('ionc-gen-min').value, 10);
-        const max = parseInt(document.getElementById('ionc-gen-max').value, 10);
-
-        // Парсим специфичные для типа параметры
-        let period, step, pulseWidth, pause;
-        if (type === 'linear' || type === 'sin' || type === 'cos') {
-            pause = parseInt(document.getElementById('ionc-gen-period').value, 10);
-            step = parseInt(document.getElementById('ionc-gen-step').value, 10);
-        } else if (type === 'square') {
-            pulseWidth = parseInt(document.getElementById('ionc-gen-pulse-width').value, 10);
-            pause = parseInt(document.getElementById('ionc-gen-pause').value, 10);
-        } else {
-            // random
-            period = parseInt(document.getElementById('ionc-gen-period').value, 10);
-        }
-
-        // Валидация общих параметров
-        if (isNaN(min) || isNaN(max)) {
-            showIoncDialogError('Min и Max должны быть числами');
-            return;
-        }
-        if (min >= max) {
-            showIoncDialogError('Min должен быть меньше Max');
-            return;
-        }
-
-        // Валидация специфичных для типа параметров
-        if (type === 'linear') {
-            if (isNaN(pause) || isNaN(step)) {
-                showIoncDialogError('Пауза и Шаг должны быть числами');
-                return;
-            }
-            if (pause < 10) {
-                showIoncDialogError('Пауза должна быть не менее 10мс');
-                return;
-            }
-            if (step === 0) {
-                showIoncDialogError('Шаг не может быть равен 0');
-                return;
-            }
-            if (Math.abs(step) > (max - min)) {
-                showIoncDialogError('Шаг должен быть меньше или равен разности Max - Min');
-                return;
-            }
-        } else if (type === 'sin' || type === 'cos') {
-            if (isNaN(pause) || isNaN(step)) {
-                showIoncDialogError('Шаг обновления и Количество точек должны быть числами');
-                return;
-            }
-            if (pause < 10) {
-                showIoncDialogError('Шаг обновления должен быть не менее 10мс');
-                return;
-            }
-            if (step < 4) {
-                showIoncDialogError('Количество точек должно быть не менее 4');
-                return;
-            }
-        } else if (type === 'square') {
-            if (isNaN(pulseWidth) || isNaN(pause)) {
-                showIoncDialogError('Ширина импульса и Пауза должны быть числами');
-                return;
-            }
-            if (pulseWidth <= 0) {
-                showIoncDialogError('Ширина импульса должна быть больше 0');
-                return;
-            }
-            if (pause <= 0) {
-                showIoncDialogError('Пауза должна быть больше 0');
-                return;
-            }
-        } else {
-            // sin, cos, random
-            if (isNaN(period)) {
-                showIoncDialogError('Период должен быть числом');
-                return;
-            }
-            if (period < 100) {
-                showIoncDialogError('Период должен быть не менее 100мс');
-                return;
-            }
-        }
-
-        // Останавливаем существующий генератор если есть
-        this.stopGenerator(sensorId);
-
-        const startTime = Date.now();
-        const self = this;
-        const objectName = this.objectName;
-
-        // Интервал обновления: ~20 обновлений за период для плавности
-        let updateInterval;
-        if (type === 'square') {
-            updateInterval = Math.max(50, Math.floor((pulseWidth + pause) / 20));
-        } else if (type === 'linear' || type === 'sin' || type === 'cos') {
-            // Для linear/sin/cos: обновляем с частотой паузы (или чаще для плавности)
-            updateInterval = Math.min(pause, 50);
-        } else {
-            // random
-            updateInterval = Math.max(50, Math.floor(period / 20));
-        }
-
-        // Состояние генератора (разные поля для разных типов)
-        const genState = {
-            sensorId,
-            type,
-            min,
-            max,
-            startTime,
-            intervalId: null
-        };
-
-        // Добавляем специфичные для типа параметры
-        if (type === 'linear' || type === 'sin' || type === 'cos') {
-            genState.pause = pause;
-            genState.step = step;
-        } else if (type === 'square') {
-            genState.pulseWidth = pulseWidth;
-            genState.pause = pause;
-        } else {
-            // random
-            genState.period = period;
-        }
-
-        // Функция генерации значения
-        const generateValue = () => {
-            const elapsed = Date.now() - genState.startTime;
-            let value;
-            const range = max - min;
-
-            switch (type) {
-                case 'sin':
-                case 'cos': {
-                    // Синусоида/косинусоида с заданным количеством точек
-                    // genState.step = количество точек на период
-                    // genState.pause = шаг обновления (мс)
-                    const numPoints = genState.step;
-                    const fullCycle = numPoints * genState.pause;
-                    const positionInCycle = elapsed % fullCycle;
-                    const pointIndex = Math.floor(positionInCycle / genState.pause);
-
-                    // Фаза от 0 до 2π
-                    const phase = (pointIndex / numPoints) * 2 * Math.PI;
-
-                    // Синус/косинус от -1 до 1
-                    const wave = type === 'sin' ? Math.sin(phase) : Math.cos(phase);
-
-                    // Масштабируем к диапазону min..max
-                    value = Math.round(min + (wave + 1) / 2 * range);
-                    break;
-                }
-                case 'linear': {
-                    // Пилообразный с шагом-инкрементом и паузой (как в SImitator)
-                    // Положительный шаг: min -> max -> min (начинаем с min, идём вверх)
-                    // Отрицательный шаг: max -> min -> max (начинаем с max, идём вниз)
-                    const absStep = Math.abs(genState.step);
-                    const numStepsFirst = Math.floor(range / absStep) + 1;
-                    const numStepsSecond = Math.floor(range / absStep) - 1;
-                    const totalSteps = numStepsFirst + numStepsSecond;
-                    const fullCycle = totalSteps * genState.pause;
-                    const positionInCycle = elapsed % fullCycle;
-                    const stepNumber = Math.floor(positionInCycle / genState.pause);
-
-                    if (genState.step > 0) {
-                        // Положительный шаг: min -> max -> min
-                        if (stepNumber < numStepsFirst) {
-                            // Вверх: min -> max
-                            value = min + stepNumber * absStep;
-                        } else {
-                            // Вниз: max-step -> min+step (НЕ включая min)
-                            const downStepNumber = stepNumber - numStepsFirst;
-                            value = max - (downStepNumber + 1) * absStep;
-                        }
-                    } else {
-                        // Отрицательный шаг: max -> min -> max
-                        if (stepNumber < numStepsFirst) {
-                            // Вниз: max -> min
-                            value = max - stepNumber * absStep;
-                        } else {
-                            // Вверх: min+step -> max-step (НЕ включая max)
-                            const upStepNumber = stepNumber - numStepsFirst;
-                            value = min + (upStepNumber + 1) * absStep;
-                        }
-                    }
-                    break;
-                }
-                case 'random': {
-                    value = Math.round(min + Math.random() * range);
-                    break;
-                }
-                case 'square': {
-                    // Прямоугольный с настраиваемой скважностью
-                    const totalPeriod = genState.pulseWidth + genState.pause;
-                    const positionInCycle = elapsed % totalPeriod;
-                    value = positionInCycle < genState.pulseWidth ? max : min;
-                    break;
-                }
-                default:
-                    value = min;
-            }
-
-            // Ограничиваем значение
-            value = Math.max(min, Math.min(max, value));
-
-            // Отправляем в API
-            self.setValueForGenerator(sensorId, value);
-        };
-
-        // Запускаем интервал
-        genState.intervalId = setInterval(generateValue, updateInterval);
-
-        // Сохраняем состояние генератора
-        this.activeGenerators.set(sensorId, genState);
-
-        // Для square генератора включаем stepped режим на графике (меандр)
-        if (type === 'square') {
-            this.setChartStepped(sensorId, true);
-        }
-
-        // Перерисовываем строку для отображения индикатора
-        this.reRenderSensorRow(sensorId);
-
-        // Запускаем сразу
-        generateValue();
-
-        // Сохраняем preferences (разные параметры для разных типов)
-        let params = { min, max };
-        if (type === 'linear' || type === 'sin' || type === 'cos') {
-            params.pause = pause;
-            params.step = step;
-        } else if (type === 'square') {
-            params.pulseWidth = pulseWidth;
-            params.pause = pause;
-        } else {
-            // random
-            params.period = period;
-        }
-        this.saveGeneratorPreferences(type, params);
-
-        closeIoncDialog();
-    }
-
-    async setValueForGenerator(sensorId, value) {
-        try {
-            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/set`);
-            await controlledFetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sensor_id: sensorId, value: value })
-            });
-        } catch (err) {
-            console.error('Generator: ошибка установки значения', err);
-        }
-    }
-
-    stopGenerator(sensorId) {
-        const genState = this.activeGenerators.get(sensorId);
-        if (genState) {
-            clearInterval(genState.intervalId);
-
-            // Возвращаем stepped режим к значению по умолчанию (isDiscrete)
-            if (genState.type === 'square') {
-                this.setChartStepped(sensorId, null); // null = вернуть к isDiscrete
-            }
-
-            this.activeGenerators.delete(sensorId);
-            this.reRenderSensorRow(sensorId);
-        }
-    }
-
-    stopAllGenerators() {
-        this.activeGenerators.forEach((genState, sensorId) => {
-            clearInterval(genState.intervalId);
-        });
-        this.activeGenerators.clear();
-    }
-
-    // Установка stepped режима для графика сенсора
-    // stepped: true = включить, false = выключить, null = вернуть к isDiscrete
-    setChartStepped(sensorId, stepped) {
-        const sensor = this.sensorMap.get(sensorId);
-        if (!sensor) return;
-
-        const tabState = state.tabs.get(this.tabKey);
-        if (!tabState) return;
-
-        const varName = `io:${sensor.name}`;
-        const chartData = tabState.charts.get(varName);
-        if (!chartData) return;
-
-        let newStepped;
-        if (stepped === null) {
-            // Вернуть к значению по умолчанию (isDiscrete)
-            newStepped = chartData.isDiscrete ? 'before' : false;
-        } else {
-            newStepped = stepped ? 'before' : false;
-        }
-
-        chartData.chart.data.datasets[0].stepped = newStepped;
-        chartData.chart.update('none');
-    }
 
     // Перерисовка строки датчика и переподключение обработчиков
     reRenderSensorRow(sensorId) {
         const sensor = this.sensorMap.get(sensorId);
         if (!sensor) return;
 
-        const row = document.querySelector(`tr[data-sensor-id="${sensorId}"]`);
+        // getEls (внутри панели this.tabKey) — а не document.querySelector,
+        // иначе при multi-server одинаковый sensorId на разных серверах
+        // указывал бы на чужую вкладку.
+        const row = this.getEls(`tr[data-sensor-id="${sensorId}"]`)[0];
         if (row) {
             row.outerHTML = this.renderSensorRow(sensor);
             this.attachRowEventListeners(sensorId);
@@ -4714,56 +5415,38 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     // Подключение обработчиков к строке датчика
+    bindFreezeToggleButtons(root) {
+        root.querySelectorAll('.ionc-btn-freeze').forEach(btn => {
+            const sensorId = parseInt(btn.dataset.id, 10);
+            bindSingleDoubleClick(
+                btn,
+                () => this.showFreezeDialog(sensorId),
+                () => this.quickFreeze(sensorId)
+            );
+        });
+
+        root.querySelectorAll('.ionc-btn-unfreeze').forEach(btn => {
+            const sensorId = parseInt(btn.dataset.id, 10);
+            bindSingleDoubleClick(
+                btn,
+                () => this.showUnfreezeDialog(sensorId),
+                () => this.quickUnfreeze(sensorId)
+            );
+        });
+    }
+
     attachRowEventListeners(sensorId) {
-        const row = document.querySelector(`tr[data-sensor-id="${sensorId}"]`);
+        // getEls внутри панели вкладки — см. reRenderSensorRow.
+        const row = this.getEls(`tr[data-sensor-id="${sensorId}"]`)[0];
         if (!row) return;
 
         row.querySelector('.ionc-btn-set')?.addEventListener('click', () => this.showSetDialog(sensorId));
         row.querySelector('.ionc-btn-consumers')?.addEventListener('click', () => this.showConsumersDialog(sensorId));
+        this.bindFreezeToggleButtons(row);
 
-        // Кнопка заморозки — одинарный/двойной клик
-        const freezeBtn = row.querySelector('.ionc-btn-freeze');
-        if (freezeBtn) {
-            let clickTimer = null;
-            freezeBtn.addEventListener('click', (e) => {
-                if (clickTimer) {
-                    // Двойной клик — быстрая заморозка
-                    clearTimeout(clickTimer);
-                    clickTimer = null;
-                    this.quickFreeze(sensorId);
-                } else {
-                    // Одинарный клик — ждём второй клик или открываем диалог
-                    clickTimer = setTimeout(() => {
-                        clickTimer = null;
-                        this.showFreezeDialog(sensorId);
-                    }, DOUBLE_CLICK_THRESHOLD);
-                }
-            });
-        }
-
-        // Кнопка разморозки — одинарный/двойной клик
-        const unfreezeBtn = row.querySelector('.ionc-btn-unfreeze');
-        if (unfreezeBtn) {
-            let clickTimer = null;
-            unfreezeBtn.addEventListener('click', (e) => {
-                if (clickTimer) {
-                    // Двойной клик — быстрая разморозка
-                    clearTimeout(clickTimer);
-                    clickTimer = null;
-                    this.quickUnfreeze(sensorId);
-                } else {
-                    // Одинарный клик — ждём второй клик или открываем диалог
-                    clickTimer = setTimeout(() => {
-                        clickTimer = null;
-                        this.showUnfreezeDialog(sensorId);
-                    }, DOUBLE_CLICK_THRESHOLD);
-                }
-            });
-        }
-
-        // Кнопки генератора
-        row.querySelector('.ionc-btn-gen')?.addEventListener('click', () => this.showGeneratorDialog(sensorId));
-        row.querySelector('.ionc-btn-gen-stop')?.addEventListener('click', () => this.stopGenerator(sensorId));
+        // Кнопки тестового сигнала (диагностика)
+        row.querySelector('.ionc-btn-gen')?.addEventListener('click', () => this.showSensorTestSignalDialog(sensorId));
+        row.querySelector('.ionc-btn-gen-stop')?.addEventListener('click', () => this.stopSensorTestSignal(sensorId));
 
         // Чекбокс графика
         row.querySelector('.ionc-chart-checkbox')?.addEventListener('change', () => this.toggleSensorChartById(sensorId));
@@ -4774,7 +5457,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
             const btn = e.currentTarget;
             const sensorName = btn.dataset.sensorName;
             const sensorLabel = btn.dataset.sensorLabel;
-            showAddToDashboardDialog(sensorName, sensorLabel);
+            showAddToDashboardDialog(sensorName, sensorLabel, getDashboardBindingFromButton(btn));
         });
     }
 
@@ -4928,9 +5611,9 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
                     // Формат: real_value → frozen_value❄
                     valueEl.className = 'ionc-value ionc-value-frozen ionc-value-updated';
                     valueEl.innerHTML = `
-                        <span class="ionc-real-value">${sensor.real_value}</span>
+                        <span class="ionc-real-value">${formatValueHtml(sensor.real_value)}</span>
                         <span class="ionc-frozen-arrow">→</span>
-                        <span class="ionc-frozen-value">${sensor.value}❄</span>
+                        <span class="ionc-frozen-value">${formatValueHtml(sensor.value)}❄</span>
                     `;
                 } else {
                     // Обычный формат
@@ -4961,7 +5644,7 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
 
         // Убираем анимацию через ANIMATION_REMOVAL_DELAY
         setTimeout(() => {
-            const panel = document.querySelector(`.tab-panel[data-name="${this.tabKey}"]`);
+            const panel = getTabPanel(this.tabKey);
             if (panel) {
                 panel.querySelectorAll('.ionc-value-updated').forEach(el => el.classList.remove('ionc-value-updated'));
             }
@@ -4980,8 +5663,8 @@ class IONotifyControllerRenderer extends BaseObjectRenderer {
     }
 
     destroy() {
-        // Останавливаем все генераторы значений
-        this.stopAllGenerators();
+        // Останавливаем все активные тестовые сигналы
+        this.stopAllSensorTestSignals();
         // Отписываемся от SSE обновлений при закрытии
         this.unsubscribeFromSSE();
         // Уничтожаем LogViewer
@@ -4995,8 +5678,442 @@ applyMixin(IONotifyControllerRenderer, SSESubscriptionMixin);
 applyMixin(IONotifyControllerRenderer, ResizableSectionMixin);
 applyMixin(IONotifyControllerRenderer, FilterMixin);
 applyMixin(IONotifyControllerRenderer, ItemCounterMixin);
+applyMixin(IONotifyControllerRenderer, PinManagementMixin);
 applyMixin(IONotifyControllerRenderer, TableSortMixin);
 
+
+// === 20-ionc-test-signal.js ===
+// ============================================================================
+// IONC Test-Signal feature — diagnostic UI to inject periodic test signals
+// (sin/cos/square/linear/random) into a SharedMemory sensor through
+// /api/objects/{name}/ionc/set. Используется наладчиками на стенде.
+//
+// Файл — mixin поверх IONotifyControllerRenderer (объявлен в 20-ionc-renderer.js).
+// Лексикографически 20-ionc-test-signal.js идёт ПОСЛЕ 20-ionc-renderer.js,
+// поэтому класс уже определён к моменту вызова applyMixin.
+//
+// Public methods (зовутся из row event handlers и destroy):
+//   - showSensorTestSignalDialog(sensorId)
+//   - startSensorTestSignal(sensorId)         (зовётся внутри dialog OK)
+//   - stopSensorTestSignal(sensorId)
+//   - stopAllSensorTestSignals()              (destroy)
+//   - activeSensorTestSignals                 (Map<sensorId, state>) — UI state
+// ============================================================================
+
+const IoncTestSignalMixin = {
+
+    // ===== Defaults / preferences =====
+
+    getDefaultTestSignalParams() {
+        return {
+            sin: {
+                min:   GENERATOR_DEFAULT_WAVE_MIN,
+                max:   GENERATOR_DEFAULT_WAVE_MAX,
+                pause: GENERATOR_DEFAULT_WAVE_PAUSE_MS,
+                step:  GENERATOR_DEFAULT_WAVE_POINTS,
+            },
+            cos: {
+                min:   GENERATOR_DEFAULT_WAVE_MIN,
+                max:   GENERATOR_DEFAULT_WAVE_MAX,
+                pause: GENERATOR_DEFAULT_WAVE_PAUSE_MS,
+                step:  GENERATOR_DEFAULT_WAVE_POINTS,
+            },
+            linear: {
+                min:   GENERATOR_DEFAULT_MIN,
+                max:   GENERATOR_DEFAULT_MAX,
+                pause: GENERATOR_DEFAULT_WAVE_PAUSE_MS,
+                step:  GENERATOR_DEFAULT_LINEAR_STEP,
+            },
+            random: {
+                min:    GENERATOR_DEFAULT_MIN,
+                max:    GENERATOR_DEFAULT_MAX,
+                period: GENERATOR_DEFAULT_RANDOM_PERIOD_MS,
+            },
+            square: {
+                min:        GENERATOR_DEFAULT_MIN,
+                max:        GENERATOR_DEFAULT_MAX,
+                pulseWidth: GENERATOR_DEFAULT_IONC_SQUARE_PULSE_WIDTH_MS,
+                pause:      GENERATOR_DEFAULT_IONC_SQUARE_PAUSE_MS,
+            },
+        };
+    },
+
+    // localStorage key 'ionc-gen-preferences' оставлен — миграция данных не нужна.
+    loadTestSignalPreferences() {
+        const newPrefs = localStorage.getItem('ionc-gen-preferences');
+        if (newPrefs) {
+            try { return JSON.parse(newPrefs); }
+            catch (e) { console.error('Failed to parse test-signal preferences:', e); }
+        }
+        // Миграция со старого формата
+        const oldType = localStorage.getItem('ionc-gen-last-type');
+        if (oldType) {
+            const prefs = { lastType: oldType, params: this.getDefaultTestSignalParams() };
+            localStorage.setItem('ionc-gen-preferences', JSON.stringify(prefs));
+            localStorage.removeItem('ionc-gen-last-type');
+            return prefs;
+        }
+        return { lastType: 'sin', params: this.getDefaultTestSignalParams() };
+    },
+
+    saveTestSignalPreferences(type, params) {
+        const prefs = this.loadTestSignalPreferences();
+        prefs.lastType = type;
+        prefs.params[type] = params;
+        localStorage.setItem('ionc-gen-preferences', JSON.stringify(prefs));
+    },
+
+    // ===== Form helpers (вызываются из dialog change handlers) =====
+
+    _updateTestSignalCalculatedPeriod() {
+        const calcPeriodValue = document.getElementById('ionc-gen-calc-period-value');
+        const pauseInput = document.getElementById('ionc-gen-period');
+        const pointsInput = document.getElementById('ionc-gen-step');
+        if (!calcPeriodValue || !pauseInput || !pointsInput) return;
+
+        const pause = parseIntegerOrDefault(pauseInput.value, 0);
+        const points = parseIntegerOrDefault(pointsInput.value, 0);
+        const totalPeriod = pause * points;
+        if (totalPeriod > 0) {
+            const seconds = (totalPeriod / 1000).toFixed(1);
+            calcPeriodValue.textContent = `${totalPeriod} мс (${seconds} сек)`;
+        } else {
+            calcPeriodValue.textContent = '-';
+        }
+    },
+
+    _updateTestSignalFormFields(type) {
+        const periodField = document.getElementById('ionc-gen-period-field');
+        const stepField = document.getElementById('ionc-gen-step-field');
+        const pulseFields = document.getElementById('ionc-gen-pulse-fields');
+        const calcPeriodField = document.getElementById('ionc-gen-calc-period');
+        const periodLabel = document.getElementById('ionc-gen-period-label');
+        const periodHint = document.getElementById('ionc-gen-period-hint');
+        const stepLabel = document.getElementById('ionc-gen-step-label');
+        const stepHint = document.getElementById('ionc-gen-step-hint');
+
+        if (!periodField || !stepField || !pulseFields) return;
+
+        // Скрываем все условные поля
+        periodField.style.display = 'none';
+        stepField.style.display = 'none';
+        pulseFields.style.display = 'none';
+        if (calcPeriodField) calcPeriodField.style.display = 'none';
+
+        if (type === 'linear') {
+            // linear: пилообразный с шагом-инкрементом
+            periodField.style.display = 'block';
+            stepField.style.display = 'block';
+            if (periodLabel) periodLabel.textContent = 'Пауза между шагами (мс)';
+            if (periodHint) periodHint.textContent = `Задержка перед следующим шагом. Мин: ${GENERATOR_MIN_WAVE_PAUSE_MS}мс`;
+            if (stepLabel) stepLabel.textContent = 'Шаг';
+            if (stepHint) stepHint.textContent = 'Размер одного шага изменения значения';
+        } else if (type === 'sin' || type === 'cos') {
+            periodField.style.display = 'block';
+            stepField.style.display = 'block';
+            if (calcPeriodField) calcPeriodField.style.display = 'block';
+            if (periodLabel) periodLabel.textContent = 'Пауза между точками (мс)';
+            if (periodHint) periodHint.textContent = `Задержка между точками синусоиды. Мин: ${GENERATOR_MIN_WAVE_PAUSE_MS}мс`;
+            if (stepLabel) stepLabel.textContent = 'Точек в периоде';
+            if (stepHint) stepHint.textContent = `Кол-во точек на полный цикл. Мин: ${GENERATOR_MIN_WAVE_POINTS}`;
+            this._updateTestSignalCalculatedPeriod();
+        } else if (type === 'square') {
+            // square: ширина импульса + пауза
+            pulseFields.style.display = 'block';
+        } else {
+            // random
+            periodField.style.display = 'block';
+            if (periodLabel) periodLabel.textContent = 'Период (мс)';
+            if (periodHint) periodHint.textContent = 'Длительность полного цикла. Мин: 100мс';
+        }
+    },
+
+    // ===== Dialog =====
+
+    showSensorTestSignalDialog(sensorId) {
+        const sensor = this.sensorMap.get(sensorId);
+        if (!sensor) return;
+        const existing = this.activeSensorTestSignals.get(sensorId);
+
+        const body = this._buildTestSignalDialogBody(sensor, sensorId, existing);
+        const footer = this._buildTestSignalDialogFooter(existing);
+
+        openIoncDialog({
+            title: existing ? 'Тестовый сигнал активен' : 'Тестовый сигнал датчика',
+            body,
+            footer,
+            focusInput: !existing,
+        });
+
+        this._wireTestSignalDialogHandlers(sensorId, existing);
+    },
+
+    _buildTestSignalDialogBody(sensor, sensorId, existing) {
+        const frozenWarning = sensor.frozen
+            ? `<div class="ionc-dialog-warning">Датчик заморожен. Значения будут записываться в SM, но не отобразятся до разморозки.</div>`
+            : '';
+        const sensorInfo = `
+            <div class="ionc-dialog-info">
+                Датчик: <strong>${escapeHtml(sensor.name)}</strong> (ID: ${sensorId})<br>
+                Текущее значение: <strong>${sensor.value}</strong>
+            </div>
+        `;
+        const main = existing
+            ? this._renderActiveTestSignalBlock(existing)
+            : this._renderTestSignalSetupForm();
+        return `${sensorInfo}${frozenWarning}${main}`;
+    },
+
+    _renderActiveTestSignalBlock(existing) {
+        const info = `${existing.type} (min: ${existing.min}, max: ${existing.max}`;
+        const timing = existing.type === 'square'
+            ? `, импульс: ${existing.pulseWidth}мс, пауза: ${existing.pause}мс)`
+            : (existing.type === 'linear' || existing.type === 'sin' || existing.type === 'cos')
+                ? `, пауза: ${existing.pause}мс, шаг: ${existing.step})`
+                : `, период: ${existing.period}мс)`;
+        return `
+            <div class="ionc-dialog-warning ionc-dialog-warning-active">
+                <strong>Тестовый сигнал активен:</strong> ${info}${timing}
+            </div>
+        `;
+    },
+
+    _renderTestSignalSetupForm() {
+        const prefs = this.loadTestSignalPreferences();
+        const lastType = prefs.lastType;
+        const params = prefs.params[lastType] || this.getDefaultTestSignalParams()[lastType];
+
+        const typeOptions = [
+            { value: 'sin',    label: 'sin(t) - Синусоида' },
+            { value: 'cos',    label: 'cos(t) - Косинусоида' },
+            { value: 'linear', label: 'linear - Пилообразный' },
+            { value: 'random', label: 'random - Случайные значения' },
+            { value: 'square', label: 'square - Прямоугольный' },
+        ];
+        const optionsHtml = typeOptions.map(o =>
+            `<option value="${o.value}"${o.value === lastType ? ' selected' : ''}>${o.label}</option>`
+        ).join('');
+
+        return `
+            <div class="ionc-dialog-field">
+                <label for="ionc-gen-type">Тип функции:</label>
+                <select id="ionc-gen-type" class="ionc-dialog-select">
+                    ${optionsHtml}
+                </select>
+            </div>
+            <div class="ionc-dialog-field-row">
+                <div class="ionc-dialog-field ionc-dialog-field-half">
+                    <label for="ionc-gen-min">Min:</label>
+                    <input type="number" id="ionc-gen-min" value="${params.min}">
+                </div>
+                <div class="ionc-dialog-field ionc-dialog-field-half">
+                    <label for="ionc-gen-max">Max:</label>
+                    <input type="number" id="ionc-gen-max" value="${params.max}">
+                </div>
+            </div>
+            <div class="ionc-dialog-field" id="ionc-gen-period-field">
+                <label for="ionc-gen-period"><span id="ionc-gen-period-label">Период (мс)</span>:</label>
+                <input type="number" id="ionc-gen-period" value="${params.period || params.pause || GENERATOR_DEFAULT_RANDOM_PERIOD_MS}" step="100">
+                <div class="ionc-dialog-hint" id="ionc-gen-period-hint">Длительность полного цикла. Мин: ${GENERATOR_MIN_PERIOD_MS}мс</div>
+            </div>
+            <div class="ionc-dialog-field" id="ionc-gen-step-field" style="display: none;">
+                <label for="ionc-gen-step"><span id="ionc-gen-step-label">Шаг</span>:</label>
+                <input type="number" id="ionc-gen-step" value="${params.step || GENERATOR_DEFAULT_WAVE_POINTS}" step="1">
+                <div class="ionc-dialog-hint" id="ionc-gen-step-hint">Размер одного шага изменения значения</div>
+            </div>
+            <div class="ionc-dialog-field" id="ionc-gen-calc-period" style="display: none;">
+                <div class="ionc-dialog-hint" style="color: #4a9eff; font-weight: 500;">
+                    💡 Полный период: <span id="ionc-gen-calc-period-value">-</span>
+                </div>
+            </div>
+            <div id="ionc-gen-pulse-fields" style="display: none;">
+                <div class="ionc-dialog-field-row">
+                    <div class="ionc-dialog-field ionc-dialog-field-half">
+                        <label for="ionc-gen-pulse-width">Ширина импульса (мс):</label>
+                        <input type="number" id="ionc-gen-pulse-width" value="${params.pulseWidth || GENERATOR_DEFAULT_IONC_SQUARE_PULSE_WIDTH_MS}" step="100" min="${GENERATOR_MIN_PULSE_WIDTH_MS}">
+                    </div>
+                    <div class="ionc-dialog-field ionc-dialog-field-half">
+                        <label for="ionc-gen-pause">Пауза (мс):</label>
+                        <input type="number" id="ionc-gen-pause" value="${params.pause || GENERATOR_DEFAULT_IONC_SQUARE_PAUSE_MS}" step="100" min="${GENERATOR_MIN_PAUSE_MS}">
+                    </div>
+                </div>
+                <div class="ionc-dialog-hint">Период = Ширина импульса + Пауза</div>
+            </div>
+        `;
+    },
+
+    _buildTestSignalDialogFooter(existing) {
+        return existing ? `
+            <button class="ionc-dialog-btn ionc-dialog-btn-cancel" onclick="closeIoncDialog()">Закрыть</button>
+            <button class="ionc-dialog-btn ionc-dialog-btn-danger" id="ionc-gen-stop">Остановить</button>
+        ` : `
+            <button class="ionc-dialog-btn ionc-dialog-btn-cancel" onclick="closeIoncDialog()">Отмена</button>
+            <button class="ionc-dialog-btn ionc-dialog-btn-primary" id="ionc-gen-start">Запустить</button>
+        `;
+    },
+
+    _wireTestSignalDialogHandlers(sensorId, existing) {
+        if (existing) {
+            document.getElementById('ionc-gen-stop')?.addEventListener('click', () => {
+                this.stopSensorTestSignal(sensorId);
+                closeIoncDialog();
+            });
+            return;
+        }
+
+        document.getElementById('ionc-gen-start')?.addEventListener('click', () => {
+            this.startSensorTestSignal(sensorId);
+        });
+
+        const typeSelect = document.getElementById('ionc-gen-type');
+        if (typeSelect) {
+            typeSelect.addEventListener('change', (e) => {
+                this._updateTestSignalFormFields(e.target.value);
+            });
+            this._updateTestSignalFormFields(typeSelect.value);
+        }
+
+        // Автоматический расчёт периода для sin/cos
+        const pauseInput = document.getElementById('ionc-gen-period');
+        const pointsInput = document.getElementById('ionc-gen-step');
+        if (pauseInput && pointsInput) {
+            const updateCalc = () => this._updateTestSignalCalculatedPeriod();
+            pauseInput.addEventListener('input', updateCalc);
+            pointsInput.addEventListener('input', updateCalc);
+        }
+    },
+
+    // ===== Start/stop =====
+
+    startSensorTestSignal(sensorId) {
+        const sensor = this.sensorMap.get(sensorId);
+        if (!sensor) return;
+
+        const selectedType = document.getElementById('ionc-gen-type').value;
+        const rawConfig = {
+            type: selectedType,
+            min: document.getElementById('ionc-gen-min').value,
+            max: document.getElementById('ionc-gen-max').value,
+            step: document.getElementById('ionc-gen-step')?.value,
+            pause: selectedType === 'square'
+                ? document.getElementById('ionc-gen-pause')?.value
+                : document.getElementById('ionc-gen-period')?.value,
+            pulseWidth: document.getElementById('ionc-gen-pulse-width')?.value,
+            period: document.getElementById('ionc-gen-period')?.value,
+        };
+        const validationError = validateSignalGeneratorConfig(rawConfig);
+        if (validationError) {
+            showIoncDialogError(validationError);
+            return;
+        }
+
+        const genConfig = normalizeSignalGeneratorConfig(rawConfig);
+        const { type, min, max, step, pause, pulseWidth, period } = genConfig;
+
+        // Останавливаем существующий test signal если есть
+        this.stopSensorTestSignal(sensorId);
+
+        const generator = new SignalGenerator({
+            ...genConfig,
+            onTick: (value) => this._writeTestSignalValue(sensorId, value),
+        });
+
+        // Минимальное состояние для UI: тип (для setChartStepped), min/max +
+        // тип-специфичные параметры (для отображения "active" баннера и
+        // сохранения preferences).
+        const state = { sensorId, type, min, max, generator };
+        if (type === 'linear' || type === 'sin' || type === 'cos') {
+            state.pause = pause;
+            state.step = step;
+        } else if (type === 'square') {
+            state.pulseWidth = pulseWidth;
+            state.pause = pause;
+        } else {
+            state.period = period;
+        }
+
+        generator.start();
+        this.activeSensorTestSignals.set(sensorId, state);
+
+        // Square = меандр → stepped chart.
+        if (type === 'square') this._setChartSteppedForTestSignal(sensorId, true);
+
+        this.reRenderSensorRow(sensorId);
+
+        // Save preferences (params без `generator` ссылки).
+        let params = { min, max };
+        if (type === 'linear' || type === 'sin' || type === 'cos') {
+            params.pause = pause;
+            params.step = step;
+        } else if (type === 'square') {
+            params.pulseWidth = pulseWidth;
+            params.pause = pause;
+        } else {
+            params.period = period;
+        }
+        this.saveTestSignalPreferences(type, params);
+
+        closeIoncDialog();
+    },
+
+    async _writeTestSignalValue(sensorId, value) {
+        try {
+            const url = this.buildUrl(`/api/objects/${encodeURIComponent(this.objectName)}/ionc/set`);
+            await controlledFetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sensor_id: sensorId, value }),
+            });
+        } catch (err) {
+            console.error('TestSignal: ошибка установки значения', err);
+        }
+    },
+
+    stopSensorTestSignal(sensorId) {
+        const state = this.activeSensorTestSignals.get(sensorId);
+        if (!state) return;
+        if (state.generator) state.generator.stop();
+        if (state.type === 'square') {
+            this._setChartSteppedForTestSignal(sensorId, null); // вернуть к isDiscrete
+        }
+        this.activeSensorTestSignals.delete(sensorId);
+        this.reRenderSensorRow(sensorId);
+    },
+
+    stopAllSensorTestSignals() {
+        this.activeSensorTestSignals.forEach((state) => {
+            if (state.generator) state.generator.stop();
+        });
+        this.activeSensorTestSignals.clear();
+    },
+
+    // Установка stepped режима для графика сенсора (для square test signal).
+    // stepped: true=включить, false=выключить, null=вернуть к isDiscrete.
+    _setChartSteppedForTestSignal(sensorId, stepped) {
+        const sensor = this.sensorMap.get(sensorId);
+        if (!sensor) return;
+        const tabState = state.tabs.get(this.tabKey);
+        if (!tabState) return;
+        const varName = `io:${sensor.name}`;
+        const chartData = tabState.charts.get(varName);
+        if (!chartData) return;
+
+        let newStepped;
+        if (stepped === null) {
+            newStepped = chartData.isDiscrete ? 'before' : false;
+        } else {
+            newStepped = stepped ? 'before' : false;
+        }
+        chartData.chart.data.datasets[0].stepped = newStepped;
+        chartData.chart.update('none');
+    },
+};
+
+// Apply mixin к IONotifyControllerRenderer (объявлен в 20-ionc-renderer.js;
+// этот файл загружается лексикографически после).
+if (typeof IONotifyControllerRenderer !== 'undefined') {
+    applyMixin(IONotifyControllerRenderer, IoncTestSignalMixin);
+}
 
 
 // === 21-opcua-exchange.js ===
@@ -5008,6 +6125,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     static getTypeName() {
         return 'OPCUAExchange';
     }
+    static loadingIdPrefix = 'opcua';
 
     constructor(objectName, tabKey = null) {
         super(objectName, tabKey);
@@ -5140,7 +6258,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             `opcua-sensors-filter-${this.objectName}`,
             `opcua-type-filter-${this.objectName}`,
             () => this.loadSensors(),
-            300,
+            FILTER_DEBOUNCE_DELAY,
             `opcua-status-filter-${this.objectName}`
         );
 
@@ -5163,7 +6281,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     createOPCUAStatusSection() {
         const headerExtra = `
             ${this.createStatusHeaderExtra()}
-            <div class="header-channels" id="opcua-header-channels-${this.objectName}" onclick="event.stopPropagation()"></div>
+            <div class="header-channels" id="opcua-header-channels-${this.objectName}"></div>
         `;
         return this.createCollapsibleSection('opcua-status', 'OPC UA Status', `
             <div class="opcua-actions">
@@ -5176,7 +6294,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
     createOPCUAControlSection() {
         const headerIndicators = `
-            <div class="header-indicators" id="opcua-control-indicators-${this.objectName}" onclick="event.stopPropagation()">
+            <div class="header-indicators" id="opcua-control-indicators-${this.objectName}">
                 <div class="header-indicator">
                     <span class="header-indicator-label">Allowed</span>
                     <span class="header-indicator-dot" id="opcua-ind-allow-${this.objectName}"></span>
@@ -5202,7 +6320,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
     createOPCUAParamsSection() {
         const headerIndicator = `
-            <span class="header-indicator-dot fail" id="opcua-ind-params-${this.objectName}" onclick="event.stopPropagation()" title="Parameters: loading..."></span>
+            <span class="header-indicator-dot fail" id="opcua-ind-params-${this.objectName}" title="Parameters: loading..."></span>
         `;
         return this.createCollapsibleSection('opcua-params', 'Exchange Parameters', `
             <div class="opcua-actions">
@@ -5323,8 +6441,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         // Компактная строка статистики
         const ioSize = status.iolist_size ?? status.iolistSize ?? '—';
         const errCount = status.errorHistorySize ?? 0;
-        const errMax = status.errorHistoryMax ?? 100;
-        const errClass = errCount >= errMax ? 'error' : (errCount > 0 ? 'warn' : '');
+        const errMax = status.errorHistoryMax ?? OPCUA_ERROR_HISTORY_DEFAULT_MAX;
 
         // Определяем класс индикатора ошибок
         const errDotClass = errCount >= errMax ? 'fail' : (errCount > 0 ? 'warn' : 'ok');
@@ -5395,57 +6512,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     renderControl() {
-        const allow = this.status?.httpControlAllow && canControl();
-        const active = this.status?.httpControlActive;
-        const enabledParams = this.status?.httpEnabledSetParams;
-        const allowText = allow ? 'Take control' : (!canControl() ? 'Read-only mode' : 'Control not allowed');
-
-        // Обновляем индикаторы в шапке
-        const indAllow = this.getEl(`opcua-ind-allow-${this.objectName}`);
-        const indActive = this.getEl(`opcua-ind-active-${this.objectName}`);
-        const indParams = this.getEl(`opcua-ind-params-${this.objectName}`);
-
-        if (indAllow) {
-            indAllow.className = `header-indicator-dot ${allow ? 'ok' : 'fail'}`;
-            indAllow.title = allow ? 'Allowed: Yes' : 'Allowed: No';
-        }
-        if (indActive) {
-            indActive.className = `header-indicator-dot ${active ? 'ok' : 'fail'}`;
-            indActive.title = active ? 'Active: Yes' : 'Active: No';
-        }
-        if (indParams) {
-            indParams.className = `header-indicator-dot ${enabledParams ? 'ok' : 'fail'}`;
-            indParams.title = enabledParams ? 'Parameters: Yes' : 'Parameters: No';
-        }
-
-        // Обновляем кнопки
-        const takeBtn = this.getEl(`opcua-control-take-${this.objectName}`);
-        const releaseBtn = this.getEl(`opcua-control-release-${this.objectName}`);
-        const noteEl = this.getEl(`opcua-control-note-${this.objectName}`);
-
-        if (takeBtn) {
-            takeBtn.disabled = !allow;
-            takeBtn.title = allowText;
-            // Подсветка кнопки когда контроль активен
-            if (active) {
-                takeBtn.classList.add('control-active');
-            } else {
-                takeBtn.classList.remove('control-active');
-            }
-        }
-        if (releaseBtn) {
-            releaseBtn.disabled = !allow;
-            releaseBtn.title = allowText;
-        }
-
-        // Обновляем стиль сообщения
-        if (noteEl) {
-            if (active) {
-                noteEl.classList.add('control-note-success');
-            } else {
-                noteEl.classList.remove('control-note-success');
-            }
-        }
+        this.renderHttpControl('opcua');
     }
 
     formatSubscription(status) {
@@ -5496,7 +6563,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         this.readonlyParams.forEach(name => {
             const current = this.params[name];
             const tr = document.createElement('tr');
-            let displayValue = current !== undefined ? formatValue(current) : '—';
+            let displayValue = current !== undefined ? formatValueHtml(current) : '—';
             // Форматируем activated как Да/Нет
             if (name === 'activated') {
                 displayValue = current ? 'Yes' : 'No';
@@ -5551,107 +6618,40 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     async loadSensors() {
-        // Reset state for fresh load
-        this.allSensors = [];
-        this.hasMore = true;
-        this.startIndex = 0;
-        this.endIndex = 0;
+        return this._loadOpcuaSensorsTable({
+            viewportId: `opcua-sensors-viewport-${this.objectName}`,
+            tableId:    `opcua-sensors-table-${this.objectName}`,
+            noteId:     `opcua-sensors-note-${this.objectName}`,
+            buildSensorParams:   () => this._buildSensorQueryParams(),
+            postProcessSensors:  (s) => this._postProcessSensors(s),
+        });
+    }
 
-        // Reset viewport scroll position
-        const viewport = this.getEl(`opcua-sensors-viewport-${this.objectName}`);
-        if (viewport) viewport.scrollTop = 0;
-
-        // Проверяем режим фильтрации: false = серверная (default), true = UI
+    // Server-side query params (search/iotype) — только если UI-фильтр выключен.
+    _buildSensorQueryParams() {
         const useUIFilter = state.config.opcuaUISensorsFilter;
+        if (useUIFilter) return '';
+        let params = '';
+        if (this.filter) params += `&search=${encodeURIComponent(this.filter)}`;
+        if (this.typeFilter && this.typeFilter !== 'all') params += `&iotype=${this.typeFilter}`;
+        return params;
+    }
 
-        try {
-            let url = `/api/objects/${encodeURIComponent(this.objectName)}/opcua/sensors?limit=${this.chunkSize}&offset=0`;
-
-            // Серверная фильтрация (если не включена UI фильтрация)
-            if (!useUIFilter) {
-                if (this.filter) {
-                    url += `&search=${encodeURIComponent(this.filter)}`;
-                }
-                if (this.typeFilter && this.typeFilter !== 'all') {
-                    url += `&iotype=${this.typeFilter}`;
-                }
-            }
-
-            const data = await this.fetchJSON(url);
-            let sensors = data.sensors || [];
-            this.sensorsTotal = typeof data.total === 'number' ? data.total : sensors.length;
-
-            // UI фильтрация (если включена)
-            if (useUIFilter) {
-                sensors = this.applyLocalFilters(sensors);
-            } else if (this.statusFilter && this.statusFilter !== 'all') {
-                // Status filter применяем локально (сервер не поддерживает)
-                sensors = sensors.filter(s =>
-                    (s.status || '').toLowerCase() === this.statusFilter.toLowerCase()
-                );
-            }
-
-            this.allSensors = sensors;
-            this.sensorMap.clear();
-            sensors.forEach(s => this.sensorMap.set(s.id, s));
-
-            // Если нет фильтра и есть закреплённые датчики - загрузить их отдельно
-            if (!this.filter) {
-                await this.loadPinnedSensors();
-            }
-
-            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
-            this.updateVisibleRows();
-            this.updateSensorCount();
-            this.setNote(`opcua-sensors-note-${this.objectName}`, '');
-
-            // Подписываемся на SSE обновления после загрузки
-            this.subscribeToSSE();
-
-            // Обработчики сортировки
-            const table = this.getEl(`opcua-sensors-table-${this.objectName}`);
-            if (table) {
-                this.attachSortHandlers(table);
-                this.updateSortHeaders();
-            }
-        } catch (err) {
-            this.setNote(`opcua-sensors-note-${this.objectName}`, err.message, true);
+    // Local post-processing: UI-mode filter ИЛИ status filter (server не поддерживает).
+    _postProcessSensors(sensors) {
+        const useUIFilter = state.config.opcuaUISensorsFilter;
+        if (useUIFilter) return this.applyLocalFilters(sensors);
+        if (this.statusFilter && this.statusFilter !== 'all') {
+            return sensors.filter(s =>
+                (s.status || '').toLowerCase() === this.statusFilter.toLowerCase()
+            );
         }
+        return sensors;
     }
 
     // Загружает закреплённые датчики, если они не в текущем списке
-    async loadPinnedSensors() {
-        const pinnedIds = this.getPinned();
-        if (pinnedIds.size === 0) return;
-
-        // Найти ID, которых нет в загруженных датчиках
-        const missingIds = [];
-        for (const idStr of pinnedIds) {
-            const id = parseInt(idStr);
-            if (!this.sensorMap.has(id)) {
-                missingIds.push(id);
-            }
-        }
-
-        if (missingIds.length === 0) return;
-
-        // Загрузить отсутствующие датчики по ID
-        try {
-            const idsParam = missingIds.join(',');
-            const url = `/api/objects/${encodeURIComponent(this.objectName)}/opcua/get?filter=${idsParam}`;
-            const response = await this.fetchJSON(url);
-            const pinnedSensors = response.sensors || [];
-
-            // Добавить закреплённые датчики в начало списка
-            for (const sensor of pinnedSensors) {
-                if (!this.sensorMap.has(sensor.id)) {
-                    this.allSensors.unshift(sensor);
-                    this.sensorMap.set(sensor.id, sensor);
-                }
-            }
-        } catch (err) {
-            console.warn('Failed to load pinned sensors:', err);
-        }
+    loadPinnedSensors() {
+        return this.loadMissingPinnedSensors('/opcua/get');
     }
 
     applyLocalFilters(sensors) {
@@ -5675,55 +6675,10 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     async loadMoreSensors() {
-        if (this.isLoadingChunk || !this.hasMore) return;
-
-        this.isLoadingChunk = true;
-        this.showLoadingIndicator(true);
-
-        // Проверяем режим фильтрации: false = серверная (default), true = UI
-        const useUIFilter = state.config.opcuaUISensorsFilter;
-
-        try {
-            const nextOffset = this.allSensors.length;
-            let url = `/api/objects/${encodeURIComponent(this.objectName)}/opcua/sensors?limit=${this.chunkSize}&offset=${nextOffset}`;
-
-            // Серверная фильтрация (если не включена UI фильтрация)
-            if (!useUIFilter) {
-                if (this.filter) {
-                    url += `&search=${encodeURIComponent(this.filter)}`;
-                }
-                if (this.typeFilter && this.typeFilter !== 'all') {
-                    url += `&iotype=${this.typeFilter}`;
-                }
-            }
-
-            const data = await this.fetchJSON(url);
-            let newSensors = data.sensors || [];
-
-            // UI фильтрация (если включена)
-            if (useUIFilter) {
-                newSensors = this.applyLocalFilters(newSensors);
-            } else if (this.statusFilter && this.statusFilter !== 'all') {
-                // Status filter применяем локально (сервер не поддерживает)
-                newSensors = newSensors.filter(s =>
-                    (s.status || '').toLowerCase() === this.statusFilter.toLowerCase()
-                );
-            }
-
-            // Дедупликация: добавляем только датчики которых еще нет
-            const existingIds = new Set(this.allSensors.map(s => s.id));
-            const uniqueNewSensors = newSensors.filter(s => !existingIds.has(s.id));
-
-            this.allSensors = [...this.allSensors, ...uniqueNewSensors];
-            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
-            this.updateVisibleRows();
-            this.updateSensorCount();
-        } catch (err) {
-            console.error('Failed to load more sensors:', err);
-        } finally {
-            this.isLoadingChunk = false;
-            this.showLoadingIndicator(false);
-        }
+        return this._loadMoreOpcuaSensorsTable({
+            buildSensorParams:   () => this._buildSensorQueryParams(),
+            postProcessSensors:  (s) => this._postProcessSensors(s),
+        });
     }
 
     renderVisibleSensors() {
@@ -5742,10 +6697,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         }
 
         // Фильтруем датчики: если есть закрепленные — показываем только их (если нет фильтра)
-        let sensorsToShow = this.allSensors;
-        if (hasPinned && !this.filter) {
-            sensorsToShow = this.allSensors.filter(s => pinnedSensors.has(String(s.id)));
-        }
+        let sensorsToShow = this.filterPinnedOnly(this.allSensors, pinnedSensors);
 
         // Set spacer height to position visible rows correctly
         const spacerHeight = this.startIndex * this.rowHeight;
@@ -5773,28 +6725,20 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         // Render visible rows with type badges and chart toggle
         tbody.innerHTML = visibleSensors.map(sensor => {
             const isPinned = pinnedSensors.has(String(sensor.id));
-            const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-            const pinIcon = isPinned ? '📌' : '○';
-            const pinTitle = isPinned ? 'Unpin' : 'Pin';
-
             const iotype = sensor.iotype || sensor.type || '';
             const typeBadgeClass = iotype ? `type-badge type-${iotype}` : '';
             return `
             <tr data-sensor-id="${sensor.id || ''}">
-                <td class="col-pin">
-                    <span class="${pinToggleClass}" data-id="${sensor.id}" title="${pinTitle}">
-                        ${pinIcon}
-                    </span>
-                </td>
+                ${this.renderPinToggleCell({ id: sensor.id, isPinned })}
                 ${this.renderAddButtonsCell(sensor.id, sensor.name, 'opcua', sensor.textname || sensor.name)}
                 <td class="col-id">${sensor.id ?? '—'}</td>
-                <td class="col-name" title="${escapeHtml(sensor.textname || sensor.comment || '')}">${escapeHtml(sensor.name || '')}</td>
+                <td class="col-name" title="${escapeAttr(sensor.textname || sensor.comment || '')}">${escapeHtml(sensor.name || '')}</td>
                 <td class="col-type"><span class="${typeBadgeClass}">${iotype || '—'}</span></td>
                 <td class="col-value">${sensor.value ?? '—'}</td>
                 <td class="col-tick">${sensor.tick ?? '—'}</td>
                 <td class="col-vtype">${sensor.vtype || '—'}</td>
                 <td class="col-precision">${sensor.precision ?? '—'}</td>
-                <td class="col-status ${sensor.status && sensor.status.toLowerCase() !== 'ok' ? 'status-bad' : ''}" title="${escapeHtml(sensor.status || '')}">${escapeHtml(sensor.status || '—')}</td>
+                <td class="col-status ${sensor.status && sensor.status.toLowerCase() !== 'ok' ? 'status-bad' : ''}" title="${escapeAttr(sensor.status || '')}">${escapeHtml(sensor.status || '—')}</td>
             </tr>
         `}).join('');
 
@@ -5806,7 +6750,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
 
         // Bind pin toggle events
         tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => this.togglePin(parseInt(toggle.dataset.id)));
+            toggle.addEventListener('click', () => this.togglePin(parseIntegerOrDefault(toggle.dataset.id, null)));
         });
 
         // Обработчик кнопки "снять все"
@@ -5825,25 +6769,15 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
         });
     }
 
-    // Override to use OPC UA SSE subscription
+    // OPCUAExchange sensors are already subscribed through main SSE
     subscribeToChartSensor(sensorId) {
-        // OPCUAExchange sensors are already subscribed through main SSE
-        // Just ensure the sensor is in our subscription list
-        if (!this.subscribedSensorIds.has(sensorId)) {
-            this.subscribedSensorIds.add(sensorId);
-        }
+        this.subscribeToChartSensorLocal(sensorId);
     }
 
     updateSensorCount() {
         this.updateItemCount(`opcua-sensor-count-${this.objectName}`, this.allSensors.length, this.sensorsTotal);
     }
 
-    showLoadingIndicator(show) {
-        const el = this.getEl(`opcua-loading-more-${this.objectName}`);
-        if (el) {
-            el.style.display = show ? 'block' : 'none';
-        }
-    }
 
     async loadSensorDetails(id) {
         try {
@@ -5937,12 +6871,7 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
     }
 
     loadDiagnosticsHeight() {
-        return this.loadSectionHeight('uniset-panel-opcua-diagnostics', 260);
-    }
-
-    saveDiagnosticsHeight(value) {
-        this.diagnosticsHeight = value;
-        this.saveSectionHeight('uniset-panel-opcua-diagnostics', value);
+        return this.loadSectionHeight('uniset-panel-opcua-diagnostics', OPCUA_DIAGNOSTICS_DEFAULT_HEIGHT);
     }
 
     setupDiagnosticsResize() {
@@ -5951,17 +6880,12 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             `opcua-diagnostics-container-${this.objectName}`,
             'uniset-panel-opcua-diagnostics',
             'diagnosticsHeight',
-            { minHeight: 160, maxHeight: 600 }
+            { minHeight: OPCUA_DIAGNOSTICS_MIN_HEIGHT, maxHeight: OPCUA_DIAGNOSTICS_MAX_HEIGHT }
         );
     }
 
     loadSensorsHeight() {
-        return this.loadSectionHeight('uniset-panel-opcua-sensors', 320);
-    }
-
-    saveSensorsHeight(value) {
-        this.sensorsHeight = value;
-        this.saveSectionHeight('uniset-panel-opcua-sensors', value);
+        return this.loadSectionHeight('uniset-panel-opcua-sensors', DATA_TABLE_DEFAULT_HEIGHT);
     }
 
     setupSensorsResize() {
@@ -5970,38 +6894,16 @@ class OPCUAExchangeRenderer extends BaseObjectRenderer {
             `opcua-sensors-container-${this.objectName}`,
             'uniset-panel-opcua-sensors',
             'sensorsHeight',
-            { minHeight: 200, maxHeight: 700 }
+            { minHeight: SENSORS_CONTAINER_MIN_HEIGHT, maxHeight: DATA_TABLE_MAX_HEIGHT }
         );
     }
 
     async takeControl() {
-        if (this.status && this.status.httpControlAllow === false) {
-            this.setNote(`opcua-control-note-${this.objectName}`, 'Control not allowed', true);
-            return;
-        }
-
-        try {
-            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/opcua/control/take`, { method: 'POST' });
-            this.setNote(`opcua-control-note-${this.objectName}`, 'HTTP control activated');
-            this.loadStatus();
-        } catch (err) {
-            this.setNote(`opcua-control-note-${this.objectName}`, err.message, true);
-        }
+        await this.takeHttpControl('opcua', 'opcua');
     }
 
     async releaseControl() {
-        if (this.status && this.status.httpControlAllow === false) {
-            this.setNote(`opcua-control-note-${this.objectName}`, 'Control not allowed', true);
-            return;
-        }
-
-        try {
-            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/opcua/control/release`, { method: 'POST' });
-            this.setNote(`opcua-control-note-${this.objectName}`, 'Control returned to sensor');
-            this.loadStatus();
-        } catch (err) {
-            this.setNote(`opcua-control-note-${this.objectName}`, err.message, true);
-        }
+        await this.releaseHttpControl('opcua', 'opcua');
     }
 
     // === SSE подписка на обновления датчиков (использует SSESubscriptionMixin) ===
@@ -6074,7 +6976,6 @@ applyMixin(OPCUAExchangeRenderer, ParamsManagerMixin);
 applyMixin(OPCUAExchangeRenderer, ItemCounterMixin);
 applyMixin(OPCUAExchangeRenderer, PinManagementMixin);
 applyMixin(OPCUAExchangeRenderer, TableSortMixin);
-
 
 
 // === 22-modbus-master.js ===
@@ -6179,7 +7080,6 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         this.setupRegistersResize();
         this.setupSimpleInfiniteScroll({
             viewportId: `mb-registers-viewport-${this.objectName}`,
-            threshold: 100,
         });
         this.initStatusAutoRefresh();
     }
@@ -6230,12 +7130,19 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
         if (releaseControl) {
             releaseControl.addEventListener('click', () => this.releaseControl());
         }
+
+        // Unpin all (persistent header element — wire'им один раз; в renderRegisters
+        // больше не трогаем).
+        const unpinBtn = this.getEl(`mb-unpin-${this.objectName}`);
+        if (unpinBtn) {
+            unpinBtn.addEventListener('click', () => this.unpinAll());
+        }
     }
 
 
     createMBControlSection() {
         const headerIndicators = `
-            <div class="header-indicators" id="mb-control-indicators-${this.objectName}" onclick="event.stopPropagation()">
+            <div class="header-indicators" id="mb-control-indicators-${this.objectName}">
                 <div class="header-indicator">
                     <span class="header-indicator-label">Allowed</span>
                     <span class="header-indicator-dot" id="mb-ind-allow-${this.objectName}"></span>
@@ -6273,7 +7180,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     createMBParamsSection() {
         return this.createCollapsibleSection('mb-params', 'Exchange Parameters', `
             <div class="mb-actions">
-                <button class="btn" id="mb-params-refresh-${this.objectName}">Перезагрузить</button>
+                    <button class="btn" id="mb-params-refresh-${this.objectName}">Reload</button>
                 <button class="btn primary" id="mb-params-save-${this.objectName}">Apply</button>
                 <span class="mb-note" id="mb-params-note-${this.objectName}"></span>
             </div>
@@ -6330,9 +7237,9 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
                                 ${this.renderSortableHeader('name', 'Name', true, 'col-name')}
                                 ${this.renderSortableHeader('type', 'Type', true, 'col-type')}
                                 ${this.renderSortableHeader('value', 'Value', true, 'col-value')}
-                                ${this.renderSortableHeader('device', 'Устройство', true, 'col-device')}
-                                ${this.renderSortableHeader('register', 'Регистр', true, 'col-register')}
-                                ${this.renderSortableHeader('func', 'Функция', true, 'col-func')}
+                                ${this.renderSortableHeader('device', 'Device', true, 'col-device')}
+                                ${this.renderSortableHeader('register', 'Register', true, 'col-register')}
+                                ${this.renderSortableHeader('func', 'Function', true, 'col-func')}
                                 <th class="col-mbval">MB Val</th>
                             </tr>
                         </thead>
@@ -6388,94 +7295,22 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="info-label">${row.label}</td>
-                <td class="info-value">${formatValue(row.value)}</td>
+                <td class="info-value">${formatValueHtml(row.value)}</td>
             `;
             tbody.appendChild(tr);
         });
     }
 
     renderControl() {
-        const allow = this.status?.httpControlAllow && canControl();
-        const active = this.status?.httpControlActive;
-        const enabledParams = this.status?.httpEnabledSetParams;
-        const allowText = allow ? 'Take control' : (!canControl() ? 'Read-only mode' : 'Control not allowed');
-
-        // Обновляем индикаторы в шапке
-        const indAllow = this.getEl(`mb-ind-allow-${this.objectName}`);
-        const indActive = this.getEl(`mb-ind-active-${this.objectName}`);
-        const indParams = this.getEl(`mb-ind-params-${this.objectName}`);
-
-        if (indAllow) {
-            indAllow.className = `header-indicator-dot ${allow ? 'ok' : 'fail'}`;
-            indAllow.title = allow ? 'Allowed: Yes' : 'Allowed: No';
-        }
-        if (indActive) {
-            indActive.className = `header-indicator-dot ${active ? 'ok' : 'fail'}`;
-            indActive.title = active ? 'Active: Yes' : 'Active: No';
-        }
-        if (indParams) {
-            indParams.className = `header-indicator-dot ${enabledParams ? 'ok' : 'fail'}`;
-            indParams.title = enabledParams ? 'Parameters: Yes' : 'Parameters: No';
-        }
-
-        // Обновляем кнопки
-        const takeBtn = this.getEl(`mb-control-take-${this.objectName}`);
-        const releaseBtn = this.getEl(`mb-control-release-${this.objectName}`);
-        const noteEl = this.getEl(`mb-control-note-${this.objectName}`);
-
-        if (takeBtn) {
-            takeBtn.disabled = !allow;
-            takeBtn.title = allowText;
-            // Подсветка кнопки когда контроль активен
-            if (active) {
-                takeBtn.classList.add('control-active');
-            } else {
-                takeBtn.classList.remove('control-active');
-            }
-        }
-        if (releaseBtn) {
-            releaseBtn.disabled = !allow;
-            releaseBtn.title = allowText;
-        }
-
-        // Обновляем стиль сообщения
-        if (noteEl) {
-            if (active) {
-                noteEl.classList.add('control-note-success');
-            } else {
-                noteEl.classList.remove('control-note-success');
-            }
-        }
+        this.renderHttpControl('mb');
     }
 
     async takeControl() {
-        if (this.status && this.status.httpControlAllow === false) {
-            this.setNote(`mb-control-note-${this.objectName}`, 'Control not allowed', true);
-            return;
-        }
-
-        try {
-            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/control/take`, { method: 'POST' });
-            this.setNote(`mb-control-note-${this.objectName}`, 'HTTP control activated');
-            this.loadStatus();
-        } catch (err) {
-            this.setNote(`mb-control-note-${this.objectName}`, err.message, true);
-        }
+        await this.takeHttpControl('modbus', 'mb');
     }
 
     async releaseControl() {
-        if (this.status && this.status.httpControlAllow === false) {
-            this.setNote(`mb-control-note-${this.objectName}`, 'Control not allowed', true);
-            return;
-        }
-
-        try {
-            await this.fetchJSON(`/api/objects/${encodeURIComponent(this.objectName)}/modbus/control/release`, { method: 'POST' });
-            this.setNote(`mb-control-note-${this.objectName}`, 'Control returned to sensor');
-            this.loadStatus();
-        } catch (err) {
-            this.setNote(`mb-control-note-${this.objectName}`, err.message, true);
-        }
+        await this.releaseHttpControl('modbus', 'mb');
     }
 
     renderParams() {
@@ -6504,7 +7339,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="param-name">${paramLabels[name] || name}</td>
-                <td class="param-value">${value !== undefined ? formatValue(value) : '—'}</td>
+                <td class="param-value">${value !== undefined ? formatValueHtml(value) : '—'}</td>
                 <td class="param-input">—</td>
             `;
             tbody.appendChild(tr);
@@ -6531,7 +7366,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
 
             tr.innerHTML = `
                 <td class="param-name">${paramLabels[name] || name}</td>
-                <td class="param-value">${value !== undefined ? formatValue(value) : '—'}</td>
+                <td class="param-value">${value !== undefined ? formatValueHtml(value) : '—'}</td>
                 <td class="param-input">${inputHtml}</td>
             `;
             tbody.appendChild(tr);
@@ -6604,105 +7439,45 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
     }
 
     renderRegisters() {
-        const tbody = this.getEl(`mb-registers-tbody-${this.objectName}`);
-        if (!tbody) return;
-
-        // Получаем закрепленные регистры
-        const pinnedRegisters = this.getPinned();
-        const hasPinned = pinnedRegisters.size > 0;
-
-        // Показываем/скрываем кнопку "снять все"
-        const unpinBtn = this.getEl(`mb-unpin-${this.objectName}`);
-        if (unpinBtn) {
-            unpinBtn.style.display = hasPinned ? 'inline' : 'none';
-        }
-
-        // Фильтруем регистры используя общий метод (по name, id, mbreg)
-        const mbregAccessor = (item, field) => (item.register || {})[field];
-        let registersToShow = this.applyFilters(this.allRegisters, 'name', 'iotype', null, ['mbreg'], mbregAccessor);
-
-        // Если есть закрепленные и нет фильтра — показываем только их
-        if (hasPinned && !this.filter) {
-            registersToShow = registersToShow.filter(r => pinnedRegisters.has(String(r.id)));
-        }
-
-        // Сортировка: pinned всегда вверху, остальные по выбранной колонке
-        registersToShow = this.sortItems(registersToShow, pinnedRegisters, this.sortColumnDefs);
-
-        // Обновляем счётчик с учётом фильтрации
-        this.updateItemCount(`mb-register-count-${this.objectName}`, registersToShow.length, this.registersTotal);
-
-        // Update registerMap for chart support
-        registersToShow.forEach(reg => {
-            if (reg.id) {
-                this.registerMap.set(reg.id, reg);
-            }
+        // Orchestration (filter/sort/pin/count/listeners) — в base, тут только row-html.
+        this._renderRegistersTable({
+            tbodyId: `mb-registers-tbody-${this.objectName}`,
+            unpinId: `mb-unpin-${this.objectName}`,
+            countId: `mb-register-count-${this.objectName}`,
+            countTotal: this.registersTotal,
+            mbregAccessor: (item, field) => (item.register || {})[field],
+            renderRow: (reg, isPinned) => this._renderRegisterRow(reg, isPinned),
         });
-
-        const html = registersToShow.map(reg => {
-            const isPinned = pinnedRegisters.has(String(reg.id));
-            const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-            const pinIcon = isPinned ? '📌' : '○';
-            const pinTitle = isPinned ? 'Unpin' : 'Pin';
-
-            const deviceAddr = reg.device;
-            const deviceInfo = this.devicesDict[deviceAddr] || {};
-            const regInfo = reg.register || {};
-            const respondClass = deviceInfo.respond ? 'ok' : 'fail';
-            return `
-                <tr data-sensor-id="${reg.id}">
-                    <td class="col-pin">
-                        <span class="${pinToggleClass}" data-id="${reg.id}" title="${pinTitle}">
-                            ${pinIcon}
-                        </span>
-                    </td>
-                    ${this.renderAddButtonsCell(reg.id, reg.name, 'mbreg', reg.textname || reg.name)}
-                    <td class="col-id">${reg.id}</td>
-                    <td class="col-name" title="${escapeHtml(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
-                    <td class="col-type">${reg.iotype ? `<span class="type-badge type-${reg.iotype}">${reg.iotype}</span>` : ''}</td>
-                    <td class="col-value">${reg.value !== undefined ? reg.value : ''}</td>
-                    <td class="col-device"><span class="mb-respond ${respondClass}">${deviceAddr || ''}</span></td>
-                    <td class="col-register">${regInfo.mbreg || ''}</td>
-                    <td class="col-func">${regInfo.mbfunc || ''}</td>
-                    <td class="col-mbval">${regInfo.mbval !== undefined ? regInfo.mbval : ''}</td>
-                </tr>
-            `;
-        }).join('');
-
-        tbody.innerHTML = html;
-
-        // Bind chart toggle events
-        this.attachChartToggleListeners(tbody, this.registerMap);
-
-        // Bind dashboard button events
-        this.attachDashboardToggleListeners(tbody);
-
-        // Bind pin toggle events
-        tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => this.togglePin(parseInt(toggle.dataset.id)));
-        });
-
-        // Обработчик кнопки "снять все"
-        if (unpinBtn) {
-            unpinBtn.onclick = () => this.unpinAll();
-        }
     }
 
-    // Override to use Modbus SSE subscription
+    _renderRegisterRow(reg, isPinned) {
+        const deviceAddr = reg.device;
+        const deviceInfo = this.devicesDict[deviceAddr] || {};
+        const regInfo = reg.register || {};
+        const respondClass = deviceInfo.respond ? 'ok' : 'fail';
+        return `
+            <tr data-sensor-id="${reg.id}">
+                ${this.renderPinToggleCell({ id: reg.id, isPinned })}
+                ${this.renderAddButtonsCell(reg.id, reg.name, 'mbreg', reg.textname || reg.name)}
+                <td class="col-id">${reg.id}</td>
+                <td class="col-name" title="${escapeAttr(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
+                <td class="col-type">${reg.iotype ? `<span class="type-badge type-${reg.iotype}">${reg.iotype}</span>` : ''}</td>
+                <td class="col-value">${reg.value !== undefined ? reg.value : ''}</td>
+                <td class="col-device"><span class="mb-respond ${respondClass}">${deviceAddr || ''}</span></td>
+                <td class="col-register">${regInfo.mbreg || ''}</td>
+                <td class="col-func">${regInfo.mbfunc || ''}</td>
+                <td class="col-mbval">${regInfo.mbval !== undefined ? regInfo.mbval : ''}</td>
+            </tr>
+        `;
+    }
+
+    // ModbusMaster registers are already subscribed through main SSE
     subscribeToChartSensor(sensorId) {
-        // ModbusMaster registers are already subscribed through main SSE
-        if (!this.subscribedSensorIds.has(sensorId)) {
-            this.subscribedSensorIds.add(sensorId);
-        }
+        this.subscribeToChartSensorLocal(sensorId);
     }
 
     loadRegistersHeight() {
-        return this.loadSectionHeight('uniset-panel-mb-registers', 320);
-    }
-
-    saveRegistersHeight(value) {
-        this.registersHeight = value;
-        this.saveSectionHeight('uniset-panel-mb-registers', value);
+        return this.loadSectionHeight('uniset-panel-mb-registers', DATA_TABLE_DEFAULT_HEIGHT);
     }
 
     setupRegistersResize() {
@@ -6711,7 +7486,7 @@ class ModbusMasterRenderer extends BaseObjectRenderer {
             `mb-registers-container-${this.objectName}`,
             'uniset-panel-mb-registers',
             'registersHeight',
-            { minHeight: 200, maxHeight: 700 }
+            { minHeight: SENSORS_CONTAINER_MIN_HEIGHT, maxHeight: DATA_TABLE_MAX_HEIGHT }
         );
     }
 
@@ -6790,7 +7565,6 @@ registerRenderer('MBTCPMultiMaster', ModbusMasterRenderer);
 registerRenderer('MBRTUMaster', ModbusMasterRenderer);
 registerRenderer('ModbusTCPMaster', ModbusMasterRenderer);
 registerRenderer('ModbusRTUMaster', ModbusMasterRenderer);
-
 
 
 // === 23-modbus-slave.js ===
@@ -6880,7 +7654,6 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         this.setupRegistersResize();
         this.setupSimpleInfiniteScroll({
             viewportId: `mbs-registers-viewport-${this.objectName}`,
-            threshold: 100,
         });
         this.initStatusAutoRefresh();
     }
@@ -6919,6 +7692,13 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             FILTER_DEBOUNCE_DELAY, null,
             () => this.renderRegisters()      // text filter → локальная фильтрация
         );
+
+        // Unpin all (persistent header element — wire'им один раз; в renderRegisters
+        // больше не трогаем).
+        const unpinBtn = this.getEl(`mbs-unpin-${this.objectName}`);
+        if (unpinBtn) {
+            unpinBtn.addEventListener('click', () => this.unpinAll());
+        }
     }
 
 
@@ -7065,7 +7845,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="info-label">${row.label}</td>
-                <td class="info-value">${formatValue(row.value)}</td>
+                <td class="info-value">${formatValueHtml(row.value)}</td>
             `;
             tbody.appendChild(tr);
         });
@@ -7130,110 +7910,50 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
     }
 
     renderRegisters() {
-        const tbody = this.getEl(`mbs-registers-tbody-${this.objectName}`);
-        if (!tbody) return;
-
-        // Получаем закрепленные регистры
-        const pinnedRegisters = this.getPinned();
-        const hasPinned = pinnedRegisters.size > 0;
-
-        // Показываем/скрываем кнопку "снять все"
-        const unpinBtn = this.getEl(`mbs-unpin-${this.objectName}`);
-        if (unpinBtn) {
-            unpinBtn.style.display = hasPinned ? 'inline' : 'none';
-        }
-
-        // Фильтруем регистры используя общий метод (по name, id, mbreg)
-        // ModbusSlave: mbreg может быть в r.register.mbreg или r.mbreg
-        const mbregAccessor = (item, field) => {
-            const regInfo = item.register || {};
-            return regInfo[field] !== undefined ? regInfo[field] : item[field];
-        };
-        let registersToShow = this.applyFilters(this.allRegisters, 'name', 'iotype', null, ['mbreg'], mbregAccessor);
-
-        // Если есть закрепленные и нет фильтра — показываем только их
-        if (hasPinned && !this.filter) {
-            registersToShow = registersToShow.filter(r => pinnedRegisters.has(String(r.id)));
-        }
-
-        // Сортировка: pinned всегда вверху, остальные по выбранной колонке
-        registersToShow = this.sortItems(registersToShow, pinnedRegisters, this.sortColumnDefs);
-
-        // Обновляем счётчик с учётом фильтрации
-        this.updateItemCount(`mbs-register-count-${this.objectName}`, registersToShow.length, this.registersTotal);
-
-        // Update registerMap for chart support
-        registersToShow.forEach(reg => {
-            if (reg.id) {
-                this.registerMap.set(reg.id, reg);
-            }
+        // Orchestration (filter/sort/pin/count/listeners) — в base, тут только row-html.
+        this._renderRegistersTable({
+            tbodyId: `mbs-registers-tbody-${this.objectName}`,
+            unpinId: `mbs-unpin-${this.objectName}`,
+            countId: `mbs-register-count-${this.objectName}`,
+            countTotal: this.registersTotal,
+            // ModbusSlave: mbreg может быть в r.register.mbreg или r.mbreg
+            mbregAccessor: (item, field) => {
+                const regInfo = item.register || {};
+                return regInfo[field] !== undefined ? regInfo[field] : item[field];
+            },
+            renderRow: (reg, isPinned) => this._renderRegisterRow(reg, isPinned),
         });
-
-        // ModbusSlave формат: device - это mbaddr, register содержит mbreg/mbfunc, есть amode
-        const html = registersToShow.map(reg => {
-            const isPinned = pinnedRegisters.has(String(reg.id));
-            const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-            const pinIcon = isPinned ? '📌' : '○';
-            const pinTitle = isPinned ? 'Unpin' : 'Pin';
-
-            const mbAddr = reg.device;
-            const regInfo = reg.register || {};
-            const mbreg = regInfo.mbreg !== undefined ? regInfo.mbreg : reg.mbreg;
-            const mbfunc = regInfo.mbfunc;
-            return `
-                <tr data-sensor-id="${reg.id}">
-                    <td class="col-pin">
-                        <span class="${pinToggleClass}" data-id="${reg.id}" title="${pinTitle}">
-                            ${pinIcon}
-                        </span>
-                    </td>
-                    ${this.renderAddButtonsCell(reg.id, reg.name, 'mbsreg', reg.textname || reg.name)}
-                    <td class="col-id">${reg.id}</td>
-                    <td class="col-name" title="${escapeHtml(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
-                    <td class="col-type">${reg.iotype ? `<span class="type-badge type-${reg.iotype}">${reg.iotype}</span>` : ''}</td>
-                    <td class="col-value">${reg.value !== undefined ? reg.value : ''}</td>
-                    <td class="col-mbaddr">${mbAddr || ''}</td>
-                    <td class="col-register">${mbreg !== undefined ? mbreg : ''}</td>
-                    <td class="col-func">${mbfunc !== undefined ? mbfunc : ''}</td>
-                    <td class="col-access">${reg.amode || ''}</td>
-                </tr>
-            `;
-        }).join('');
-
-        tbody.innerHTML = html;
-
-        // Bind chart toggle events
-        this.attachChartToggleListeners(tbody, this.registerMap);
-
-        // Bind dashboard toggle events
-        this.attachDashboardToggleListeners(tbody);
-
-        // Bind pin toggle events
-        tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => this.togglePin(parseInt(toggle.dataset.id)));
-        });
-
-        // Обработчик кнопки "снять все"
-        if (unpinBtn) {
-            unpinBtn.onclick = () => this.unpinAll();
-        }
     }
 
-    // Override to use ModbusSlave SSE subscription
+    // ModbusSlave row: device = mbaddr, register содержит mbreg/mbfunc, есть amode.
+    _renderRegisterRow(reg, isPinned) {
+        const mbAddr = reg.device;
+        const regInfo = reg.register || {};
+        const mbreg = regInfo.mbreg !== undefined ? regInfo.mbreg : reg.mbreg;
+        const mbfunc = regInfo.mbfunc;
+        return `
+            <tr data-sensor-id="${reg.id}">
+                ${this.renderPinToggleCell({ id: reg.id, isPinned })}
+                ${this.renderAddButtonsCell(reg.id, reg.name, 'mbsreg', reg.textname || reg.name)}
+                <td class="col-id">${reg.id}</td>
+                <td class="col-name" title="${escapeAttr(reg.textname || reg.comment || '')}">${escapeHtml(reg.name || '')}</td>
+                <td class="col-type">${reg.iotype ? `<span class="type-badge type-${reg.iotype}">${reg.iotype}</span>` : ''}</td>
+                <td class="col-value">${reg.value !== undefined ? reg.value : ''}</td>
+                <td class="col-mbaddr">${mbAddr || ''}</td>
+                <td class="col-register">${mbreg !== undefined ? mbreg : ''}</td>
+                <td class="col-func">${mbfunc !== undefined ? mbfunc : ''}</td>
+                <td class="col-access">${reg.amode || ''}</td>
+            </tr>
+        `;
+    }
+
+    // ModbusSlave registers are already subscribed through main SSE
     subscribeToChartSensor(sensorId) {
-        // ModbusSlave registers are already subscribed through main SSE
-        if (!this.subscribedSensorIds.has(sensorId)) {
-            this.subscribedSensorIds.add(sensorId);
-        }
+        this.subscribeToChartSensorLocal(sensorId);
     }
 
     loadRegistersHeight() {
-        return this.loadSectionHeight('uniset-panel-mbs-registers', 320);
-    }
-
-    saveRegistersHeight(value) {
-        this.registersHeight = value;
-        this.saveSectionHeight('uniset-panel-mbs-registers', value);
+        return this.loadSectionHeight('uniset-panel-mbs-registers', DATA_TABLE_DEFAULT_HEIGHT);
     }
 
     setupRegistersResize() {
@@ -7242,7 +7962,7 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
             `mbs-registers-container-${this.objectName}`,
             'uniset-panel-mbs-registers',
             'registersHeight',
-            { minHeight: 200, maxHeight: 700 }
+            { minHeight: SENSORS_CONTAINER_MIN_HEIGHT, maxHeight: DATA_TABLE_MAX_HEIGHT }
         );
     }
 
@@ -7268,13 +7988,6 @@ class ModbusSlaveRenderer extends BaseObjectRenderer {
         // Value
         if (update.value !== undefined) {
             this._animateCellValue(row, '.col-value', String(update.value), 'value-changed');
-        }
-        // Device respond status
-        const deviceCell = row.querySelector('.col-device .mb-respond');
-        if (deviceCell && update.device !== undefined) {
-            const deviceAddr = update.device;
-            const deviceInfo = this.devicesDict ? (this.devicesDict[deviceAddr] || {}) : {};
-            deviceCell.className = `mb-respond ${deviceInfo.respond ? 'ok' : 'fail'}`;
         }
     }
 
@@ -7310,12 +8023,12 @@ registerRenderer('MBSlave1', ModbusSlaveRenderer);
 // OPCUAServer - это OPC UA сервер, который предоставляет доступ к переменным через OPC UA протокол
 
 
-
 // === 24-opcua-server.js ===
 class OPCUAServerRenderer extends BaseObjectRenderer {
     static getTypeName() {
         return 'OPCUAServer';
     }
+    static loadingIdPrefix = 'opcuasrv';
 
     constructor(objectName, tabKey = null) {
         super(objectName, tabKey);
@@ -7385,7 +8098,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         this.setupSensorsResize();
         this.setupFullVirtualScroll({
             viewportId: `opcuasrv-sensors-viewport-${this.objectName}`,
-            threshold: 80,
+            threshold: VIRTUAL_SCROLL_PERCENT_THRESHOLD,
             thresholdType: 'percent',
         });
         this.initStatusAutoRefresh();
@@ -7436,7 +8149,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
     createOPCUAServerParamsSection() {
         const headerIndicator = `
-            <span class="header-indicator-dot fail" id="opcuasrv-ind-params-${this.objectName}" onclick="event.stopPropagation()" title="Parameters: loading..."></span>
+            <span class="header-indicator-dot fail" id="opcuasrv-ind-params-${this.objectName}" title="Parameters: loading..."></span>
         `;
         return this.createCollapsibleSection('opcuasrv-params', 'Server Parameters', `
             <div class="opcua-actions">
@@ -7554,7 +8267,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="info-label">${row.label}</td>
-                <td class="info-value">${formatValue(row.value)}</td>
+                <td class="info-value">${formatValueHtml(row.value)}</td>
             `;
             tbody.appendChild(tr);
         });
@@ -7592,7 +8305,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td class="info-label">${row.label}</td>
-                    <td class="info-value">${formatValue(row.value)}</td>
+                    <td class="info-value">${formatValueHtml(row.value)}</td>
                 `;
                 configTbody.appendChild(tr);
             });
@@ -7620,135 +8333,41 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="variable-name">${name}</td>
-                <td class="variable-value">${current !== undefined ? formatValue(current) : '—'}</td>
-                <td><input class="opcua-param-input" data-name="${name}" value="${current !== undefined ? current : ''}"></td>
+                <td class="variable-value">${current !== undefined ? formatValueHtml(current) : '—'}</td>
+                <td><input class="opcua-param-input" data-name="${escapeAttr(name)}" value="${escapeAttr(current !== undefined ? current : '')}"></td>
             `;
             tbody.appendChild(tr);
         });
     }
 
     async loadSensors() {
-        // Reset state for fresh load
-        this.allSensors = [];
-        this.hasMore = true;
-        this.startIndex = 0;
-        this.endIndex = 0;
+        return this._loadOpcuaSensorsTable({
+            viewportId: `opcuasrv-sensors-viewport-${this.objectName}`,
+            tableId:    `opcuasrv-sensors-table-${this.objectName}`,
+            noteId:     `opcuasrv-sensors-note-${this.objectName}`,
+            buildSensorParams:   () => this._buildSensorQueryParams(),
+            postProcessSensors:  (s) => s,  // OPCUAServer не имеет UI/status post-filter
+        });
+    }
 
-        // Reset viewport scroll position
-        const viewport = this.getEl(`opcuasrv-sensors-viewport-${this.objectName}`);
-        if (viewport) viewport.scrollTop = 0;
-
-        try {
-            let url = `/api/objects/${encodeURIComponent(this.objectName)}/opcua/sensors?limit=${this.chunkSize}&offset=0`;
-
-            if (this.filter) {
-                url += `&search=${encodeURIComponent(this.filter)}`;
-            }
-            if (this.typeFilter && this.typeFilter !== 'all') {
-                url += `&iotype=${this.typeFilter}`;
-            }
-
-            const data = await this.fetchJSON(url);
-            let sensors = data.sensors || [];
-            this.sensorsTotal = typeof data.total === 'number' ? data.total : sensors.length;
-
-            this.allSensors = sensors;
-            this.sensorMap.clear();
-            sensors.forEach(s => this.sensorMap.set(s.id, s));
-
-            // Если нет фильтра и есть закреплённые датчики - загрузить их отдельно
-            if (!this.filter) {
-                await this.loadPinnedSensors();
-            }
-
-            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
-            this.updateVisibleRows();
-            this.updateSensorCount();
-            this.setNote(`opcuasrv-sensors-note-${this.objectName}`, '');
-
-            // Подписываемся на SSE обновления после загрузки
-            this.subscribeToSSE();
-
-            // Обработчики сортировки
-            const table = this.getEl(`opcuasrv-sensors-table-${this.objectName}`);
-            if (table) {
-                this.attachSortHandlers(table);
-                this.updateSortHeaders();
-            }
-        } catch (err) {
-            this.setNote(`opcuasrv-sensors-note-${this.objectName}`, err.message, true);
-        }
+    // OPCUAServer: только server-side search/iotype (нет UI-mode и status filter).
+    _buildSensorQueryParams() {
+        let params = '';
+        if (this.filter) params += `&search=${encodeURIComponent(this.filter)}`;
+        if (this.typeFilter && this.typeFilter !== 'all') params += `&iotype=${this.typeFilter}`;
+        return params;
     }
 
     // Загружает закреплённые датчики, если они не в текущем списке
-    async loadPinnedSensors() {
-        const pinnedIds = this.getPinned();
-        if (pinnedIds.size === 0) return;
-
-        // Найти ID, которых нет в загруженных датчиках
-        const missingIds = [];
-        for (const idStr of pinnedIds) {
-            const id = parseInt(idStr);
-            if (!this.sensorMap.has(id)) {
-                missingIds.push(id);
-            }
-        }
-
-        if (missingIds.length === 0) return;
-
-        // Загрузить отсутствующие датчики по ID
-        try {
-            const idsParam = missingIds.join(',');
-            const url = `/api/objects/${encodeURIComponent(this.objectName)}/opcua/get?filter=${idsParam}`;
-            const response = await this.fetchJSON(url);
-            const pinnedSensors = response.sensors || [];
-
-            // Добавить закреплённые датчики в начало списка
-            for (const sensor of pinnedSensors) {
-                if (!this.sensorMap.has(sensor.id)) {
-                    this.allSensors.unshift(sensor);
-                    this.sensorMap.set(sensor.id, sensor);
-                }
-            }
-        } catch (err) {
-            console.warn('Failed to load pinned sensors:', err);
-        }
+    loadPinnedSensors() {
+        return this.loadMissingPinnedSensors('/opcua/get');
     }
 
     async loadMoreSensors() {
-        if (this.isLoadingChunk || !this.hasMore) return;
-
-        this.isLoadingChunk = true;
-        this.showLoadingIndicator(true);
-
-        try {
-            const nextOffset = this.allSensors.length;
-            let url = `/api/objects/${encodeURIComponent(this.objectName)}/opcua/sensors?limit=${this.chunkSize}&offset=${nextOffset}`;
-
-            if (this.filter) {
-                url += `&search=${encodeURIComponent(this.filter)}`;
-            }
-            if (this.typeFilter && this.typeFilter !== 'all') {
-                url += `&iotype=${this.typeFilter}`;
-            }
-
-            const data = await this.fetchJSON(url);
-            let newSensors = data.sensors || [];
-
-            // Дедупликация: добавляем только датчики которых еще нет
-            const existingIds = new Set(this.allSensors.map(s => s.id));
-            const uniqueNewSensors = newSensors.filter(s => !existingIds.has(s.id));
-
-            this.allSensors = [...this.allSensors, ...uniqueNewSensors];
-            this.hasMore = (data.sensors?.length || 0) === this.chunkSize;
-            this.updateVisibleRows();
-            this.updateSensorCount();
-        } catch (err) {
-            console.error('Failed to load more sensors:', err);
-        } finally {
-            this.isLoadingChunk = false;
-            this.showLoadingIndicator(false);
-        }
+        return this._loadMoreOpcuaSensorsTable({
+            buildSensorParams:   () => this._buildSensorQueryParams(),
+            postProcessSensors:  (s) => s,
+        });
     }
 
     renderVisibleSensors() {
@@ -7770,9 +8389,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         let sensorsToShow = this.applyFilters(this.allSensors, 'name', 'iotype');
 
         // Если есть закрепленные и нет фильтра — показываем только их
-        if (hasPinned && !this.filter) {
-            sensorsToShow = this.allSensors.filter(s => pinnedSensors.has(String(s.id)));
-        }
+        sensorsToShow = this.filterPinnedOnly(sensorsToShow, pinnedSensors);
 
         // Set spacer height to position visible rows correctly
         const spacerHeight = this.startIndex * this.rowHeight;
@@ -7800,24 +8417,16 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         // Render visible rows with type badges and chart toggle
         tbody.innerHTML = visibleSensors.map(sensor => {
             const isPinned = pinnedSensors.has(String(sensor.id));
-            const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-            const pinIcon = isPinned ? '📌' : '○';
-            const pinTitle = isPinned ? 'Unpin' : 'Pin';
-
             const iotype = sensor.iotype || sensor.type || '';
             const typeBadgeClass = iotype ? `type-badge type-${iotype}` : '';
             return `
             <tr data-sensor-id="${sensor.id || ''}">
-                <td class="col-pin">
-                    <span class="${pinToggleClass}" data-id="${sensor.id}" title="${pinTitle}">
-                        ${pinIcon}
-                    </span>
-                </td>
+                ${this.renderPinToggleCell({ id: sensor.id, isPinned })}
                 ${this.renderAddButtonsCell(sensor.id, sensor.name, 'opcuasrv', sensor.textname || sensor.name)}
                 <td>${sensor.id || ''}</td>
-                <td class="sensor-name" title="${escapeHtml(sensor.textname || sensor.comment || '')}">${sensor.name || ''}</td>
+                <td class="sensor-name" title="${escapeAttr(sensor.textname || sensor.comment || '')}">${escapeHtml(sensor.name || '')}</td>
                 <td><span class="${typeBadgeClass}">${iotype}</span></td>
-                <td class="sensor-value">${sensor.value !== undefined ? formatValue(sensor.value) : '—'}</td>
+                <td class="sensor-value">${sensor.value !== undefined ? formatValueHtml(sensor.value) : '—'}</td>
                 <td>${sensor.vtype || ''}</td>
                 <td>${sensor.precision !== undefined ? sensor.precision : ''}</td>
             </tr>
@@ -7832,7 +8441,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
         // Bind pin toggle events
         tbody.querySelectorAll('.pin-toggle').forEach(toggle => {
-            toggle.addEventListener('click', () => this.togglePin(parseInt(toggle.dataset.id)));
+            toggle.addEventListener('click', () => this.togglePin(parseIntegerOrDefault(toggle.dataset.id, null)));
         });
 
         // Обработчик кнопки "снять все"
@@ -7841,20 +8450,11 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
         }
     }
 
-    // Override to use OPCUAServer SSE subscription
+    // OPCUAServer sensors are already subscribed through main SSE
     subscribeToChartSensor(sensorId) {
-        // OPCUAServer sensors are already subscribed through main SSE
-        if (!this.subscribedSensorIds.has(sensorId)) {
-            this.subscribedSensorIds.add(sensorId);
-        }
+        this.subscribeToChartSensorLocal(sensorId);
     }
 
-    showLoadingIndicator(show) {
-        const indicator = this.getEl(`opcuasrv-loading-more-${this.objectName}`);
-        if (indicator) {
-            indicator.style.display = show ? 'block' : 'none';
-        }
-    }
 
     updateSensorCount() {
         this.updateItemCount(`opcuasrv-sensor-count-${this.objectName}`, this.allSensors.length, this.sensorsTotal);
@@ -7862,11 +8462,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
 
     loadSensorsHeight() {
         // Используем формат JSON как другие рендереры
-        return this.loadSectionHeight('uniset-panel-opcuasrv-sensors', 300);
-    }
-
-    saveSensorsHeight(height) {
-        this.saveSectionHeight('uniset-panel-opcuasrv-sensors', height);
+        return this.loadSectionHeight('uniset-panel-opcuasrv-sensors', DEFAULT_SECTION_HEIGHT);
     }
 
     setupSensorsResize() {
@@ -7875,7 +8471,7 @@ class OPCUAServerRenderer extends BaseObjectRenderer {
             `opcuasrv-sensors-container-${this.objectName}`,
             'uniset-panel-opcuasrv-sensors',
             'sensorsHeight',
-            { minHeight: 200, maxHeight: 700 }
+            { minHeight: SENSORS_CONTAINER_MIN_HEIGHT, maxHeight: DATA_TABLE_MAX_HEIGHT }
         );
     }
 
@@ -7925,7 +8521,6 @@ applyMixin(OPCUAServerRenderer, TableSortMixin);
 registerRenderer('OPCUAServer', OPCUAServerRenderer);
 
 
-
 // === 25-uwsgate.js ===
 // ============================================================================
 // UWebSocketGateRenderer - рендерер для объектов UWebSocketGate
@@ -7954,7 +8549,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         this.selectedAutocompleteIndex = 0;
 
         // Высота секции датчиков
-        this.sensorsHeight = this.loadSectionHeight('uwsgate-sensors-height', 400);
+        this.sensorsHeight = this.loadSectionHeight('uwsgate-sensors-height', UWSGATE_SENSORS_DEFAULT_HEIGHT);
 
         // Инициализация сортировки
         this.initSortProps();
@@ -7979,32 +8574,22 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
     }
 
     loadHighlightSetting() {
-        try {
-            return localStorage.getItem(this.highlightKey) === 'true';
-        } catch (e) {
-            return false;
-        }
+        // Highlight setting — boolean. Хранится не в map, а напрямую как JSON
+        // (true/false), потому что ключ per-tab и нет смысла оборачивать в объект.
+        return loadJSON(this.highlightKey, false) === true;
     }
 
     saveHighlightSetting() {
-        try {
-            localStorage.setItem(this.highlightKey, this.highlightEnabled.toString());
-        } catch (e) {}
+        saveJSON(this.highlightKey, this.highlightEnabled);
     }
 
     loadPinnedSensors() {
-        try {
-            const saved = localStorage.getItem(this.pinnedKey);
-            if (saved) {
-                this.pinnedSensors = new Set(JSON.parse(saved));
-            }
-        } catch (e) {}
+        const arr = loadJSON(this.pinnedKey, []);
+        if (Array.isArray(arr)) this.pinnedSensors = new Set(arr);
     }
 
     savePinnedSensors() {
-        try {
-            localStorage.setItem(this.pinnedKey, JSON.stringify(Array.from(this.pinnedSensors)));
-        } catch (e) {}
+        saveJSON(this.pinnedKey, Array.from(this.pinnedSensors));
     }
 
     togglePin(sensorName) {
@@ -8126,12 +8711,16 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
             }
         });
 
-        // Click outside to hide autocomplete
-        document.addEventListener('click', (e) => {
+        // Click outside to hide autocomplete.
+        // Сохраняем reference, чтобы destroy() мог снять — без этого после
+        // пересоздания renderer'а оставались висячие listeners, которые держали
+        // ссылку на старый instance и срабатывали на чужих экранах.
+        this._docClickHandler = (e) => {
             if (!e.target.closest('.uwsgate-add-sensor')) {
                 this.hideAutocomplete();
             }
-        });
+        };
+        document.addEventListener('click', this._docClickHandler);
 
         // Highlight toggle
         const highlightCheckbox = getElementInTab(this.tabKey, `uwsgate-highlight-${this.objectName}`);
@@ -8154,26 +8743,18 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         const container = getElementInTab(this.tabKey, `uwsgate-sensors-container-${this.objectName}`);
         if (!handle || !container) return;
 
-        let startY, startHeight;
-        const onMouseMove = (e) => {
-            const newHeight = startHeight + (e.clientY - startY);
-            if (newHeight >= 100 && newHeight <= 800) {
-                container.style.height = `${newHeight}px`;
-                this.sensorsHeight = newHeight;
-            }
-        };
-        const onMouseUp = () => {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            this.saveSectionHeight('uwsgate-sensors-height', this.sensorsHeight);
-        };
-        handle.addEventListener('mousedown', (e) => {
-            startY = e.clientY;
-            startHeight = container.offsetHeight;
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-            e.preventDefault();
-        });
+        setupResizeHandle(
+            handle,
+            container,
+            MIN_SECTION_HEIGHT,
+            (height) => {
+                this.sensorsHeight = height;
+                this.saveSectionHeight('uwsgate-sensors-height', height);
+            },
+            MAX_SECTION_HEIGHT,
+            (height) => { this.sensorsHeight = height; },
+            { updateMaxHeight: false }
+        );
     }
 
     async loadAllSensors() {
@@ -8181,9 +8762,9 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
 
         try {
             const tabState = state.tabs.get(this.tabKey);
-            const serverId = tabState?.serverId || '';
-            const param = serverId ? `?server=${encodeURIComponent(serverId)}` : '';
-            const response = await fetch(`/api/sensors${param}`);
+            const serverId = tabState?.serverId;
+            if (!serverId) return [];
+            const response = await fetch(`/api/sensors?server=${encodeURIComponent(serverId)}`);
             if (!response.ok) return [];
             const data = await response.json();
             this.allSensorsCache = data.sensors || [];
@@ -8228,7 +8809,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         this.selectedAutocompleteIndex = 0;
 
         container.innerHTML = matches.map((s, i) => `
-            <div class="uwsgate-autocomplete-item${i === 0 ? ' selected' : ''}" data-name="${escapeHtml(s.name)}">
+            <div class="uwsgate-autocomplete-item${i === 0 ? ' selected' : ''}" data-name="${escapeAttr(s.name)}">
                 <span class="sensor-name">${escapeHtml(s.name)}</span>
                 <span class="type-badge type-${s.iotype}">${s.iotype || '?'}</span>
                 ${s.textname ? `<span class="sensor-textname">${escapeHtml(s.textname)}</span>` : ''}
@@ -8402,6 +8983,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
     }
 
     renderSensorRow(sensor) {
+        const serverId = state.tabs.get(this.tabKey)?.serverId || '';
         const chartOptions = this.getChartOptions();
         const varName = `${chartOptions.prefix}:${sensor.name}`;
         const isOnChart = this.isSensorOnChart(varName);
@@ -8410,32 +8992,28 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         const pinnedClass = isPinned ? 'uwsgate-sensor-pinned' : '';
 
         const checkboxId = `uwsgate-chart-${this.objectName}-${sensor.name}`;
-        const pinToggleClass = isPinned ? 'pin-toggle pinned' : 'pin-toggle';
-        const pinIcon = isPinned ? '📌' : '○';
-        const pinTitle = isPinned ? 'Unpin' : 'Pin';
         return `
-            <tr class="uwsgate-sensor-row ${errorClass} ${pinnedClass}" data-sensor-name="${escapeHtml(sensor.name)}">
-                <td class="col-pin">
-                    <span class="${pinToggleClass}" data-name="${escapeHtml(sensor.name)}" title="${pinTitle}">
-                        ${pinIcon}
-                    </span>
-                </td>
+            <tr class="uwsgate-sensor-row ${errorClass} ${pinnedClass}" data-sensor-name="${escapeAttr(sensor.name)}">
+                ${this.renderPinToggleCell({ id: sensor.name, isPinned, dataAttr: 'data-name' })}
                 <td class="col-add-buttons add-buttons-col">
                     <span class="chart-toggle">
                         <input type="checkbox"
-                               id="${escapeHtml(checkboxId)}"
+                               id="${escapeAttr(checkboxId)}"
                                class="uwsgate-chart-checkbox chart-toggle-input"
-                               data-name="${escapeHtml(sensor.name)}"
+                               data-name="${escapeAttr(sensor.name)}"
                                ${isOnChart ? 'checked' : ''}>
-                        <label class="chart-toggle-label" for="${escapeHtml(checkboxId)}" title="Add to Chart">
+                        <label class="chart-toggle-label" for="${escapeAttr(checkboxId)}" title="Add to Chart">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-3 3"/>
                             </svg>
                         </label>
                     </span>
                     <button class="dashboard-add-btn"
-                            data-sensor-name="${escapeHtml(sensor.name)}"
-                            data-sensor-label="${escapeHtml(sensor.textname || sensor.name)}"
+                            data-sensor-name="${escapeAttr(sensor.name)}"
+                            data-sensor-label="${escapeAttr(sensor.textname || sensor.name)}"
+                            data-sensor-id="${escapeAttr(sensor.id ?? '')}"
+                            data-server-id="${escapeAttr(serverId)}"
+                            data-object-name="${escapeAttr(this.objectName)}"
                             title="Add to Dashboard">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <rect x="3" y="3" width="7" height="7" rx="1"/>
@@ -8445,14 +9023,14 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
                         </svg>
                     </button>
                 </td>
-                <td class="col-id">${sensor.id}</td>
-                <td class="col-name" title="${escapeHtml(sensor.textname || sensor.name)}">${escapeHtml(sensor.name)}</td>
-                <td class="col-type"><span class="type-badge type-${sensor.iotype}">${sensor.iotype || '?'}</span></td>
-                <td class="col-value" id="uwsgate-value-${this.objectName}-${escapeHtml(sensor.name)}">${sensor.value}</td>
-                <td class="col-supplier" id="uwsgate-supplier-${this.objectName}-${escapeHtml(sensor.name)}" title="${escapeHtml(sensor.supplier || '')}">${escapeHtml(sensor.supplier || '-')}</td>
-                <td class="col-status">${sensor.error ? `<span class="error-flag">Error: ${sensor.error}</span>` : '-'}</td>
+                <td class="col-id">${escapeHtml(sensor.id ?? '')}</td>
+                <td class="col-name" title="${escapeAttr(sensor.textname || sensor.name)}">${escapeHtml(sensor.name)}</td>
+                <td class="col-type"><span class="type-badge type-${escapeAttr(sensor.iotype || '')}">${escapeHtml(sensor.iotype || '?')}</span></td>
+                <td class="col-value" id="uwsgate-value-${escapeAttr(this.objectName)}-${escapeAttr(sensor.name)}">${formatValueHtml(sensor.value)}</td>
+                <td class="col-supplier" id="uwsgate-supplier-${this.objectName}-${escapeAttr(sensor.name)}" title="${escapeAttr(sensor.supplier || '')}">${escapeHtml(sensor.supplier || '-')}</td>
+                <td class="col-status">${sensor.error ? `<span class="error-flag">Error: ${escapeHtml(sensor.error)}</span>` : '-'}</td>
                 <td class="col-actions">
-                    <button class="uwsgate-btn-remove" data-name="${escapeHtml(sensor.name)}" title="Remove sensor">✕</button>
+                    <button class="uwsgate-btn-remove" data-name="${escapeAttr(sensor.name)}" title="Remove sensor">✕</button>
                 </td>
             </tr>
         `;
@@ -8485,7 +9063,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
                 e.stopPropagation();
                 const sensorName = btn.dataset.sensorName;
                 const sensorLabel = btn.dataset.sensorLabel;
-                showAddToDashboardDialog(sensorName, sensorLabel);
+                showAddToDashboardDialog(sensorName, sensorLabel, getDashboardBindingFromButton(btn));
             });
         });
     }
@@ -8499,13 +9077,10 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
         const chartOptions = this.getChartOptions();
         const varName = `${chartOptions.prefix}:${sensor.name}`;
         const tabState = state.tabs.get(this.tabKey);
-        console.log('UWebSocketGate: toggleSensorChart', { varName, tabKey: this.tabKey, hasChart: tabState?.charts?.has(varName) });
 
         if (tabState?.charts?.has(varName)) {
-            console.log('UWebSocketGate: Removing chart', varName);
             removeChart(this.tabKey, varName);
         } else {
-            console.log('UWebSocketGate: Adding chart', varName, 'sensorId:', sensor.id);
             addExternalSensorChart(this.tabKey, varName, sensor.id, sensor.textname || sensor.name, chartOptions);
         }
     }
@@ -8571,8 +9146,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
             });
 
             // Trim old data
-            const maxPoints = 1000;
-            if (chartData.chart.data.datasets[0].data.length > maxPoints) {
+            if (chartData.chart.data.datasets[0].data.length > MAX_CHART_POINTS) {
                 chartData.chart.data.datasets[0].data.shift();
             }
 
@@ -8626,8 +9200,7 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
 
     // localStorage persistence
     saveSubscriptions() {
-        const names = Array.from(this.sensors.keys());
-        localStorage.setItem(this.subscriptionsKey, JSON.stringify(names));
+        saveJSON(this.subscriptionsKey, Array.from(this.sensors.keys()));
     }
 
     async loadSavedSubscriptions() {
@@ -8638,7 +9211,6 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
             if (sensorsResponse.ok) {
                 const data = await sensorsResponse.json();
                 if (data.sensors && data.sensors.length > 0) {
-                    console.log(`UWebSocketGate: Loading ${data.sensors.length} sensors from server`);
                     // Add sensors with their current values
                     for (const sensor of data.sensors) {
                         if (!this.sensors.has(sensor.name)) {
@@ -8662,13 +9234,9 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
             }
 
             // Fallback to localStorage if server has no subscriptions
-            const saved = localStorage.getItem(this.subscriptionsKey);
-            if (!saved) return;
-
-            const names = JSON.parse(saved);
+            const names = loadJSON(this.subscriptionsKey, []);
             if (!Array.isArray(names) || names.length === 0) return;
 
-            console.log(`UWebSocketGate: Loading ${names.length} subscriptions from localStorage`);
             // Restore subscriptions (will re-subscribe to server)
             for (const name of names) {
                 await this.addSensorByName(name);
@@ -8681,6 +9249,12 @@ class UWebSocketGateRenderer extends BaseObjectRenderer {
     destroy() {
         super.destroy();
         this.destroyLogViewer();
+
+        // Снимаем document click listener, навешенный в setupEventListeners.
+        if (this._docClickHandler) {
+            document.removeEventListener('click', this._docClickHandler);
+            this._docClickHandler = null;
+        }
 
         // Unsubscribe from all sensors when tab closes
         if (this.sensors.size > 0) {
@@ -8704,7 +9278,6 @@ applyMixin(UWebSocketGateRenderer, TableSortMixin);
 
 // UWebSocketGate рендерер (по extensionType)
 registerRenderer('UWebSocketGate', UWebSocketGateRenderer);
-
 
 
 // === 26-unet-exchange.js ===
@@ -8857,13 +9430,13 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
     }
 
     async loadStatus() {
-        const serverParam = this.getServerParam();
-
         try {
-            const response = await fetch(`/api/objects/${this.objectName}/unet/status?${serverParam}`);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-            this.status = await response.json();
+            // fetchJSON прокидывает server=... через buildUrl и кидает на !ok —
+            // ручной fetch + getServerParam здесь дублировал бы базу и забывал
+            // encodeURIComponent для objectName.
+            this.status = await this.fetchJSON(
+                `/api/objects/${encodeURIComponent(this.objectName)}/unet/status`
+            );
             this.updateStatusTimestamp();
 
             // Распаковываем receivers и senders из status
@@ -8929,7 +9502,7 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
     renderStatusError(message) {
         const container = this.getEl(`unet-status-${this.objectName}`);
         if (container) {
-            container.innerHTML = `<div class="status-error">Error: ${message}</div>`;
+            container.innerHTML = `<div class="status-error">Error: ${escapeHtml(message)}</div>`;
         }
     }
 
@@ -8973,10 +9546,10 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
                         <td class="col-add-buttons add-buttons-col">
                             <span class="chart-toggle">
                                 <input type="checkbox"
-                                       class="chart-checkbox chart-toggle-input"
+                                       class="chart-checkbox chart-toggle-input unet-chart-toggle"
                                        id="chart-${this.objectName}-recv-${nodeIndex}-${chanKey}"
-                                       ${isEnabled ? 'checked' : ''}
-                                       onchange="toggleUNetChannel('${this.tabKey}', 'recv', '${channelId}', this.checked)">
+                                       data-unet-type="recv" data-unet-channel="${escapeAttr(channelId)}"
+                                       ${isEnabled ? 'checked' : ''}>
                                 <label class="chart-toggle-label" for="chart-${this.objectName}-recv-${nodeIndex}-${chanKey}" title="Add to Charts">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M3 3v18h18"/>
@@ -8999,7 +9572,19 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
         });
 
         tbody.innerHTML = rows.join('');
+        this._wireChartToggles(tbody);
         if (countEl) countEl.textContent = totalChannels.toString();
+    }
+
+    // Привязывает change-handler к unet-chart-toggle чекбоксам в указанном root.
+    // Извлекает type и channelId из data-* атрибутов (избегая inline onchange=
+    // с интерполяцией tabKey/channelId — содержит ':' и ломает JS-контекст атрибута).
+    _wireChartToggles(root) {
+        root.querySelectorAll('.unet-chart-toggle').forEach(cb => {
+            cb.addEventListener('change', () => {
+                toggleUNetChannel(this.tabKey, cb.dataset.unetType, cb.dataset.unetChannel, cb.checked);
+            });
+        });
     }
 
     renderSenders() {
@@ -9029,10 +9614,10 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
                     <td class="col-add-buttons add-buttons-col">
                         <span class="chart-toggle">
                             <input type="checkbox"
-                                   class="chart-checkbox chart-toggle-input"
+                                   class="chart-checkbox chart-toggle-input unet-chart-toggle"
                                    id="chart-${this.objectName}-send-${chanKey}"
-                                   ${isEnabled ? 'checked' : ''}
-                                   onchange="toggleUNetChannel('${this.tabKey}', 'send', '${channelId}', this.checked)">
+                                   data-unet-type="send" data-unet-channel="${escapeAttr(channelId)}"
+                                   ${isEnabled ? 'checked' : ''}>
                             <label class="chart-toggle-label" for="chart-${this.objectName}-send-${chanKey}" title="Add to Charts">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M3 3v18h18"/>
@@ -9052,6 +9637,7 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
         });
 
         tbody.innerHTML = rows.join('');
+        this._wireChartToggles(tbody);
         if (countEl) countEl.textContent = channels.length.toString();
     }
 
@@ -9080,10 +9666,10 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
                 <div class="chart-panel-header">
                     <div class="chart-panel-info">
                         <span class="chart-panel-badge">UNET</span>
-                        <span class="chart-panel-title">${type === 'recv' ? 'Recv' : 'Send'}: ${metricLabel}</span>
+                        <span class="chart-panel-title">${type === 'recv' ? 'Recv' : 'Send'}: ${escapeHtml(metricLabel)}</span>
                     </div>
                     <div class="chart-panel-right">
-                        <button class="btn-icon" title="Close" onclick="removeUNetMetricChart('${this.tabKey}', '${chartKey}')">
+                        <button class="btn-icon unet-metric-close" title="Close" data-unet-chart-key="${escapeAttr(chartKey)}">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M18 6L6 18M6 6l12 12"/>
                             </svg>
@@ -9095,38 +9681,26 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
                 </div>
             `;
             chartsGrid.appendChild(chartContainer);
+            chartContainer.querySelector('.unet-metric-close').addEventListener('click', () => {
+                removeUNetMetricChart(this.tabKey, chartKey);
+            });
 
             const canvas = this.getEl(`chart-canvas-${this.objectName}-${safeChartKey}`);
-            const chart = new Chart(canvas, {
-                type: 'line',
-                data: {
-                    datasets: []
-                },
+            const chart = new Chart(canvas, createLineChartConfig({
+                datasets: [],
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    animation: false,
-                    scales: {
-                        x: {
-                            type: 'time',
-                            time: {
-                                displayFormats: { second: 'HH:mm:ss' }
-                            },
-                            ticks: { maxTicksLimit: 6 }
-                        },
-                        y: {
-                            beginAtZero: true
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            display: true,
-                            position: 'bottom',
-                            labels: { boxWidth: 12, padding: 8 }
+                    discreteYAxis: true,
+                    xMaxTicksLimit: UNET_CHART_X_MAX_TICKS,
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        labels: {
+                            boxWidth: CHART_LEGEND_BOX_WIDTH,
+                            padding: CHART_LEGEND_PADDING
                         }
                     }
                 }
-            });
+            }));
 
             tabState.charts.set(chartKey, {
                 chart: chart,
@@ -9151,9 +9725,9 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
             data: [],
             borderColor: color,
             backgroundColor: 'transparent',
-            borderWidth: 1.5,
+            borderWidth: CHART_LINE_BORDER_WIDTH,
             pointRadius: 0,
-            tension: 0.1
+            tension: UNET_CHART_LINE_TENSION
         });
 
         chartData.channels.set(channelId, datasetIndex);
@@ -9247,7 +9821,7 @@ class UNetExchangeRenderer extends BaseObjectRenderer {
         if (!tabState || !tabState.charts) return;
 
         const now = Date.now();
-        const maxPoints = 300;
+        const maxPoints = UNET_CHART_MAX_POINTS;
 
         // Обновляем графики receivers
         UNET_RECV_METRICS.forEach(metric => {
@@ -9370,7 +9944,7 @@ class LauncherRenderer {
                     </div>
                     <div class="launcher-header-right">
                         <span class="launcher-control-info" id="launcher-control-${this.nodeId}">${takeBtn}</span>
-                        ${this.launcherUrl ? `<a class="launcher-link" href="${escapeHtml(this.launcherUrl)}" target="_blank" rel="noopener noreferrer">Open Launcher UI</a>` : ''}
+                        ${this.launcherUrl ? `<a class="launcher-link" href="${escapeAttr(this.launcherUrl)}" target="_blank" rel="noopener noreferrer">Open Launcher UI</a>` : ''}
                     </div>
                 </div>
                 <div class="launcher-filter">
@@ -9867,9 +10441,9 @@ class LogViewer {
 
         // Reconnection settings
         this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
-        this.baseReconnectDelay = 1000; // 1 second
-        this.maxReconnectDelay = 30000; // 30 seconds
+        this.maxReconnectAttempts = LOGVIEWER_MAX_RECONNECT_ATTEMPTS;
+        this.baseReconnectDelay = LOGVIEWER_BASE_RECONNECT_DELAY;
+        this.maxReconnectDelay = LOGVIEWER_MAX_RECONNECT_DELAY;
         this.reconnectTimer = null;
 
         this.init();
@@ -9894,7 +10468,7 @@ class LogViewer {
                         <path d="M6 9l6 6 6-6"/>
                     </svg>
                     <span class="logviewer-title">Logs</span>
-                    <div class="logviewer-controls" onclick="event.stopPropagation()">
+                    <div class="logviewer-controls">
                         <div class="log-level-wrapper" id="log-level-wrapper-${this.objectName}">
                             <button class="log-level-btn" id="log-level-btn-${this.objectName}" title="Select log levels">
                                 Levels ▼
@@ -9957,20 +10531,16 @@ class LogViewer {
                         </button>
                         <button class="log-connect-btn" id="log-connect-${this.objectName}">Connect</button>
                         <select class="log-buffer-select" id="log-buffer-${this.objectName}" title="Buffer size">
-                            <option value="500">500</option>
-                            <option value="1000">1000</option>
-                            <option value="2000">2000</option>
-                            <option value="5000">5000</option>
-                            <option value="10000" selected>10000</option>
-                            <option value="20000">20000</option>
-                            <option value="50000">50000</option>
+                            ${LOGVIEWER_BUFFER_OPTIONS.map(size => `
+                                <option value="${size}" ${size === MAX_LOG_LINES ? 'selected' : ''}>${size}</option>
+                            `).join('')}
                         </select>
                         <button class="log-download-btn" id="log-download-${this.objectName}" title="Download logs">💾</button>
                         <button class="log-clear-btn" id="log-clear-${this.objectName}" title="Clear">Clear</button>
                     </div>
-                    <div class="section-reorder-buttons" onclick="event.stopPropagation()">
-                        <button class="section-move-btn section-move-up" onclick="moveSectionUp('${this.tabKey}', 'logviewer')" title="Move up">↑</button>
-                        <button class="section-move-btn section-move-down" onclick="moveSectionDown('${this.tabKey}', 'logviewer')" title="Move down">↓</button>
+                    <div class="section-reorder-buttons" id="log-reorder-${this.objectName}">
+                        <button class="section-move-btn section-move-up" id="log-move-up-${this.objectName}" title="Move up">↑</button>
+                        <button class="section-move-btn section-move-down" id="log-move-down-${this.objectName}" title="Move down">↓</button>
                     </div>
                 </div>
                 <div class="logviewer-content">
@@ -10022,6 +10592,14 @@ class LogViewer {
         const pauseBtn = this.getEl(`log-pause-${this.objectName}`);
         pauseBtn.addEventListener('click', () => this.togglePause());
 
+        // Section reorder buttons (раньше — inline onclick в HTML).
+        const reorderRoot = this.getEl(`log-reorder-${this.objectName}`);
+        reorderRoot?.addEventListener('click', (e) => e.stopPropagation());
+        const moveUpBtn = this.getEl(`log-move-up-${this.objectName}`);
+        moveUpBtn?.addEventListener('click', () => moveSectionUp(this.tabKey, 'logviewer'));
+        const moveDownBtn = this.getEl(`log-move-down-${this.objectName}`);
+        moveDownBtn?.addEventListener('click', () => moveSectionDown(this.tabKey, 'logviewer'));
+
         // Level dropdown
         this.setupLevelDropdown();
 
@@ -10033,7 +10611,7 @@ class LogViewer {
             filterTimeout = setTimeout(() => {
                 this.filter = e.target.value;
                 this.applyFilter();
-            }, 300);
+            }, LOGVIEWER_FILTER_DEBOUNCE_DELAY);
         });
 
         // Filter options
@@ -10058,9 +10636,11 @@ class LogViewer {
             this.applyFilter();
         });
 
-        // Hotkey "/" for filter focus, Esc for pause toggle
-        document.addEventListener('keydown', (e) => {
-            // Check if LogViewer section is visible
+        // Hotkey "/" for filter focus, Esc for pause toggle.
+        // Сохраняем ссылку на handler — нужен для removeEventListener в destroy(),
+        // иначе document держит замыкание на весь LogViewer instance + filterInput
+        // навечно (утечка на каждое открытие/закрытие вкладки).
+        this._keydownHandler = (e) => {
             const section = this.getEl(`logviewer-section-${this.objectName}`);
             if (!section || section.classList.contains('collapsed')) return;
 
@@ -10070,22 +10650,21 @@ class LogViewer {
             }
             if (e.key === 'Escape') {
                 if (document.activeElement === filterInput) {
-                    // Clear filter and blur
                     filterInput.value = '';
                     this.filter = '';
                     this.applyFilter();
                     filterInput.blur();
                 } else if (document.activeElement.tagName !== 'INPUT') {
-                    // Toggle pause when not in input
                     this.togglePause();
                 }
             }
-        });
+        };
+        document.addEventListener('keydown', this._keydownHandler);
 
         // Buffer size select
         const bufferSelect = this.getEl(`log-buffer-${this.objectName}`);
         bufferSelect.addEventListener('change', (e) => {
-            this.maxLines = parseInt(e.target.value);
+            this.maxLines = parseIntegerOrDefault(e.target.value, this.maxLines);
             this.saveBufferSize();
             this.updateStats();
         });
@@ -10097,7 +10676,7 @@ class LogViewer {
         const logContainer = this.getEl(`log-container-${this.objectName}`);
         logContainer.addEventListener('scroll', () => {
             const { scrollTop, scrollHeight, clientHeight } = logContainer;
-            this.autoScroll = scrollHeight - scrollTop - clientHeight < 50;
+            this.autoScroll = scrollHeight - scrollTop - clientHeight < LOGVIEWER_AUTOSCROLL_THRESHOLD_PX;
         });
 
         // Load saved settings
@@ -10107,65 +10686,46 @@ class LogViewer {
     }
 
     saveFilterOptions() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-filter-options') || '{}');
+        updateStorageMap('uniset-panel-filter-options', (saved) => {
             saved[this.tabKey] = {
                 regex: this.filterRegex,
                 case: this.filterCase,
                 only: this.filterOnlyMatches
             };
-            localStorage.setItem('uniset-panel-filter-options', JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save filter options:', err);
-        }
+        });
     }
 
     loadFilterOptions() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-filter-options') || '{}');
-            const opts = saved[this.tabKey] || saved[this.objectName];
-            if (opts) {
-                this.filterRegex = opts.regex !== undefined ? opts.regex : true;
-                this.filterCase = opts.case !== undefined ? opts.case : false;
-                this.filterOnlyMatches = opts.only !== undefined ? opts.only : false;
+        const saved = loadStorageMap('uniset-panel-filter-options');
+        const opts = saved[this.tabKey] || saved[this.objectName];
+        if (!opts) return;
 
-                // Update checkboxes
-                const regexCheckbox = this.getEl(`log-filter-regex-${this.objectName}`);
-                const caseCheckbox = this.getEl(`log-filter-case-${this.objectName}`);
-                const onlyCheckbox = this.getEl(`log-filter-only-${this.objectName}`);
+        this.filterRegex = opts.regex !== undefined ? opts.regex : true;
+        this.filterCase = opts.case !== undefined ? opts.case : false;
+        this.filterOnlyMatches = opts.only !== undefined ? opts.only : false;
 
-                if (regexCheckbox) regexCheckbox.checked = this.filterRegex;
-                if (caseCheckbox) caseCheckbox.checked = this.filterCase;
-                if (onlyCheckbox) onlyCheckbox.checked = this.filterOnlyMatches;
-            }
-        } catch (err) {
-            console.warn('Failed to load filter options:', err);
-        }
+        const regexCheckbox = this.getEl(`log-filter-regex-${this.objectName}`);
+        const caseCheckbox = this.getEl(`log-filter-case-${this.objectName}`);
+        const onlyCheckbox = this.getEl(`log-filter-only-${this.objectName}`);
+
+        if (regexCheckbox) regexCheckbox.checked = this.filterRegex;
+        if (caseCheckbox) caseCheckbox.checked = this.filterCase;
+        if (onlyCheckbox) onlyCheckbox.checked = this.filterOnlyMatches;
     }
 
     saveBufferSize() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-buffersize') || '{}');
-            saved[this.tabKey] = this.maxLines;
-            localStorage.setItem('uniset-panel-buffersize', JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save buffer size:', err);
-        }
+        updateStorageMap('uniset-panel-buffersize', (saved) => { saved[this.tabKey] = this.maxLines; });
     }
 
     loadSavedBufferSize() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-buffersize') || '{}');
-            const bufSize = saved[this.tabKey] ?? saved[this.objectName];
-            if (bufSize) {
-                this.maxLines = bufSize;
-                const bufferSelect = this.getEl(`log-buffer-${this.objectName}`);
-                if (bufferSelect) {
-                    bufferSelect.value = this.maxLines;
-                }
+        const saved = loadStorageMap('uniset-panel-buffersize');
+        const bufSize = saved[this.tabKey] ?? saved[this.objectName];
+        if (bufSize) {
+            this.maxLines = bufSize;
+            const bufferSelect = this.getEl(`log-buffer-${this.objectName}`);
+            if (bufferSelect) {
+                bufferSelect.value = this.maxLines;
             }
-        } catch (err) {
-            console.warn('Failed to load buffer size:', err);
         }
     }
 
@@ -10296,76 +10856,43 @@ class LogViewer {
     }
 
     saveLevels() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-loglevels') || '{}');
+        updateStorageMap('uniset-panel-loglevels', (saved) => {
             saved[this.tabKey] = Array.from(this.selectedLevels);
-            localStorage.setItem('uniset-panel-loglevels', JSON.stringify(saved));
-        } catch (err) {
-            console.warn('Failed to save log levels:', err);
-        }
+        });
     }
 
     loadSavedLevels() {
-        try {
-            const saved = JSON.parse(localStorage.getItem('uniset-panel-loglevels') || '{}');
-            const levels = saved[this.tabKey] || saved[this.objectName];
-            if (levels) {
-                this.selectedLevels = new Set(levels);
-                this.updatePillsUI();
-                // Calculate mask for currentLevel
-                let mask = 0;
-                if (this.selectedLevels.has('ANY')) {
-                    mask = LOG_LEVELS.ANY;
-                } else {
-                    this.selectedLevels.forEach(level => {
-                        if (LOG_LEVELS[level]) {
-                            mask |= LOG_LEVELS[level];
-                        }
-                    });
+        const saved = loadStorageMap('uniset-panel-loglevels');
+        const levels = saved[this.tabKey] || saved[this.objectName];
+        if (!levels) return;
+
+        this.selectedLevels = new Set(levels);
+        this.updatePillsUI();
+        // Calculate mask for currentLevel
+        let mask = 0;
+        if (this.selectedLevels.has('ANY')) {
+            mask = LOG_LEVELS.ANY;
+        } else {
+            this.selectedLevels.forEach(level => {
+                if (LOG_LEVELS[level]) {
+                    mask |= LOG_LEVELS[level];
                 }
-                this.currentLevel = mask;
-            }
-        } catch (err) {
-            console.warn('Failed to load log levels:', err);
+            });
         }
+        this.currentLevel = mask;
     }
 
     setupResize() {
         const resizeHandle = this.getEl(`log-resize-${this.objectName}`);
         const logContainer = this.getEl(`log-container-${this.objectName}`);
-
-        let startY = 0;
-        let startHeight = 0;
-        let isResizing = false;
-
-        const onMouseMove = (e) => {
-            if (!isResizing) return;
-            const delta = e.clientY - startY;
-            const newHeight = Math.max(LOGVIEWER_MIN_HEIGHT, Math.min(LOGVIEWER_MAX_HEIGHT, startHeight + delta));
-            logContainer.style.height = `${newHeight}px`;
-            this.height = newHeight;
-        };
-
-        const onMouseUp = () => {
-            if (!isResizing) return;
-            isResizing = false;
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-            this.saveHeight();
-        };
-
-        resizeHandle.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            isResizing = true;
-            startY = e.clientY;
-            startHeight = logContainer.offsetHeight;
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = 'ns-resize';
-            document.body.style.userSelect = 'none';
-        });
+        setupResizeHandle(
+            resizeHandle,
+            logContainer,
+            LOGVIEWER_MIN_HEIGHT,
+            (height) => { this.height = height; this.saveHeight(); },
+            LOGVIEWER_MAX_HEIGHT,
+            (height) => { this.height = height; }
+        );
     }
 
     toggleCollapse() {
@@ -10415,9 +10942,9 @@ class LogViewer {
 
             try {
                 const data = JSON.parse(e.data);
-                console.log(`LogViewer: Connected to ${data.host}:${data.port}`);
+                debugLog(`LogViewer: Connected to ${data.host}:${data.port}`);
             } catch (err) {
-                console.log('LogViewer: Connected');
+                debugLog('LogViewer: Connected');
             }
         });
 
@@ -10436,7 +10963,7 @@ class LogViewer {
         });
 
         this.eventSource.addEventListener('disconnected', () => {
-            console.log('LogViewer: Disconnected from LogServer, will reconnect');
+            debugLog('LogViewer: Disconnected from LogServer, will reconnect');
             this.handleConnectionError();
         });
 
@@ -10472,7 +10999,7 @@ class LogViewer {
             const jitter = cappedDelay * 0.1 * (Math.random() * 2 - 1);
             const delay = Math.round(cappedDelay + jitter);
 
-            console.log(`LogViewer: Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+            debugLog(`LogViewer: Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
             this.updateStatus('reconnecting');
 
             // Clear any existing timer
@@ -10690,9 +11217,8 @@ class LogViewer {
                 const flags = this.filterCase ? 'g' : 'gi';
                 regex = new RegExp(`(${this.filter})`, flags);
             } else {
-                const escaped = this.filter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 const flags = this.filterCase ? 'g' : 'gi';
-                regex = new RegExp(`(${escaped})`, flags);
+                regex = new RegExp(`(${escapeRegex(this.filter)})`, flags);
             }
 
             if (regex.test(text)) {
@@ -10914,28 +11440,18 @@ class LogViewer {
     }
 
     saveHeight() {
-        try {
-            const heights = JSON.parse(localStorage.getItem('uniset-panel-logheights') || '{}');
-            heights[this.tabKey] = this.height;
-            localStorage.setItem('uniset-panel-logheights', JSON.stringify(heights));
-        } catch (err) {
-            console.warn('Failed to save log height:', err);
-        }
+        updateStorageMap('uniset-panel-logheights', (heights) => { heights[this.tabKey] = this.height; });
     }
 
     loadSavedHeight() {
-        try {
-            const heights = JSON.parse(localStorage.getItem('uniset-panel-logheights') || '{}');
-            const h = heights[this.tabKey] ?? heights[this.objectName];
-            if (h) {
-                this.height = h;
-                const container = this.getEl(`log-container-${this.objectName}`);
-                if (container) {
-                    container.style.height = `${this.height}px`;
-                }
+        const heights = loadStorageMap('uniset-panel-logheights');
+        const h = heights[this.tabKey] ?? heights[this.objectName];
+        if (h) {
+            this.height = h;
+            const container = this.getEl(`log-container-${this.objectName}`);
+            if (container) {
+                container.style.height = `${this.height}px`;
             }
-        } catch (err) {
-            console.warn('Failed to load log height:', err);
         }
     }
 
@@ -10954,10 +11470,13 @@ class LogViewer {
     }
 
     destroy() {
+        if (this._keydownHandler) {
+            document.removeEventListener('keydown', this._keydownHandler);
+            this._keydownHandler = null;
+        }
         this.disconnect();
     }
 }
-
 
 
 // === 35-journal.js ===
@@ -11165,19 +11684,9 @@ class JournalRenderer {
             return;
         }
 
-        const multipliers = {
-            '15m': 15 * 60 * 1000,
-            '1h': 60 * 60 * 1000,
-            '3h': 3 * 60 * 60 * 1000,
-            '10h': 10 * 60 * 60 * 1000,
-            '1d': 24 * 60 * 60 * 1000,
-            '3d': 3 * 24 * 60 * 60 * 1000,
-            '1w': 7 * 24 * 60 * 60 * 1000,
-            '1M': 30 * 24 * 60 * 60 * 1000
-        };
-
-        if (multipliers[range]) {
-            from = new Date(now.getTime() - multipliers[range]);
+        const offset = JOURNAL_TIME_RANGE_MS[range];
+        if (offset) {
+            from = new Date(now.getTime() - offset);
         }
 
         this.filters.from = from ? from.toISOString() : null;
@@ -11192,8 +11701,7 @@ class JournalRenderer {
             if (this.isLoading || !this.hasMore) return;
 
             const { scrollTop, scrollHeight, clientHeight } = wrapper;
-            // Load more when scrolled to 80% of the content
-            if (scrollTop + clientHeight >= scrollHeight * 0.8) {
+            if (scrollTop + clientHeight >= scrollHeight * JOURNAL_SCROLL_LOAD_RATIO) {
                 this.loadMore();
             }
         });
@@ -11202,32 +11710,14 @@ class JournalRenderer {
     setupResize() {
         const handle = document.getElementById(`journal-resize-${this.journalId}`);
         const container = document.getElementById(`journal-container-${this.journalId}`);
-        if (!handle || !container) return;
-
-        let startY, startHeight;
-
-        const onMouseMove = (e) => {
-            const delta = e.clientY - startY;
-            const newHeight = Math.max(150, Math.min(800, startHeight + delta));
-            container.style.height = `${newHeight}px`;
-            container.style.flex = 'none'; // Override flex: 1 to allow fixed height
-        };
-
-        const onMouseUp = () => {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-        };
-
-        handle.addEventListener('mousedown', (e) => {
-            startY = e.clientY;
-            startHeight = container.offsetHeight;
-            document.body.style.cursor = 'ns-resize';
-            document.body.style.userSelect = 'none';
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-        });
+        setupResizeHandle(
+            handle,
+            container,
+            JOURNAL_CONTAINER_MIN_HEIGHT,
+            null,
+            JOURNAL_CONTAINER_MAX_HEIGHT,
+            () => { container.style.flex = 'none'; }
+        );
     }
 
     async loadMTypes() {
@@ -11343,7 +11833,30 @@ class JournalRenderer {
     }
 
     renderMessageRow(msg) {
-        const time = new Date(msg.timestamp);
+        return `
+            <tr class="journal-row ${this.getMTypeClass(msg.mtype)}">
+                ${this.renderMessageCells(msg)}
+            </tr>
+        `;
+    }
+
+    renderMessageCells(msg) {
+        const { displayTime, titleTime } = this.getMessageTimeParts(msg.timestamp);
+        const mtypeClass = this.getMTypeClass(msg.mtype);
+
+        return `
+            <td class="col-time" title="${escapeAttr(titleTime)}">${escapeHtml(displayTime)}</td>
+            <td class="col-type"><span class="journal-badge ${mtypeClass}">${escapeHtml(msg.mtype || '')}</span></td>
+            <td class="col-message" title="${escapeAttr(msg.message || '')}">${this.highlightText(msg.message)}</td>
+            <td class="col-code">${this.highlightText(msg.mcode)}</td>
+            <td class="col-group">${this.highlightText(msg.mgroup)}</td>
+            <td class="col-name" title="${escapeAttr(msg.name || '')}">${this.highlightText(msg.name)}</td>
+            <td class="col-value">${escapeHtml(msg.value ?? '')}</td>
+        `;
+    }
+
+    getMessageTimeParts(timestamp) {
+        const time = new Date(timestamp);
         const today = new Date();
         const isToday = time.toDateString() === today.toDateString();
 
@@ -11360,33 +11873,28 @@ class JournalRenderer {
 
         // Show date if not today
         const displayTime = isToday ? timeStr : `${dateStr} ${timeStr}`;
-
-        const mtypeClass = this.getMTypeClass(msg.mtype);
-        const searchTerm = this.filters.search;
-
-        // Highlight search matches
-        const highlightText = (text) => {
-            if (!searchTerm || !text) return this.escapeHtml(text || '');
-            const escaped = this.escapeHtml(text);
-            const regex = new RegExp(`(${this.escapeRegex(searchTerm)})`, 'gi');
-            return escaped.replace(regex, '<mark class="journal-highlight">$1</mark>');
+        return {
+            displayTime,
+            titleTime: time.toLocaleString('ru-RU')
         };
-
-        return `
-            <tr class="journal-row ${mtypeClass}">
-                <td class="col-time" title="${time.toLocaleString('ru-RU')}">${displayTime}</td>
-                <td class="col-type"><span class="journal-badge ${mtypeClass}">${this.escapeHtml(msg.mtype || '')}</span></td>
-                <td class="col-message" title="${this.escapeHtml(msg.message || '')}">${highlightText(msg.message)}</td>
-                <td class="col-code">${highlightText(msg.mcode)}</td>
-                <td class="col-group">${highlightText(msg.mgroup)}</td>
-                <td class="col-name" title="${this.escapeHtml(msg.name || '')}">${highlightText(msg.name)}</td>
-                <td class="col-value">${msg.value !== undefined ? msg.value : ''}</td>
-            </tr>
-        `;
     }
 
-    escapeRegex(str) {
-        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    highlightText(text) {
+        if (text === null || text === undefined) return '';
+        const raw = String(text);
+        const searchTerm = this.filters.search;
+        if (!searchTerm || raw === '') return escapeHtml(raw);
+
+        // Сплитим raw по совпадениям, escapeHtml каждый фрагмент. Раньше regex
+        // применялся к escaped-строке — поиск по '<', '>', '&', '"', '=' в тексте
+        // вроде "value >= 5" не находил совпадение, потому что ищем в "value &gt;= 5".
+        const regex = new RegExp(`(${escapeRegex(searchTerm)})`, 'gi');
+        const parts = raw.split(regex);
+        return parts.map((part, i) =>
+            i % 2 === 1
+                ? `<mark class="journal-highlight">${escapeHtml(part)}</mark>`
+                : escapeHtml(part)
+        ).join('');
     }
 
     getMTypeClass(mtype) {
@@ -11454,7 +11962,7 @@ class JournalRenderer {
 
             const row = document.createElement('tr');
             row.className = `journal-row ${this.getMTypeClass(msg.mtype)} journal-new`;
-            row.innerHTML = this.renderMessageRowContent(msg);
+            row.innerHTML = this.renderMessageCells(msg);
             tbody.insertBefore(row, tbody.firstChild);
 
             setTimeout(() => row.classList.remove('journal-new'), JOURNAL_HIGHLIGHT_DURATION);
@@ -11478,44 +11986,6 @@ class JournalRenderer {
         return true;
     }
 
-    renderMessageRowContent(msg) {
-        const time = new Date(msg.timestamp);
-        const today = new Date();
-        const isToday = time.toDateString() === today.toDateString();
-
-        const timeStr = time.toLocaleTimeString('ru-RU', {
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-        });
-
-        const dateStr = time.toLocaleDateString('ru-RU', {
-            day: '2-digit',
-            month: '2-digit'
-        });
-
-        const displayTime = isToday ? timeStr : `${dateStr} ${timeStr}`;
-        const mtypeClass = this.getMTypeClass(msg.mtype);
-        const searchTerm = this.filters.search;
-
-        const highlightText = (text) => {
-            if (!searchTerm || !text) return this.escapeHtml(text || '');
-            const escaped = this.escapeHtml(text);
-            const regex = new RegExp(`(${this.escapeRegex(searchTerm)})`, 'gi');
-            return escaped.replace(regex, '<mark class="journal-highlight">$1</mark>');
-        };
-
-        return `
-            <td class="col-time" title="${time.toLocaleString('ru-RU')}">${displayTime}</td>
-            <td class="col-type"><span class="journal-badge ${mtypeClass}">${this.escapeHtml(msg.mtype || '')}</span></td>
-            <td class="col-message" title="${this.escapeHtml(msg.message || '')}">${highlightText(msg.message)}</td>
-            <td class="col-code">${highlightText(msg.mcode)}</td>
-            <td class="col-group">${highlightText(msg.mgroup)}</td>
-            <td class="col-name" title="${this.escapeHtml(msg.name || '')}">${highlightText(msg.name)}</td>
-            <td class="col-value">${msg.value !== undefined ? msg.value : ''}</td>
-        `;
-    }
-
     updatePendingCount() {
         const pendingEl = document.getElementById(`journal-pending-${this.journalId}`);
         if (pendingEl) {
@@ -11528,14 +11998,8 @@ class JournalRenderer {
     showError(message) {
         const tbody = document.getElementById(`journal-tbody-${this.journalId}`);
         if (tbody) {
-            tbody.innerHTML = `<tr class="journal-error"><td colspan="7">${this.escapeHtml(message)}</td></tr>`;
+            tbody.innerHTML = `<tr class="journal-error"><td colspan="7">${escapeHtml(message)}</td></tr>`;
         }
-    }
-
-    escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
     }
 
     destroy() {
@@ -11591,8 +12055,8 @@ class JournalManager {
                         <polyline points="10 9 9 9 8 9"/>
                     </svg>
                 </span>
-                <span class="journal-item-name">${this.escapeHtml(j.name)}</span>
-                <span class="journal-item-status ${j.status}">${j.status}</span>
+                <span class="journal-item-name">${escapeHtml(j.name)}</span>
+                <span class="journal-item-status ${escapeAttr(j.status)}">${escapeHtml(j.status)}</span>
             </li>
         `).join('');
 
@@ -11626,6 +12090,11 @@ class JournalManager {
         if (!renderer) {
             renderer = new JournalRenderer(journalId, journal.name);
             this.renderers.set(journalId, renderer);
+        } else {
+            // При повторном открытии: очистить timer'ы старого инстанса перед
+            // переинициализацией. content.innerHTML ниже выкинет старый DOM,
+            // но searchDebounceTimer / SSE-пингинг могут жить ещё ~debounce ms.
+            renderer.destroy();
         }
 
         // Render journal panel
@@ -11644,11 +12113,6 @@ class JournalManager {
         }
     }
 
-    escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
-    }
 }
 
 // Global journal manager instance
@@ -11797,11 +12261,7 @@ async function initJournals() {
 // Конец LogViewer
 // ============================================================================
 
-// Цвета для графиков
-const CHART_COLORS = [
-    '#3274d9', '#73bf69', '#ff9830', '#f2495c',
-    '#b877d9', '#5794f2', '#fade2a', '#ff6eb4'
-];
+// Цвета для графиков — палитра в 00-constants.js (CHART_COLORS).
 let colorIndex = 0;
 
 function getNextColor() {
@@ -11869,9 +12329,9 @@ async function refreshObjectsList() {
     try {
         const data = await fetchObjects();
         renderObjectsList(data);
-        console.log('Список объектов обновлён');
+        debugLog('Список объектов обновлён');
     } catch (err) {
-        console.error('Error обновления списка объектов:', err);
+        console.error('Failed to refresh objects list:', err);
     } finally {
         _refreshObjectsInProgress = false;
         if (_refreshObjectsPending) {
@@ -11882,96 +12342,83 @@ async function refreshObjectsList() {
 }
 
 async function fetchObjectData(name, serverId = null) {
-    let url = `/api/objects/${encodeURIComponent(name)}`;
-    if (serverId) {
-        url += `?server=${encodeURIComponent(serverId)}`;
-    }
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to load object data');
-    return response.json();
+    return fetchJSONOrThrow(buildObjectUrl(name, '', serverId), {}, 'Failed to load object data');
 }
 
 async function watchObject(name, serverId = null) {
-    let url = `/api/objects/${encodeURIComponent(name)}/watch`;
-    if (serverId) {
-        url += `?server=${encodeURIComponent(serverId)}`;
-    }
-    const response = await fetch(url, { method: 'POST' });
-    if (!response.ok) throw new Error('Failed to start watching');
-    return response.json();
+    return fetchJSONOrThrow(buildObjectUrl(name, '/watch', serverId), { method: 'POST' }, 'Failed to start watching');
 }
 
 async function unwatchObject(name, serverId = null) {
-    let url = `/api/objects/${encodeURIComponent(name)}/watch`;
-    if (serverId) {
-        url += `?server=${encodeURIComponent(serverId)}`;
-    }
-    const response = await fetch(url, { method: 'DELETE' });
-    if (!response.ok) throw new Error('Failed to stop watching');
-    return response.json();
+    return fetchJSONOrThrow(buildObjectUrl(name, '/watch', serverId), { method: 'DELETE' }, 'Failed to stop watching');
 }
 
-async function fetchVariableHistory(objectName, variableName, count = 100, serverId = null) {
-    let url = `/api/objects/${encodeURIComponent(objectName)}/variables/${encodeURIComponent(variableName)}/history?count=${count}`;
-    if (serverId) {
-        url += `&server=${encodeURIComponent(serverId)}`;
-    }
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to load history');
-    return response.json();
+function buildVariableHistoryUrl(objectName, variableName, count = DEFAULT_VARIABLE_HISTORY_COUNT, serverId = null) {
+    return buildObjectUrl(
+        objectName,
+        `/variables/${encodeURIComponent(variableName)}/history`,
+        serverId,
+        { count }
+    );
+}
+
+async function fetchVariableHistory(objectName, variableName, count = DEFAULT_VARIABLE_HISTORY_COUNT, serverId = null) {
+    return fetchJSONOrThrow(
+        buildVariableHistoryUrl(objectName, variableName, count, serverId),
+        {},
+        'Failed to load history'
+    );
 }
 
 async function fetchSensors(serverId) {
-    const param = serverId ? `?server=${encodeURIComponent(serverId)}` : '';
-    const response = await fetch(`/api/sensors${param}`);
+    const response = await fetch(`/api/sensors?server=${encodeURIComponent(serverId)}`);
     if (!response.ok) return { sensors: [], count: 0 };
     return response.json();
 }
 
-async function fetchSMSensors() {
-    const response = await fetch('/api/sm/sensors');
+async function fetchSMSensors(serverId) {
+    const response = await fetch(`/api/sm/sensors?server=${encodeURIComponent(serverId)}`);
     if (!response.ok) return { sensors: [], count: 0 };
     return response.json();
 }
 
-// Loading конфигурации сенсоров (per-server, вызывается после заполнения state.servers)
+// Loading конфигурации сенсоров (per-server, вызывается после заполнения state.servers).
+// Для каждого сервера сначала пробуем sensorconfig (XML — даёт textname,
+// isDiscrete, isInput); если для этого сервера конфига нет, спрашиваем
+// IONC/SharedMemory напрямую — список тот же, без metadata.
 async function loadSensorsConfig() {
     try {
-        let totalLoaded = 0;
-
-        // Загружаем сенсоры для каждого известного сервера
         for (const [serverId] of state.servers) {
-            const data = await fetchSensors(serverId);
-            if (data.sensors && data.sensors.length > 0) {
-                data.sensors.forEach(sensor => {
-                    if (!state.sensorsByName.has(sensor.name)) {
-                        state.sensors.set(sensor.id, sensor);
-                        state.sensorsByName.set(sensor.name, sensor);
-                        totalLoaded++;
-                    }
-                });
+            let data = await fetchSensors(serverId);
+            if (!data.sensors || data.sensors.length === 0) {
+                data = await fetchSMSensors(serverId);
             }
-        }
-
-        // Если ничего не загрузилось, пробуем SharedMemory как fallback
-        if (totalLoaded === 0) {
-            console.log('Конфиг датчиков пуст, загружаю из SharedMemory...');
-            const data = await fetchSMSensors();
-            if (data.sensors) {
-                data.sensors.forEach(sensor => {
+            if (!data.sensors) continue;
+            data.sensors.forEach(sensor => {
+                // sensor.supplier — owning object (типично "SharedMemory");
+                // если backend не вернул — fallback. Это не идеально для
+                // cross-object одинаковых имён, но лучшее, что есть из
+                // /api/sensors response сейчас.
+                const objectName = sensor.supplier || 'SharedMemory';
+                const key = makeSensorKey(serverId, objectName, sensor.name);
+                state.sensorsByKey.set(key, sensor);
+                if (!state.sensorsByName.has(sensor.name)) {
                     state.sensors.set(sensor.id, sensor);
                     state.sensorsByName.set(sensor.name, sensor);
-                });
-            }
+                }
+            });
         }
 
-        console.log(`Загружено ${state.sensors.size} сенсоров`);
+        debugLog(`Загружено ${state.sensors.size} сенсоров`);
     } catch (err) {
-        console.error('Error загрузки конфигурации сенсоров:', err);
+        console.error('Failed to load sensors config:', err);
     }
 }
 
-// Получить информацию о сенсоре по ID или имени
+// Получить информацию о сенсоре по ID или имени.
+// На multi-server панели возвращает первый встретившийся sensor с этим именем
+// (см. комментарий к state.sensorsByName). Для multi-server-точного lookup
+// используй getSensorInfoByKey(serverId, objectName, sensorName).
 function getSensorInfo(idOrName) {
     if (typeof idOrName === 'number') {
         return state.sensors.get(idOrName);
@@ -11979,12 +12426,31 @@ function getSensorInfo(idOrName) {
     return state.sensorsByName.get(idOrName);
 }
 
+// Multi-server-aware lookup. Принимает либо готовый sensorKey, либо
+// (serverId, objectName, sensorName). Если такого ключа нет — fallback на
+// short-name lookup, чтобы данные старых одно-серверных setup'ов не
+// «терялись» (не критично, потому что там single-server и конфликта нет).
+function getSensorInfoByKey(serverIdOrKey, objectName, sensorName) {
+    const key = sensorName === undefined
+        ? serverIdOrKey
+        : makeSensorKey(serverIdOrKey, objectName, sensorName);
+    const found = state.sensorsByKey.get(key);
+    if (found) return found;
+    // Fallback by short name. parseSensorKey работает только если key — наш
+    // строковый формат; если caller передал что-то другое, просто skip.
+    const parsed = typeof key === 'string' ? parseSensorKey(key) : null;
+    return parsed ? state.sensorsByName.get(parsed.sensorName) : undefined;
+}
+
+if (typeof globalThis !== 'undefined') {
+    globalThis.getSensorInfoByKey = getSensorInfoByKey;
+}
+
 // Проверить, является ли сигнал дискретным
 function isDiscreteSignal(sensor) {
     if (!sensor) return false;
     return sensor.isDiscrete === true || sensor.iotype === 'DI' || sensor.iotype === 'DO';
 }
-
 
 
 // === 41-dialogs.js ===
@@ -12024,7 +12490,7 @@ function openIoncDialog(options) {
                 input.focus();
                 input.select();
             }
-        }, 50);
+        }, IONC_DIALOG_FOCUS_DELAY_MS);
     }
 
     // Add ESC handler (remove old one first to prevent duplicates)
@@ -12120,7 +12586,10 @@ function openSensorDialog(tabKey) {
         }
     }
 
-    // Обработчик фильтра
+    // Обработчик фильтра. .oninput (а не addEventListener) — намеренно:
+    // openSensorDialog зовётся повторно (диалог singleton-овый, элемент не
+    // пересоздаётся), .oninput идемпотентно перезаписывает; addEventListener
+    // копил бы дубликаты на каждое открытие.
     filterInput.oninput = () => {
         filterSensors(filterInput.value);
         renderSensorTable();
@@ -12211,8 +12680,8 @@ function renderSensorTable() {
             <tr>
                 <td>
                     <button class="sensor-add-btn" ${btnDisabled} title="${btnTitle}"
-                            data-object="${escapeHtml(sensorDialogState.objectName)}"
-                            data-sensor="${escapeHtml(sensor.name)}">${btnText}</button>
+                            data-object="${escapeAttr(sensorDialogState.objectName)}"
+                            data-sensor="${escapeAttr(sensor.name)}">${btnText}</button>
                 </td>
                 <td>${sensor.id}</td>
                 <td class="sensor-name">${escapeHtml(sensor.name)}</td>
@@ -12249,30 +12718,45 @@ function renderSensorTable() {
 // Экранирование HTML
 // escapeHtml() определена в 06-utils.js
 
+function buildObjectApiUrl(tabKey, objectPath) {
+    const tabState = state.tabs.get(tabKey);
+    const serverId = tabState?.serverId;
+    const objectName = tabState?.displayName || tabKey;
+    const url = buildObjectUrl(objectName, objectPath, serverId);
+
+    return { url, tabState, serverId, objectName };
+}
+
+async function fetchObjectApi(tabKey, objectPath, options = {}) {
+    const { url, tabState, serverId, objectName } = buildObjectApiUrl(tabKey, objectPath);
+    const response = await fetch(url, options);
+    return { response, tabState, serverId, objectName };
+}
+
+async function warnObjectApiError(response, message) {
+    let err = {};
+    try {
+        err = await response.json();
+    } catch (parseErr) {
+        err = {};
+    }
+    console.warn(message, err.error || response.statusText);
+}
+
 // Подписаться на внешние датчики через API
 // tabKey - ключ вкладки (serverId:objectName)
 async function subscribeToExternalSensors(tabKey, sensorNames) {
     try {
-        const tabState = state.tabs.get(tabKey);
-        const serverId = tabState?.serverId;
-        const objectName = tabState?.displayName || tabKey;
-
-        let url = `/api/objects/${encodeURIComponent(objectName)}/external-sensors`;
-        if (serverId) {
-            url += `?server=${encodeURIComponent(serverId)}`;
-        }
-
-        const response = await fetch(url, {
+        const { response } = await fetchObjectApi(tabKey, '/external-sensors', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sensors: sensorNames })
         });
         if (!response.ok) {
-            const err = await response.json();
-            console.warn('Error подписки на датчики:', err.error || response.statusText);
+            await warnObjectApiError(response, 'Error подписки на датчики:');
         }
     } catch (err) {
-        console.warn('Error подписки на датчики:', err);
+        console.warn('Failed to subscribe to sensors:', err);
     }
 }
 
@@ -12280,22 +12764,16 @@ async function subscribeToExternalSensors(tabKey, sensorNames) {
 // tabKey - ключ вкладки (serverId:objectName)
 async function unsubscribeFromExternalSensor(tabKey, sensorName) {
     try {
-        const tabState = state.tabs.get(tabKey);
-        const serverId = tabState?.serverId;
-        const objectName = tabState?.displayName || tabKey;
-
-        let url = `/api/objects/${encodeURIComponent(objectName)}/external-sensors/${encodeURIComponent(sensorName)}`;
-        if (serverId) {
-            url += `?server=${encodeURIComponent(serverId)}`;
-        }
-
-        const response = await fetch(url, { method: 'DELETE' });
+        const { response } = await fetchObjectApi(
+            tabKey,
+            `/external-sensors/${encodeURIComponent(sensorName)}`,
+            { method: 'DELETE' }
+        );
         if (!response.ok) {
-            const err = await response.json();
-            console.warn('Error отписки от датчика:', err.error || response.statusText);
+            await warnObjectApiError(response, 'Error отписки от датчика:');
         }
     } catch (err) {
-        console.warn('Error отписки от датчика:', err);
+        console.warn('Failed to unsubscribe from sensor:', err);
     }
 }
 
@@ -12303,32 +12781,22 @@ async function unsubscribeFromExternalSensor(tabKey, sensorName) {
 // tabKey - ключ вкладки (serverId:objectName)
 async function subscribeToIONCSensor(tabKey, sensorId) {
     try {
-        const tabState = state.tabs.get(tabKey);
-        const serverId = tabState?.serverId;
-        const objectName = tabState?.displayName || tabKey;
-
-        let url = `/api/objects/${encodeURIComponent(objectName)}/ionc/subscribe`;
-        if (serverId) {
-            url += `?server=${encodeURIComponent(serverId)}`;
-        }
-
-        const response = await fetch(url, {
+        const { response, tabState, serverId, objectName } = await fetchObjectApi(tabKey, '/ionc/subscribe', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sensor_ids: [sensorId] })
         });
         if (!response.ok) {
-            const err = await response.json();
-            console.warn('Error подписки на IONC датчик:', err.error || response.statusText);
+            await warnObjectApiError(response, 'Error подписки на IONC датчик:');
         } else {
             // Добавляем в список подписок рендерера
             if (tabState && tabState.renderer && tabState.renderer.subscribedSensorIds) {
                 tabState.renderer.subscribedSensorIds.add(sensorId);
             }
-            console.log(`IONC: Подписка на датчик ${sensorId} для ${objectName} (server: ${serverId})`);
+            debugLog(`IONC: Подписка на датчик ${sensorId} для ${objectName} (server: ${serverId})`);
         }
     } catch (err) {
-        console.warn('Error подписки на IONC датчик:', err);
+        console.warn('Failed to subscribe to IONC sensor:', err);
     }
 }
 
@@ -12336,32 +12804,22 @@ async function subscribeToIONCSensor(tabKey, sensorId) {
 // tabKey - ключ вкладки (serverId:objectName)
 async function unsubscribeFromIONCSensor(tabKey, sensorId) {
     try {
-        const tabState = state.tabs.get(tabKey);
-        const serverId = tabState?.serverId;
-        const objectName = tabState?.displayName || tabKey;
-
-        let url = `/api/objects/${encodeURIComponent(objectName)}/ionc/unsubscribe`;
-        if (serverId) {
-            url += `?server=${encodeURIComponent(serverId)}`;
-        }
-
-        const response = await fetch(url, {
+        const { response, tabState, serverId, objectName } = await fetchObjectApi(tabKey, '/ionc/unsubscribe', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sensor_ids: [sensorId] })
         });
         if (!response.ok) {
-            const err = await response.json();
-            console.warn('Error отписки от IONC датчика:', err.error || response.statusText);
+            await warnObjectApiError(response, 'Error отписки от IONC датчика:');
         } else {
             // Удаляем из списка подписок рендерера
             if (tabState && tabState.renderer && tabState.renderer.subscribedSensorIds) {
                 tabState.renderer.subscribedSensorIds.delete(sensorId);
             }
-            console.log(`IONC: Отписка от датчика ${sensorId} для ${objectName} (server: ${serverId})`);
+            debugLog(`IONC: Отписка от датчика ${sensorId} для ${objectName} (server: ${serverId})`);
         }
     } catch (err) {
-        console.warn('Error отписки от IONC датчика:', err);
+        console.warn('Failed to unsubscribe from IONC sensor:', err);
     }
 }
 
@@ -12405,7 +12863,7 @@ function addExternalSensor(tabKey, sensorName) {
     // Обновляем таблицу (чтобы кнопка стала disabled)
     renderSensorTable();
 
-    console.log(`External sensor added ${sensorName} для ${displayName}`);
+    debugLog(`External sensor added ${sensorName} для ${displayName}`);
 
     if (state.capabilities.smEnabled) {
         // SM включен - подписываемся через SM API
@@ -12431,7 +12889,7 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
 
     // Проверяем, не создан ли уже график
     if (tabState.charts.has(varName)) {
-        console.log(`График для ${varName} уже существует`);
+        debugLog(`График для ${varName} уже существует`);
         return;
     }
 
@@ -12496,87 +12954,18 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
 
     // Получаем диапазон времени
     const timeRange = getTimeRangeForObject(objectName);
-    const fillEnabled = true;
-    const steppedEnabled = isDiscrete;
 
     // Создаём Chart.js график
     const ctx = getElementInTab(tabKey, `canvas-${objectName}-${safeVarName}`).getContext('2d');
-    const chartConfig = {
-        type: 'line',
-        data: {
-            datasets: [{
-                label: displayName,
-                data: [],
-                borderColor: color,
-                backgroundColor: `${color}20`,
-                fill: fillEnabled,
-                tension: isDiscrete ? 0 : 0.3,
-                stepped: isDiscrete ? 'before' : false,
-                pointRadius: 0,
-                borderWidth: isDiscrete ? 2 : 1.5
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: false,
-            interaction: {
-                intersect: false,
-                mode: 'index'
-            },
-            scales: {
-                x: {
-                    type: 'time',
-                    display: true,
-                    grid: {
-                        color: '#333840',
-                        drawBorder: false
-                    },
-                    ticks: {
-                        color: '#8a9099',
-                        maxTicksLimit: 10,
-                        display: true
-                    },
-                    time: {
-                        displayFormats: {
-                            second: 'HH:mm:ss',
-                            minute: 'HH:mm',
-                            hour: 'HH:mm'
-                        }
-                    },
-                    min: timeRange.min,
-                    max: timeRange.max
-                },
-                y: {
-                    display: true,
-                    position: 'left',
-                    beginAtZero: isDiscrete,
-                    suggestedMin: isDiscrete ? 0 : undefined,
-                    suggestedMax: isDiscrete ? 1.1 : undefined,
-                    grid: {
-                        color: '#333840',
-                        drawBorder: false
-                    },
-                    ticks: {
-                        color: '#8a9099',
-                        stepSize: isDiscrete ? 1 : undefined
-                    }
-                }
-            },
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    backgroundColor: '#22252a',
-                    titleColor: '#d8dce2',
-                    bodyColor: '#d8dce2',
-                    borderColor: '#333840',
-                    borderWidth: 1
-                }
-            }
-        }
-    };
+    const chartConfig = createLineChartConfig({
+        datasets: [{
+            label: displayName,
+            data: [],
+            color,
+            isDiscrete
+        }],
+        timeRange
+    });
 
     const chart = new Chart(ctx, chartConfig);
 
@@ -12628,7 +13017,7 @@ function createExternalSensorChart(tabKey, sensor, options = {}) {
     const smoothCheckbox = getElementInTab(tabKey, `smooth-${objectName}-${safeVarName}`);
     if (smoothCheckbox) {
         smoothCheckbox.addEventListener('change', (e) => {
-            chart.data.datasets[0].tension = e.target.checked ? 0.3 : 0;
+            chart.data.datasets[0].tension = e.target.checked ? CHART_LINE_TENSION : 0;
             chart.update('none');
         });
     }
@@ -12647,7 +13036,7 @@ function addExternalSensorChart(tabKey, varName, sensorId, textname, options = {
 
     // Проверяем, не создан ли уже график
     if (tabState.charts.has(varName)) {
-        console.log(`График для ${varName} уже существует`);
+        debugLog(`График для ${varName} уже существует`);
         return;
     }
 
@@ -12721,10 +13110,12 @@ function removeExternalSensor(tabKey, sensorName, options = {}) {
         }
     }
 
-    // Снять галочку в любой таблице по data-sensor-name (Modbus, OPCUA и др.)
-    const chartCheckbox = document.querySelector(`.chart-checkbox[data-sensor-name="${CSS.escape(sensorName)}"]`);
-    if (chartCheckbox) {
-        chartCheckbox.checked = false;
+    // Снять галочку в любой таблице по data-sensor-name (Modbus, OPCUA и др.).
+    // Scoped lookup: при дубликате sensorName на разных вкладках нельзя снимать
+    // галочку в чужой вкладке (правило DOM lookup из CLAUDE.md).
+    const chartCheckboxes = getElementsInTab(tabKey, `.chart-checkbox[data-sensor-name="${CSS.escape(sensorName)}"]`);
+    if (chartCheckboxes && chartCheckboxes.length > 0) {
+        chartCheckboxes[0].checked = false;
     }
 
     // Снять галочку в таблице UWebSocketGate (по data-name)
@@ -12739,7 +13130,7 @@ function removeExternalSensor(tabKey, sensorName, options = {}) {
         renderSensorTable();
     }
 
-    console.log(`Удалён внешний датчик ${sensorName} для ${tabKey}`);
+    debugLog(`Удалён внешний датчик ${sensorName} для ${tabKey}`);
 
     // Отписываемся от датчика через API
     if (state.capabilities.smEnabled) {
@@ -12752,44 +13143,29 @@ function removeExternalSensor(tabKey, sensorName, options = {}) {
 // Загрузить внешние датчики из localStorage
 // Возвращает Map<sensorName, sensorData> для обратной совместимости с Set API (.has, .add, .delete)
 function getExternalSensorsFromStorage(tabKey, objectName) {
-    try {
-        // Пробуем по tabKey, потом fallback на objectName (обратная совместимость)
-        const keyByTab = `uniset-panel-external-sensors-${tabKey}`;
-        const keyByObj = `uniset-panel-external-sensors-${objectName}`;
-        const data = localStorage.getItem(keyByTab) || (objectName ? localStorage.getItem(keyByObj) : null);
-        if (data) {
-            const parsed = JSON.parse(data);
-            // Обратная совместимость: если это массив строк (старый формат), конвертируем
-            if (Array.isArray(parsed)) {
-                const map = new Map();
-                parsed.forEach(item => {
-                    if (typeof item === 'string') {
-                        // Старый формат: только имя
-                        map.set(item, { name: item });
-                    } else if (item && item.name) {
-                        // Новый формат: объект с данными
-                        map.set(item.name, item);
-                    }
-                });
-                return map;
+    // Пробуем по tabKey, потом fallback на objectName (обратная совместимость).
+    const parsed = loadJSON(`uniset-panel-external-sensors-${tabKey}`, null)
+        ?? (objectName ? loadJSON(`uniset-panel-external-sensors-${objectName}`, null) : null);
+
+    const map = new Map();
+    if (Array.isArray(parsed)) {
+        parsed.forEach(item => {
+            if (typeof item === 'string') {
+                // Старый формат: только имя
+                map.set(item, { name: item });
+            } else if (item && item.name) {
+                // Новый формат: объект с данными
+                map.set(item.name, item);
             }
-        }
-    } catch (err) {
-        console.warn('Error загрузки внешних датчиков:', err);
+        });
     }
-    return new Map();
+    return map;
 }
 
 // Save внешние датчики в localStorage
 function saveExternalSensorsToStorage(tabKey, sensors) {
-    try {
-        const key = `uniset-panel-external-sensors-${tabKey}`;
-        // sensors - это Map<name, sensorData>
-        const arr = [...sensors.values()];
-        localStorage.setItem(key, JSON.stringify(arr));
-    } catch (err) {
-        console.warn('Error сохранения внешних датчиков:', err);
-    }
+    // sensors - это Map<name, sensorData>
+    saveJSON(`uniset-panel-external-sensors-${tabKey}`, [...sensors.values()]);
 }
 
 // Восстановить внешние датчики при открытии вкладки
@@ -12807,7 +13183,7 @@ function restoreExternalSensors(tabKey, displayName) {
         const tabState = state.tabs.get(tabKey);
         if (!tabState) {
             if (++attempts > RESTORE_SENSORS_MAX_ATTEMPTS) return;
-            setTimeout(restoreSensors, 100);
+            setTimeout(restoreSensors, RESTORE_SENSORS_RETRY_DELAY_MS);
             return;
         }
 
@@ -12835,6 +13211,15 @@ function restoreExternalSensors(tabKey, displayName) {
                     state.sensorsByName.set(sensorName, sensor);
                     state.sensors.set(sensor.id, sensor);
                 }
+                // Multi-server-aware: scoped запись по (tabKey serverId, objectName).
+                // tabKey формата `${serverId}:${objectName}` — split по первому ':'.
+                const _idx = tabKey.indexOf(':');
+                const _serverId = _idx >= 0 ? tabKey.slice(0, _idx) : '';
+                const _objectName = _idx >= 0 ? tabKey.slice(_idx + 1) : tabKey;
+                state.sensorsByKey.set(
+                    makeSensorKey(_serverId, _objectName, sensorName),
+                    sensor
+                );
             } else {
                 // Старый формат: только имя - пробуем найти в state или renderer
                 let sensor = state.sensorsByName.get(sensorName);
@@ -12866,32 +13251,27 @@ function restoreExternalSensors(tabKey, displayName) {
                 subscribeToExternalSensors(tabKey, restoredSensorNames);
             } else if (tabState.renderer && tabState.renderer.subscribedSensorIds) {
                 // IONC подписка
-                const serverId = tabState.serverId;
-                let url = `/api/objects/${encodeURIComponent(displayName)}/ionc/subscribe`;
-                if (serverId) {
-                    url += `?server=${encodeURIComponent(serverId)}`;
-                }
-                fetch(url, {
+                fetchObjectApi(tabKey, '/ionc/subscribe', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ sensor_ids: restoredSensorIds })
-                }).then(response => {
+                }).then(({ response }) => {
                     if (response.ok) {
                         restoredSensorIds.forEach(id => {
                             tabState.renderer.subscribedSensorIds.add(id);
                         });
                     }
                 }).catch(err => {
-                    console.warn('Error восстановления подписок:', err);
+                    console.warn('Failed to restore subscriptions:', err);
                 });
             }
         }
 
-        console.log(`Восстановлено ${restoredSensorIds.length} датчиков на графике для ${displayName}`);
+        debugLog(`Восстановлено ${restoredSensorIds.length} датчиков на графике для ${displayName}`);
     };
 
     // Даём время на инициализацию вкладки
-    setTimeout(restoreSensors, 200);
+    setTimeout(restoreSensors, RESTORE_SENSORS_INITIAL_DELAY_MS);
 }
 
 // Загрузка сенсоров для конкретного сервера
@@ -12904,6 +13284,271 @@ async function fetchSensorsForServer(serverId) {
 }
 
 // UI функции
+
+
+// === 41-sensor-autocomplete.js ===
+// ============================================================================
+// setupSensorAutocomplete — переиспользуемый IONC sensor selector.
+//
+// Привязывается к input'у. По вводу — debounce, fetch к
+// /api/objects/{objectName}/ionc/sensors?server=...&search=...&limit=20,
+// показывает выпадающий suggest. Клик/Enter — подставляет name + сохраняет
+// числовой id в hidden input. Стрелки ↑↓ — навигация. Esc — закрыть.
+// При смене objectName (через resetOnObjectChange()) — очищает выбор.
+// ============================================================================
+
+// URL builder для IONC sensors endpoint — единая точка композиции query
+// (autocomplete, dashboard bootstrap, dashboard cold-resolve).
+function buildIONCSensorsUrl({ objectName, serverId = '', search = '', limit = SENSOR_AUTOCOMPLETE_LIMIT, offset = null } = {}) {
+    let url = `/api/objects/${encodeURIComponent(objectName)}/ionc/sensors?limit=${limit}`;
+    if (serverId)        url += `&server=${encodeURIComponent(serverId)}`;
+    if (search)          url += `&search=${encodeURIComponent(search)}`;
+    if (offset !== null) url += `&offset=${offset}`;
+    return url;
+}
+
+if (typeof globalThis !== 'undefined') {
+    globalThis.buildIONCSensorsUrl = buildIONCSensorsUrl;
+}
+
+function setupSensorAutocomplete(inputEl, hiddenIdEl, getObjectName, getServerId) {
+    if (!inputEl) return null;
+
+    let dropdown = null;
+    let debounceTimer = null;
+    let activeIndex = -1;
+    let currentItems = [];
+    let currentSearch = '';
+    let currentOffset = 0;
+    let currentTotal = 0;
+    let isLoading = false;
+    let hasMore = false;
+    let scrollHandler = null;
+    // requestId защищает от race condition: устаревший fetch не должен затереть
+    // более свежий результат, если user быстро перепечатывает search.
+    let requestId = 0;
+
+    function destroyDropdown() {
+        if (dropdown) {
+            if (scrollHandler) dropdown.removeEventListener('scroll', scrollHandler);
+            dropdown.remove();
+            dropdown = null;
+        }
+        scrollHandler = null;
+        activeIndex = -1;
+        currentItems = [];
+        currentSearch = '';
+        currentOffset = 0;
+        currentTotal = 0;
+        isLoading = false;
+        hasMore = false;
+    }
+
+    function buildDropdown() {
+        if (dropdown) return;
+        dropdown = document.createElement('div');
+        dropdown.className = 'sensor-autocomplete-dropdown';
+        // Положение — fixed с подсчётом координат относительно input'а.
+        const rect = inputEl.getBoundingClientRect();
+        dropdown.style.position = 'fixed';
+        dropdown.style.left = `${rect.left}px`;
+        dropdown.style.top = `${rect.bottom + 2}px`;
+        dropdown.style.width = `${rect.width}px`;
+        dropdown.style.zIndex = String(SENSOR_AUTOCOMPLETE_DROPDOWN_Z_INDEX);
+        document.body.appendChild(dropdown);
+
+        scrollHandler = () => {
+            if (!dropdown || isLoading || !hasMore) return;
+            const remaining = dropdown.scrollHeight - (dropdown.scrollTop + dropdown.clientHeight);
+            if (remaining <= SENSOR_AUTOCOMPLETE_SCROLL_THRESHOLD_PX) {
+                fetchMore();
+            }
+        };
+        dropdown.addEventListener('scroll', scrollHandler);
+    }
+
+    function renderItems() {
+        if (!dropdown) return;
+        if (currentItems.length === 0 && !isLoading) {
+            dropdown.innerHTML = '<div class="sensor-autocomplete-empty">Не найдено</div>';
+            return;
+        }
+        const itemsHtml = currentItems.map((s, idx) => `
+            <div class="sensor-autocomplete-item ${idx === activeIndex ? 'active' : ''}"
+                 data-idx="${idx}"
+                 data-id="${escapeAttr(s.id)}"
+                 data-name="${escapeAttr(s.name)}">
+                <div class="sensor-autocomplete-name">${escapeHtml(s.name)}</div>
+                <div class="sensor-autocomplete-meta">id=${escapeHtml(String(s.id))} · type=${escapeHtml(s.type || '?')} · value=${escapeHtml(String(s.value ?? '—'))}</div>
+            </div>
+        `).join('');
+        let footerHtml = '';
+        if (currentTotal > 0) {
+            const showing = currentItems.length;
+            const hint = isLoading
+                ? `Загрузка ещё ${SENSOR_AUTOCOMPLETE_CHUNK_SIZE}…`
+                : (showing < currentTotal ? 'прокрутите для загрузки или введите для фильтра' : 'весь список');
+            footerHtml = `<div class="sensor-autocomplete-footer">${showing} из ${currentTotal} — ${hint}</div>`;
+        }
+        dropdown.innerHTML = itemsHtml + footerHtml;
+        dropdown.querySelectorAll('.sensor-autocomplete-item').forEach(el => {
+            el.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                pickItem(parseInt(el.dataset.idx, 10));
+            });
+        });
+    }
+
+    function pickItem(idx) {
+        const item = currentItems[idx];
+        if (!item) return;
+        inputEl.value = item.name;
+        if (hiddenIdEl) hiddenIdEl.value = String(item.id);
+        destroyDropdown();
+    }
+
+    async function fetchInitial(searchText) {
+        const objectName = (getObjectName && getObjectName()) || 'SharedMemory';
+        const serverId = (getServerId && getServerId()) || '';
+        currentSearch = searchText;
+        currentOffset = 0;
+        currentItems = [];
+        currentTotal = 0;
+        hasMore = false;
+        activeIndex = -1;
+        if (!serverId) {
+            buildDropdown();
+            renderItems();
+            return;
+        }
+        const myReq = ++requestId;
+        isLoading = true;
+        try {
+            const resp = await fetch(buildIONCSensorsUrl({
+                objectName, serverId, search: searchText,
+                limit: SENSOR_AUTOCOMPLETE_CHUNK_SIZE, offset: 0,
+            }));
+            if (myReq !== requestId) return; // stale — newer request superseded
+            buildDropdown();
+            isLoading = false;
+            if (!resp.ok) {
+                renderItems();
+                return;
+            }
+            const data = await resp.json();
+            if (myReq !== requestId) return;
+            currentItems = data.sensors || [];
+            // Pagination semantics — общий хелпер (см. 06-utils.js).
+            const meta = computeSensorChunkPagination(currentItems.length, data, SENSOR_AUTOCOMPLETE_CHUNK_SIZE);
+            currentTotal = meta.total;
+            hasMore = meta.hasMore;
+            currentOffset = currentItems.length;
+            renderItems();
+        } catch (e) {
+            if (myReq !== requestId) return;
+            isLoading = false;
+            console.warn('sensor autocomplete fetch failed:', e);
+        }
+    }
+
+    async function fetchMore() {
+        if (!dropdown || isLoading || !hasMore) return;
+        const objectName = (getObjectName && getObjectName()) || 'SharedMemory';
+        const serverId = (getServerId && getServerId()) || '';
+        if (!serverId) return;
+        const myReq = ++requestId;
+        isLoading = true;
+        renderItems(); // обновить footer на «Загрузка…»
+        try {
+            const resp = await fetch(buildIONCSensorsUrl({
+                objectName, serverId, search: currentSearch,
+                limit: SENSOR_AUTOCOMPLETE_CHUNK_SIZE, offset: currentOffset,
+            }));
+            if (myReq !== requestId) return;
+            isLoading = false;
+            if (!resp.ok) {
+                hasMore = false;
+                renderItems();
+                return;
+            }
+            const data = await resp.json();
+            if (myReq !== requestId) return;
+            const newItems = data.sensors || [];
+            // Сохранить scroll position при ре-рендере list (innerHTML wipe сбрасывает scrollTop)
+            const savedScroll = dropdown.scrollTop;
+            currentItems = currentItems.concat(newItems);
+            const meta = computeSensorChunkPagination(currentItems.length, data, SENSOR_AUTOCOMPLETE_CHUNK_SIZE);
+            currentTotal = meta.total;
+            hasMore = meta.hasMore;
+            currentOffset = currentItems.length;
+            // Empty chunk — backend подтвердил end-of-list (heuristic-cleanup).
+            if (newItems.length === 0) hasMore = false;
+            renderItems();
+            dropdown.scrollTop = savedScroll;
+        } catch (e) {
+            if (myReq !== requestId) return;
+            isLoading = false;
+            console.warn('sensor autocomplete fetch-more failed:', e);
+        }
+    }
+
+    inputEl.addEventListener('focus', () => {
+        fetchInitial('');
+    });
+
+    inputEl.addEventListener('input', () => {
+        // Любая ручная правка инвалидирует ранее выбранный sensorId — иначе юзер
+        // может оставить старый числовой ID при имени, не выбранном из dropdown,
+        // и backend subscribe/write пойдёт в неправильный sensor. Перевыбор из
+        // dropdown (mousedown в pickItem) перезапишет hidden обратно.
+        if (hiddenIdEl) hiddenIdEl.value = '';
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => fetchInitial(inputEl.value.trim()),
+            AUTOCOMPLETE_DEBOUNCE_DELAY);
+    });
+
+    inputEl.addEventListener('keydown', (e) => {
+        if (!dropdown || currentItems.length === 0) return;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            activeIndex = Math.min(activeIndex + 1, currentItems.length - 1);
+            renderItems();
+            // Scroll active item into view if needed
+            dropdown.querySelector('.sensor-autocomplete-item.active')?.scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            activeIndex = Math.max(activeIndex - 1, 0);
+            renderItems();
+            dropdown.querySelector('.sensor-autocomplete-item.active')?.scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'Enter') {
+            if (activeIndex >= 0) {
+                e.preventDefault();
+                pickItem(activeIndex);
+            }
+        } else if (e.key === 'Escape') {
+            destroyDropdown();
+        }
+    });
+
+    inputEl.addEventListener('blur', () => {
+        // Delay so click on dropdown item fires first (mousedown handler runs).
+        setTimeout(destroyDropdown, SENSOR_AUTOCOMPLETE_BLUR_DELAY_MS);
+    });
+
+    return {
+        // Каллер вызывает при смене IONC объекта в форме конфига.
+        resetOnObjectChange() {
+            inputEl.value = '';
+            if (hiddenIdEl) hiddenIdEl.value = '';
+            destroyDropdown();
+        },
+        destroy() {
+            destroyDropdown();
+        }
+    };
+}
+
+window.setupSensorAutocomplete = setupSensorAutocomplete;
 
 
 // === 50-ui-tabs.js ===
@@ -13124,7 +13769,7 @@ function renderServersSection() {
 
         li.innerHTML = `
             <span class="server-status-dot${statusClass}"></span>
-            <span class="server-name" title="${escapeHtml(server.url)}">${escapeHtml(displayName)}</span>
+            <span class="server-name" title="${escapeAttr(server.url)}">${escapeHtml(displayName)}</span>
             <span class="server-stats ${statsClass}">${statsText}</span>
         `;
 
@@ -13190,12 +13835,6 @@ async function openObjectTab(name, serverId, serverName) {
 }
 
 function createTab(tabKey, displayName, rendererInfo, initialData, serverId, serverName) {
-    const tabsHeader = document.getElementById('tabs-header');
-    const tabsContent = document.getElementById('tabs-content');
-
-    const placeholder = tabsContent.querySelector('.placeholder');
-    if (placeholder) placeholder.remove();
-
     // Получаем класс рендерера для данного типа объекта/расширения
     const RendererClass = rendererInfo.RendererClass || DefaultObjectRenderer;
     const renderer = new RendererClass(displayName, tabKey);
@@ -13206,40 +13845,24 @@ function createTab(tabKey, displayName, rendererInfo, initialData, serverId, ser
     const serverData = state.servers.get(serverId);
     const serverConnected = serverData?.connected !== false;
 
-    const tabBtn = document.createElement('button');
-    tabBtn.className = 'tab-btn' + (serverConnected ? '' : ' server-disconnected');
-    tabBtn.dataset.name = tabKey;
-    tabBtn.dataset.objectType = rendererInfo.rendererType;
-    tabBtn.dataset.serverId = serverId;
-
     const badgeType = rendererInfo.badgeType || rendererInfo.rendererType || 'Default';
 
     // Формируем HTML вкладки
-    const tabHTML = `
+    const buttonHtml = `
         <span class="tab-type-badge">${badgeType}</span>
-        <span class="tab-server-badge${serverConnected ? '' : ' disconnected'}" data-server-id="${serverId}">${serverName}</span>
-        ${displayName}
+        <span class="tab-server-badge${serverConnected ? '' : ' disconnected'}" data-server-id="${escapeAttr(serverId)}">${escapeHtml(serverName)}</span>
+        ${escapeHtml(displayName)}
         <span class="close">&times;</span>
     `;
-    tabBtn.innerHTML = tabHTML;
 
-    tabBtn.addEventListener('click', (e) => {
-        if (e.target.classList.contains('close')) {
-            closeTab(tabKey);
-        } else {
-            activateTab(tabKey);
-        }
+    createTabShell({
+        tabKey,
+        objectType: rendererInfo.rendererType,
+        connected: serverConnected,
+        serverId,
+        buttonHtml,
+        panelHtml: renderer.createPanelHTML()
     });
-    tabsHeader.appendChild(tabBtn);
-
-    // Панель содержимого - создаётся рендерером
-    const panel = document.createElement('div');
-    panel.className = 'tab-panel' + (serverConnected ? '' : ' server-disconnected');
-    panel.dataset.name = tabKey;
-    panel.dataset.objectType = rendererInfo.rendererType;
-    panel.dataset.serverId = serverId;
-    panel.innerHTML = renderer.createPanelHTML();
-    tabsContent.appendChild(panel);
 
     // Восстановить состояние спойлеров
     restoreCollapsedSections(displayName);
@@ -13268,6 +13891,12 @@ function createTab(tabKey, displayName, rendererInfo, initialData, serverId, ser
     // Инициализация рендерера (настройка обработчиков и т.д.)
     renderer.initialize();
 
+    // Делегированные click-handlers для всех secций tab-панели
+    // (toggleSection, moveSectionUp/Down, addSensor, time-range, IO sequential).
+    // Раньше эти handler'ы шли inline onclick="..." из шаблонов 10-base-renderer
+    // и 20-ionc-renderer; теперь — единый bind после initialize().
+    renderer._setupSectionDelegation?.();
+
     // Восстанавливаем внешние датчики из localStorage
     restoreExternalSensors(tabKey, displayName);
 
@@ -13284,6 +13913,57 @@ function createTab(tabKey, displayName, rendererInfo, initialData, serverId, ser
     updateAllControlButtons();
 }
 
+function createTabShell({ tabKey, objectType, connected, serverId = null, buttonHtml, panelHtml }) {
+    const tabsHeader = document.getElementById('tabs-header');
+    const tabsContent = document.getElementById('tabs-content');
+
+    const placeholder = tabsContent.querySelector('.placeholder');
+    if (placeholder) placeholder.remove();
+
+    const tabBtn = document.createElement('button');
+    tabBtn.className = 'tab-btn' + (connected ? '' : ' server-disconnected');
+    tabBtn.dataset.name = tabKey;
+    tabBtn.dataset.objectType = objectType;
+    if (serverId) {
+        tabBtn.dataset.serverId = serverId;
+    }
+    tabBtn.innerHTML = buttonHtml;
+    tabBtn.addEventListener('click', (e) => {
+        if (e.target.classList.contains('close')) {
+            closeTab(tabKey);
+        } else {
+            activateTab(tabKey);
+        }
+    });
+    tabsHeader.appendChild(tabBtn);
+
+    const panel = document.createElement('div');
+    panel.className = 'tab-panel' + (connected ? '' : ' server-disconnected');
+    panel.dataset.name = tabKey;
+    panel.dataset.objectType = objectType;
+    if (serverId) {
+        panel.dataset.serverId = serverId;
+    }
+    panel.innerHTML = panelHtml;
+    tabsContent.appendChild(panel);
+
+    return { tabBtn, panel };
+}
+
+function getTabButton(name) {
+    return Array.from(document.querySelectorAll('.tab-btn'))
+        .find(btn => btn.dataset.name === name) || null;
+}
+
+function getObjectListItem(tabKey) {
+    const tabState = state.tabs.get(tabKey);
+    const displayName = tabState?.displayName || tabKey;
+    const serverId = tabState?.serverId || null;
+
+    return Array.from(document.querySelectorAll('.objects-list li'))
+        .find(li => li.dataset.name === displayName && (!serverId || li.dataset.serverId === serverId)) || null;
+}
+
 function activateTab(name) {
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
@@ -13291,9 +13971,9 @@ function activateTab(name) {
     // Снимаем выделение с dashboard items в sidebar
     document.querySelectorAll('.dashboard-item').forEach(item => item.classList.remove('active'));
 
-    document.querySelector(`.tab-btn[data-name="${name}"]`)?.classList.add('active');
-    document.querySelector(`.tab-panel[data-name="${name}"]`)?.classList.add('active');
-    document.querySelector(`.objects-list li[data-name="${name}"]`)?.classList.add('active');
+    getTabButton(name)?.classList.add('active');
+    getTabPanel(name)?.classList.add('active');
+    getObjectListItem(name)?.classList.add('active');
 
     state.activeTab = name;
 }
@@ -13318,8 +13998,8 @@ function closeTab(name) {
 
     state.tabs.delete(name);
 
-    document.querySelector(`.tab-btn[data-name="${name}"]`)?.remove();
-    document.querySelector(`.tab-panel[data-name="${name}"]`)?.remove();
+    getTabButton(name)?.remove();
+    getTabPanel(name)?.remove();
 
     if (state.tabs.size === 0) {
         const tabsContent = document.getElementById('tabs-content');
@@ -13353,44 +14033,24 @@ function openLauncherTab(nodeId, nodeName, launcherUrl, hasControl) {
 }
 
 function createLauncherTab(tabKey, nodeId, nodeName, launcherUrl, hasControl) {
-    const tabsHeader = document.getElementById('tabs-header');
-    const tabsContent = document.getElementById('tabs-content');
-
-    const placeholder = tabsContent.querySelector('.placeholder');
-    if (placeholder) placeholder.remove();
-
     const renderer = new LauncherRenderer(nodeName, tabKey, nodeId, launcherUrl, hasControl);
 
     // Проверяем начальный статус подключения
     const nodeState = state.nodes.get(nodeId);
     const nodeConnected = nodeState?.connected !== false;
 
-    // Кнопка вкладки
-    const tabBtn = document.createElement('button');
-    tabBtn.className = 'tab-btn' + (nodeConnected ? '' : ' server-disconnected');
-    tabBtn.dataset.name = tabKey;
-    tabBtn.dataset.objectType = 'Launcher';
-    tabBtn.innerHTML = `
+    createTabShell({
+        tabKey,
+        objectType: 'Launcher',
+        connected: nodeConnected,
+        serverId: nodeId,
+        buttonHtml: `
         <span class="tab-type-badge tab-badge-launcher">Launcher</span>
         ${escapeHtml(nodeName)}
         <span class="close">&times;</span>
-    `;
-    tabBtn.addEventListener('click', (e) => {
-        if (e.target.classList.contains('close')) {
-            closeTab(tabKey);
-        } else {
-            activateTab(tabKey);
-        }
+    `,
+        panelHtml: renderer.createPanelHTML()
     });
-    tabsHeader.appendChild(tabBtn);
-
-    // Панель содержимого
-    const panel = document.createElement('div');
-    panel.className = 'tab-panel' + (nodeConnected ? '' : ' server-disconnected');
-    panel.dataset.name = tabKey;
-    panel.dataset.objectType = 'Launcher';
-    panel.innerHTML = renderer.createPanelHTML();
-    tabsContent.appendChild(panel);
 
     // Сохраняем состояние
     state.tabs.set(tabKey, {
@@ -13510,11 +14170,11 @@ function updateLauncherNodeStatus(nodeId, connected) {
 
     // Обновляем CSS-класс tab-кнопки и панели (аналогично updateServerStatus)
     const tabKey = `launcher:${nodeId}`;
-    const tabBtn = document.querySelector(`.tab-btn[data-name="${CSS.escape(tabKey)}"]`);
+    const tabBtn = getTabButton(tabKey);
     if (tabBtn) {
         tabBtn.classList.toggle('server-disconnected', !connected);
     }
-    const tabPanel = document.querySelector(`.tab-panel[data-name="${CSS.escape(tabKey)}"]`);
+    const tabPanel = getTabPanel(tabKey);
     if (tabPanel) {
         tabPanel.classList.toggle('server-disconnected', !connected);
     }
@@ -13561,12 +14221,16 @@ async function loadObjectData(tabKey) {
 }
 
 
-
 // === 51-ui-render.js ===
 // ============================================================================
 // Helper для безопасного поиска элементов внутри панели вкладки
 // Решает проблему конфликта ID при multi-server с одинаковыми displayName
 // ============================================================================
+
+function getTabPanel(tabKey) {
+    return Array.from(document.querySelectorAll('.tab-panel'))
+        .find(panel => panel.dataset.name === tabKey) || null;
+}
 
 /**
  * Находит элемент внутри панели конкретной вкладки
@@ -13575,7 +14239,7 @@ async function loadObjectData(tabKey) {
  * @returns {HTMLElement|null} - Найденный элемент или null
  */
 function getElementInTab(tabKey, elementId) {
-    const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+    const panel = getTabPanel(tabKey);
     if (!panel) return null;
     // Escape special CSS characters in elementId (e.g., colon in "ws:SensorName")
     const escapedId = CSS.escape(elementId);
@@ -13589,7 +14253,7 @@ function getElementInTab(tabKey, elementId) {
  * @returns {NodeList} - Список найденных элементов
  */
 function getElementsInTab(tabKey, selector) {
-    const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+    const panel = getTabPanel(tabKey);
     if (!panel) return [];
     return panel.querySelectorAll(selector);
 }
@@ -13620,8 +14284,8 @@ function renderVariables(tabKey, variables, filterText = '') {
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td class="variable-name">${varName}</td>
-            <td class="variable-value">${formatValue(value)}</td>
+            <td class="variable-name">${escapeHtml(varName)}</td>
+            <td class="variable-value">${formatValueHtml(value)}</td>
             <td></td>
         `;
 
@@ -13703,8 +14367,8 @@ function renderIO(tabKey, type, ioData) {
             <td class="io-spacer-col"></td>
             <td><span class="variable-iotype iotype-${iotype.toLowerCase()}">${iotype}</span></td>
             <td>${io.id}</td>
-            <td class="variable-name" title="${textname}">${io.name || key}</td>
-            <td class="variable-value" data-var="${varName}">${formatValue(io.value)}</td>
+            <td class="variable-name" title="${escapeAttr(textname)}">${escapeHtml(io.name || key)}</td>
+            <td class="variable-value" data-var="${varName}">${formatValueHtml(io.value)}</td>
         `;
 
         // Pin toggle handler
@@ -13733,6 +14397,10 @@ function formatValue(value) {
         return Number.isInteger(value) ? value : value.toFixed(2);
     }
     return String(value);
+}
+
+function formatValueHtml(value) {
+    return escapeHtml(String(formatValue(value)));
 }
 
 // Находит tabKey по displayName (для обратной совместимости с кодом использующим objectName)
@@ -13810,7 +14478,7 @@ async function addChart(tabKey, varName, sensorId, passedTextname) {
                     <input type="checkbox" id="fill-${displayName}-${varName}" checked>
                     <span class="fill-toggle-label">fill</span>
                 </label>
-                <button class="btn-icon" title="Close" onclick="removeChartByButton('${tabKey}', '${varName}')">
+                <button class="btn-icon chart-close-btn" title="Close">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M18 6L6 18M6 6l12 12"/>
                     </svg>
@@ -13822,6 +14490,13 @@ async function addChart(tabKey, varName, sensorId, passedTextname) {
         </div>
     `;
     chartsContainer.appendChild(chartDiv);
+
+    // Вместо inline onclick — addEventListener со ссылками на tabKey/varName
+    // из closure'а. Inline-вариант ломался бы на varName со спецсимволами
+    // (одинарные кавычки в имени датчика и т.п.) и был XSS-вектором.
+    chartDiv.querySelector('.chart-close-btn')?.addEventListener('click', () => {
+        removeChart(tabKey, varName);
+    });
 
     // Обработчик для чекбокса заливки
     const fillCheckbox = getElementInTab(tabKey, `fill-${displayName}-${varName}`);
@@ -13842,7 +14517,7 @@ async function addChart(tabKey, varName, sensorId, passedTextname) {
     // Загружаем историю
     try {
         const serverId = tabState?.serverId;
-        const history = await fetchVariableHistory(displayName, varName, 200, serverId);
+        const history = await fetchVariableHistory(displayName, varName, OBJECT_CHART_HISTORY_LIMIT, serverId);
         const ctx = getElementInTab(tabKey, `canvas-${displayName}-${varName}`).getContext('2d');
 
         // Преобразуем данные для временной шкалы
@@ -13854,86 +14529,15 @@ async function addChart(tabKey, varName, sensorId, passedTextname) {
         // Получаем диапазон времени (при первом графике устанавливается начало)
         const timeRange = getTimeRangeForObject(tabKey);
 
-        // Заливка по умолчанию только для аналоговых
-        const fillEnabled = true;
-
-        // Конфигурация графика в зависимости от типа сигнала
-        const chartConfig = {
-            type: 'line',
-            data: {
-                datasets: [{
-                    label: sensorDisplayName,
-                    data: historyData,
-                    borderColor: color,
-                    backgroundColor: `${color}20`,
-                    fill: fillEnabled,
-                    tension: isDiscrete ? 0 : 0.3,
-                    stepped: isDiscrete ? 'before' : false,
-                    pointRadius: 0,
-                    borderWidth: isDiscrete ? 2 : 1.5
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: false,
-                interaction: {
-                    intersect: false,
-                    mode: 'index'
-                },
-                scales: {
-                    x: {
-                        type: 'time',
-                        display: true,
-                        grid: {
-                            color: '#333840',
-                            drawBorder: false
-                        },
-                        ticks: {
-                            color: '#8a9099',
-                            maxTicksLimit: 10,
-                            display: true
-                        },
-                        time: {
-                            displayFormats: {
-                                second: 'HH:mm:ss',
-                                minute: 'HH:mm',
-                                hour: 'HH:mm'
-                            }
-                        },
-                        min: timeRange.min,
-                        max: timeRange.max
-                    },
-                    y: {
-                        display: true,
-                        position: 'left',
-                        beginAtZero: isDiscrete,
-                        suggestedMin: isDiscrete ? 0 : undefined,
-                        suggestedMax: isDiscrete ? 1.1 : undefined,
-                        grid: {
-                            color: '#333840',
-                            drawBorder: false
-                        },
-                        ticks: {
-                            color: '#8a9099',
-                            stepSize: isDiscrete ? 1 : undefined
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: false
-                    },
-                    tooltip: {
-                        backgroundColor: '#22252a',
-                        titleColor: '#d8dce2',
-                        bodyColor: '#d8dce2',
-                        borderColor: '#333840',
-                        borderWidth: 1
-                    }
-                }
-            }
-        };
+        const chartConfig = createLineChartConfig({
+            datasets: [{
+                label: sensorDisplayName,
+                data: historyData,
+                color,
+                isDiscrete
+            }],
+            timeRange
+        });
 
         const chart = new Chart(ctx, chartConfig);
 
@@ -13982,7 +14586,7 @@ async function updateChart(objectName, varName, chart) {
     try {
         const serverId = tabState?.serverId;
         const displayName = tabState?.displayName || objectName;
-        const history = await fetchVariableHistory(displayName, varName, 200, serverId);
+        const history = await fetchVariableHistory(displayName, varName, OBJECT_CHART_HISTORY_LIMIT, serverId);
 
         // Преобразуем данные для временной шкалы
         const chartData = history.points?.map(p => ({
@@ -13999,10 +14603,13 @@ async function updateChart(objectName, varName, chart) {
 
         chart.update('none');
 
-        // Обновить значение в легенде
+        // Обновить значение в легенде. ID элемента создаётся в addChart с
+        // displayName, а не objectName: при polling-вызове из setInterval
+        // objectName == tabKey, и при multi-server (tabKey != displayName)
+        // запрос мимо.
         if (history.points && history.points.length > 0) {
             const lastValue = history.points[history.points.length - 1].value;
-            const legendEl = getElementInTab(tabKey, `legend-value-${objectName}-${varName}`);
+            const legendEl = getElementInTab(tabKey, `legend-value-${displayName}-${varName}`);
             if (legendEl) {
                 legendEl.textContent = formatValue(lastValue);
             }
@@ -14072,7 +14679,7 @@ function updateXAxisVisibility(tabKey) {
 
     // ВАЖНО: Ограничиваем поиск панелью конкретной вкладки
     // для избежания конфликтов ID при multi-server (когда displayName одинаковый)
-    const tabPanel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+    const tabPanel = getTabPanel(tabKey);
     if (!tabPanel) return;
 
     const chartPanels = tabPanel.querySelectorAll(`#charts-${displayName} .chart-panel`);
@@ -14162,11 +14769,6 @@ function removeChart(tabKey, varName) {
     // Обновить видимость оси X на оставшихся графиках
     updateXAxisVisibility(tabKey);
 }
-
-// Глобальная функция для кнопки закрытия графика
-window.removeChartByButton = function(objectName, varName) {
-    removeChart(objectName, varName);
-};
 
 // Глобальная функция для сворачивания/разворачивания секций
 window.toggleSection = function(sectionId) {
@@ -14307,27 +14909,26 @@ function renderTimersTable(tabKey, timers) {
 function startTimerUpdateInterval() {
     if (timerUpdateInterval) return;
 
-    const UPDATE_INTERVAL = 100; // мс
-
     timerUpdateInterval = setInterval(() => {
         const now = Date.now();
 
-        Object.entries(timerDataCache).forEach(([objectName, cache]) => {
+        Object.entries(timerDataCache).forEach(([tabKey, cache]) => {
+            // Обновляем timeleft для каждого таймера. Decrement = реальный
+            // elapsed (now - cache.lastUpdate), а не TIMER_UPDATE_INTERVAL_MS:
+            // если вкладка была background'ом, setInterval мог пропустить тики,
+            // и интервал между фактическими вызовами callback'а > nominal'а.
             const elapsed = now - cache.lastUpdate;
-
-            // Обновляем timeleft для каждого таймера
             cache.timers.forEach(timer => {
                 if (timer.tick !== -1 && timer.timeleft > 0) {
-                    timer.timeleft = Math.max(0, timer.timeleft - UPDATE_INTERVAL);
+                    timer.timeleft = Math.max(0, timer.timeleft - elapsed);
                 }
             });
 
             cache.lastUpdate = now;
 
-            // Перерисовываем таблицу
-            renderTimersTable(objectName, cache.timers);
+            renderTimersTable(tabKey, cache.timers);
         });
-    }, UPDATE_INTERVAL);
+    }, TIMER_UPDATE_INTERVAL_MS);
 }
 
 // Рендеринг информации об объекте
@@ -14550,7 +15151,7 @@ function renderStatistics(tabKey, statsData) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td class="info-label">${escapeHtml(key)}</td>
-            <td class="info-value">${escapeHtml(String(formatValue(value)))}</td>
+            <td class="info-value">${formatValueHtml(value)}</td>
         `;
         generalTbody.appendChild(tr);
     });
@@ -14607,7 +15208,7 @@ function renderStatisticsSensors(tabKey, filterText = '') {
         tr.innerHTML = `
             <td>${escapeHtml(String(sensorId))}</td>
             <td class="variable-name">${escapeHtml(String(sensorName))}</td>
-            <td class="variable-value">${escapeHtml(String(formatValue(sensorCount)))}</td>
+            <td class="variable-value">${formatValueHtml(sensorCount)}</td>
         `;
         tbody.appendChild(tr);
     });
@@ -14619,13 +15220,9 @@ function renderStatisticsSensors(tabKey, filterText = '') {
 
 // Восстановление состояния спойлеров из localStorage
 function restoreCollapsedSections(objectName) {
-    try {
-        const saved = localStorage.getItem('uniset-panel-collapsed');
-        if (saved) {
-            state.collapsedSections = JSON.parse(saved);
-        }
-    } catch (err) {
-        console.warn('Error загрузки состояния спойлеров:', err);
+    const saved = loadJSON('uniset-panel-collapsed', null);
+    if (saved && typeof saved === 'object') {
+        state.collapsedSections = saved;
     }
 
     // Apply сохранённые состояния к секциям этого объекта
@@ -14650,12 +15247,7 @@ function saveCollapsedSections() {
     });
 
     state.collapsedSections = collapsed;
-
-    try {
-        localStorage.setItem('uniset-panel-collapsed', JSON.stringify(collapsed));
-    } catch (err) {
-        console.warn('Error сохранения состояния спойлеров:', err);
-    }
+    saveJSON('uniset-panel-collapsed', collapsed);
 }
 
 // Color picker для изменения цвета графика
@@ -14730,11 +15322,13 @@ function changeChartColor(tabKey, varName, newColor) {
     chart.data.datasets[0].backgroundColor = `${newColor}20`;
     chart.update('none');
 
-    // Обновить цвет квадратика в шапке
-    // Используем displayName для ID элемента (objectName)
+    // Обновить цвет квадратика в шапке. Scoped lookup внутри панели вкладки —
+    // при multi-server одинаковый displayName на разных серверах не должен
+    // тащить chart-panel из чужой вкладки.
     const displayName = tabState.displayName || tabKey;
     const safeVarName = varName.replace(/:/g, '-');
-    const colorPicker = document.querySelector(`#chart-panel-${displayName}-${safeVarName} .legend-color-picker`);
+    const tabPanel = getTabPanel(tabKey);
+    const colorPicker = tabPanel?.querySelector(`#chart-panel-${CSS.escape(`${displayName}-${safeVarName}`)} .legend-color-picker`);
     if (colorPicker) {
         colorPicker.style.background = newColor;
     }
@@ -14762,7 +15356,7 @@ function toggleChartSmooth(tabKey, varName, smoothEnabled) {
     const chartData = tabState.charts.get(varName);
     if (!chartData) return;
 
-    chartData.chart.data.datasets[0].tension = smoothEnabled ? 0.3 : 0;
+    chartData.chart.data.datasets[0].tension = smoothEnabled ? CHART_LINE_TENSION : 0;
     chartData.chart.update('none');
 }
 
@@ -14842,13 +15436,7 @@ function setupChartsResize(tabKey) {
 }
 
 function saveChartsHeight(tabKey, height) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-charts-height') || '{}');
-        saved[tabKey] = height;
-        localStorage.setItem('uniset-panel-charts-height', JSON.stringify(saved));
-    } catch (err) {
-        console.warn('Failed to save charts height:', err);
-    }
+    updateStorageMap('uniset-panel-charts-height', (saved) => { saved[tabKey] = height; });
 }
 
 function loadChartsHeight(tabKey) {
@@ -14856,18 +15444,13 @@ function loadChartsHeight(tabKey) {
     if (!tabState) return;
 
     const displayName = tabState.displayName || tabKey;
-
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-charts-height') || '{}');
-        if (saved[tabKey]) {
-            const chartsContainer = getElementInTab(tabKey, `charts-container-${displayName}`);
-            if (chartsContainer) {
-                chartsContainer.style.height = `${saved[tabKey]}px`;
-                chartsContainer.style.maxHeight = `${saved[tabKey]}px`;
-            }
+    const saved = loadStorageMap('uniset-panel-charts-height');
+    if (saved[tabKey]) {
+        const chartsContainer = getElementInTab(tabKey, `charts-container-${displayName}`);
+        if (chartsContainer) {
+            chartsContainer.style.height = `${saved[tabKey]}px`;
+            chartsContainer.style.maxHeight = `${saved[tabKey]}px`;
         }
-    } catch (err) {
-        console.warn('Failed to load charts height:', err);
     }
 }
 
@@ -14884,31 +15467,21 @@ function setupIONCSensorsResize(tabKey, objectName) {
 }
 
 function saveIONCSensorsHeight(tabKey, height) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-ionc-height') || '{}');
-        saved[tabKey] = height;
-        localStorage.setItem('uniset-panel-ionc-height', JSON.stringify(saved));
-    } catch (err) {
-        console.warn('Failed to save IONC sensors height:', err);
-    }
+    updateStorageMap('uniset-panel-ionc-height', (saved) => { saved[tabKey] = height; });
 }
 
 function loadIONCSensorsHeight(tabKey, objectName) {
 
 
 // === 53-ui-settings.js ===
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-ionc-height') || '{}');
-        const height = saved[tabKey] ?? saved[objectName];
-        if (height) {
-            const sensorsContainer = getElementInTab(tabKey, `ionc-sensors-container-${objectName}`);
-            if (sensorsContainer) {
-                sensorsContainer.style.height = `${height}px`;
-                sensorsContainer.style.maxHeight = `${height}px`;
-            }
+    const saved = loadStorageMap('uniset-panel-ionc-height');
+    const height = saved[tabKey] ?? saved[objectName];
+    if (height) {
+        const sensorsContainer = getElementInTab(tabKey, `ionc-sensors-container-${objectName}`);
+        if (sensorsContainer) {
+            sensorsContainer.style.height = `${height}px`;
+            sensorsContainer.style.maxHeight = `${height}px`;
         }
-    } catch (err) {
-        console.warn('Failed to load IONC sensors height:', err);
     }
 }
 
@@ -14930,28 +15503,18 @@ function toggleIOLayout(tabKey, objectName) {
 }
 
 function saveIOLayoutState(tabKey, isSequential) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-io-layout') || '{}');
-        saved[tabKey] = isSequential;
-        localStorage.setItem('uniset-panel-io-layout', JSON.stringify(saved));
-    } catch (err) {
-        console.warn('Failed to save IO layout state:', err);
-    }
+    updateStorageMap('uniset-panel-io-layout', (saved) => { saved[tabKey] = isSequential; });
 }
 
 function loadIOLayoutState(tabKey, objectName) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-io-layout') || '{}');
-        if (saved[tabKey] ?? saved[objectName]) {
-            const checkbox = getElementInTab(tabKey, `io-sequential-${objectName}`);
-            const ioGrid = getElementInTab(tabKey, `io-grid-${objectName}`);
-            if (checkbox && ioGrid) {
-                checkbox.checked = true;
-                ioGrid.classList.add('io-sequential');
-            }
+    const saved = loadStorageMap('uniset-panel-io-layout');
+    if (saved[tabKey] ?? saved[objectName]) {
+        const checkbox = getElementInTab(tabKey, `io-sequential-${objectName}`);
+        const ioGrid = getElementInTab(tabKey, `io-grid-${objectName}`);
+        if (checkbox && ioGrid) {
+            checkbox.checked = true;
+            ioGrid.classList.add('io-sequential');
         }
-    } catch (err) {
-        console.warn('Failed to load IO layout state:', err);
     }
 }
 
@@ -14985,7 +15548,7 @@ function moveSectionDown(tabKey, sectionId) {
 
 function getSectionElement(tabKey, sectionId) {
     // Ищем секцию по data-section-id внутри панели вкладки
-    const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+    const panel = getTabPanel(tabKey);
     if (!panel) return null;
     return panel.querySelector(`.reorderable-section[data-section-id="${sectionId}"]`);
 }
@@ -15014,30 +15577,23 @@ function getNextReorderableSection(element) {
 
 // tabKey - ключ вкладки (serverId:objectName)
 function saveSectionOrder(tabKey) {
-    try {
-        const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
-        if (!panel) return;
+    const panel = getTabPanel(tabKey);
+    if (!panel) return;
 
-        const sections = panel.querySelectorAll('.reorderable-section[data-section-id]');
-        const order = Array.from(sections).map(s => s.dataset.sectionId);
+    const sections = panel.querySelectorAll('.reorderable-section[data-section-id]');
+    const order = Array.from(sections).map(s => s.dataset.sectionId);
 
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-section-order') || '{}');
-        saved[tabKey] = order;
-        localStorage.setItem('uniset-panel-section-order', JSON.stringify(saved));
-    } catch (err) {
-        console.warn('Failed to save section order:', err);
-    }
+    updateStorageMap('uniset-panel-section-order', (saved) => { saved[tabKey] = order; });
 }
 
 // tabKey - ключ вкладки (serverId:objectName)
 function loadSectionOrder(tabKey) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-section-order') || '{}');
-        const order = saved[tabKey];
-        if (!order || !Array.isArray(order)) return;
+    const saved = loadStorageMap('uniset-panel-section-order');
+    const order = saved[tabKey];
+    if (!order || !Array.isArray(order)) return;
 
-        const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
-        if (!panel) return;
+    const panel = getTabPanel(tabKey);
+    if (!panel) return;
 
         // Собираем все reorderable секции в Map
         const sections = new Map();
@@ -15068,15 +15624,12 @@ function loadSectionOrder(tabKey) {
             anchor = orderedSections[i];
         }
 
-        updateReorderButtons(tabKey);
-    } catch (err) {
-        console.warn('Failed to load section order:', err);
-    }
+    updateReorderButtons(tabKey);
 }
 
 // tabKey - ключ вкладки (serverId:objectName)
 function updateReorderButtons(tabKey) {
-    const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+    const panel = getTabPanel(tabKey);
     if (!panel) return;
 
     const sections = Array.from(panel.querySelectorAll('.reorderable-section[data-section-id]'))
@@ -15113,7 +15666,7 @@ function setupIOSections(tabKey) {
 }
 
 function setupIOCollapse(tabKey, objectName, type) {
-    const panel = document.querySelector(`.tab-panel[data-name="${tabKey}"]`);
+    const panel = getTabPanel(tabKey);
     if (!panel) return;
 
     const toggleEl = panel.querySelector(`.io-section-toggle[data-section="${type}-${objectName}"]`);
@@ -15135,25 +15688,14 @@ function setupIOCollapse(tabKey, objectName, type) {
 }
 
 function saveIOCollapseState(tabKey, type, collapsed) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-io-collapse') || '{}');
-        const key = `${tabKey}-${type}`;
-        saved[key] = collapsed ? 'collapsed' : 'expanded';
-        localStorage.setItem('uniset-panel-io-collapse', JSON.stringify(saved));
-    } catch (err) {
-        console.warn('Failed to save IO collapse state:', err);
-    }
+    updateStorageMap('uniset-panel-io-collapse', (saved) => {
+        saved[`${tabKey}-${type}`] = collapsed ? 'collapsed' : 'expanded';
+    });
 }
 
 function loadIOCollapseState(tabKey, type) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-io-collapse') || '{}');
-        const key = `${tabKey}-${type}`;
-        return saved[key] || 'expanded';
-    } catch (err) {
-        console.warn('Failed to load IO collapse state:', err);
-        return 'expanded';
-    }
+    const saved = loadStorageMap('uniset-panel-io-collapse');
+    return saved[`${tabKey}-${type}`] || 'expanded';
 }
 
 function setupIOResize(tabKey, objectName, type) {
@@ -15168,29 +15710,20 @@ function setupIOResize(tabKey, objectName, type) {
 }
 
 function saveIOHeight(tabKey, type, height) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-io-heights') || '{}');
-        const key = `${tabKey}-${type}`;
-        saved[key] = height;
-        localStorage.setItem('uniset-panel-io-heights', JSON.stringify(saved));
-    } catch (err) {
-        console.warn('Failed to save IO height:', err);
-    }
+    updateStorageMap('uniset-panel-io-heights', (saved) => {
+        saved[`${tabKey}-${type}`] = height;
+    });
 }
 
 function loadIOHeight(tabKey, objectName, type) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-io-heights') || '{}');
-        const key = `${tabKey}-${type}`;
-        if (saved[key]) {
-            const container = getElementInTab(tabKey, `io-container-${type}-${objectName}`);
-            if (container) {
-                container.style.height = `${saved[key]}px`;
-                container.style.maxHeight = `${saved[key]}px`;
-            }
+    const saved = loadStorageMap('uniset-panel-io-heights');
+    const height = saved[`${tabKey}-${type}`];
+    if (height) {
+        const container = getElementInTab(tabKey, `io-container-${type}-${objectName}`);
+        if (container) {
+            container.style.height = `${height}px`;
+            container.style.maxHeight = `${height}px`;
         }
-    } catch (err) {
-        console.warn('Failed to load IO height:', err);
     }
 }
 
@@ -15254,24 +15787,14 @@ function setupIOUnpinAll(tabKey, objectName, type) {
 
 // Pinned rows management
 function getIOPinnedRows(tabKey, type) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-io-pinned') || '{}');
-        const key = `${tabKey}-${type}`;
-        return new Set(saved[key] || []);
-    } catch (err) {
-        return new Set();
-    }
+    const saved = loadStorageMap('uniset-panel-io-pinned');
+    return new Set(saved[`${tabKey}-${type}`] || []);
 }
 
 function saveIOPinnedRows(tabKey, type, pinnedSet) {
-    try {
-        const saved = JSON.parse(localStorage.getItem('uniset-panel-io-pinned') || '{}');
-        const key = `${tabKey}-${type}`;
-        saved[key] = Array.from(pinnedSet);
-        localStorage.setItem('uniset-panel-io-pinned', JSON.stringify(saved));
-    } catch (err) {
-        console.warn('Failed to save pinned rows:', err);
-    }
+    updateStorageMap('uniset-panel-io-pinned', (saved) => {
+        saved[`${tabKey}-${type}`] = Array.from(pinnedSet);
+    });
 }
 
 function toggleIOPin(tabKey, type, rowKey) {
@@ -15296,7 +15819,7 @@ function clearIOPinnedRows(tabKey, type) {
 function setTimeRange(range) {
     // Обновляем active класс на всех кнопках
     document.querySelectorAll('.time-range-btn').forEach(btn => {
-        const btnRange = parseInt(btn.getAttribute('onclick')?.match(/setTimeRange\((\d+)\)/)?.[1], 10);
+        const btnRange = parseInt(btn.dataset.range, 10);
         btn.classList.toggle('active', btnRange === range);
     });
 
@@ -15317,54 +15840,51 @@ function setTimeRange(range) {
 
 // Сохранение настроек в localStorage
 function saveSettings() {
-    const settings = {
+    saveJSON('uniset-panel-settings', {
         timeRange: state.timeRange,
         sidebarCollapsed: state.sidebarCollapsed,
         collapsedServerGroups: Array.from(state.collapsedServerGroups),
         serversSectionCollapsed: state.serversSectionCollapsed,
         launchersSectionCollapsed: state.launchersSectionCollapsed
-    };
-    localStorage.setItem('uniset-panel-settings', JSON.stringify(settings));
+    });
 }
 
 // Loading настроек из localStorage
 function loadSettings() {
+    const settings = loadJSON('uniset-panel-settings', null);
+    if (!settings || typeof settings !== 'object') return;
+
     try {
-        const saved = localStorage.getItem('uniset-panel-settings');
-        if (saved) {
-            const settings = JSON.parse(saved);
+        // Восстановить timeRange
+        if (settings.timeRange) {
+            state.timeRange = settings.timeRange;
+            document.querySelectorAll('.time-range-btn').forEach(btn => {
+                btn.classList.toggle('active', parseInt(btn.dataset.range, 10) === state.timeRange);
+            });
+        }
 
-            // Восстановить timeRange
-            if (settings.timeRange) {
-                state.timeRange = settings.timeRange;
-                document.querySelectorAll('.time-range-btn').forEach(btn => {
-                    btn.classList.toggle('active', parseInt(btn.dataset.range, 10) === state.timeRange);
-                });
-            }
+        // Восстановить состояние sidebar
+        if (settings.sidebarCollapsed) {
+            state.sidebarCollapsed = settings.sidebarCollapsed;
+            document.getElementById('sidebar').classList.add('collapsed');
+        }
 
-            // Восстановить состояние sidebar
-            if (settings.sidebarCollapsed) {
-                state.sidebarCollapsed = settings.sidebarCollapsed;
-                document.getElementById('sidebar').classList.add('collapsed');
-            }
+        // Восстановить свёрнутые группы серверов
+        if (settings.collapsedServerGroups && Array.isArray(settings.collapsedServerGroups)) {
+            state.collapsedServerGroups = new Set(settings.collapsedServerGroups);
+        }
 
-            // Восстановить свёрнутые группы серверов
-            if (settings.collapsedServerGroups && Array.isArray(settings.collapsedServerGroups)) {
-                state.collapsedServerGroups = new Set(settings.collapsedServerGroups);
-            }
+        // Восстановить состояние секции "Servers"
+        if (settings.serversSectionCollapsed !== undefined) {
+            state.serversSectionCollapsed = settings.serversSectionCollapsed;
+        }
 
-            // Восстановить состояние секции "Servers"
-            if (settings.serversSectionCollapsed !== undefined) {
-                state.serversSectionCollapsed = settings.serversSectionCollapsed;
-            }
-
-            // Восстановить состояние секции "Launchers"
-            if (settings.launchersSectionCollapsed !== undefined) {
-                state.launchersSectionCollapsed = settings.launchersSectionCollapsed;
-            }
+        // Восстановить состояние секции "Launchers"
+        if (settings.launchersSectionCollapsed !== undefined) {
+            state.launchersSectionCollapsed = settings.launchersSectionCollapsed;
         }
     } catch (err) {
-        console.warn('Error загрузки настроек:', err);
+        console.warn('Failed to apply settings:', err);
     }
 }
 
@@ -15375,13 +15895,12 @@ async function loadAppConfig() {
         if (response.ok) {
             const config = await response.json();
             state.config = { ...state.config, ...config };
-            console.log('App config loaded:', state.config);
+            debugLog('App config loaded:', state.config);
         }
     } catch (err) {
         console.warn('Failed to load app config:', err);
     }
 }
-
 
 
 // === 55-sidebar-groups.js ===
@@ -15407,7 +15926,7 @@ async function loadSidebar() {
         }
         const data = await response.json();
         state.sidebarGroups = Array.isArray(data.groups) ? data.groups : [];
-        console.log(`Sidebar: ${state.sidebarGroups.length} groups loaded`);
+        debugLog(`Sidebar: ${state.sidebarGroups.length} groups loaded`);
     } catch (err) {
         console.warn('Failed to load sidebar config:', err);
         state.sidebarGroups = [];
@@ -15416,23 +15935,12 @@ async function loadSidebar() {
 
 // Загрузка collapse состояния групп из localStorage
 function loadGroupCollapseState() {
-    try {
-        const saved = localStorage.getItem('uniset-panel-group-collapse');
-        if (saved) {
-            state.groupCollapseState = JSON.parse(saved);
-        }
-    } catch (err) {
-        state.groupCollapseState = {};
-    }
+    state.groupCollapseState = loadJSON('uniset-panel-group-collapse', {}) || {};
 }
 
 // Сохранение collapse состояния групп в localStorage
 function saveGroupCollapseState() {
-    try {
-        localStorage.setItem('uniset-panel-group-collapse', JSON.stringify(state.groupCollapseState));
-    } catch (err) {
-        // ignore
-    }
+    saveJSON('uniset-panel-group-collapse', state.groupCollapseState);
 }
 
 // Основная функция рендеринга всех групп
@@ -15506,8 +16014,11 @@ function createSidebarGroupItem(item) {
         li.dataset.serverId = item.serverId;
     }
 
-    // Status dot для объектов и серверов
-    if (item.type === 'object' || item.type === 'server') {
+    // Status dot для всех сущностей с понятием connectivity
+    // (object/server — UniSet2 сервер; launcher — pRunner; journal — журнал).
+    // Dashboard — статичный конфиг, всегда «connected», dot не нужен.
+    if (item.type === 'object' || item.type === 'server'
+        || item.type === 'launcher' || item.type === 'journal') {
         const dot = document.createElement('span');
         dot.className = 'sidebar-group-status';
         li.appendChild(dot);
@@ -15641,25 +16152,11 @@ function applySidebarStatuses() {
 
 // Рендеринг пользовательских dashboard'ов в отдельную группу
 function renderUserDashboardsGroup(container) {
-    try {
-        const saved = localStorage.getItem('user-dashboards');
-        if (!saved) return;
+    const userDashboards = loadJSON('user-dashboards', []);
+    if (!Array.isArray(userDashboards) || userDashboards.length === 0) return;
 
-        const userDashboards = JSON.parse(saved);
-        if (!Array.isArray(userDashboards) || userDashboards.length === 0) return;
-
-        const items = userDashboards.map(name => ({
-            type: 'dashboard',
-            name: name
-        }));
-
-        renderSidebarGroup({
-            name: 'Custom',
-            items: items
-        }, container);
-    } catch (err) {
-        // ignore
-    }
+    const items = userDashboards.map(name => ({ type: 'dashboard', name }));
+    renderSidebarGroup({ name: 'Custom', items }, container);
 }
 
 
@@ -15674,14 +16171,13 @@ const DASHBOARD_VERSION = 1;
 const dashboardState = window.dashboardState = {
     currentView: 'objects', // 'objects' or 'dashboard'
     currentDashboard: null, // current dashboard name
-    dashboards: new Map(),  // name -> dashboard config
-    serverDashboards: [],   // list of server-side dashboards
+    dashboards: new Map(),  // name -> dashboard config (server dashboards помечены _server: true)
     editMode: false,
     selectedWidgetId: null, // selected widget for keyboard movement
     widgets: new Map(),     // widgetId -> widget instance
-    sensorSubscriptions: new Map(), // sensorName -> Set of widgetIds
-    setpointSubscriptions: new Map(), // sensor2Name -> Set of widgetIds (for dual scale)
-    chartSubscriptions: new Map(), // sensorName -> Set of widgetIds (for chart widgets)
+    sensorSubscriptions: new Map(), // sensorKey -> Set of widgetIds (sensorKey = ${serverId}|${objectName}|${sensorName})
+    setpointSubscriptions: new Map(), // sensorKey -> Set of widgetIds (для setpoint sensor2)
+    chartSubscriptions: new Map(), // sensorKey -> Set of widgetIds
     pendingImport: null     // pending import data
 };
 
@@ -15700,7 +16196,7 @@ class DashboardWidget {
 
     constructor(id, config, container) {
         this.id = id;
-        this.config = config;
+        this.config = config || {};
         this.container = container;
         this.value = null;
         this.error = null;
@@ -15727,12 +16223,12 @@ class DashboardWidget {
             <div class="widget-config-field">
                 <label>Sensor</label>
                 <input type="text" class="widget-input" name="sensor"
-                       value="${config.sensor || ''}" placeholder="Type to search..." autocomplete="off">
+                       value="${escapeAttr(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
             </div>
             <div class="widget-config-field">
                 <label>Label</label>
                 <input type="text" class="widget-input" name="label"
-                       value="${config.label || ''}" placeholder="Display label">
+                       value="${escapeAttr(config.label || '')}" placeholder="Display label">
             </div>
         `;
     }
@@ -15751,9 +16247,17 @@ class DashboardWidget {
         }
     }
 
-    getConfig() {
-        return { ...this.config };
+    // Подбирает цвет по значению из настройки zones[]. Используется LevelWidget,
+    // GaugeWidget — везде, где есть цветовые зоны. Static, чтобы можно было
+    // дёрнуть из любого instance без зависимости от подкласса.
+    static getColorForZones(value, zones = []) {
+        if (!zones || zones.length === 0) return 'var(--accent-blue)';
+        for (const zone of zones) {
+            if (value >= zone.from && value <= zone.to) return zone.color;
+        }
+        return 'var(--accent-blue)';
     }
+
 }
 
 // ============================================================================
@@ -15761,14 +16265,2898 @@ class DashboardWidget {
 // ============================================================================
 
 
+// === 60-widget-sensor-binding.js ===
+// ui/static/js/src/60-widget-sensor-binding.js
+// ============================================================================
+// Helpers для рендера/парсинга/wiring "server + IONC object + sensor + sensorId"
+// конфиг-полей. Используются:
+//   - ActiveDashboardWidget (toggle/checkbox/pushbutton/setpoint/generator)
+//   - read-only widgets (gauge/level/led/digital)
+//   - multi-sensor widgets (statusbar/bargraph/chart) per item
+//
+// fieldPrefix контракт:
+//   - ''           — single-sensor widget (поля name="serverId" etc.)
+//   - 'sensor2-'   — feedback/secondary sensor (gauge dual / setpoint feedback)
+//   - 'item-${idx}-' — multi-sensor items
+// ============================================================================
 
-// === 61-dashboard-widgets.js ===
+// ============================================================================
+// IONC@server registry — session-cache для combobox'а в config-форме widget'ов.
+// TTL 5 минут (IONC_REGISTRY_TTL_MS) + ручной refresh через кнопку ↻.
+// fetchPromise shared между concurrent open вызовами.
+// 5xx / network error: fetchedAt НЕ обновляется (cache не помечается fresh),
+// существующие данные сохраняются для fallback.
+// ============================================================================
+
+// formatIONCComboValue — единственный источник истины для display-string'а
+// combo input'а и его dropdown items. Формат: `${objectName} @ ${serverName||serverId}`.
+// `(offline)` суффикс добавляется когда либо явно через opts.showOffline=true,
+// либо когда entry.connected === false и opts.autoOfflineSuffix !== false.
+//
+// Передавать можно либо registry-entry ({serverId, objectName, serverName, connected}),
+// либо «orphan-binding» из config'а (serverId+objectName, без serverName/connected → showOffline:true).
+function formatIONCComboValue(entry, opts = {}) {
+    if (!entry || !entry.objectName) return '';
+    const serverNameOrId = entry.serverName || entry.serverId || '';
+    const base = `${entry.objectName} @ ${serverNameOrId}`;
+    const explicitShow = opts.showOffline === true;
+    const auto = opts.autoOfflineSuffix !== false && entry.connected === false;
+    return (explicitShow || auto) ? `${base} (offline)` : base;
+}
+
+async function ensureIONCRegistry({ force = false } = {}) {
+    const reg = state.ioncRegistry;
+    const fresh = (Date.now() - reg.fetchedAt) < IONC_REGISTRY_TTL_MS;
+    if (!force && fresh && reg.servers.size > 0) return reg;
+    if (reg.fetchPromise) return reg.fetchPromise;
+    reg.isFetching = true;
+    reg.fetchPromise = (async () => {
+        try {
+            const resp = await fetch('/api/objects-by-type?type=IONotifyController');
+            if (!resp.ok) throw new Error(`/api/objects-by-type: HTTP ${resp.status}`);
+            const data = await resp.json();
+            reg.servers.clear();
+            (data.servers || []).forEach(s => {
+                reg.servers.set(s.serverId, {
+                    serverName: s.serverName || '',
+                    connected:  !!s.connected,
+                    objects:    Array.isArray(s.objects) ? s.objects : [],
+                });
+            });
+            reg.fetchedAt = Date.now();
+            reg.lastError = null;
+            return reg;
+        } catch (err) {
+            // Cache (servers Map + fetchedAt) НЕ инвалидируется — old data fallback.
+            // lastError используется dropdown'ом для отображения error message.
+            reg.lastError = (err && err.message) ? err.message : String(err);
+            console.warn('IONC registry fetch failed:', err);
+            throw err;
+        }
+    })().finally(() => {
+        reg.isFetching = false;
+        reg.fetchPromise = null;
+    });
+    return reg.fetchPromise;
+}
+
+function getIONCEntries() {
+    const out = [];
+    state.ioncRegistry.servers.forEach((srv, serverId) => {
+        srv.objects.forEach(objectName => {
+            const entry = {
+                serverId,
+                serverName: srv.serverName,
+                connected:  srv.connected,
+                objectName,
+            };
+            // displayString — канонический ключ для filter/sort (БЕЗ offline-суффикса,
+            // чтобы поиск "SharedMemory" находил и offline pair'ы). Для input value
+            // используется formatIONCComboValue с autoOfflineSuffix.
+            entry.displayString = formatIONCComboValue(entry, { autoOfflineSuffix: false });
+            out.push(entry);
+        });
+    });
+    out.sort((a, b) => {
+        if (a.connected !== b.connected) return a.connected ? -1 : 1;
+        return a.displayString.localeCompare(b.displayString);
+    });
+    return out;
+}
+
+function findIONCEntry(serverId, objectName) {
+    const srv = state.ioncRegistry.servers.get(serverId);
+    if (!srv) return null;
+    if (!srv.objects.includes(objectName)) return null;
+    const entry = {
+        serverId, serverName: srv.serverName, connected: srv.connected, objectName,
+    };
+    entry.displayString = formatIONCComboValue(entry, { autoOfflineSuffix: false });
+    return entry;
+}
+
+// ============================================================================
+// IONC combo helpers — module-level pure / DOM helpers
+// (вынесены из setupIONCComboAutocomplete для читаемости + тестируемости)
+// ============================================================================
+
+// _highlightIONCMatch — wrap'ит match-substring в <mark>, безопасно escape'ит остальное.
+// Pure: не зависит от DOM или closure-state.
+function _highlightIONCMatch(text, filterLower) {
+    if (!filterLower) return escapeHtml(text);
+    const lower = text.toLowerCase();
+    const idx = lower.indexOf(filterLower);
+    if (idx < 0) return escapeHtml(text);
+    return `${escapeHtml(text.slice(0, idx))}<mark>${escapeHtml(text.slice(idx, idx + filterLower.length))}</mark>${escapeHtml(text.slice(idx + filterLower.length))}`;
+}
+
+// _buildIONCDropdownNode — создаёт+позиционирует absolute dropdown под input'ом.
+// Возвращает только что вставленный <div>. Стиль/класс выровнен с CSS .ionc-combo-dropdown.
+function _buildIONCDropdownNode(input) {
+    const dropdown = document.createElement('div');
+    dropdown.className = 'ionc-combo-dropdown';
+    const rect = input.getBoundingClientRect();
+    dropdown.style.position = 'fixed';
+    dropdown.style.left   = `${rect.left}px`;
+    dropdown.style.top    = `${rect.bottom + IONC_COMBO_DROPDOWN_TOP_OFFSET_PX}px`;
+    dropdown.style.width  = `${rect.width}px`;
+    dropdown.style.zIndex = String(SENSOR_AUTOCOMPLETE_DROPDOWN_Z_INDEX);
+    document.body.appendChild(dropdown);
+    return dropdown;
+}
+
+// _renderIONCEmptyState — выбирает HTML для пустого dropdown'а:
+// либо error message (registry пустой + lastError зафиксирован),
+// либо обычное "Нет совпадений".
+function _renderIONCEmptyState(reg) {
+    const noEntries = reg.servers.size === 0;
+    if (noEntries && reg.lastError) {
+        return '<div class="ionc-combo-empty error">Не удалось загрузить — попробуйте ↻</div>';
+    }
+    return '<div class="ionc-combo-empty">Нет совпадений</div>';
+}
+
+// _renderIONCDropdownItems — innerHTML для items + click-delegation.
+// ctx: { activeIndex, currentFilter, hiddenServer, hiddenObject, onPick(idx) }.
+function _renderIONCDropdownItems(dropdown, items, ctx) {
+    const filterLower = ctx.currentFilter.toLowerCase();
+    const itemsHtml = items.map((entry, idx) => {
+        const isPreselected = ctx.hiddenServer.value === entry.serverId
+            && ctx.hiddenObject.value === entry.objectName;
+        const cls = [
+            'ionc-combo-item',
+            idx === ctx.activeIndex ? 'active' : '',
+            entry.connected ? '' : 'offline',
+            isPreselected ? 'preselected' : '',
+        ].filter(Boolean).join(' ');
+        const offlineMark = entry.connected
+            ? ''
+            : '<span class="ionc-combo-offline-mark">⚠ offline</span>';
+        const star = isPreselected ? '<span class="ionc-combo-star">★</span>' : '';
+        return `<div class="${cls}" data-idx="${idx}">
+            ${star}<span class="ionc-combo-display">${_highlightIONCMatch(entry.displayString, filterLower)}</span>${offlineMark}
+        </div>`;
+    }).join('');
+    dropdown.innerHTML = itemsHtml;
+    dropdown.querySelectorAll('.ionc-combo-item').forEach(el => {
+        el.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            ctx.onPick(parseIntegerOrDefault(el.dataset.idx, -1));
+        });
+    });
+}
+
+// _setIONCRefreshLoading — одна точка для visual loading state кнопки и input'а.
+// Используется в refresh-handler'е (toggle on/off вокруг await fetch).
+function _setIONCRefreshLoading(input, refreshBtn, isLoading) {
+    if (isLoading) {
+        refreshBtn.classList.add('spinning');
+        input.disabled = true;
+    } else {
+        refreshBtn.classList.remove('spinning');
+        // input.disabled НЕ восстанавливается тут — это решение caller'а
+        // (применить applySingleMatchOrPreselect или restore wasDisabled на error).
+    }
+}
+
+// _applyIONCFilter — pure фильтрация + сортировка (preselected first).
+// Возвращает новый массив.
+function _applyIONCFilter(allEntries, filterText, currentServerId, currentObjectName) {
+    const text = filterText || '';
+    let filtered;
+    if (!text) {
+        filtered = allEntries;
+    } else {
+        const lowered = text.toLowerCase();
+        filtered = allEntries.filter(entry => entry.displayString.toLowerCase().includes(lowered));
+    }
+    // Preselected item (current binding) sorts first for quick re-selection.
+    if (currentServerId && currentObjectName) {
+        filtered = filtered.slice().sort((a, b) => {
+            const aMatch = (a.serverId === currentServerId && a.objectName === currentObjectName) ? -1 : 0;
+            const bMatch = (b.serverId === currentServerId && b.objectName === currentObjectName) ? -1 : 0;
+            if (aMatch !== bMatch) return aMatch - bMatch;
+            return 0; // preserve existing order (online-first + alpha from getIONCEntries)
+        });
+    }
+    return filtered;
+}
+
+// setupIONCComboAutocomplete — wiring combobox'а IONC@server.
+// Привязывает к input/hidden/refresh-кнопке. Идемпотентен через
+// form.dataset[`ioncCombo_${prefix}_wired`].
+//
+// Внутри держит замыкания: dropdown (DOM nullable), debounceTimer, activeIndex,
+// currentItems, currentFilter, lastCommittedDisplay. Все остальные операции
+// (рендер items, build dropdown DOM, фильтрация, refresh-loading toggle)
+// делегированы в module-level _-helpers выше.
+function setupIONCComboAutocomplete(form, prefix = '') {
+    const flagKey = `ioncCombo_${prefix.replace(/[^a-z0-9]/gi, '_')}_wired`;
+    if (form.dataset[flagKey] === 'true') return;
+    form.dataset[flagKey] = 'true';
+
+    const input        = form.querySelector(`[name="${prefix}ioncCombo"]`);
+    const hiddenServer = form.querySelector(`[name="${prefix}serverId"]`);
+    const hiddenObject = form.querySelector(`[name="${prefix}objectName"]`);
+    const refreshBtn   = input?.closest('.ionc-combo-wrap')?.querySelector('.ionc-combo-refresh');
+    if (!input || !hiddenServer || !hiddenObject) return;
+
+    let dropdown = null;
+    let debounceTimer = null;
+    let activeIndex = -1;
+    let currentItems = [];
+    let currentFilter = '';
+    // lastCommittedDisplay — последнее значение input.value, которое мы признаём
+    // «коммитнутым» (через preselect, single-match auto-fill или explicit pickItem).
+    // На blur без pick'а input.value откатывается на это значение. Hidden inputs
+    // никогда не трогаются автоматически (Persistence Invariant).
+    let lastCommittedDisplay = '';
+
+    function commit(displayValue) {
+        lastCommittedDisplay = displayValue;
+        delete input.dataset.invalid;
+    }
+
+    function destroyDropdown() {
+        if (dropdown) { dropdown.remove(); dropdown = null; }
+        activeIndex = -1;
+        currentItems = [];
+    }
+
+    function ensureDropdown() {
+        if (!dropdown) dropdown = _buildIONCDropdownNode(input);
+    }
+
+    function renderItems() {
+        if (!dropdown) return;
+        if (currentItems.length === 0) {
+            dropdown.innerHTML = _renderIONCEmptyState(state.ioncRegistry);
+            return;
+        }
+        _renderIONCDropdownItems(dropdown, currentItems, {
+            activeIndex,
+            currentFilter,
+            hiddenServer,
+            hiddenObject,
+            onPick: pickItem,
+        });
+    }
+
+    function applyFilter(text) {
+        currentFilter = text;
+        currentItems = _applyIONCFilter(
+            getIONCEntries(),
+            text,
+            hiddenServer.value,
+            hiddenObject.value
+        );
+        activeIndex = -1;
+        renderItems();
+    }
+
+    function commitSelection(entry) {
+        // Offline pick: input показывает (offline) суффикс + orphan-маркер сохраняется
+        // (UI signал что выбранный target недоступен). Online pick: чистый display.
+        const displayValue = formatIONCComboValue(entry, { autoOfflineSuffix: true });
+        input.value = displayValue;
+        if (entry.connected) {
+            delete input.dataset.orphan;
+        } else {
+            input.dataset.orphan = 'true';
+        }
+        commit(displayValue);
+        hiddenServer.value = entry.serverId;
+        hiddenObject.value = entry.objectName;
+        hiddenServer.dispatchEvent(new Event('change', { bubbles: true }));
+        hiddenObject.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function pickItem(idx) {
+        const entry = currentItems[idx];
+        if (!entry) return;
+        commitSelection(entry);
+        destroyDropdown();
+    }
+
+    function preselectFromConfig() {
+        const serverId = hiddenServer.value;
+        const objectName = hiddenObject.value;
+        if (!serverId || !objectName) {
+            commit(input.value || '');
+            return;
+        }
+        const entry = findIONCEntry(serverId, objectName);
+        let displayValue;
+        if (entry) {
+            // Если entry online — обычный display. Если offline — с суффиксом + orphan.
+            displayValue = formatIONCComboValue(entry, { autoOfflineSuffix: true });
+            if (entry.connected) {
+                delete input.dataset.orphan;
+            } else {
+                input.dataset.orphan = 'true';
+            }
+        } else {
+            // Pair не в registry → orphan: показываем raw serverId/objectName + offline.
+            displayValue = formatIONCComboValue({ serverId, objectName }, { showOffline: true });
+            input.dataset.orphan = 'true';
+        }
+        input.value = displayValue;
+        commit(displayValue);
+    }
+
+    function applySingleMatchOrPreselect() {
+        const all = getIONCEntries();
+        if (all.length === 1) {
+            const only = all[0];
+            // Persistence Invariant: existing binding is user property — never overwrite automatically.
+            // Single-match auto-fill только когда config пустой (новый widget без серверной привязки).
+            // serverId — достаточный discriminator: новый widget не имеет serverId,
+            // а существующий (даже orphan) всегда имеет сохранённый serverId.
+            if (hiddenServer.value) {
+                // Если сохранённый binding совпадает с единственной entry registry —
+                // disable input (никакой альтернативы пользователь выбрать не может,
+                // даже после refresh). Иначе оставляем enabled, чтобы можно было
+                // перейти на правильную entry / orphan-fallback оставить виден.
+                const matchesOnly = hiddenServer.value === only.serverId
+                    && hiddenObject.value === only.objectName;
+                if (matchesOnly) {
+                    input.disabled = true;
+                    input.title = 'Только 1 IONC@server в системе';
+                } else {
+                    input.disabled = false;
+                    input.title = '';
+                }
+                preselectFromConfig();
+                return;
+            }
+            input.disabled = true;
+            input.title = 'Только 1 IONC@server в системе';
+            commitSelection(only);
+            return;
+        }
+        input.disabled = false;
+        input.title = '';
+        preselectFromConfig();
+    }
+
+    if (state.ioncRegistry.servers.size > 0) {
+        applySingleMatchOrPreselect();
+    } else {
+        ensureIONCRegistry().then(applySingleMatchOrPreselect).catch(() => {
+            preselectFromConfig();
+        });
+    }
+
+    input.addEventListener('focus', () => {
+        if (input.disabled) return;
+        ensureDropdown();
+        applyFilter('');
+    });
+
+    input.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            ensureDropdown();
+            const text = input.value || '';
+            applyFilter(text);
+            // data-invalid: typed text не матчит ни одну entry's displayString.
+            // Пустой text → не invalid (пользователь стирает). Не трогаем hidden.
+            if (!text) {
+                delete input.dataset.invalid;
+            } else {
+                const lower = text.toLowerCase();
+                const hasMatch = getIONCEntries().some(e => e.displayString.toLowerCase().includes(lower));
+                if (hasMatch) delete input.dataset.invalid;
+                else          input.dataset.invalid = 'true';
+            }
+        }, IONC_COMBO_DEBOUNCE_MS);
+    });
+
+    input.addEventListener('keydown', (e) => {
+        if (!dropdown || currentItems.length === 0) return;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            activeIndex = Math.min(activeIndex + 1, currentItems.length - 1);
+            renderItems();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            activeIndex = Math.max(activeIndex - 1, 0);
+            renderItems();
+        } else if (e.key === 'Enter') {
+            if (activeIndex >= 0) {
+                e.preventDefault();
+                pickItem(activeIndex);
+            }
+        } else if (e.key === 'Escape') {
+            destroyDropdown();
+        }
+    });
+
+    input.addEventListener('blur', () => {
+        // Откладываем revert на тот же delay что и destroyDropdown — чтобы успел
+        // отработать mousedown→pickItem (который обновит lastCommittedDisplay).
+        // Если pickItem уже committed новое значение, restore просто перезапишет
+        // input.value тем же, что там и так стоит.
+        setTimeout(() => {
+            destroyDropdown();
+            input.value = lastCommittedDisplay;
+            delete input.dataset.invalid;
+        }, SENSOR_AUTOCOMPLETE_BLUR_DELAY_MS);
+    });
+
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', async () => {
+            if (state.ioncRegistry.isFetching) return;
+            // Snapshot prior disabled state — на случай fetch error мы возвращаем
+            // input в исходное состояние (single-match disabled или enabled).
+            // На success applySingleMatchOrPreselect самостоятельно перезапишет disabled.
+            const wasDisabled = input.disabled;
+            _setIONCRefreshLoading(input, refreshBtn, true);
+            try {
+                await ensureIONCRegistry({ force: true });
+                applySingleMatchOrPreselect();
+                if (dropdown) applyFilter(input.value || '');
+            } catch (err) {
+                console.warn('IONC registry refresh failed:', err);
+                // На fetch error applySingleMatchOrPreselect не вызвана —
+                // restore prior disabled state, чтобы не оставить input залипшим.
+                input.disabled = wasDisabled;
+            } finally {
+                _setIONCRefreshLoading(input, refreshBtn, false);
+            }
+        });
+    }
+}
+
+function renderSensorBindingFields(config = {}, opts = {}) {
+    const prefix = opts.fieldPrefix || '';
+    const sensorLabel = opts.sensorLabel || 'Sensor';
+    const objectNameDefault = opts.objectNameDefault || 'SharedMemory';
+
+    const serverId = config.serverId || '';
+    const objectName = config.objectName || objectNameDefault;
+    // initialDisplay — orphan fallback (без serverName, registry ещё не загружена).
+    // setupIONCComboAutocomplete переписывает после ensureIONCRegistry, если pair найден.
+    const initialDisplay = serverId && objectName
+        ? formatIONCComboValue({ serverId, objectName }, { autoOfflineSuffix: false })
+        : '';
+
+    return `
+        <div class="widget-config-field ionc-combo-row">
+            <label>IONC @ Server</label>
+            <div class="ionc-combo-wrap">
+                <input type="text" class="widget-input ionc-combo-input"
+                       name="${prefix}ioncCombo" autocomplete="off"
+                       placeholder="введите для поиска…"
+                       value="${escapeAttr(initialDisplay)}"
+                       data-test="cfg-${prefix}ioncCombo">
+                <button type="button" class="ionc-combo-refresh"
+                        title="Обновить список"
+                        data-test="cfg-${prefix}ioncRefresh">↻</button>
+                <input type="hidden" name="${prefix}serverId" value="${escapeAttr(serverId)}"
+                       data-test="cfg-${prefix}serverId">
+                <input type="hidden" name="${prefix}objectName" value="${escapeAttr(objectName)}"
+                       data-test="cfg-${prefix}objectName">
+            </div>
+        </div>
+        <div class="widget-config-field">
+            <label>${escapeHtml(sensorLabel)}</label>
+            <div class="sensor-select-wrap">
+                <input type="text" class="widget-input sensor-select-input" name="${prefix}sensor" autocomplete="off"
+                       placeholder="Click to select or type to search..."
+                       value="${escapeAttr(config.sensor || '')}" data-test="cfg-${prefix}sensor">
+                <input type="hidden" name="${prefix}sensorId" value="${escapeAttr(config.sensorId ?? '')}" data-test="cfg-${prefix}sensorId">
+            </div>
+        </div>
+    `;
+}
+
+// Стандартный label-field, который в widget config dialog'е почти везде одинаковый:
+// `<label>Label</label> + <input name="label">`. Используется в passive widget'ах
+// (gauge, level, digital, ...). Active widget'ы рендерят свой через base.getConfigForm.
+function renderLabelField(config = {}, placeholder = 'Display label') {
+    return `
+        <div class="widget-config-field">
+            <label>Label</label>
+            <input type="text" class="widget-input" name="label"
+                   value="${escapeAttr(config.label || '')}" placeholder="${escapeAttr(placeholder)}">
+        </div>
+    `;
+}
+
+// Парсит значение label-поля. Возвращает строку или ''.
+function parseLabelField(form) {
+    return form.querySelector('[name="label"]')?.value || '';
+}
+
+function parseSensorBindingFields(form, opts = {}) {
+    const prefix = opts.fieldPrefix || '';
+    const rawId = form.querySelector(`[name="${prefix}sensorId"]`)?.value;
+    const sensorId = parseIntegerOrDefault(rawId, null);
+    return {
+        serverId:   form.querySelector(`[name="${prefix}serverId"]`)?.value || null,
+        objectName: form.querySelector(`[name="${prefix}objectName"]`)?.value || (opts.objectNameDefault || 'SharedMemory'),
+        sensor:     form.querySelector(`[name="${prefix}sensor"]`)?.value || '',
+        sensorId,
+    };
+}
+
+// Render одной row для multi-sensor item.
+// opts: { idx, item, extraFieldsHtml, rowClass='sensor-item', removable=true }
+function renderSensorItemRow(opts) {
+    const { idx, item = {}, extraFieldsHtml = '', rowClass = 'sensor-item', removable = true } = opts;
+    const bindingHtml = renderSensorBindingFields(item, { fieldPrefix: `item-${idx}-` });
+    const removeBtn = removable
+        ? `<button type="button" class="widget-btn-small remove-sensor-item" data-idx="${idx}">×</button>`
+        : '';
+    return `
+        <div class="${rowClass}" data-idx="${idx}">
+            ${bindingHtml}
+            ${extraFieldsHtml}
+            ${removeBtn}
+        </div>
+    `;
+}
+
+// Парсит items[] из form.
+// opts: { rowClass='sensor-item', parseExtraFields(itemEl, idx) }
+function parseSensorItemList(form, opts = {}) {
+    const { rowClass = 'sensor-item', parseExtraFields } = opts;
+    const items = [];
+    form.querySelectorAll(`.${rowClass}`).forEach(el => {
+        const idx = parseIntegerOrDefault(el.dataset.idx, NaN);
+        if (!Number.isFinite(idx)) return; // skip malformed rows
+        const binding = parseSensorBindingFields(form, { fieldPrefix: `item-${idx}-` });
+        const extra = parseExtraFields ? parseExtraFields(el, idx) : {};
+        items.push({ ...binding, ...extra });
+    });
+    return items;
+}
+
+function getSensorNameFromBinding(binding = {}) {
+    return binding.sensor || binding.name || '';
+}
+
+function sensorItemMatchesUpdate(item = {}, sensorName, ctx = null) {
+    if (getSensorNameFromBinding(item) !== sensorName) return false;
+    if (ctx?.serverId && item.serverId && ctx.serverId !== item.serverId) return false;
+    if (ctx?.objectName && item.objectName && ctx.objectName !== item.objectName) return false;
+    return true;
+}
+
+function updateSensorItemsByName(items = [], sensorName, ctx = null, updateItem) {
+    items.forEach((item, idx) => {
+        if (sensorItemMatchesUpdate(item, sensorName, ctx)) {
+            updateItem(item, idx);
+        }
+    });
+}
+
+function getSensorNamesFromItems(items = []) {
+    return items.map(getSensorNameFromBinding).filter(Boolean);
+}
+
+// initSensorBindingHandlers — wires combobox IONC@server + sensor autocomplete.
+// Идемпотентен через form.dataset[flagKey].
+//
+// При смене hidden objectName/serverId (через pickItem combo'а) — sensor input
+// сбрасывается через ac.resetOnObjectChange() (контракт сохранён).
+function initSensorBindingHandlers(form, config = {}, opts = {}) {
+    const prefix = opts.fieldPrefix || '';
+    const flagKey = `sensorBinding_${prefix.replace(/[^a-z0-9]/gi, '_')}_wired`;
+    if (form.dataset[flagKey] === 'true') return null;
+    form.dataset[flagKey] = 'true';
+
+    const hiddenServer = form.querySelector(`[name="${prefix}serverId"]`);
+    const hiddenObject = form.querySelector(`[name="${prefix}objectName"]`);
+    const sensorInput  = form.querySelector(`[name="${prefix}sensor"]`);
+    const hiddenIdInput = form.querySelector(`[name="${prefix}sensorId"]`);
+    if (!hiddenServer || !hiddenObject || !sensorInput || !hiddenIdInput) return null;
+
+    setupIONCComboAutocomplete(form, prefix);
+
+    const ac = setupSensorAutocomplete(
+        sensorInput,
+        hiddenIdInput,
+        () => hiddenObject.value,
+        () => hiddenServer.value
+    );
+
+    hiddenServer.addEventListener('change', () => {
+        if (ac && typeof ac.resetOnObjectChange === 'function') ac.resetOnObjectChange();
+    });
+    hiddenObject.addEventListener('change', () => {
+        if (ac && typeof ac.resetOnObjectChange === 'function') ac.resetOnObjectChange();
+    });
+
+    return {
+        resetSensor() {
+            if (ac && typeof ac.resetOnObjectChange === 'function') ac.resetOnObjectChange();
+        },
+    };
+}
+
+// Wire'ит add/remove кнопки + per-item handlers + pre-fill server/object из last item.
+//
+// opts:
+//   addBtnSelector       — CSS селектор кнопки "+ Add"
+//   containerSelector    — CSS селектор контейнера, куда добавляются rows
+//   rowClass             — CSS класс одной row (default 'sensor-item')
+//   defaultExtras        — function(): дефолты для extra-полей нового item
+//   renderRow            — function({ idx, item }): HTML новой row (типично — re-export из widget'а)
+//   parseExtraFields     — function(itemEl, idx): обязательная функция parsing'а extra-полей
+function initSensorItemListHandlers(form, config = {}, opts = {}) {
+    const {
+        addBtnSelector,
+        containerSelector,
+        rowClass = 'sensor-item',
+        defaultExtras = () => ({}),
+        renderRow,
+        parseExtraFields,
+    } = opts;
+
+    // dataset.* нормализует hyphens в camelCase, но прямой [key]= с hyphen
+    // выкидывает 'is not a valid property name' — sanitize до alnum/underscore.
+    const flagKey = `sensorItemList_${rowClass.replace(/[^a-z0-9]/gi, '_')}_wired`;
+    if (form.dataset[flagKey] === 'true') return;
+    form.dataset[flagKey] = 'true';
+
+    const container = form.querySelector(containerSelector);
+    const addBtn = form.querySelector(addBtnSelector);
+
+    // Wire each existing row
+    form.querySelectorAll(`.${rowClass}`).forEach(el => {
+        const idx = parseIntegerOrDefault(el.dataset.idx, NaN);
+        if (!Number.isFinite(idx)) return;
+        initSensorBindingHandlers(form, config?.items?.[idx] || {}, { fieldPrefix: `item-${idx}-` });
+    });
+
+    // nextIdx — max(existing data-idx) + 1. Берём из DOM, а не из config.items.length:
+    // для новых widget'ов (showWidgetConfig(null, type)) config = {}, но getConfigForm
+    // дефолтит первую row → counted from DOM iff config.items пуст.
+    let nextIdx = 0;
+    container?.querySelectorAll(`.${rowClass}`).forEach(el => {
+        const i = parseIntegerOrDefault(el.dataset.idx, NaN);
+        if (Number.isFinite(i) && i + 1 > nextIdx) nextIdx = i + 1;
+    });
+
+    addBtn?.addEventListener('click', () => {
+        const idx = nextIdx++;
+        // Pre-fill server+object из last visible row.
+        const existing = parseSensorItemList(form, { rowClass, parseExtraFields });
+        const last = existing[existing.length - 1];
+        let prefilled = { serverId: last?.serverId || '', objectName: last?.objectName || 'SharedMemory' };
+        if (!prefilled.serverId) {
+            prefilled.serverId = getFirstConnectedServerId() || '';
+        }
+        const item = { ...prefilled, sensor: '', sensorId: null, ...defaultExtras() };
+        const html = renderRow({ idx, item });
+        container.insertAdjacentHTML('beforeend', html);
+        // Wire новой row (свежий fieldPrefix `item-${idx}-` — idempotency-flag не сработает).
+        initSensorBindingHandlers(form, item, { fieldPrefix: `item-${idx}-` });
+    });
+
+    container?.addEventListener('click', (e) => {
+        const btn = e.target.closest('.remove-sensor-item');
+        if (!btn) return;
+        const row = btn.closest(`.${rowClass}`);
+        if (row && container.querySelectorAll(`.${rowClass}`).length > 1) {
+            row.remove();
+        }
+    });
+}
+
+// Pure-функция миграции legacy binding'а.
+//
+// cfg может содержать:
+//   - main sensor: { sensor, serverId?, objectName?, sensorId? }
+//   - sensor2 (feedback / dual): { sensor2, serverId2?, objectName2?, sensorId2? }
+//   - items: [{ sensor, ... }] (StatusBar/BarGraph)
+//   - zones: [{ sensors: [{ sensor, ... }] }] (Chart)
+//
+// sensorRegistry — Map<sensorKey, { id, name, ... }> где sensorKey = "${serverId}|${objectName}|${sensorName}".
+//
+// Возвращает количество заполненных полей (0 — ничего не нужно).
+function _migrateBindingPure(cfg, sensorRegistry) {
+    if (!cfg || !sensorRegistry) return 0;
+    let filled = 0;
+
+    // Найти первый match в registry по sensorName.
+    // Возвращает { serverId, objectName, sensorId } или null.
+    const lookup = (sensorName) => {
+        if (!sensorName) return null;
+        for (const [key, val] of sensorRegistry) {
+            const sepA = key.indexOf('|');
+            const sepB = key.lastIndexOf('|');
+            if (sepA < 0 || sepB <= sepA) continue;
+            const name = key.slice(sepB + 1);
+            if (name === sensorName) {
+                return {
+                    serverId:   key.slice(0, sepA),
+                    objectName: key.slice(sepA + 1, sepB),
+                    sensorId:   val?.id,
+                };
+            }
+        }
+        return null;
+    };
+
+    // Резолвит binding-блок. b — объект с потенциально неполным {serverId, objectName, sensor, sensorId}.
+    // Legacy chart configs хранят имя в b.name (см. config/dashboards/system-overview.json),
+    // современные — в b.sensor. Читаем из любого поля; пишем в b.sensor (canonical) и
+    // зеркалим в b.name (back-compat: ChartWidget runtime читает sensor.name).
+    const resolve = (b, idField = 'sensorId') => {
+        const sensorName = b?.sensor || b?.name;
+        if (!sensorName) return false;
+        if (b.serverId && b.objectName && Number.isFinite(b[idField])) return false; // already full
+        const info = lookup(sensorName);
+        if (!info) return false;
+        let touched = false;
+        if (!b.serverId)   { b.serverId = info.serverId;   touched = true; }
+        if (!b.objectName) { b.objectName = info.objectName; touched = true; }
+        if (!Number.isFinite(b[idField]) && Number.isFinite(info.sensorId)) {
+            b[idField] = info.sensorId; touched = true;
+        }
+        // Normalize: гарантируем оба поля для downstream consumers.
+        if (!b.sensor) { b.sensor = sensorName; touched = true; }
+        if (!b.name)   { b.name   = sensorName; touched = true; }
+        return touched;
+    };
+
+    if (resolve(cfg)) filled++;
+
+    // sensor2: создаём «виртуальный binding» из serverId2/objectName2/sensor2/sensorId2.
+    if (cfg.sensor2) {
+        const b2 = {
+            serverId:   cfg.serverId2,
+            objectName: cfg.objectName2,
+            sensor:     cfg.sensor2,
+            sensorId:   cfg.sensorId2,
+        };
+        if (resolve(b2)) {
+            if (b2.serverId   && !cfg.serverId2)   cfg.serverId2   = b2.serverId;
+            if (b2.objectName && !cfg.objectName2) cfg.objectName2 = b2.objectName;
+            if (Number.isFinite(b2.sensorId)) cfg.sensorId2 = b2.sensorId;
+            filled++;
+        }
+    }
+
+    if (Array.isArray(cfg.items)) cfg.items.forEach(it => { if (resolve(it)) filled++; });
+    if (Array.isArray(cfg.zones)) {
+        cfg.zones.forEach(z => (z.sensors || []).forEach(s => { if (resolve(s)) filled++; }));
+    }
+
+    return filled;
+}
+
+if (typeof globalThis !== 'undefined') {
+    globalThis.setupIONCComboAutocomplete = setupIONCComboAutocomplete;
+    globalThis.renderSensorBindingFields = renderSensorBindingFields;
+    globalThis.parseSensorBindingFields  = parseSensorBindingFields;
+    globalThis.renderLabelField          = renderLabelField;
+    globalThis.parseLabelField           = parseLabelField;
+    globalThis.renderSensorItemRow       = renderSensorItemRow;
+    globalThis.parseSensorItemList       = parseSensorItemList;
+    globalThis.sensorItemMatchesUpdate   = sensorItemMatchesUpdate;
+    globalThis.updateSensorItemsByName   = updateSensorItemsByName;
+    globalThis.getSensorNameFromBinding  = getSensorNameFromBinding;
+    globalThis.getSensorNamesFromItems   = getSensorNamesFromItems;
+    globalThis.initSensorBindingHandlers = initSensorBindingHandlers;
+    globalThis.initSensorItemListHandlers = initSensorItemListHandlers;
+    globalThis._migrateBindingPure       = _migrateBindingPure;
+    globalThis.ensureIONCRegistry = ensureIONCRegistry;
+    globalThis.getIONCEntries     = getIONCEntries;
+    globalThis.findIONCEntry      = findIONCEntry;
+    globalThis.formatIONCComboValue = formatIONCComboValue;
+}
+
+
+// === 61-dashboard-active-base.js ===
+// ============================================================================
+// ActiveDashboardWidget — базовый класс для активных (write-capable) виджетов.
+//
+// Базовый класс предоставляет:
+//   - writeValue(value): запись через controlledFetch на /api/objects/.../ionc/set
+//   - writeState: 'idle' | 'pending' | 'success' | 'error' (с auto-revert/timeout)
+//   - commandValue / feedbackValue: раздельные «команда vs обратная связь» (SCADA)
+//   - isInteractive(): false в edit mode и без controlToken
+//   - _updateInteractivityClass(): реактивный active-disabled
+//   - _recomputeTitle(): единое управление tooltip'ом (приоритет: error > blocked > пусто)
+//   - needsConfirmation(): читает config.requireConfirmation
+//   - static getConfigForm: рендерит objectName select + sensor input + hidden sensorId +
+//     style select (если styles.length > 1) + label + requireConfirmation
+//   - static parseConfigForm: парсит base поля + spread parseActiveConfigFields()
+//   - static initConfigHandlers: загружает IONC dropdown + setupSensorAutocomplete
+//
+// Subclass contract (минимальный active widget):
+//   - render() — построить DOM, навесить interaction handlers
+//   - renderCommand() — отразить commandValue + writeState в DOM
+//   - renderFeedback() — отразить feedbackValue + error в DOM
+//
+// Опциональные override:
+//   - static getActiveConfigFields(config) — дополнительные поля формы
+//   - static parseActiveConfigFields(form) — парсинг этих полей (return {} merge'ится)
+//   - static styles + static defaultStyle — несколько визуальных стилей; base.getConfigForm
+//     автоматически рендерит style select когда styles.length > 1
+//   - _confirm(value) — заменить window.confirm на красивый dialog
+//
+// НЕ переопределять (наследуется и достаточно):
+//   - getConfigForm, parseConfigForm, initConfigHandlers, writeValue, _doWrite,
+//     usesNewSensorAutocomplete, _setWriteState, _recomputeTitle, _updateInteractivityClass.
+//
+// Persisted base config поля: serverId, sensor, sensorId, objectName, label,
+// requireConfirmation, style. Subclass добавляет свои через
+// parseActiveConfigFields/getActiveConfigFields — НЕ перекрывай serverId
+// и не возвращай его из parseActiveConfigFields.
+//
+// Конкретные виджеты реализуются в файлах 61-dashboard-active-*.js и регистрируются
+// в WIDGET_TYPES (62-dashboard-manager.js).
+// ============================================================================
+
+class ActiveDashboardWidget extends DashboardWidget {
+    static type = 'active-base';
+    static displayName = 'Active Widget (base)';
+    static description = 'Base class for write-capable widgets';
+    // Active widgets всегда используют setupSensorAutocomplete (41-sensor-autocomplete.js).
+    // dashboard-manager skip'ает legacy in-memory sensor autocomplete для widget'ов
+    // c этим флагом. См. 62-dashboard-manager.js setupConfigDialog.
+    static usesNewSensorAutocomplete = true;
+    // Subclasses с несколькими стилями (toggle: ['slider','checkbox']) задают список;
+    // base getConfigForm рендерит style select когда length > 1.
+    static styles = [];
+    static defaultStyle = '';
+
+    constructor(id, config, container) {
+        super(id, config, container);
+        this.commandValue = null;
+        this.feedbackValue = null;
+        this.feedbackMeta = null;  // { frozen, blocked } — статусные флаги датчика
+        this.writeState = 'idle';
+        this._writeStateTimer = null;
+        this._pendingTimeoutTimer = null;
+
+        // Reactive interactivity: refresh active-disabled класс when edit mode
+        // or controlToken state changes.
+        this._interactivityListener = () => this._updateInteractivityClass();
+        document.addEventListener('dashboardEditModeChanged', this._interactivityListener);
+        document.addEventListener('controlStatusChanged', this._interactivityListener);
+    }
+
+    // ===== SSE feedback =====
+    // meta — { frozen, blocked }. Subclass'ы которые игнорируют value (PushButton,
+    // Generator) ВСЁ РАВНО должны обработать meta — frozen блокирует запись.
+    // Используют _applyFeedbackMeta() без последующего renderFeedback().
+    update(value, error = null, meta = null) {
+        this.feedbackValue = value;
+        this.value = value;
+        this.error = error;
+        this._applyFeedbackMeta(meta);
+        this.renderFeedback();
+    }
+
+    // Сохранить meta и реактивно обновить interactivity если frozen-flag менялся.
+    // Subclass'ы зовут это из своих override'ов update() (см. PushButton/Generator).
+    _applyFeedbackMeta(meta) {
+        const wasFrozen = this.isFrozen();
+        this.feedbackMeta = meta || null;
+        if (wasFrozen !== this.isFrozen()) {
+            this._updateInteractivityClass();
+        }
+    }
+
+    isFrozen() {
+        return !!this.feedbackMeta?.frozen;
+    }
+
+    // ===== Write =====
+    // Orchestrator: проверяет UI guards (interactive + confirmation), затем
+    // делегирует actual fetch в _doWrite().
+    async writeValue(value) {
+        if (!this.isInteractive()) return false;
+        if (this.needsConfirmation() && !await this._confirm(value)) return false;
+        return await this._doWrite(value);
+    }
+
+    // Actual fetch + writeState handling. БЕЗ interactive/confirm guards.
+    // Используется напрямую активными widget'ами для release/OFF path,
+    // где critical чтобы second POST дошёл даже если controlToken был
+    // отозван между ON и OFF (push-button release, pulse trailing edge).
+    // Валидирует только sensorId/serverId/objectName.
+    async _doWrite(value) {
+        this.commandValue = value;
+        this._setWriteState('pending');
+        const result = await this._postIoncSet(value);
+        if (result.ok) {
+            this._setWriteState('success');
+            return true;
+        }
+        this._setWriteState('error', result.error);
+        return false;
+    }
+
+    // Silent write — POST на ionc/set без _setWriteState/commandValue логики.
+    // Используется генератором (per-tick) и подобными fire-and-forget сценариями,
+    // где визуальный pending/success flash не нужен (или мешает). Caller сам
+    // решает что делать с результатом (`{ ok, error }`).
+    // Все sensorId/serverId/objectName проверки — те же, что в _doWrite.
+    async _doWriteSilent(value) {
+        return this._postIoncSet(value);
+    }
+
+    // Internal: чистый POST + validation (без UI side effects).
+    // Возвращает `{ ok: true }` или `{ ok: false, error: string }`.
+    async _postIoncSet(value) {
+        // sensorId — числовой ID, должен быть резолвлен заранее (autocomplete сохраняет
+        // его в config). config.sensor (имя) — fallback для smoke TestActiveWidget'а.
+        const sensorId = this.config?.sensorId ?? this.config?.sensor;
+        if (sensorId === undefined || sensorId === null || sensorId === '') {
+            return { ok: false, error: 'Sensor not configured' };
+        }
+
+        const serverId = this.config?.serverId ?? this._resolveServerId();
+        if (!serverId) {
+            return { ok: false, error: 'No server configured' };
+        }
+        // Warn один раз на widget lifetime — legacy widget'ы могут писать N раз/сек
+        // (generator) или сериями (push-button pulse), spam в console не нужен.
+        if (!this.config?.serverId && !this._serverIdFallbackWarned) {
+            this._serverIdFallbackWarned = true;
+            console.warn(`Active widget ${this.id || '<unknown>'}: serverId missing in config, using fallback ${serverId} — config will be migrated on next dashboard load`);
+        }
+
+        const objectName = this.config?.objectName || 'SharedMemory';
+        const url = `/api/objects/${encodeURIComponent(objectName)}/ionc/set?server=${encodeURIComponent(serverId)}`;
+        try {
+            const resp = await controlledFetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sensor_id: sensorId, value })
+            });
+            if (!resp.ok) {
+                const data = await resp.json().catch(() => ({}));
+                return { ok: false, error: data.error || `HTTP ${resp.status}` };
+            }
+            return { ok: true };
+        } catch (e) {
+            return { ok: false, error: e.message };
+        }
+    }
+
+    // ===== State helpers =====
+    _setWriteState(state, message = '') {
+        this.writeState = state;
+        this._lastWriteMessage = message;
+
+        // Обновить CSS-классы контейнера виджета
+        const root = this.container;
+        if (root) {
+            root.classList.remove('active-pending', 'active-success', 'active-error');
+            if (state !== 'idle') {
+                root.classList.add(`active-${state}`);
+            }
+            this._recomputeTitle();
+        }
+
+        // Очистить предыдущие таймеры
+        clearTimeout(this._writeStateTimer);
+        clearTimeout(this._pendingTimeoutTimer);
+        this._writeStateTimer = null;
+        this._pendingTimeoutTimer = null;
+
+        if (state === 'pending') {
+            // Защитный таймаут — если сервер молчит, переводим в error.
+            this._pendingTimeoutTimer = setTimeout(() => {
+                if (this.writeState === 'pending') {
+                    this._setWriteState('error', 'Write timed out');
+                }
+            }, WRITE_PENDING_TIMEOUT_MS);
+        } else if (state === 'success') {
+            // Через WRITE_SUCCESS_DISPLAY_MS возвращаемся в idle.
+            this._writeStateTimer = setTimeout(() => {
+                if (this.writeState === 'success') {
+                    this._setWriteState('idle');
+                }
+            }, WRITE_SUCCESS_DISPLAY_MS);
+        }
+
+        // command может зависеть от state (например opacity).
+        // Guard: _setWriteState может вызываться до render() (writeValue может фейлиться синхронно).
+        if (this.element) this.renderCommand();
+    }
+
+    // ===== Edit-mode / control / frozen gating =====
+    // Любой "не могу писать" → false. Источник конкретной причины — это уже
+    // _recomputeTitle() и data-* атрибуты в _updateInteractivityClass().
+    isInteractive() {
+        if (typeof dashboardState !== 'undefined' && dashboardState.editMode) return false;
+        if (typeof canControl === 'function' && !canControl()) return false;
+        if (this.isFrozen()) return false;
+        return true;
+    }
+
+    // Единая точка владения title. Приоритет:
+    //   1. write error message (пока активен writeState='error')
+    //   2. sensor frozen → 'Sensor is frozen — unfreeze to control'
+    //   3. control-blocked / edit-mode → 'Take control to interact'
+    //   4. пусто
+    // Вызывается из _setWriteState и _updateInteractivityClass — так разные
+    // источники не затирают друг друга и пользователь видит самое релевантное.
+    _recomputeTitle() {
+        const root = this.container;
+        if (!root) return;
+        if (this.writeState === 'error' && this._lastWriteMessage) {
+            root.title = this._lastWriteMessage;
+            return;
+        }
+        if (this.isFrozen()) {
+            root.title = 'Sensor is frozen — unfreeze to control';
+            return;
+        }
+        if (!this.isInteractive()) {
+            root.title = 'Take control to interact';
+            return;
+        }
+        root.removeAttribute('title');
+    }
+
+    // Toggles 'active-disabled' class и data-* attrs:
+    //   - data-control-blocked="true" — edit mode / no controlToken (нейтральный grey)
+    //   - data-frozen="true"          — sensor latched (icy/cyan + ❄ marker, см. CSS)
+    // Раздельные attrs позволяют CSS показать причину разным цветом — оператору
+    // видно «нет прав» vs «датчик заморожен». Native disabled гарантирует что
+    // <input type=range>/<input type=text> не drag'аются клавиатурой.
+    _updateInteractivityClass() {
+        const root = this.container;
+        if (!root) return;
+        const interactive = this.isInteractive();
+        const frozen = this.isFrozen();
+        root.classList.toggle('active-disabled', !interactive);
+        // data-frozen ставится независимо от других причин блокировки —
+        // оператор должен видеть ❄ даже если ещё и controlToken отозван.
+        if (frozen) {
+            root.dataset.frozen = 'true';
+        } else {
+            delete root.dataset.frozen;
+        }
+        // data-control-blocked — только когда заблокирован НЕ из-за frozen
+        // (иначе frozen marker и грей-control marker наслаиваются и сбивают).
+        if (!interactive && !frozen) {
+            root.dataset.controlBlocked = 'true';
+        } else {
+            delete root.dataset.controlBlocked;
+        }
+        if (this.element) {
+            const formEls = this.element.querySelectorAll('input, select, button, textarea');
+            for (const el of formEls) {
+                el.disabled = !interactive;
+            }
+        }
+        this._recomputeTitle();
+    }
+
+    needsConfirmation() {
+        return !!this.config?.requireConfirmation;
+    }
+
+    async _confirm(value) {
+        // Простой confirm — конкретные виджеты могут override на красивый dialog.
+        return window.confirm(`Set ${this.config?.sensor || 'sensor'} = ${value}?`);
+    }
+
+    _resolveServerId() {
+        // Берём первый подключённый сервер (как делает dashboard для чтения).
+        return getFirstConnectedServerId();
+    }
+
+    // ===== Render hooks (override в наследниках) =====
+    renderCommand() {
+        // Override: показать commandValue в DOM.
+    }
+
+    renderFeedback() {
+        // Override: показать feedbackValue в DOM.
+    }
+
+    // ===== Config form extension =====
+    static getConfigForm(config = {}) {
+        const styleSelect = (this.styles && this.styles.length > 1)
+            ? `
+            <div class="widget-config-field">
+                <label>Style</label>
+                <select class="widget-input" name="style" data-test="cfg-style">
+                    ${this.styles.map(s => `<option value="${escapeAttr(s)}" ${(config.style || this.defaultStyle) === s ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
+                </select>
+            </div>
+            `
+            : '';
+
+        return `
+            ${renderSensorBindingFields(config, { fieldPrefix: '' })}
+            ${styleSelect}
+            <div class="widget-config-field">
+                <label>Label (optional)</label>
+                <input type="text" class="widget-input" name="label"
+                       value="${escapeAttr(config.label || '')}" placeholder="Leave empty to hide header">
+            </div>
+            <div class="widget-config-field">
+                <label class="widget-checkbox-label">
+                    <input type="checkbox" name="requireConfirmation"
+                           ${config.requireConfirmation ? 'checked' : ''}>
+                    <span>Require confirmation before write</span>
+                </label>
+            </div>
+        ` + (this.getActiveConfigFields ? this.getActiveConfigFields(config) : '');
+    }
+
+    static getActiveConfigFields(config = {}) {
+        // Override: дополнительные поля специфичные для виджета.
+        return '';
+    }
+
+    static parseConfigForm(form) {
+        const binding = parseSensorBindingFields(form, { fieldPrefix: '' });
+        const base = {
+            ...binding,
+            label:      form.querySelector('[name="label"]')?.value || '',
+            requireConfirmation: form.querySelector('[name="requireConfirmation"]')?.checked || false,
+        };
+        const styleEl = form.querySelector('[name="style"]');
+        if (styleEl) base.style = styleEl.value;
+        const extra = this.parseActiveConfigFields ? this.parseActiveConfigFields(form) : {};
+        return { ...base, ...extra };
+    }
+
+    // IMPORTANT для subclass'ов: если переопределяешь — ОБЯЗАТЕЛЬНО вызывай
+    // super.initConfigHandlers(form, config) ровно ОДИН РАЗ. Двойной вызов
+    // навесит дублирующие listeners на sensor input и change на objectSelect.
+    // Idempotency guard ниже защищает от случайного повторного вызова.
+    static initConfigHandlers(form, config = {}) {
+        if (form.dataset.activeHandlersWired === 'true') return;
+        form.dataset.activeHandlersWired = 'true';
+        initSensorBindingHandlers(form, config, { fieldPrefix: '' });
+    }
+
+    static parseActiveConfigFields(form) {
+        // Override: разобрать поля из getActiveConfigFields().
+        return {};
+    }
+
+    destroy() {
+        clearTimeout(this._writeStateTimer);
+        clearTimeout(this._pendingTimeoutTimer);
+        document.removeEventListener('dashboardEditModeChanged', this._interactivityListener);
+        document.removeEventListener('controlStatusChanged', this._interactivityListener);
+        super.destroy();
+    }
+}
+
+window.ActiveDashboardWidget = ActiveDashboardWidget;
+
+
+// === 61-dashboard-active-button.js ===
+// ============================================================================
+// PushButtonWidget — write-only momentary/pulse кнопка для команд.
+//
+// Семантика отличается от toggle: нет двух-состоянного латча, нет feedback
+// отображения (push-button — fire-and-forget команда). update() override
+// в no-op (feedback игнорируется).
+//
+// Config:
+//   sensor      — имя датчика (от base)
+//   sensorId    — числовой ID (от base)
+//   objectName  — IONC object (default 'SharedMemory', от base)
+//   label       — подпись на кнопке (default = sensor name)
+//   valueOn     — числовое значение «нажато» (default 1)
+//   valueOff    — числовое значение «отпущено» (default 0)
+//   mode        — 'pulse' (default) | 'momentary'
+//   pulseWidth  — ms, длительность импульса для pulse режима (default PUSHBUTTON_DEFAULT_PULSE_WIDTH_MS)
+//   style       — 'flat' (default) | 'mushroom' | 'pill'
+//   requireConfirmation — bool (от base; в momentary НЕ работает, warning в форме)
+// ============================================================================
+
+class PushButtonWidget extends ActiveDashboardWidget {
+    static type = 'pushbutton';
+    static displayName = 'Push Button';
+    static description = 'Momentary/pulse command button (write-only)';
+    static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>';
+    static styles = ['flat', 'mushroom', 'pill'];
+    static defaultStyle = 'flat';
+    // Default — для flat (наиболее частый стиль). 2×1 был тесен: текст
+    // вроде «STOP/EMERGENCY» налезал на края, оператору неудобно. 3×2 даёт
+    // запас под надпись и читается как полноценная command button.
+    static defaultSize = { width: 3, height: 2 };
+    static minSize = { width: 2, height: 1 };
+    static maxSize = { width: 6, height: 3 };
+
+    constructor(id, config, container) {
+        super(id, config, container);
+        this._destroyed = false;
+    }
+
+    // Style-aware default size — dashboard-manager.createWidget использует
+    // этот helper при размещении нового виджета (если style уже выбран
+    // в config), иначе fallback на static defaultSize.
+    static getDefaultSizeForStyle(style) {
+        if (style === 'mushroom') return { width: 3, height: 3 };
+        if (style === 'pill')     return { width: 3, height: 1 };
+        return { width: 3, height: 2 }; // flat
+    }
+
+    // === SSE feedback override — игнорируем value, но meta обрабатываем ===
+    // Push-button fire-and-forget: feedback value пролетает за миллисекунды и
+    // не несёт смысла оператору, потому renderFeedback() пуст. Но meta.frozen
+    // должен блокировать клик — иначе аварийная команда (STOP/RESET) уйдёт
+    // на frozen sensor silent no-op'ом и оператор не узнает что не сработало.
+    update(value, error = null, meta = null) {
+        this.feedbackValue = value;
+        this.value = value;
+        this.error = error;
+        this._applyFeedbackMeta(meta);
+        // НЕ вызываем renderFeedback — UI остаётся неподвижным.
+    }
+
+    _currentStyle() {
+        return this.config?.style || PushButtonWidget.defaultStyle;
+    }
+
+    _currentMode() {
+        return this.config?.mode || 'pulse';
+    }
+
+    // === Render ===
+    render() {
+        const style = this._currentStyle();
+        const label = this.config?.label || this.config?.sensor || 'BUTTON';
+
+        this.element = document.createElement('div');
+        this.element.className = `widget-content pushbutton-widget pushbutton-style-${style}`;
+        this.element.innerHTML = `<button class="pb-btn" data-test="btn">${escapeHtml(label)}</button>`;
+        this.container.appendChild(this.element);
+
+        const btn = this.element.querySelector('[data-test="btn"]');
+        if (this._currentMode() === 'momentary') {
+            this._bindMomentary(btn);
+        } else {
+            btn.addEventListener('click', () => this._onPulseClick());
+        }
+    }
+
+    // === Pulse mode handler ===
+    async _onPulseClick() {
+        if (!this.isInteractive()) return;
+        const valueOn = this.config?.valueOn ?? 1;
+        const valueOff = this.config?.valueOff ?? 0;
+        const pulseWidth = this.config?.pulseWidth ?? PUSHBUTTON_DEFAULT_PULSE_WIDTH_MS;
+
+        // Visual flash независимо от pulseWidth — это UI feedback.
+        // Timer хранится на instance чтобы destroy() мог его отменить и не
+        // снимать класс с уже удалённого DOM-узла.
+        const btn = this.element?.querySelector('[data-test="btn"]');
+        if (btn) {
+            btn.classList.add('pulsing');
+            clearTimeout(this._pulseFlashTimer);
+            this._pulseFlashTimer = setTimeout(() => {
+                this._pulseFlashTimer = null;
+                btn?.classList.remove('pulsing');
+            }, PUSHBUTTON_FLASH_MS);
+        }
+
+        // POST valueOn → wait pulseWidth → POST valueOff. Таймер стартует
+        // после успешной ON-записи, иначе медленный backend/confirm съедает
+        // всю ширину импульса и OFF уходит сразу после ON.
+        // Второй POST через _writeValueRaw чтобы не дублировать confirm dialog.
+        // Trailing timer тоже на instance — destroy() отменяет его, чтобы не
+        // дёргать _writeValueRaw на удалённом widget'е (safety OFF при destroy
+        // оставляем ответственностью владельца, не побочным эффектом).
+        const wroteOn = await this.writeValue(valueOn);
+        if (!wroteOn || this._destroyed) return;
+        clearTimeout(this._pulseTrailTimer);
+        this._pulseTrailTimer = setTimeout(() => {
+            this._pulseTrailTimer = null;
+            this._writeValueRaw(valueOff);
+        }, pulseWidth);
+    }
+
+    destroy() {
+        this._destroyed = true;
+        clearTimeout(this._pulseFlashTimer);
+        clearTimeout(this._pulseTrailTimer);
+        this._pulseFlashTimer = null;
+        this._pulseTrailTimer = null;
+        super.destroy();
+    }
+
+    // === Momentary mode handler ===
+    _bindMomentary(btn) {
+        const valueOn = this.config?.valueOn ?? 1;
+        const valueOff = this.config?.valueOff ?? 0;
+
+        const onDown = (e) => {
+            if (!this.isInteractive()) return;
+            e.preventDefault();
+            btn.classList.add('pressed');
+            this.writeValue(valueOn);
+            // Window-level listeners — гарантия release даже если мышь ушла за пределы кнопки.
+            const onUp = () => {
+                btn.classList.remove('pressed');
+                this._writeValueRaw(valueOff);
+                window.removeEventListener('mouseup', onUp);
+                window.removeEventListener('touchend', onUp);
+            };
+            window.addEventListener('mouseup', onUp);
+            window.addEventListener('touchend', onUp);
+        };
+        btn.addEventListener('mousedown', onDown);
+        btn.addEventListener('touchstart', onDown);
+    }
+
+    // Release/OFF path для pulse trailing edge и momentary mouseup.
+    // Вызывает _doWrite напрямую — пропускает isInteractive() и confirm.
+    // Это критично: между нажатием (ON отправлен) и release пользователь мог
+    // отдать controlToken, выйти из edit-mode и т.п. Если бы мы прошли через
+    // writeValue() с её guard'ами, OFF не отправился бы → actuator завис в ON.
+    // Server validation (sensorId/serverId/objectName) сохраняется внутри _doWrite.
+    async _writeValueRaw(value) {
+        return await this._doWrite(value);
+    }
+
+    // Push-button doesn't visualize commandValue or feedbackValue — overrides пустые.
+    renderCommand() { /* no-op */ }
+    renderFeedback() { /* no-op */ }
+
+    // === Config form ===
+    static getActiveConfigFields(config = {}) {
+        const mode = config.mode || 'pulse';
+        return `
+            <div class="widget-config-row">
+                <div class="widget-config-field">
+                    <label>Mode</label>
+                    <select class="widget-input" name="mode" data-test="cfg-mode">
+                        <option value="pulse" ${mode === 'pulse' ? 'selected' : ''}>pulse</option>
+                        <option value="momentary" ${mode === 'momentary' ? 'selected' : ''}>momentary</option>
+                    </select>
+                </div>
+                <div class="widget-config-field" data-pulse-only style="display:${mode === 'pulse' ? '' : 'none'}">
+                    <label>Pulse width (ms)</label>
+                    <input type="number" class="widget-input" name="pulseWidth"
+                           value="${config.pulseWidth ?? PUSHBUTTON_DEFAULT_PULSE_WIDTH_MS}" min="${PUSHBUTTON_MIN_PULSE_WIDTH_MS}" data-test="cfg-pulseWidth">
+                </div>
+            </div>
+            <div class="widget-config-row">
+                <div class="widget-config-field">
+                    <label>valueOff</label>
+                    <input type="number" class="widget-input" name="valueOff"
+                           value="${config.valueOff ?? 0}" data-test="cfg-valueOff">
+                </div>
+                <div class="widget-config-field">
+                    <label>valueOn</label>
+                    <input type="number" class="widget-input" name="valueOn"
+                           value="${config.valueOn ?? 1}" data-test="cfg-valueOn">
+                </div>
+            </div>
+            <div class="widget-config-field" data-momentary-warning style="display:${mode === 'momentary' ? '' : 'none'}">
+                <small style="color:#f59e0b">⚠ В momentary режиме confirm применяется только к ON; release/OFF уйдёт без повторного диалога.</small>
+            </div>
+        `;
+    }
+
+    static initConfigHandlers(form, config = {}) {
+        super.initConfigHandlers(form, config);
+        // Дополнительно: при смене mode показывать/скрывать pulseWidth field
+        // (relevant только для pulse) + momentary warning.
+        const modeSel = form.querySelector('[name="mode"]');
+        const warning = form.querySelector('[data-momentary-warning]');
+        const pulseField = form.querySelector('[data-pulse-only]');
+        if (!modeSel) return;
+        const update = () => {
+            const isMomentary = modeSel.value === 'momentary';
+            if (warning)    warning.style.display    = isMomentary ? '' : 'none';
+            if (pulseField) pulseField.style.display = isMomentary ? 'none' : '';
+        };
+        modeSel.addEventListener('change', update);
+        update();
+    }
+
+    static parseActiveConfigFields(form) {
+        const pulseRaw = parseInt(form.querySelector('[name="pulseWidth"]')?.value, 10);
+        // pulseWidth: clamp к [PUSHBUTTON_MIN_PULSE_WIDTH_MS, ∞) — html min это hint, не enforcement.
+        // Number.isFinite check вместо `|| default` — иначе pulseWidth=0 неправильно
+        // парсится как default (falsy-zero).
+        const pulseWidth = Number.isFinite(pulseRaw)
+            ? Math.max(PUSHBUTTON_MIN_PULSE_WIDTH_MS, pulseRaw)
+            : PUSHBUTTON_DEFAULT_PULSE_WIDTH_MS;
+        return {
+            mode:       form.querySelector('[name="mode"]')?.value || 'pulse',
+            pulseWidth,
+            valueOff:   Number(form.querySelector('[name="valueOff"]')?.value ?? 0),
+            valueOn:    Number(form.querySelector('[name="valueOn"]')?.value ?? 1),
+        };
+    }
+}
+
+window.PushButtonWidget = PushButtonWidget;
+
+
+// === 61-dashboard-active-generator.js ===
+// ============================================================================
+// GeneratorWidget — обёртка вокруг SignalGenerator engine для dashboard.
+//
+// Запускает математический генератор (square/sin/cos/linear/random),
+// каждый тик пишет в датчик через _doWriteSilent (fire-and-forget). Параметры
+// настраиваются только через config dialog, на widget'е — Start/Stop toggle
+// + текущее значение.
+//
+// Один стиль 'compact' (default 3×1). Сетpoint feedback игнорируется
+// (update() no-op, как PushButton) — UI показывает что генератор послал.
+//
+// Config:
+//   sensor      — имя датчика (от base)
+//   sensorId    — числовой ID (от base)
+//   objectName  — IONC object (default 'SharedMemory', от base)
+//   label       — подпись виджета (default = имя датчика)
+//   requireConfirmation — bool, спрашивать ли confirm при Start (от base)
+//   type        — 'square' (default) | 'sin' | 'cos' | 'linear' | 'random'
+//   min, max    — диапазон значений
+//   step        — для linear/sin/cos (число точек на полуцикл)
+//   pause       — для linear/sin/cos/square (ms между шагами)
+//   pulseWidth  — для square (ms ширина импульса)
+//   period      — для random (ms между генерациями)
+// ============================================================================
+
+class GeneratorWidget extends ActiveDashboardWidget {
+    static type = 'generator';
+    static displayName = 'Signal Generator';
+    static description = 'Writes generated signal (square/sin/cos/linear/random) to a sensor';
+    static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12 L6 12 L6 4 L10 4 L10 20 L14 20 L14 4 L18 4 L18 12 L22 12"/></svg>';
+    static defaultSize = { width: 3, height: 1 };
+    static minSize = { width: 2, height: 1 };
+    static maxSize = { width: 6, height: 2 };
+    // Один стиль — base.getConfigForm НЕ рендерит style select когда styles.length <= 1.
+    static styles = [];
+    static defaultStyle = '';
+
+    constructor(id, config, container) {
+        super(id, config, container);
+        this._signalGen = null;
+    }
+
+    // === Render ===
+    render() {
+        // Label опционален: пустой → header не рисуется. Fallback на sensor name
+        // удалён намеренно (см. комментарий в ToggleWidget.renderSlider).
+        const label = this.config?.label || '';
+        const labelHtml = label
+            ? `<div class="gen-label" data-test="label">${escapeHtml(label)}</div>`
+            : '';
+        this.element = document.createElement('div');
+        this.element.className = 'widget-content generator-widget';
+        this.element.innerHTML = `
+            ${labelHtml}
+            <div class="gen-value" data-test="value">--</div>
+            <div class="gen-toggle" data-test="toggle" role="switch" aria-checked="false">
+                <div class="gen-handle"></div>
+            </div>
+        `;
+        this.container.appendChild(this.element);
+
+        const toggle = this.element.querySelector('[data-test="toggle"]');
+        toggle.addEventListener('click', (e) => { e.stopPropagation(); this._onToggle(); });
+        // mousedown.preventDefault — toggle не должен забирать фокус на click
+        toggle.addEventListener('mousedown', (e) => e.preventDefault());
+    }
+
+    // === SSE feedback override — игнорируем value, но meta обрабатываем ===
+    // UI показывает значение от генератора (через _updateValueDisplay), а не
+    // от датчика — потому feedback value игнорируем. Но meta.frozen → автостоп
+    // (через _updateInteractivityClass override ниже): нет смысла гнать тики
+    // в frozen-датчик, на backend они станут silent no-op'ом.
+    update(value, error = null, meta = null) {
+        this.feedbackValue = value;
+        this.value = value;
+        this.error = error;
+        this._applyFeedbackMeta(meta);
+    }
+
+    // === Toggle handler ===
+    async _onToggle() {
+        if (!this.isInteractive()) return;
+        if (this._isRunning()) {
+            this._stop();
+        } else {
+            if (this.needsConfirmation() && !await this._confirm(this.config?.sensor || 'sensor')) return;
+            this._start();
+        }
+    }
+
+    async _confirm(sensorName) {
+        return window.confirm(`Start generator on "${sensorName}"? It will write each tick.`);
+    }
+
+    // === Start/Stop ===
+    _start() {
+        // S-3: guard against double-start (rapid double-toggle leak).
+        if (this._signalGen) return;
+        this._signalGen = new SignalGenerator({
+            type: this.config?.type || 'square',
+            min: this.config?.min ?? GENERATOR_DEFAULT_MIN,
+            max: this.config?.max ?? GENERATOR_DEFAULT_MAX,
+            step: this.config?.step,
+            pause: this.config?.pause,
+            pulseWidth: this.config?.pulseWidth,
+            period: this.config?.period,
+            onTick: (value) => this._onTick(value),
+        });
+        this._signalGen.start();
+        this._updateRunningUI(true);
+    }
+
+    _stop() {
+        if (this._signalGen) {
+            this._signalGen.stop();
+            this._signalGen = null;
+        }
+        this._updateValueDisplay(null);
+        this._updateRunningUI(false);
+    }
+
+    _isRunning() {
+        return !!this._signalGen?.isRunning();
+    }
+
+    async _onTick(value) {
+        this._updateValueDisplay(value);
+        // Fire-and-forget: per-tick без UI flash. На ошибке — стоп с error state.
+        // Validation (sensorId/serverId/objectName) происходит внутри _doWriteSilent.
+        const result = await this._doWriteSilent(value);
+        if (!result.ok) {
+            console.warn('Generator write failed:', result.error);
+            this._stop();
+            this._setWriteState('error', result.error);
+        }
+    }
+
+    // === UI update helpers ===
+    _updateValueDisplay(value) {
+        if (!this.element) return;
+        const valueEl = this.element.querySelector('[data-test="value"]');
+        if (valueEl) {
+            valueEl.textContent = (value !== null && value !== undefined) ? String(value) : '--';
+            valueEl.classList.toggle('running', value !== null && value !== undefined);
+        }
+    }
+
+    _updateRunningUI(isRunning) {
+        if (!this.element) return;
+        const toggle = this.element.querySelector('[data-test="toggle"]');
+        if (toggle) {
+            toggle.classList.toggle('running', isRunning);
+            toggle.setAttribute('aria-checked', isRunning ? 'true' : 'false');
+        }
+    }
+
+    // === ControlToken released во время работы → стоп ===
+    _updateInteractivityClass() {
+        super._updateInteractivityClass();
+        if (this._isRunning() && !this.isInteractive()) {
+            this._stop();
+        }
+    }
+
+    // === Render hooks (не используются для Generator) ===
+    renderFeedback() { /* no-op */ }
+    renderCommand() { /* no-op */ }
+
+    // === Cleanup ===
+    destroy() {
+        this._stop();
+        super.destroy();
+    }
+
+    // === Config form ===
+    static getActiveConfigFields(config = {}) {
+        const type = config.type || 'square';
+        const showLinSinCos = (type === 'linear' || type === 'sin' || type === 'cos');
+        const showSquare = (type === 'square');
+        const showRandom = (type === 'random');
+
+        return `
+            <div class="widget-config-row">
+                <div class="widget-config-field">
+                    <label>Type</label>
+                    <select class="widget-input" name="type" data-test="cfg-type">
+                        <option value="square" ${type==='square'?'selected':''}>square</option>
+                        <option value="sin"    ${type==='sin'?'selected':''}>sin</option>
+                        <option value="cos"    ${type==='cos'?'selected':''}>cos</option>
+                        <option value="linear" ${type==='linear'?'selected':''}>linear</option>
+                        <option value="random" ${type==='random'?'selected':''}>random</option>
+                    </select>
+                </div>
+            </div>
+            <div class="widget-config-row">
+                <div class="widget-config-field">
+                    <label>min</label>
+                    <input type="number" class="widget-input" name="min" value="${config.min ?? GENERATOR_DEFAULT_MIN}" data-test="cfg-min">
+                </div>
+                <div class="widget-config-field">
+                    <label>max</label>
+                    <input type="number" class="widget-input" name="max" value="${config.max ?? GENERATOR_DEFAULT_MAX}" data-test="cfg-max">
+                </div>
+            </div>
+            <div class="widget-config-row gen-cfg-lin-sin-cos" data-test="cfg-row-step-pause" style="display:${showLinSinCos?'flex':'none'}">
+                <div class="widget-config-field">
+                    <label>step</label>
+                    <input type="number" class="widget-input" name="step" value="${config.step ?? GENERATOR_DEFAULT_STEP}" data-test="cfg-step">
+                </div>
+                <div class="widget-config-field">
+                    <label>pause (ms)</label>
+                    <input type="number" class="widget-input" name="pause" value="${config.pause ?? GENERATOR_DEFAULT_PAUSE_MS}" min="${GENERATOR_MIN_PAUSE_MS}" data-test="cfg-pause">
+                </div>
+            </div>
+            <div class="widget-config-row gen-cfg-square" data-test="cfg-row-square" style="display:${showSquare?'flex':'none'}">
+                <div class="widget-config-field">
+                    <label>pulseWidth (ms)</label>
+                    <input type="number" class="widget-input" name="pulseWidth" value="${config.pulseWidth ?? GENERATOR_DEFAULT_PULSE_WIDTH_MS}" min="${GENERATOR_MIN_PULSE_WIDTH_MS}" data-test="cfg-pulseWidth">
+                </div>
+                <div class="widget-config-field">
+                    <label>pause (ms)</label>
+                    <input type="number" class="widget-input" name="pause-square" value="${config.pause ?? GENERATOR_DEFAULT_SQUARE_PAUSE_MS}" min="${GENERATOR_MIN_PAUSE_MS}" data-test="cfg-pause-square">
+                </div>
+            </div>
+            <div class="widget-config-row gen-cfg-random" data-test="cfg-row-random" style="display:${showRandom?'flex':'none'}">
+                <div class="widget-config-field">
+                    <label>period (ms)</label>
+                    <input type="number" class="widget-input" name="period" value="${config.period ?? GENERATOR_DEFAULT_PERIOD_MS}" min="${GENERATOR_MIN_PERIOD_MS}" data-test="cfg-period">
+                </div>
+            </div>
+        `;
+    }
+
+    // initConfigHandlers ОВЕРРАЙДИМ для conditional полей по type.
+    // ОБЯЗАТЕЛЬНО зовём super.initConfigHandlers (для autocomplete + IONC dropdown).
+    static initConfigHandlers(form, config = {}) {
+        super.initConfigHandlers(form, config);
+        // Idempotency для нашего type listener'а
+        if (form.dataset.genHandlersWired === 'true') return;
+        form.dataset.genHandlersWired = 'true';
+
+        const typeSelect = form.querySelector('[name="type"]');
+        const rowLinSinCos = form.querySelector('[data-test="cfg-row-step-pause"]');
+        const rowSquare    = form.querySelector('[data-test="cfg-row-square"]');
+        const rowRandom    = form.querySelector('[data-test="cfg-row-random"]');
+        if (!typeSelect) return;
+
+        const updateConditional = () => {
+            const t = typeSelect.value;
+            if (rowLinSinCos) rowLinSinCos.style.display = (t === 'linear' || t === 'sin' || t === 'cos') ? 'flex' : 'none';
+            if (rowSquare)    rowSquare.style.display    = (t === 'square') ? 'flex' : 'none';
+            if (rowRandom)    rowRandom.style.display    = (t === 'random') ? 'flex' : 'none';
+        };
+        typeSelect.addEventListener('change', updateConditional);
+        // Не вызываем сразу — initial display уже установлен через template style attr.
+    }
+
+    static parseActiveConfigFields(form) {
+        const type = form.querySelector('[name="type"]')?.value || 'square';
+        return normalizeSignalGeneratorConfig({
+            type,
+            min: form.querySelector('[name="min"]')?.value,
+            max: form.querySelector('[name="max"]')?.value,
+            step: form.querySelector('[name="step"]')?.value,
+            pause: type === 'square'
+                ? form.querySelector('[name="pause-square"]')?.value
+                : form.querySelector('[name="pause"]')?.value,
+            pulseWidth: form.querySelector('[name="pulseWidth"]')?.value,
+            period: form.querySelector('[name="period"]')?.value,
+        });
+    }
+}
+
+window.GeneratorWidget = GeneratorWidget;
+
+
+// === 61-dashboard-active-setpoint.js ===
+// ============================================================================
+// SetpointWidget — числовой задатчик для AI/AO датчиков.
+//
+// Семантика: пользователь вводит число в [min, max] с шагом step, посылается
+// через POST .../ionc/set. Two-way: feedbackValue (от сервера) vs commandValue
+// (что пользователь установил), расхождение → dirty state (жёлтая граница).
+//
+// Config:
+//   sensor      — имя датчика (от base)
+//   sensorId    — числовой ID (от base)
+//   objectName  — IONC object (default 'SharedMemory', от base)
+//   label       — заголовок виджета (от base)
+//   min         — нижняя граница диапазона (default 0)
+//   max         — верхняя граница (default 100)
+//   step        — шаг изменения (default 1; влияет на stepper buttons и slider step)
+//   unit        — текстовая подпись после value ("°C", "%", "Pa"; default '')
+//   applyMode   — 'manual' (default) | 'auto'
+//   style       — 'input' (default) | 'slider' | 'stepper'
+//   requireConfirmation — bool (от base)
+//
+// Стили:
+//   - 'input': текстовый input + Apply button (visible только в dirty state)
+//   - 'slider': horizontal slider + value-label (с inline-edit) + min/max подписи
+//   - 'stepper': '−' [value] '+' (auto-apply on click; inline-edit на value)
+// ============================================================================
+
+// SETPOINT_* константы — в 00-constants.js (общие дефолты, могут use'аться
+// тестами и сторонним кодом).
+
+class SetpointWidget extends ActiveDashboardWidget {
+    static type = 'setpoint';
+    static displayName = 'Setpoint';
+    static description = 'Numeric setpoint (analog write) with input/slider/stepper styles';
+    static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="9" width="18" height="6" rx="1"/><path d="M7 9v6M12 9v6M17 9v6"/></svg>';
+    static styles = ['input', 'slider', 'stepper'];
+    static defaultStyle = 'input';
+    static defaultSize = { width: 3, height: 2 };
+    static minSize = { width: 2, height: 1 };
+    static maxSize = { width: 6, height: 3 };
+
+    static getDefaultSizeForStyle(style, config = {}) {
+        if (style === 'slider') {
+            const orientation = config.orientation === 'vertical' ? 'vertical' : 'horizontal';
+            return orientation === 'vertical'
+                ? { width: 4, height: 6 }
+                : { width: 6, height: 4 };
+        }
+        return null; // fall back to static defaultSize
+    }
+
+    constructor(id, config, container) {
+        super(id, config, container);
+        this._autoApplyTimer = null;
+        this._sliderDragging = false;
+        this._onSliderMove = null;
+        this._onSliderUp = null;
+        this._sliderTrackWrap = null;
+        // True после первого ручного ввода/clicka на +/- — после этого
+        // renderFeedback больше не перезаписывает input.value на feedbackValue
+        // (иначе после blur значение возвращалось бы на старое feedback).
+        // Сбрасывается в _cancel() (Esc) — для resync с актуальным feedback.
+        this._userHasEdited = false;
+    }
+
+    // Filter keydown в numeric input'ах: только цифры/знак/точка/запятая, плюс
+    // пропуск Ctrl/Meta/Alt (Ctrl+C/V/A) и многосимвольных ключей (Backspace,
+    // ArrowLeft и т.п.). Используется в _renderInput и в inline-edit (_makeInlineEditable).
+    _filterNumericKey(e) {
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        if (e.key.length !== 1) return;
+        if (!/[0-9.,\-]/.test(e.key)) e.preventDefault();
+    }
+
+    _currentStyle() {
+        return this.config?.style || SetpointWidget.defaultStyle;
+    }
+
+    _applyMode() {
+        return this.config?.applyMode || 'manual';
+    }
+
+    _clamp(value) {
+        const min = this.config?.min ?? -Infinity;
+        const max = this.config?.max ?? Infinity;
+        return Math.max(min, Math.min(max, value));
+    }
+
+    // ===== Render dispatch =====
+    render() {
+        const style = this._currentStyle();
+        this.element = document.createElement('div');
+        this.element.className = `widget-content setpoint-widget setpoint-style-${style}`;
+        // Tabindex=-1 чтобы widget мог принимать keyboard events (Esc), но не
+        // попадал в Tab navigation. Esc на любом элементе виджета bubble'ится
+        // и вызывает _cancel — работает для всех стилей (input/slider/stepper).
+        this.element.tabIndex = -1;
+        this.element.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.commandValue !== null) {
+                e.preventDefault();
+                e.stopPropagation();
+                this._cancel();
+            }
+        });
+
+        if (style === 'slider') {
+            this._renderSlider();
+        } else if (style === 'stepper') {
+            this._renderStepper();
+        } else {
+            this._renderInput();
+        }
+
+        this.container.appendChild(this.element);
+        // Initial display sync
+        this.renderFeedback();
+    }
+
+    // ===== Style: input =====
+    _renderInput() {
+        const unit = escapeHtml(this.config?.unit || '');
+        const min = this.config?.min ?? '';
+        const max = this.config?.max ?? '';
+        const step = this.config?.step ?? 1;
+        // type="text" + inputmode=decimal — нативно нет spin buttons, нет
+        // password-popup, и selection API работает (для select-on-focus).
+        // Валидация только цифр — через keydown filter ниже + _clamp в JS.
+        // autocomplete=off + data-form-type + data-lpignore — отключают browser
+        // autocomplete и password manager хинты.
+        this.element.innerHTML = `
+            ${this._labelHtml()}
+            <div class="setpoint-feedback" data-test="feedback"><strong data-test="feedback-value">--</strong>${unit ? '<span class="setpoint-unit">' + unit + '</span>' : ''}</div>
+            <div class="setpoint-input-row">
+                <input type="text" class="setpoint-input" data-test="value-input"
+                       autocomplete="off" autocorrect="off" autocapitalize="off"
+                       spellcheck="false" data-form-type="other" data-lpignore="true"
+                       inputmode="decimal"
+                       data-min="${escapeAttr(String(min))}" data-max="${escapeAttr(String(max))}" data-step="${escapeAttr(String(step))}">
+                ${unit ? '<span class="setpoint-unit">' + unit + '</span>' : ''}
+                <button class="setpoint-apply-btn" data-test="apply-btn" tabindex="-1">Apply</button>
+                <button class="setpoint-cancel-btn" data-test="cancel-btn" title="Cancel" tabindex="-1">×</button>
+            </div>
+        `;
+
+        const input = this.element.querySelector('[data-test="value-input"]');
+        const applyBtn = this.element.querySelector('[data-test="apply-btn"]');
+        const cancelBtn = this.element.querySelector('[data-test="cancel-btn"]');
+
+        // Commit gesture: применить + снять focus + оптимистично убрать dirty
+        // (если write fails — _setWriteState('error') покажет purple border).
+        const commit = () => {
+            this._applyNow();
+            this.commandValue = null;
+            this._updateDirty(false);
+            input.blur();
+        };
+
+        // При получении фокуса (клик/Tab/программно) — выделить текущее значение,
+        // чтобы новый ввод сразу его заменял. setTimeout(0) — после нативного
+        // позиционирования cursor'а от mousedown'а.
+        input.addEventListener('focus', () => {
+            setTimeout(() => { try { input.select(); } catch {} }, 0);
+        });
+        input.addEventListener('input', () => {
+            this._userHasEdited = true;
+            const num = parseDecimalInputOrDefault(input.value, NaN);
+            if (!Number.isFinite(num)) return;
+            this._setCommand(num);
+        });
+        // Не пропускать буквы / 'e' (scientific) / '+' — оставлять только цифры,
+        // знак минус, точку, запятую и навигационные клавиши.
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); commit(); return; }
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); input.blur(); this._cancel(); return; }
+            this._filterNumericKey(e);
+        });
+        applyBtn.addEventListener('mousedown', (e) => e.preventDefault());
+        cancelBtn.addEventListener('mousedown', (e) => e.preventDefault());
+        applyBtn.addEventListener('click', (e) => { e.stopPropagation(); commit(); });
+        cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); input.blur(); this._cancel(); });
+    }
+
+    // ===== Style: slider =====
+    _renderSlider() {
+        const unit = escapeHtml(this.config?.unit || '');
+        const min = this.config?.min ?? SETPOINT_DEFAULT_MIN;
+        const max = this.config?.max ?? SETPOINT_DEFAULT_MAX;
+        const orientation = this.config?.orientation === 'vertical' ? 'vertical' : 'horizontal';
+        const zones = Array.isArray(this.config?.zones) ? this.config.zones : [];
+        if (orientation === 'vertical') {
+            this.element.classList.add('setpoint-slider-vertical');
+        }
+        const zonesHtml = zones.length > 0
+            ? `<div class="setpoint-slider-zones" data-test="zones">${this._renderZonesHtml(zones, min, max, orientation)}</div>`
+            : '';
+        const fillHtml = zones.length > 0
+            ? ''
+            : '<div class="setpoint-slider-fill"></div>';
+
+        // Zero mark on the scale when the range crosses zero (e.g. -50..+50).
+        // Renders a small tick on the track plus a "0" label beside the min/max
+        // labels. Strict `min<0<max` — when zero coincides with min or max it's
+        // already labelled by the existing min/max span.
+        let zeroTickHtml = '';
+        let zeroLabelHtml = '';
+        if (min < 0 && max > 0 && max > min) {
+            const zeroPct = ((0 - min) / (max - min)) * 100;
+            const tickPos = orientation === 'vertical' ? `bottom:${zeroPct}%` : `left:${zeroPct}%`;
+            const labelPos = orientation === 'vertical' ? `bottom:${zeroPct}%` : `left:${zeroPct}%`;
+            zeroTickHtml  = `<div class="setpoint-slider-zero-tick"  style="${tickPos}"  data-test="zero-tick"></div>`;
+            zeroLabelHtml = `<span class="setpoint-slider-zero-label" style="${labelPos}" data-test="zero-label">0</span>`;
+        }
+
+        const unitSpan = unit ? `<span class="setpoint-unit"> ${unit}</span>` : '';
+        const labelsHtml = `
+            <div class="setpoint-slider-labels">
+                <span>${escapeHtml(String(min))}</span>
+                ${zeroLabelHtml}
+                <span>${escapeHtml(String(max))}${unitSpan}</span>
+            </div>
+        `;
+        // For vertical orientation labels live INSIDE track-wrap (positioned
+        // absolutely alongside the track). For horizontal they are a sibling
+        // AFTER the wrap so they participate in normal column flex flow and
+        // the widget container reserves space for them.
+        const labelsInside = orientation === 'vertical' ? labelsHtml : '';
+        const labelsAfter = orientation === 'vertical' ? '' : labelsHtml;
+
+        // Value bubble lives inside track-wrap (absolutely positioned) so it
+        // can follow the handle's X (horizontal) or Y (vertical). The previous
+        // `.setpoint-slider-value-row` is gone — track-wrap reserves space for
+        // the bubble via margin-top (h) / margin-left (v) in CSS.
+        this.element.innerHTML = `
+            ${this._labelHtml()}
+            <div class="setpoint-slider-wrap">
+                <div class="setpoint-slider-track-wrap" data-test="track-wrap">
+                    ${zonesHtml}
+                    <div class="setpoint-slider-track">${fillHtml}</div>
+                    ${zeroTickHtml}
+                    <div class="setpoint-slider-handle" data-test="handle"></div>
+                    <span class="setpoint-slider-value" data-test="value" title="Двойной клик — точный ввод">--</span>
+                    <div class="setpoint-slider-fb-marker" data-test="fb-marker"></div>
+                    ${labelsInside}
+                </div>
+                ${labelsAfter}
+            </div>
+        `;
+
+        const valueSpan = this.element.querySelector('[data-test="value"]');
+        this._makeInlineEditable(valueSpan);
+
+        const trackWrap = this.element.querySelector('[data-test="track-wrap"]');
+        this._sliderTrackWrap = trackWrap;
+
+        const valueAtPointer = (e) => {
+            const rect = trackWrap.getBoundingClientRect();
+            const cfgMin = this.config?.min ?? SETPOINT_DEFAULT_MIN;
+            const cfgMax = this.config?.max ?? SETPOINT_DEFAULT_MAX;
+            const cfgStep = this.config?.step ?? SETPOINT_DEFAULT_STEP;
+            const isVertical = this.config?.orientation === 'vertical';
+            let pct = isVertical
+                ? 1 - (e.clientY - rect.top) / rect.height
+                : (e.clientX - rect.left) / rect.width;
+            pct = Math.max(0, Math.min(1, pct));
+            const raw = cfgMin + pct * (cfgMax - cfgMin);
+            const stepped = Math.round(raw / cfgStep) * cfgStep;
+            return Math.max(cfgMin, Math.min(cfgMax, stepped));
+        };
+
+        this._onSliderMove = (e) => {
+            if (!this._sliderDragging) return;
+            const v = valueAtPointer(e);
+            this._setCommand(v);
+        };
+        this._onSliderUp = () => {
+            if (!this._sliderDragging) return;
+            this._sliderDragging = false;
+            trackWrap.classList.remove('dragging');
+            window.removeEventListener('mousemove', this._onSliderMove);
+            window.removeEventListener('mouseup', this._onSliderUp);
+            this._applyNow();
+        };
+
+        trackWrap.addEventListener('mousedown', (e) => {
+            if (!this.isInteractive()) return;
+            e.preventDefault();
+            e.stopPropagation();
+            this._sliderDragging = true;
+            trackWrap.classList.add('dragging');
+            const v = valueAtPointer(e);
+            this._setCommand(v);
+            // Do NOT _applyNow() here — committed on mouseup.
+            window.addEventListener('mousemove', this._onSliderMove);
+            window.addEventListener('mouseup', this._onSliderUp);
+        });
+
+        // Double-click on handle → jump to 0 (if 0 ∈ [min, max]).
+        // stopPropagation чтобы dblclick не дошёл до valueSpan (inline-edit).
+        const handleEl = this.element.querySelector('[data-test="handle"]');
+        if (handleEl) {
+            handleEl.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                if (!this.isInteractive()) return;
+                const cfgMin = this.config?.min ?? SETPOINT_DEFAULT_MIN;
+                const cfgMax = this.config?.max ?? SETPOINT_DEFAULT_MAX;
+                if (cfgMin > 0 || cfgMax < 0) return;
+                this._setCommand(0);
+                this._applyNow();
+            });
+        }
+    }
+
+    _renderZonesHtml(zones, min, max, orientation) {
+        const range = max - min;
+        if (range <= 0) return '';
+        return zones.map(z => {
+            const fromPct = Math.max(0, Math.min(100, (z.from - min) / range * 100));
+            const toPct   = Math.max(0, Math.min(100, (z.to   - min) / range * 100));
+            const left  = Math.min(fromPct, toPct);
+            const right = 100 - Math.max(fromPct, toPct);
+            const color = escapeAttr(z.color || '#ef4444');
+            if (orientation === 'vertical') {
+                const bottom = left;
+                const heightPct = 100 - left - right;
+                return `<div class="setpoint-slider-zone" style="bottom:${bottom}%;height:${heightPct}%;background:${color}"></div>`;
+            }
+            return `<div class="setpoint-slider-zone" style="left:${left}%;right:${right}%;background:${color}"></div>`;
+        }).join('');
+    }
+
+    // ===== Style: stepper =====
+    _renderStepper() {
+        const unit = escapeHtml(this.config?.unit || '');
+        // Stepper не имеет Apply/Cancel кнопок — auto-apply on click +/- сразу
+        // отправляет POST. × cancel был добавлен раньше но оказался лишним:
+        // commandValue не «pending», команда уже ушла. Если оператор хочет
+        // вернуться — кликает обратное направление +/-. Esc на widget element
+        // всё ещё работает (через _cancel) — для случая когда юзер передумал
+        // через keyboard.
+        this.element.innerHTML = `
+            ${this._labelHtml()}
+            <div class="setpoint-feedback" data-test="feedback"><strong data-test="feedback-value">--</strong>${unit ? '<span class="setpoint-unit">' + unit + '</span>' : ''}</div>
+            <div class="setpoint-stepper-row">
+                <button class="setpoint-step-btn" data-test="step-down" tabindex="-1">−</button>
+                <span class="setpoint-stepper-value" data-test="value" title="Двойной клик — точный ввод">--</span>
+                <button class="setpoint-step-btn" data-test="step-up" tabindex="-1">+</button>
+            </div>
+        `;
+
+        const stepDown = this.element.querySelector('[data-test="step-down"]');
+        const stepUp = this.element.querySelector('[data-test="step-up"]');
+        const valueSpan = this.element.querySelector('[data-test="value"]');
+        const step = this.config?.step ?? 1;
+
+        const stepBy = (delta, ev) => {
+            if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+            if (!this.isInteractive()) return;
+            const current = this.commandValue ?? this.feedbackValue ?? this.config?.min ?? SETPOINT_DEFAULT_MIN;
+            const next = this._clamp(current + delta);
+            this._setCommand(next);
+            // Stepper всегда auto-apply (нет explicit Apply кнопки).
+            this._applyNow();
+        };
+        // mousedown.preventDefault — не передавать фокус на button при клике
+        // (focus border мерцал после каждого клика). Дополнительно blur() в click
+        // — на Linux/Chrome preventDefault иногда пропускает фокус на 1 frame.
+        stepDown.addEventListener('mousedown', (e) => e.preventDefault());
+        stepUp.addEventListener('mousedown', (e) => e.preventDefault());
+        stepDown.addEventListener('click', (e) => { stepBy(-step, e); stepDown.blur(); });
+        stepUp.addEventListener('click', (e) => { stepBy(step, e); stepUp.blur(); });
+
+        this._makeInlineEditable(valueSpan);
+    }
+
+    // Label header — рендерится сверху виджета, если config.label задан.
+    _labelHtml() {
+        const label = this.config?.label;
+        if (!label) return '';
+        return `<div class="setpoint-label" data-test="label">${escapeHtml(label)}</div>`;
+    }
+
+    // ===== Common: feedback rendering =====
+    // Pure DOM update — НЕ делает auto-snap dirty (это в update() от SSE).
+    // Иначе во время typing значение совпавшее с feedback автоматически
+    // снимало dirty без Enter.
+    renderFeedback() {
+        if (!this.element) return;
+        const fbValueEl = this.element.querySelector('[data-test="feedback-value"]');
+        if (fbValueEl) {
+            fbValueEl.textContent = (this.feedbackValue !== null && this.feedbackValue !== undefined)
+                ? String(this.feedbackValue) : '--';
+        }
+
+        const style = this._currentStyle();
+        if (style === 'input') {
+            const input = this.element.querySelector('[data-test="value-input"]');
+            // Initial sync: пока юзер ничего не вводил, input.value tracks feedback.
+            // После первого ручного ввода — input.value под контролем юзера, feedback
+            // отображается отдельно через [data-test="feedback-value"].
+            if (input && !this._userHasEdited && document.activeElement !== input) {
+                input.value = this.feedbackValue ?? '';
+            }
+        } else if (style === 'slider') {
+            const trackWrap = this.element.querySelector('[data-test="track-wrap"]');
+            const handle = this.element.querySelector('[data-test="handle"]');
+            const valueSpan = this.element.querySelector('[data-test="value"]');
+            const fill = this.element.querySelector('.setpoint-slider-fill');
+            const fbMarker = this.element.querySelector('[data-test="fb-marker"]');
+            const display = this.commandValue ?? this.feedbackValue;
+            const isVertical = this.config?.orientation === 'vertical';
+            const cfgMin = this.config?.min ?? SETPOINT_DEFAULT_MIN;
+            const cfgMax = this.config?.max ?? SETPOINT_DEFAULT_MAX;
+            const range = cfgMax - cfgMin;
+
+            const pct = (v) => {
+                if (range <= 0) return 0;
+                return Math.max(0, Math.min(100, (v - cfgMin) / range * 100));
+            };
+
+            // No-data state
+            const noData = (display === null || display === undefined);
+            this.element.classList.toggle('setpoint-slider-no-data', noData);
+
+            if (valueSpan) {
+                valueSpan.textContent = noData ? '--' : String(display);
+                // Bubble follows the handle. Horizontal: track X via `left`.
+                // Vertical: track Y via `bottom`. CSS handles the rest of the
+                // positioning (offset, transform, transition).
+                if (!noData) {
+                    const p = pct(display);
+                    if (isVertical) {
+                        valueSpan.style.bottom = p + '%';
+                        valueSpan.style.left = '';
+                    } else {
+                        valueSpan.style.left = p + '%';
+                        valueSpan.style.bottom = '';
+                    }
+                } else {
+                    // Park bubble at left/bottom edge while we have no data.
+                    if (isVertical) {
+                        valueSpan.style.bottom = '0%';
+                        valueSpan.style.left = '';
+                    } else {
+                        valueSpan.style.left = '0%';
+                        valueSpan.style.bottom = '';
+                    }
+                }
+            }
+            if (!noData && handle) {
+                const p = pct(display);
+                if (isVertical) {
+                    handle.style.bottom = p + '%';
+                    handle.style.left = '';
+                } else {
+                    handle.style.left = p + '%';
+                    handle.style.bottom = '';
+                }
+            }
+            if (!noData && fill) {
+                // Fill range:
+                //   'zero' (default) — signed from zero. Extends RIGHT of zero
+                //                      for positive values, LEFT of zero for
+                //                      negative. Falls back to 'min' when zero
+                //                      is outside [min, max].
+                //   'min'            — fill from left/bottom edge to value
+                //                      (legacy default).
+                //   'max'            — fill from value to right/top edge
+                //                      (mirror image of 'min').
+                const fillOrigin = this.config?.fillOrigin || 'zero';
+                const valuePct = pct(display);
+                let startPct = 0;
+                let endPct = valuePct;
+                if (fillOrigin === 'max') {
+                    startPct = valuePct;
+                    endPct = 100;
+                } else if (fillOrigin === 'zero' && cfgMin < 0 && cfgMax > 0) {
+                    const zeroPct = ((0 - cfgMin) / range) * 100;
+                    if (display >= 0) {
+                        startPct = zeroPct;
+                        endPct = valuePct;
+                    } else {
+                        startPct = valuePct;
+                        endPct = zeroPct;
+                    }
+                }
+                const sizePct = Math.max(0, endPct - startPct);
+                if (isVertical) {
+                    fill.style.bottom = startPct + '%';
+                    fill.style.height = sizePct + '%';
+                    fill.style.top = 'auto';
+                    fill.style.width = '';
+                    fill.style.left = '';
+                } else {
+                    fill.style.left = startPct + '%';
+                    fill.style.width = sizePct + '%';
+                    fill.style.right = 'auto';
+                    fill.style.height = '';
+                    fill.style.bottom = '';
+                }
+            }
+            // fb-marker — only when dirty (cmd != fb), positioned at fb
+            if (fbMarker) {
+                const fbReady = this.feedbackValue !== null && this.feedbackValue !== undefined;
+                const isDirty = this.commandValue !== null && this.commandValue !== undefined && fbReady;
+                if (isDirty) {
+                    const p = pct(this.feedbackValue);
+                    if (isVertical) {
+                        fbMarker.style.bottom = p + '%';
+                        fbMarker.style.left = '';
+                    } else {
+                        fbMarker.style.left = p + '%';
+                        fbMarker.style.bottom = '';
+                    }
+                }
+            }
+        } else { // stepper
+            const valueSpan = this.element.querySelector('[data-test="value"]');
+            const display = this.commandValue ?? this.feedbackValue;
+            if (valueSpan) {
+                valueSpan.textContent = (display !== null && display !== undefined) ? String(display) : '--';
+            }
+        }
+    }
+
+    // ===== SSE feedback override =====
+    // Auto-snap dirty: если feedback догнал command (с tolerance step/2) → снять.
+    // Делается ТОЛЬКО здесь (в update от SSE), не в renderFeedback — иначе во
+    // время typing совпавшее с feedback значение автоматически апплаилось.
+    // meta = { frozen, blocked } — пробрасываем в base для interactivity gating.
+    update(value, error = null, meta = null) {
+        this.feedbackValue = value;
+        this.value = value;
+        this.error = error;
+        this._applyFeedbackMeta(meta);
+        if (this.commandValue !== null && this.commandValue !== undefined &&
+            value !== null && value !== undefined) {
+            const tolerance = Math.abs(this.config?.step ?? 1) / 2;
+            if (Math.abs(this.commandValue - value) <= tolerance) {
+                this.commandValue = null;
+                this._updateDirty(false);
+            }
+        }
+        // Skip handle re-render during active drag — feedback is recorded but not visualized
+        // until mouseup, so the handle does not "jump out of the operator's hand".
+        if (!this._sliderDragging) {
+            this.renderFeedback();
+        }
+    }
+
+    renderCommand() {
+        // No-op для setpoint (commandValue отображается через renderFeedback).
+    }
+
+    // ===== Apply flow =====
+    _setCommand(value) {
+        const clamped = this._clamp(value);
+        this.commandValue = clamped;
+        this._updateDirty(true);
+        // Сразу обновить отображение (особенно для stepper — иначе value-span ждёт SSE).
+        this.renderFeedback();
+        if (this._applyMode() === 'auto') {
+            clearTimeout(this._autoApplyTimer);
+            this._autoApplyTimer = setTimeout(() => this._applyNow(), SETPOINT_AUTO_APPLY_DEBOUNCE_MS);
+        }
+    }
+
+    _applyNow() {
+        clearTimeout(this._autoApplyTimer);
+        if (this.commandValue === null || this.commandValue === undefined) return;
+        this.writeValue(this.commandValue);
+    }
+
+    _cancel() {
+        clearTimeout(this._autoApplyTimer);
+        this.commandValue = null;
+        this._userHasEdited = false;  // resync с feedback
+        this._updateDirty(false);
+        this.renderFeedback();
+    }
+
+    _updateDirty(isDirty) {
+        const root = this.element;
+        if (!root) return;
+        root.classList.toggle('dirty', !!isDirty);
+    }
+
+    // ===== Inline-edit helper =====
+    _makeInlineEditable(spanEl) {
+        spanEl.addEventListener('dblclick', () => {
+            const currentValue = spanEl.textContent.trim();
+            const input = document.createElement('input');
+            input.type = 'text';  // type=text + inputmode=decimal — см. _renderInput
+            input.className = 'setpoint-inline-edit';
+            input.dataset.test = 'inline-input';
+            input.autocomplete = 'off';
+            input.autocorrect = 'off';
+            input.autocapitalize = 'off';
+            input.spellcheck = false;
+            input.setAttribute('data-form-type', 'other');
+            input.setAttribute('data-lpignore', 'true');
+            input.setAttribute('inputmode', 'decimal');
+            input.value = currentValue === '--' ? '' : currentValue;
+            spanEl.replaceWith(input);
+            input.select();
+
+            let finished = false;
+            const finish = (apply) => {
+                if (finished) return;
+                finished = true;
+                if (apply) {
+                    const num = parseDecimalInputOrDefault(input.value, NaN);
+                    if (Number.isFinite(num)) {
+                        this._setCommand(num);
+                        // Inline-edit Enter/blur — explicit commit gesture; всегда apply
+                        // независимо от applyMode (иначе slider+manual+inline → soft-lock).
+                        this._applyNow();
+                    }
+                }
+                input.replaceWith(spanEl);
+                this.renderFeedback();  // обновить display
+            };
+
+            input.addEventListener('keydown', (e) => {
+                e.stopPropagation();
+                if (e.key === 'Enter') { e.preventDefault(); finish(true); return; }
+                if (e.key === 'Escape') { e.preventDefault(); finish(false); return; }
+                this._filterNumericKey(e);
+            });
+            input.addEventListener('blur', () => finish(true));
+            // Stop click propagation, чтобы не открыть widget config dialog
+            // через bubble на родителя.
+            input.addEventListener('click', (e) => e.stopPropagation());
+            input.addEventListener('dblclick', (e) => e.stopPropagation());
+        });
+    }
+
+    // ===== Config form =====
+    static getActiveConfigFields(config = {}) {
+        const applyMode = config.applyMode || 'manual';
+        const orientation = config.orientation || 'horizontal';
+        const fillOrigin = config.fillOrigin || 'zero';
+        const zones = Array.isArray(config.zones) ? config.zones : [];
+        return `
+            <div class="widget-config-row">
+                <div class="widget-config-field">
+                    <label>min</label>
+                    <input type="number" class="widget-input" name="min"
+                           value="${config.min ?? SETPOINT_DEFAULT_MIN}" data-test="cfg-min">
+                </div>
+                <div class="widget-config-field">
+                    <label>max</label>
+                    <input type="number" class="widget-input" name="max"
+                           value="${config.max ?? SETPOINT_DEFAULT_MAX}" data-test="cfg-max">
+                </div>
+                <div class="widget-config-field">
+                    <label>step</label>
+                    <input type="number" class="widget-input" name="step"
+                           value="${config.step ?? SETPOINT_DEFAULT_STEP}" min="0" data-test="cfg-step">
+                </div>
+            </div>
+            <div class="widget-config-row">
+                <div class="widget-config-field">
+                    <label>Unit</label>
+                    <input type="text" class="widget-input" name="unit"
+                           value="${escapeAttr(config.unit || '')}" placeholder="°C, %, Pa..." data-test="cfg-unit">
+                </div>
+                <div class="widget-config-field" data-row="applyMode">
+                    <label>Apply mode</label>
+                    <select class="widget-input" name="applyMode" data-test="cfg-applyMode">
+                        <option value="manual" ${applyMode === 'manual' ? 'selected' : ''}>manual (Apply button)</option>
+                        <option value="auto" ${applyMode === 'auto' ? 'selected' : ''}>auto (debounce ${SETPOINT_AUTO_APPLY_DEBOUNCE_MS}ms)</option>
+                    </select>
+                </div>
+                <div class="widget-config-field" data-row="orientation">
+                    <label>Orientation</label>
+                    <select class="widget-input" name="orientation" data-test="cfg-orientation">
+                        <option value="horizontal" ${orientation === 'horizontal' ? 'selected' : ''}>horizontal</option>
+                        <option value="vertical"   ${orientation === 'vertical'   ? 'selected' : ''}>vertical</option>
+                    </select>
+                </div>
+                <div class="widget-config-field" data-row="fillOrigin">
+                    <label>Fill from</label>
+                    <select class="widget-input" name="fillOrigin" data-test="cfg-fillOrigin">
+                        <option value="zero" ${fillOrigin === 'zero' ? 'selected' : ''}>zero (signed)</option>
+                        <option value="min"  ${fillOrigin === 'min'  ? 'selected' : ''}>left/bottom edge</option>
+                        <option value="max"  ${fillOrigin === 'max'  ? 'selected' : ''}>right/top edge</option>
+                    </select>
+                </div>
+            </div>
+            <div class="widget-config-row" data-row="zones">
+                ${renderColorZonesEditor(zones, '#3b82f6')}
+            </div>
+        `;
+    }
+
+    static parseActiveConfigFields(form) {
+        const min = parseDecimalInputOrDefault(form.querySelector('[name="min"]')?.value, SETPOINT_DEFAULT_MIN);
+        const max = parseDecimalInputOrDefault(form.querySelector('[name="max"]')?.value, SETPOINT_DEFAULT_MAX);
+        const stepRaw = parseDecimalInputOrDefault(form.querySelector('[name="step"]')?.value, SETPOINT_DEFAULT_STEP);
+        const step = stepRaw > 0 ? stepRaw : SETPOINT_DEFAULT_STEP;
+        const style = form.querySelector('[name="style"]')?.value || SetpointWidget.defaultStyle;
+        const result = {
+            min: Math.min(min, max),
+            max: Math.max(min, max),
+            step,
+            unit: form.querySelector('[name="unit"]')?.value || '',
+        };
+        if (style === 'slider') {
+            const orient = form.querySelector('[name="orientation"]')?.value;
+            result.orientation = orient === 'vertical' ? 'vertical' : 'horizontal';
+            const fillOrigin = form.querySelector('[name="fillOrigin"]')?.value;
+            result.fillOrigin = (fillOrigin === 'min' || fillOrigin === 'max')
+                ? fillOrigin
+                : 'zero';
+            const zonesContainer = form.querySelector('[data-row="zones"]');
+            result.zones = zonesContainer ? parseColorZones(zonesContainer) : [];
+        } else {
+            result.applyMode = form.querySelector('[name="applyMode"]')?.value === 'auto' ? 'auto' : 'manual';
+        }
+        return result;
+    }
+
+    static initConfigHandlers(form, config = {}) {
+        mountZonesReusePicker(form, 'setpoint');
+        super.initConfigHandlers(form, config);  // wires sensor binding
+
+        if (form.dataset.setpointStyleHandlersWired === 'true') return;
+        form.dataset.setpointStyleHandlersWired = 'true';
+
+        const styleSel = form.querySelector('[name="style"]');
+        if (!styleSel) return;
+
+        const applyRow      = form.querySelector('[data-row="applyMode"]');
+        const orientRow     = form.querySelector('[data-row="orientation"]');
+        const fillOriginRow = form.querySelector('[data-row="fillOrigin"]');
+        const zonesRow      = form.querySelector('[data-row="zones"]');
+
+        const applyVisibility = () => {
+            const isSlider = styleSel.value === 'slider';
+            if (applyRow)      applyRow.style.display      = isSlider ? 'none' : '';
+            if (orientRow)     orientRow.style.display     = isSlider ? '' : 'none';
+            if (fillOriginRow) fillOriginRow.style.display = isSlider ? '' : 'none';
+            if (zonesRow)      zonesRow.style.display      = isSlider ? '' : 'none';
+        };
+        applyVisibility();
+        styleSel.addEventListener('change', applyVisibility);
+    }
+
+    destroy() {
+        clearTimeout(this._autoApplyTimer);
+        if (this._sliderDragging) {
+            this._sliderDragging = false;
+            if (this._sliderTrackWrap) {
+                this._sliderTrackWrap.classList.remove('dragging');
+            }
+        }
+        if (this._onSliderMove) {
+            window.removeEventListener('mousemove', this._onSliderMove);
+            this._onSliderMove = null;
+        }
+        if (this._onSliderUp) {
+            window.removeEventListener('mouseup', this._onSliderUp);
+            this._onSliderUp = null;
+        }
+        super.destroy();
+    }
+}
+
+window.SetpointWidget = SetpointWidget;
+
+
+// === 61-dashboard-active-toggle.js ===
+// ============================================================================
+// ToggleWidget — переключатель между двумя числовыми значениями (DI/DO/AI/AO).
+// Слитая композиция: цвет track = feedback, позиция handle = command.
+// Жёлтая граница при расхождении command vs feedback.
+//
+// Config:
+//   sensor      — имя датчика (для отображения, autocomplete сохраняет имя)
+//   sensorId    — числовой ID датчика (используется в writeValue)
+//   objectName  — имя IONC-объекта (default 'SharedMemory')
+//   valueOff    — числовое значение OFF (default 0)
+//   valueOn     — числовое значение ON (default 1)
+//   labelOff    — текстовая подпись OFF (default 'OFF')
+//   labelOn     — текстовая подпись ON (default 'ON')
+//   label       — заголовок виджета (default = имя датчика)
+//   requireConfirmation — bool, наследуется от base
+// ============================================================================
+
+class ToggleWidget extends ActiveDashboardWidget {
+    static type = 'toggle';
+    static displayName = 'Toggle';
+    static description = 'Two-state switch (writes to digital or analog sensor)';
+    static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="5"/><circle cx="16" cy="12" r="3" fill="currentColor"/></svg>';
+    static defaultSize = { width: 3, height: 2 };
+    static minSize = { width: 2, height: 2 };
+    static maxSize = { width: 6, height: 3 };
+
+    // Доступные визуальные стили. base.getConfigForm рендерит style select
+    // когда length > 1.
+    static styles = ['slider', 'checkbox'];
+    static defaultStyle = 'slider';
+
+    // === Render ===
+    render() {
+        if (this._currentStyle() === 'checkbox') {
+            this.renderCheckbox();
+        } else {
+            this.renderSlider();
+        }
+    }
+
+    _currentStyle() {
+        return this.config?.style || ToggleWidget.defaultStyle;
+    }
+
+    renderSlider() {
+        // Label опционален: если пустой — НЕ показываем header строку, экономим
+        // вертикальный pixel'аж. Fallback на sensor name удалён намеренно
+        // (старое поведение «не задал label → имя датчика» путало юзеров,
+        // которые специально хотели чистый виджет).
+        const label = this.config?.label || '';
+        const labelHtml = label
+            ? `<div class="toggle-name" data-test="name">${escapeHtml(label)}</div>`
+            : '';
+        this.element = document.createElement('div');
+        this.element.className = 'widget-content toggle-widget toggle-style-slider';
+        this.element.innerHTML = `
+            ${labelHtml}
+            <div class="toggle-track" data-test="track" data-handle-pos="left">
+                <div class="toggle-handle"></div>
+            </div>
+            <div class="toggle-state-text" data-test="state-text">${escapeHtml(this._currentLabel())}</div>
+        `;
+        this.container.appendChild(this.element);
+        this.element.querySelector('[data-test="track"]').addEventListener('click', () => this.onClick());
+
+        // Initial state — отрисовать по текущим feedback/command.
+        this.renderFeedback();
+        this.renderCommand();
+    }
+
+    renderCheckbox() {
+        // Label опционален. См. комментарий в renderSlider().
+        const label = this.config?.label || '';
+        const labelHtml = label
+            ? `<div class="toggle-name" data-test="name">${escapeHtml(label)}</div>`
+            : '';
+        this.element = document.createElement('div');
+        this.element.className = 'widget-content toggle-widget toggle-style-checkbox';
+        this.element.innerHTML = `
+            <div class="toggle-cb" data-test="cb"></div>
+            ${labelHtml}
+        `;
+        this.container.appendChild(this.element);
+        // Click anywhere on widget triggers writeValue (standard checkbox UX).
+        this.element.addEventListener('click', () => this.onClick());
+
+        this.renderFeedback();
+        this.renderCommand();
+    }
+
+    // Возвращает labelOn если current value считается ON, иначе labelOff.
+    _currentLabel() {
+        const labelOff = this.config?.labelOff || 'OFF';
+        const labelOn = this.config?.labelOn || 'ON';
+        const valueOn = this.config?.valueOn ?? 1;
+        const current = this.commandValue ?? this.feedbackValue;
+        return current === valueOn ? labelOn : labelOff;
+    }
+
+    onClick() {
+        // Если widget не интерактивен — клик игнорируется (writeValue сам это знает,
+        // но мы ещё не проходим path validation если просто вернём ничего).
+        if (!this.isInteractive()) return;
+        const valueOff = this.config?.valueOff ?? 0;
+        const valueOn = this.config?.valueOn ?? 1;
+        const current = this.commandValue ?? this.feedbackValue;
+        const next = current === valueOn ? valueOff : valueOn;
+        this.writeValue(next);
+    }
+
+    renderCommand() {
+        if (this._currentStyle() === 'checkbox') {
+            this.renderCheckboxCommand();
+        } else {
+            this.renderSliderCommand();
+        }
+    }
+
+    renderSliderCommand() {
+        const track = this.element?.querySelector('[data-test="track"]');
+        if (!track) return;
+        const valueOn = this.config?.valueOn ?? 1;
+        const refValue = this.commandValue ?? this.feedbackValue;
+        track.dataset.handlePos = refValue === valueOn ? 'right' : 'left';
+        const diverges = this.commandValue !== null
+            && this.commandValue !== undefined
+            && this.commandValue !== this.feedbackValue;
+        track.classList.toggle('diverge', !!diverges);
+        const stateText = this.element?.querySelector('[data-test="state-text"]');
+        if (stateText) stateText.textContent = this._currentLabel();
+    }
+
+    renderCheckboxCommand() {
+        // diverge применяется к корневому .toggle-widget (yellow box-shadow вокруг
+        // всего widget'а лучше читается чем вокруг 24px чекбокса).
+        const root = this.element;
+        if (!root) return;
+        const diverges = this.commandValue !== null
+            && this.commandValue !== undefined
+            && this.commandValue !== this.feedbackValue;
+        root.classList.toggle('diverge', !!diverges);
+    }
+
+    renderFeedback() {
+        if (this._currentStyle() === 'checkbox') {
+            this.renderCheckboxFeedback();
+        } else {
+            this.renderSliderFeedback();
+        }
+    }
+
+    renderSliderFeedback() {
+        const track = this.element?.querySelector('[data-test="track"]');
+        if (!track) return;
+        const valueOff = this.config?.valueOff ?? 0;
+        const valueOn = this.config?.valueOn ?? 1;
+        track.classList.remove('fb-on', 'fb-off', 'fb-unknown');
+        if (this.feedbackValue === valueOn) {
+            track.classList.add('fb-on');
+        } else if (this.feedbackValue === valueOff) {
+            track.classList.add('fb-off');
+        } else {
+            track.classList.add('fb-unknown');
+        }
+        if (this.feedbackValue !== null && this.feedbackValue !== undefined) {
+            track.title = `actual: ${this.feedbackValue}`;
+        }
+        this.renderCommand();
+    }
+
+    renderCheckboxFeedback() {
+        const cb = this.element?.querySelector('[data-test="cb"]');
+        if (!cb) return;
+        const valueOff = this.config?.valueOff ?? 0;
+        const valueOn = this.config?.valueOn ?? 1;
+        cb.classList.remove('fb-on', 'fb-off', 'fb-unknown');
+        if (this.feedbackValue === valueOn) {
+            cb.classList.add('fb-on');
+        } else if (this.feedbackValue === valueOff) {
+            cb.classList.add('fb-off');
+        } else {
+            cb.classList.add('fb-unknown');
+        }
+        if (this.feedbackValue !== null && this.feedbackValue !== undefined) {
+            cb.title = `actual: ${this.feedbackValue}`;
+        }
+        this.renderCommand();
+    }
+
+    // === Config form ===
+
+    static getActiveConfigFields(config = {}) {
+        return `
+            <div class="widget-config-row">
+                <div class="widget-config-field">
+                    <label>valueOff</label>
+                    <input type="number" class="widget-input" name="valueOff"
+                           value="${config.valueOff ?? 0}" data-test="cfg-valueOff">
+                </div>
+                <div class="widget-config-field">
+                    <label>valueOn</label>
+                    <input type="number" class="widget-input" name="valueOn"
+                           value="${config.valueOn ?? 1}" data-test="cfg-valueOn">
+                </div>
+            </div>
+            <div class="widget-config-row">
+                <div class="widget-config-field">
+                    <label>labelOff</label>
+                    <input type="text" class="widget-input" name="labelOff"
+                           value="${escapeAttr(config.labelOff || '')}" placeholder="OFF" data-test="cfg-labelOff">
+                </div>
+                <div class="widget-config-field">
+                    <label>labelOn</label>
+                    <input type="text" class="widget-input" name="labelOn"
+                           value="${escapeAttr(config.labelOn || '')}" placeholder="ON" data-test="cfg-labelOn">
+                </div>
+            </div>
+        `;
+    }
+
+    static parseActiveConfigFields(form) {
+        const valueOff = Number(form.querySelector('[name="valueOff"]')?.value ?? 0);
+        let valueOn = Number(form.querySelector('[name="valueOn"]')?.value ?? 1);
+        // Защита от degenerate config: valueOff === valueOn делает click no-op
+        // (current===valueOn?valueOff:valueOn возвращает valueOn). Если совпали,
+        // принудительно ставим valueOn = valueOff + 1, чтобы toggle хотя бы что-то делал.
+        if (valueOn === valueOff) {
+            valueOn = valueOff + 1;
+        }
+        return {
+            valueOff,
+            valueOn,
+            labelOff: form.querySelector('[name="labelOff"]')?.value || '',
+            labelOn:  form.querySelector('[name="labelOn"]')?.value || '',
+        };
+    }
+}
+
+window.ToggleWidget = ToggleWidget;
+
+
+// === 61-dashboard-gauge-geometry.js ===
+// ============================================================================
+// Gauge Geometry Helpers
+// ============================================================================
+
+const GAUGE_SECTOR_PRESETS = {
+    default: { cx: 50, cy: 50, r: 35 },
+    semicircle: { cx: 50, cy: 46, r: 34 },
+    arc270: { cx: 60, cy: 55, r: 44 },
+    speedometer: { cx: 60, cy: 55, r: 44 },
+    dual: { cx: 60, cy: 62, r: 44 }
+};
+
+const GAUGE_STYLE_LAYOUTS = {
+    semicircle: {
+        cx: 50, cy: 46, r: 41,
+        zoneR: 34,
+        tickOuterR: 36,
+        tickMajorInnerR: 30,
+        tickMinorInnerR: 33,
+        tickTextR: 23
+    },
+    arc270: {
+        cx: 60, cy: 55, r: 51,
+        zoneR: 38,
+        tickOuterR: 42,
+        tickMajorInnerR: 34,
+        tickMinorInnerR: 38,
+        tickTextR: 26
+    },
+    speedometer: {
+        cx: 60, cy: 55, r: 48,
+        zoneOffset: 6,
+        tickOuterOffset: 4,
+        tickMajorInnerOffset: 12,
+        tickMinorInnerOffset: 8,
+        tickTextOffset: 24
+    },
+    dual: {
+        cx: 60, cy: 62, r: 55,
+        zoneOffset: 6,
+        targetArcOffset: 2,
+        tickOuterOffset: 4,
+        tickMajorInnerOffset: 11,
+        tickMinorInnerOffset: 7,
+        tickTextOffset: 19
+    }
+};
+
+const GaugeGeometry = {
+    SEMICIRCLE_DEGREES: 180,
+    ARC270_START_DEGREES: 135,
+    ARC270_DEGREES: 270,
+    FULL_CIRCLE_DEGREES: 360,
+    CSS_SEMICIRCLE_START_DEGREES: -90,
+    CSS_ARC270_START_DEGREES: -135,
+    SECTOR_MIN_PERCENT: 0.001,
+    TARGET_ARC_MIN_PERCENT: 0.01,
+    SECTOR_ANIMATION_EPSILON: 0.002,
+    SECTOR_ANIMATION_MAX_MS: 1500,
+    MAJOR_STEP_EPSILON: 0.001,
+    MINOR_TICKS_PER_MAJOR: 4,
+
+    toRadians(angle) {
+        return angle * Math.PI / GaugeGeometry.SEMICIRCLE_DEGREES;
+    },
+
+    polarPoint(cx, cy, radius, angle) {
+        const rad = GaugeGeometry.toRadians(angle);
+        return {
+            x: cx + radius * Math.cos(rad),
+            y: cy + radius * Math.sin(rad)
+        };
+    },
+
+    isArc270Style(style) {
+        return style === 'arc270' || style === 'speedometer' || style === 'dual';
+    },
+
+    cssArcStartForStyle(style) {
+        return GaugeGeometry.isArc270Style(style)
+            ? GaugeGeometry.CSS_ARC270_START_DEGREES
+            : GaugeGeometry.CSS_SEMICIRCLE_START_DEGREES;
+    },
+
+    cssArcSpanForStyle(style) {
+        return GaugeGeometry.isArc270Style(style)
+            ? GaugeGeometry.ARC270_DEGREES
+            : GaugeGeometry.SEMICIRCLE_DEGREES;
+    },
+
+    angleForPercent(style, percent) {
+        return GaugeGeometry.cssArcStartForStyle(style)
+            + (percent * GaugeGeometry.cssArcSpanForStyle(style));
+    },
+
+    percentFromAngle(style, angle) {
+        return (angle - GaugeGeometry.cssArcStartForStyle(style))
+            / GaugeGeometry.cssArcSpanForStyle(style);
+    },
+
+    sectorParamsForStyle(style) {
+        return GAUGE_SECTOR_PRESETS[style] || GAUGE_SECTOR_PRESETS.default;
+    },
+
+    layoutForStyle(style) {
+        return GAUGE_STYLE_LAYOUTS[style] || GAUGE_STYLE_LAYOUTS.semicircle;
+    }
+};
+
+const GAUGE_MAJOR_STEP_RULES = [
+    { maxRange: 100, step: 10 },
+    { maxRange: 500, step: 50 },
+    { maxRange: 1000, step: 100 },
+    { maxRange: 5000, step: 500 },
+    { maxRange: 10000, step: 1000 }
+];
+
+
+// === 61-dashboard-widget-gauge.js ===
+// ============================================================================
+// Gauge Widget (SVG)
+// ============================================================================
+
 class GaugeWidget extends DashboardWidget {
     static type = 'gauge';
+    static usesNewSensorAutocomplete = true;
     static displayName = 'Gauge';
     static description = 'Circular gauge with needle';
     static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>';
     static defaultSize = { width: 8, height: 4 };
+    static GEOMETRY = GaugeGeometry;
+    static MAJOR_STEP_RULES = GAUGE_MAJOR_STEP_RULES;
+
+    static toRadians(angle) {
+        return GaugeGeometry.toRadians(angle);
+    }
+
+    static polarPoint(cx, cy, radius, angle) {
+        return GaugeGeometry.polarPoint(cx, cy, radius, angle);
+    }
+
+    static isArc270Style(style) {
+        return GaugeGeometry.isArc270Style(style);
+    }
+
+    static cssArcStartForStyle(style) {
+        return GaugeGeometry.cssArcStartForStyle(style);
+    }
+
+    static cssArcSpanForStyle(style) {
+        return GaugeGeometry.cssArcSpanForStyle(style);
+    }
+
+    static angleForPercent(style, percent) {
+        return GaugeGeometry.angleForPercent(style, percent);
+    }
+
+    static percentFromAngle(style, angle) {
+        return GaugeGeometry.percentFromAngle(style, angle);
+    }
+
+    static sectorParamsForStyle(style) {
+        return GaugeGeometry.sectorParamsForStyle(style);
+    }
+
+    static layoutForStyle(style) {
+        return GaugeGeometry.layoutForStyle(style);
+    }
 
     render() {
         const { style = 'default' } = this.config;
@@ -15798,7 +19186,7 @@ class GaugeWidget extends DashboardWidget {
 
     // === Default style (current design) ===
     renderDefault() {
-        const { min = 0, max = 100, unit = '' } = this.config;
+        const { min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX, unit = '' } = this.config;
 
         this.element.innerHTML = `
             <svg class="gauge-svg" viewBox="0 0 100 60">
@@ -15809,7 +19197,7 @@ class GaugeWidget extends DashboardWidget {
                 <!-- Value arc -->
                 <path class="gauge-value-arc" id="gauge-arc-${this.id}" d="M 10 50 A 40 40 0 0 1 90 50"/>
                 <!-- Needle -->
-                <g class="gauge-needle" id="gauge-needle-${this.id}" style="transform-origin: 50px 50px; transform: rotate(-90deg)">
+                <g class="gauge-needle" id="gauge-needle-${this.id}" style="transform-origin: 50px 50px; transform: rotate(${GaugeWidget.cssArcStartForStyle('default')}deg)">
                     <polygon points="50,15 48,50 52,50"/>
                 </g>
                 <!-- Center -->
@@ -15832,11 +19220,11 @@ class GaugeWidget extends DashboardWidget {
 
     // === Classic style (chrome rim, trading style) ===
     renderClassic() {
-        const { min = 0, max = 100, unit = '', zones = [] } = this.config;
+        const { min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX, unit = '', zones = [] } = this.config;
         const ticks = this.generateTicks(min, max, 5);
 
         // Semicircular gauge with value below on dark background
-        const cx = 50, cy = 46, r = 41;
+        const { cx, cy, r } = GaugeWidget.layoutForStyle('semicircle');
 
         this.element.innerHTML = `
             <svg class="gauge-svg gauge-semicircle" viewBox="0 0 100 72">
@@ -15876,7 +19264,7 @@ class GaugeWidget extends DashboardWidget {
                 ${ticks.map(t => this.renderClassicTick(t.angle, t.value, t.major)).join('')}
 
                 <!-- Needle -->
-                <g class="gauge-needle-semicircle" id="gauge-needle-${this.id}" style="transform-origin: ${cx}px ${cy}px; transform: rotate(-90deg)">
+                <g class="gauge-needle-semicircle" id="gauge-needle-${this.id}" style="transform-origin: ${cx}px ${cy}px; transform: rotate(${GaugeWidget.cssArcStartForStyle('semicircle')}deg)">
                     <polygon points="${cx},${cy - r + 6} ${cx - 2},${cy - 3} ${cx + 2},${cy - 3}" fill="#222"/>
                     <polygon points="${cx},${cy - r + 8} ${cx - 1.5},${cy - 4} ${cx + 1.5},${cy - 4}" fill="#c00"/>
                 </g>
@@ -15899,63 +19287,40 @@ class GaugeWidget extends DashboardWidget {
     }
 
     renderClassicZones(zones, min, max) {
-        if (!zones || zones.length === 0) return '';
-
-        const cx = 50, cy = 46, r = 34;
-        let html = '';
-
-        for (const zone of zones) {
-            const startPercent = (zone.from - min) / (max - min);
-            const endPercent = (zone.to - min) / (max - min);
-            // Position angles for cos/sin: LEFT (180°) to RIGHT (360°) via TOP (270°)
-            const startAngle = 180 + (startPercent * 180);
-            const endAngle = 180 + (endPercent * 180);
-
-            const startRad = startAngle * Math.PI / 180;
-            const endRad = endAngle * Math.PI / 180;
-
-            const x1 = cx + r * Math.cos(startRad);
-            const y1 = cy + r * Math.sin(startRad);
-            const x2 = cx + r * Math.cos(endRad);
-            const y2 = cy + r * Math.sin(endRad);
-
-            // Arc spans from startAngle to endAngle (sweep=1 for upper arc in SVG Y-down)
-            const arcSpan = Math.abs(endAngle - startAngle);
-            const largeArc = arcSpan > 180 ? 1 : 0;
-
-            html += `<path d="M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}"
-                          fill="none" stroke="${zone.color}" stroke-width="4" opacity="0.8"/>`;
-        }
-
-        return html;
+        const layout = GaugeWidget.layoutForStyle('semicircle');
+        return this.renderZoneArcs(zones, min, max, {
+            ...layout,
+            r: layout.zoneR,
+            startAngle: GaugeWidget.GEOMETRY.SEMICIRCLE_DEGREES,
+            angleSpan: GaugeWidget.GEOMETRY.SEMICIRCLE_DEGREES,
+            strokeWidth: 4, opacity: 0.8
+        });
     }
 
     renderClassicTick(angle, value, major) {
-        const cx = 50, cy = 46;
-        const outerR = 36;
-        const innerR = major ? 30 : 33;
-        const textR = 23;
+        const layout = GaugeWidget.layoutForStyle('semicircle');
+        const { cx, cy } = layout;
+        const outerR = layout.tickOuterR;
+        const innerR = major ? layout.tickMajorInnerR : layout.tickMinorInnerR;
+        const textR = layout.tickTextR;
 
         // Convert from lower semicircle angles (180→0) to upper semicircle (180→360)
-        const upperAngle = 360 - angle;
-        const rad = upperAngle * Math.PI / 180;
-        const x1 = cx + outerR * Math.cos(rad);
-        const y1 = cy + outerR * Math.sin(rad);
-        const x2 = cx + innerR * Math.cos(rad);
-        const y2 = cy + innerR * Math.sin(rad);
-        const tx = cx + textR * Math.cos(rad);
-        let ty = cy + textR * Math.sin(rad);
+        const upperAngle = GaugeWidget.GEOMETRY.FULL_CIRCLE_DEGREES - angle;
+        const outer = GaugeWidget.polarPoint(cx, cy, outerR, upperAngle);
+        const inner = GaugeWidget.polarPoint(cx, cy, innerR, upperAngle);
+        const text = GaugeWidget.polarPoint(cx, cy, textR, upperAngle);
+        let ty = text.y;
 
         // Raise extreme labels (0 and max) by 3px so they don't extend beyond gauge background
-        if (angle === 180 || angle === 0) {
+        if (angle === GaugeWidget.GEOMETRY.SEMICIRCLE_DEGREES || angle === 0) {
             ty -= 3;
         }
 
-        let html = `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"
+        let html = `<line x1="${outer.x}" y1="${outer.y}" x2="${inner.x}" y2="${inner.y}"
                          stroke="#444" stroke-width="${major ? 1 : 0.5}"/>`;
 
         if (major) {
-            html += `<text x="${tx}" y="${ty}" class="gauge-semicircle-tick" text-anchor="middle" dominant-baseline="middle">${value}</text>`;
+            html += `<text x="${text.x}" y="${ty}" class="gauge-semicircle-tick" text-anchor="middle" dominant-baseline="middle">${value}</text>`;
         }
 
         return html;
@@ -15963,11 +19328,11 @@ class GaugeWidget extends DashboardWidget {
 
     // === Modern style (Lada dashboard style) ===
     renderModern() {
-        const { min = 0, max = 100, unit = '', zones = [] } = this.config;
+        const { min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX, unit = '', zones = [] } = this.config;
         const ticks = this.generateTicks(min, max, 5);
 
         // Match speedometer outer diameter with thicker bezel
-        const cx = 60, cy = 55, r = 51;
+        const { cx, cy, r } = GaugeWidget.layoutForStyle('arc270');
 
         this.element.innerHTML = `
             <svg class="gauge-svg gauge-arc270" viewBox="0 0 120 115">
@@ -16020,7 +19385,7 @@ class GaugeWidget extends DashboardWidget {
                 ${ticks.map(t => this.renderModernTick(t.angle, t.value, t.major)).join('')}
 
                 <!-- Needle -->
-                <g class="gauge-needle-arc270" id="gauge-needle-${this.id}" style="transform-origin: ${cx}px ${cy}px; transform: rotate(-135deg)">
+                <g class="gauge-needle-arc270" id="gauge-needle-${this.id}" style="transform-origin: ${cx}px ${cy}px; transform: rotate(${GaugeWidget.cssArcStartForStyle('arc270')}deg)">
                     <line x1="${cx}" y1="${cy}" x2="${cx}" y2="${cy - r + 10}" stroke="#ff6b35" stroke-width="2" stroke-linecap="round"/>
                     <circle cx="${cx}" cy="${cy}" r="4" fill="#333" stroke="#ff6b35" stroke-width="1"/>
                 </g>
@@ -16043,60 +19408,36 @@ class GaugeWidget extends DashboardWidget {
     }
 
     renderModernRedZone(zones, min, max) {
-        if (!zones || zones.length === 0) return '';
-
-        const cx = 60, cy = 55, r = 38;
-        let html = '';
-
-        // Find red/warning zones (typically high values)
-        for (const zone of zones) {
-            const startPercent = (zone.from - min) / (max - min);
-            const endPercent = (zone.to - min) / (max - min);
-            // Position angles for cos/sin: BOTTOM-LEFT (135°) to BOTTOM-RIGHT (45°) via TOP (270°)
-            const startAngle = 135 + (startPercent * 270);
-            const endAngle = 135 + (endPercent * 270);
-
-            const startRad = startAngle * Math.PI / 180;
-            const endRad = endAngle * Math.PI / 180;
-
-            const x1 = cx + r * Math.cos(startRad);
-            const y1 = cy + r * Math.sin(startRad);
-            const x2 = cx + r * Math.cos(endRad);
-            const y2 = cy + r * Math.sin(endRad);
-
-            // Arc spans from startAngle to endAngle (increasing angles with sweep=1)
-            const arcSpan = Math.abs(endAngle - startAngle);
-            const largeArc = arcSpan > 180 ? 1 : 0;
-
-            html += `<path d="M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}"
-                          fill="none" stroke="${zone.color}" stroke-width="4" opacity="0.8"/>`;
-        }
-
-        return html;
+        const layout = GaugeWidget.layoutForStyle('arc270');
+        return this.renderZoneArcs(zones, min, max, {
+            ...layout,
+            r: layout.zoneR,
+            startAngle: GaugeWidget.GEOMETRY.ARC270_START_DEGREES,
+            angleSpan: GaugeWidget.GEOMETRY.ARC270_DEGREES,
+            strokeWidth: 4, opacity: 0.8
+        });
     }
 
     renderModernTick(angle, value, major) {
-        const cx = 60, cy = 55;
-        const outerR = 42;
-        const innerR = major ? 34 : 38;
-        const textR = 26;
+        const layout = GaugeWidget.layoutForStyle('arc270');
+        const { cx, cy } = layout;
+        const outerR = layout.tickOuterR;
+        const innerR = major ? layout.tickMajorInnerR : layout.tickMinorInnerR;
+        const textR = layout.tickTextR;
 
         // Convert from semicircle position angles (180° to 0°) to arc270 (135° to 405°)
-        const adjustedAngle = 135 + (180 - angle) / 180 * 270;
-        const rad = adjustedAngle * Math.PI / 180;
+        const { ARC270_START_DEGREES, ARC270_DEGREES, SEMICIRCLE_DEGREES } = GaugeWidget.GEOMETRY;
+        const adjustedAngle = ARC270_START_DEGREES
+            + (SEMICIRCLE_DEGREES - angle) / SEMICIRCLE_DEGREES * ARC270_DEGREES;
+        const outer = GaugeWidget.polarPoint(cx, cy, outerR, adjustedAngle);
+        const inner = GaugeWidget.polarPoint(cx, cy, innerR, adjustedAngle);
+        const text = GaugeWidget.polarPoint(cx, cy, textR, adjustedAngle);
 
-        const x1 = cx + outerR * Math.cos(rad);
-        const y1 = cy + outerR * Math.sin(rad);
-        const x2 = cx + innerR * Math.cos(rad);
-        const y2 = cy + innerR * Math.sin(rad);
-        const tx = cx + textR * Math.cos(rad);
-        const ty = cy + textR * Math.sin(rad);
-
-        let html = `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"
+        let html = `<line x1="${outer.x}" y1="${outer.y}" x2="${inner.x}" y2="${inner.y}"
                          stroke="${major ? '#888' : '#555'}" stroke-width="${major ? 1.5 : 0.5}"/>`;
 
         if (major) {
-            html += `<text x="${tx}" y="${ty}" class="gauge-arc270-tick" text-anchor="middle" dominant-baseline="middle">${value}</text>`;
+            html += `<text x="${text.x}" y="${text.y}" class="gauge-arc270-tick" text-anchor="middle" dominant-baseline="middle">${value}</text>`;
         }
 
         return html;
@@ -16104,11 +19445,11 @@ class GaugeWidget extends DashboardWidget {
 
     // === Speedometer style (realistic automotive gauge) ===
     renderSpeedometer() {
-        const { min = 0, max = 4000, unit = 'RPM', zones = [] } = this.config;
+        const { min = WIDGET_DEFAULT_MIN, max = SPEEDOMETER_DEFAULT_MAX_RPM, unit = 'RPM', zones = [] } = this.config;
         const majorStep = this.calculateMajorStep(min, max);
         const ticks = this.generateSpeedoTicks(min, max, majorStep);
 
-        const cx = 60, cy = 55, r = 48;
+        const { cx, cy, r } = GaugeWidget.layoutForStyle('speedometer');
 
         this.element.innerHTML = `
             <svg class="gauge-svg gauge-speedometer" viewBox="0 0 120 115">
@@ -16165,13 +19506,13 @@ class GaugeWidget extends DashboardWidget {
                 <path class="gauge-sector-fill" id="gauge-sector-${this.id}" style="display: none; opacity: 0.3;"/>
 
                 <!-- Color zones (danger zone etc) -->
-                ${this.renderSpeedoZones(zones, min, max, cx, cy, r - 6)}
+                ${this.renderSpeedoZones(zones, min, max, cx, cy, r - GaugeWidget.layoutForStyle('speedometer').zoneOffset)}
 
                 <!-- Tick marks and numbers -->
                 ${ticks.map(t => this.renderSpeedoTick(t, cx, cy, r)).join('')}
 
                 <!-- Needle assembly -->
-                <g class="gauge-needle-tacho" id="gauge-needle-${this.id}" style="transform-origin: ${cx}px ${cy}px; transform: rotate(-135deg)">
+                <g class="gauge-needle-tacho" id="gauge-needle-${this.id}" style="transform-origin: ${cx}px ${cy}px; transform: rotate(${GaugeWidget.cssArcStartForStyle('speedometer')}deg)">
                     <!-- Needle shadow -->
                     <polygon points="${cx},${cy - r + 14} ${cx - 3},${cy + 8} ${cx + 3},${cy + 8}"
                              fill="rgba(0,0,0,0.2)" transform="translate(1, 1)"/>
@@ -16210,10 +19551,10 @@ class GaugeWidget extends DashboardWidget {
 
     // === Dual Scale style (main value + target indicator) ===
     renderDualScale() {
-        const { min = 0, max = 100, unit = '', zones = [], sensor2 = '' } = this.config;
+        const { min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX, unit = '', zones = [], sensor2 = '' } = this.config;
         const hasSensor2 = sensor2 && sensor2.trim() !== '';
 
-        const cx = 60, cy = 62, r = 55;
+        const { cx, cy, r } = GaugeWidget.layoutForStyle('dual');
         const majorStep = this.calculateMajorStep(min, max);
         const ticks = this.generateSpeedoTicks(min, max, majorStep);
 
@@ -16275,7 +19616,7 @@ class GaugeWidget extends DashboardWidget {
                 <path class="gauge-sector-fill" id="gauge-sector-${this.id}" style="display: none; opacity: 0.3;"/>
 
                 <!-- Color zones -->
-                ${this.renderSpeedoZones(zones, min, max, cx, cy, r - 6)}
+                ${this.renderSpeedoZones(zones, min, max, cx, cy, r - GaugeWidget.layoutForStyle('dual').zoneOffset)}
 
                 <!-- Scale: tick marks -->
                 ${ticks.map(t => this.renderDualOuterTick(t, cx, cy, r)).join('')}
@@ -16286,10 +19627,10 @@ class GaugeWidget extends DashboardWidget {
                       filter="url(#dual-target-glow-${this.id})" style="display: none;"/>
 
                 <!-- Target indicator (invisible, used only for angle calculation) -->
-                <g class="dual-target-marker" id="gauge-target-${this.id}" style="transform-origin: ${cx}px ${cy}px; transform: rotate(-135deg); display: none;"></g>
+                <g class="dual-target-marker" id="gauge-target-${this.id}" style="transform-origin: ${cx}px ${cy}px; transform: rotate(${GaugeWidget.cssArcStartForStyle('dual')}deg); display: none;"></g>
 
                 <!-- Needle assembly (cyan) -->
-                <g class="gauge-needle-dual" id="gauge-needle-${this.id}" style="transform-origin: ${cx}px ${cy}px; transform: rotate(-135deg)">
+                <g class="gauge-needle-dual" id="gauge-needle-${this.id}" style="transform-origin: ${cx}px ${cy}px; transform: rotate(${GaugeWidget.cssArcStartForStyle('dual')}deg)">
                     <!-- Needle glow -->
                     <polygon points="${cx},${cy - r + 14} ${cx - 2.5},${cy + 6} ${cx + 2.5},${cy + 6}"
                              fill="#00d4ff" filter="url(#dual-glow-${this.id})" opacity="0.5"/>
@@ -16330,30 +19671,26 @@ class GaugeWidget extends DashboardWidget {
         this.targetDigitalEl = this.element.querySelector(`#gauge-target-digital-${this.id}`);
         this.sectorEl = this.element.querySelector(`#gauge-sector-${this.id}`);
         // Store dimensions for arc calculation
-        this.dualParams = { cx, cy, r, arcR: r - 2 };
+        this.dualParams = { cx, cy, r, arcR: r - GaugeWidget.layoutForStyle('dual').targetArcOffset };
     }
 
     renderDualOuterTick(tick, cx, cy, r) {
         const { angle, value, major } = tick;
-        const rad = angle * Math.PI / 180;
-
         // Outer scale: ticks at edge, numbers between ticks and inner dots
-        const outerR = r - 4;      // tick outer edge
-        const innerR = major ? r - 11 : r - 7;  // tick inner edge
-        const textR = r - 19;      // numbers position (between ticks and dots)
+        const layout = GaugeWidget.layoutForStyle('dual');
+        const outerR = r - layout.tickOuterOffset;
+        const innerR = major ? r - layout.tickMajorInnerOffset : r - layout.tickMinorInnerOffset;
+        const textR = r - layout.tickTextOffset;
 
-        const x1 = cx + outerR * Math.cos(rad);
-        const y1 = cy + outerR * Math.sin(rad);
-        const x2 = cx + innerR * Math.cos(rad);
-        const y2 = cy + innerR * Math.sin(rad);
+        const outer = GaugeWidget.polarPoint(cx, cy, outerR, angle);
+        const inner = GaugeWidget.polarPoint(cx, cy, innerR, angle);
 
-        let html = `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"
+        let html = `<line x1="${outer.x}" y1="${outer.y}" x2="${inner.x}" y2="${inner.y}"
                          stroke="#ccc" stroke-width="${major ? 1.8 : 0.8}"/>`;
 
         if (major) {
-            const tx = cx + textR * Math.cos(rad);
-            const ty = cy + textR * Math.sin(rad);
-            html += `<text x="${tx}" y="${ty}" class="dual-outer-label"
+            const text = GaugeWidget.polarPoint(cx, cy, textR, angle);
+            html += `<text x="${text.x}" y="${text.y}" class="dual-outer-label"
                           text-anchor="middle" dominant-baseline="middle">${value}</text>`;
         }
 
@@ -16362,23 +19699,22 @@ class GaugeWidget extends DashboardWidget {
 
     calculateMajorStep(min, max) {
         const range = max - min;
-        if (range <= 100) return 10;
-        if (range <= 500) return 50;
-        if (range <= 1000) return 100;
-        if (range <= 5000) return 500;
-        if (range <= 10000) return 1000;
-        return 2000;
+        const rule = GaugeWidget.MAJOR_STEP_RULES.find(({ maxRange }) => range <= maxRange);
+        if (rule) return rule.step;
+        return GAUGE_FALLBACK_MAJOR_STEP;
     }
 
     generateSpeedoTicks(min, max, majorStep) {
         const ticks = [];
         const minorStep = majorStep / 5;
+        const { ARC270_START_DEGREES, ARC270_DEGREES, MAJOR_STEP_EPSILON } = GaugeWidget.GEOMETRY;
 
         for (let v = min; v <= max; v += minorStep) {
-            const isMajor = Math.abs(v % majorStep) < 0.001 || Math.abs(v % majorStep - majorStep) < 0.001;
-            const percent = (v - min) / (max - min);
+            const isMajor = Math.abs(v % majorStep) < MAJOR_STEP_EPSILON
+                || Math.abs(v % majorStep - majorStep) < MAJOR_STEP_EPSILON;
+            const percent = percentInRange(v, min, max);
             // 270° arc for positioning with cos/sin (135° to 405°/45°)
-            const angle = 135 + (percent * 270);
+            const angle = ARC270_START_DEGREES + (percent * ARC270_DEGREES);
             ticks.push({ value: Math.round(v), angle, major: isMajor });
         }
 
@@ -16387,24 +19723,21 @@ class GaugeWidget extends DashboardWidget {
 
     renderSpeedoTick(tick, cx, cy, r) {
         const { angle, value, major } = tick;
-        const rad = angle * Math.PI / 180;
 
-        const outerR = r - 4;
-        const innerR = major ? r - 12 : r - 8;
-        const textR = r - 24;
+        const layout = GaugeWidget.layoutForStyle('speedometer');
+        const outerR = r - layout.tickOuterOffset;
+        const innerR = major ? r - layout.tickMajorInnerOffset : r - layout.tickMinorInnerOffset;
+        const textR = r - layout.tickTextOffset;
 
-        const x1 = cx + outerR * Math.cos(rad);
-        const y1 = cy + outerR * Math.sin(rad);
-        const x2 = cx + innerR * Math.cos(rad);
-        const y2 = cy + innerR * Math.sin(rad);
+        const outer = GaugeWidget.polarPoint(cx, cy, outerR, angle);
+        const inner = GaugeWidget.polarPoint(cx, cy, innerR, angle);
 
-        let html = `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"
+        let html = `<line x1="${outer.x}" y1="${outer.y}" x2="${inner.x}" y2="${inner.y}"
                          stroke="#333" stroke-width="${major ? 1.5 : 0.7}"/>`;
 
         if (major) {
-            const tx = cx + textR * Math.cos(rad);
-            const ty = cy + textR * Math.sin(rad);
-            html += `<text x="${tx}" y="${ty}" class="speedo-tick-label"
+            const text = GaugeWidget.polarPoint(cx, cy, textR, angle);
+            html += `<text x="${text.x}" y="${text.y}" class="speedo-tick-label"
                           text-anchor="middle" dominant-baseline="middle">${value}</text>`;
         }
 
@@ -16412,30 +19745,32 @@ class GaugeWidget extends DashboardWidget {
     }
 
     renderSpeedoZones(zones, min, max, cx, cy, r) {
+        return this.renderZoneArcs(zones, min, max, {
+            cx, cy, r,
+            startAngle: GaugeWidget.GEOMETRY.ARC270_START_DEGREES,
+            angleSpan: GaugeWidget.GEOMETRY.ARC270_DEGREES,
+            strokeWidth: 6, opacity: 0.7
+        });
+    }
+
+    renderZoneArcs(zones, min, max, opts) {
         if (!zones || zones.length === 0) return '';
 
         let html = '';
         for (const zone of zones) {
-            const startPercent = (zone.from - min) / (max - min);
-            const endPercent = (zone.to - min) / (max - min);
-            // Position angles for cos/sin (135° to 405°/45°)
-            const startAngle = 135 + (startPercent * 270);
-            const endAngle = 135 + (endPercent * 270);
+            const startPercent = percentInRange(zone.from, min, max);
+            const endPercent = percentInRange(zone.to, min, max);
+            const startAngle = opts.startAngle + (startPercent * opts.angleSpan);
+            const endAngle = opts.startAngle + (endPercent * opts.angleSpan);
 
-            const startRad = startAngle * Math.PI / 180;
-            const endRad = endAngle * Math.PI / 180;
+            const start = GaugeWidget.polarPoint(opts.cx, opts.cy, opts.r, startAngle);
+            const end = GaugeWidget.polarPoint(opts.cx, opts.cy, opts.r, endAngle);
 
-            const x1 = cx + r * Math.cos(startRad);
-            const y1 = cy + r * Math.sin(startRad);
-            const x2 = cx + r * Math.cos(endRad);
-            const y2 = cy + r * Math.sin(endRad);
-
-            // Arc spans from startAngle to endAngle (increasing angles with sweep=1)
             const arcSpan = Math.abs(endAngle - startAngle);
-            const largeArc = arcSpan > 180 ? 1 : 0;
+            const largeArc = arcSpan > GaugeWidget.GEOMETRY.SEMICIRCLE_DEGREES ? 1 : 0;
 
-            html += `<path d="M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}"
-                          fill="none" stroke="${zone.color}" stroke-width="6" opacity="0.7"/>`;
+            html += `<path d="M ${start.x} ${start.y} A ${opts.r} ${opts.r} 0 ${largeArc} 1 ${end.x} ${end.y}"
+                          fill="none" stroke="${zone.color}" stroke-width="${opts.strokeWidth}" opacity="${opts.opacity}"/>`;
         }
 
         return html;
@@ -16446,20 +19781,22 @@ class GaugeWidget extends DashboardWidget {
         const ticks = [];
         const range = max - min;
         const majorStep = range / majorCount;
-        const minorPerMajor = 4;
+        const minorPerMajor = GaugeWidget.GEOMETRY.MINOR_TICKS_PER_MAJOR;
 
         for (let i = 0; i <= majorCount; i++) {
             const value = min + (i * majorStep);
             const percent = i / majorCount;
             // Position angle for cos/sin: 180° (left) to 0° (right) via 90° (bottom)
-            const angle = 180 - (percent * 180);
+            const angle = GaugeWidget.GEOMETRY.SEMICIRCLE_DEGREES
+                - (percent * GaugeWidget.GEOMETRY.SEMICIRCLE_DEGREES);
             ticks.push({ angle, value: Math.round(value), major: true });
 
             // Minor ticks
             if (i < majorCount) {
                 for (let j = 1; j <= minorPerMajor; j++) {
                     const minorPercent = (i + j / (minorPerMajor + 1)) / majorCount;
-                    const minorAngle = 180 - (minorPercent * 180);
+                    const minorAngle = GaugeWidget.GEOMETRY.SEMICIRCLE_DEGREES
+                        - (minorPercent * GaugeWidget.GEOMETRY.SEMICIRCLE_DEGREES);
                     const minorValue = min + (minorPercent * range);
                     ticks.push({ angle: minorAngle, value: Math.round(minorValue), major: false });
                 }
@@ -16470,19 +19807,7 @@ class GaugeWidget extends DashboardWidget {
     }
 
     getColorForValue(value) {
-        const { zones = [] } = this.config;
-
-        if (zones.length === 0) {
-            return 'var(--accent-blue)';
-        }
-
-        for (const zone of zones) {
-            if (value >= zone.from && value <= zone.to) {
-                return zone.color;
-            }
-        }
-
-        return 'var(--accent-blue)';
+        return DashboardWidget.getColorForZones(value, this.config.zones);
     }
 
     updateArcColor(value) {
@@ -16494,7 +19819,7 @@ class GaugeWidget extends DashboardWidget {
     update(value, error = null) {
         super.update(value, error);
 
-        const { min = 0, max = 100, decimals = 1, style = 'default' } = this.config;
+        const { min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX, decimals = 1, style = 'default' } = this.config;
 
         // For speedometer/dual, check digitalEl; for others, check valueEl
         const hasDisplay = (style === 'speedometer' || style === 'dual') ? this.digitalEl : this.valueEl;
@@ -16507,9 +19832,9 @@ class GaugeWidget extends DashboardWidget {
             return;
         }
 
-        const numValue = parseFloat(value) || 0;
+        const numValue = parseNumberOrDefault(value, 0);
         const clampedValue = Math.max(min, Math.min(max, numValue));
-        const percent = (clampedValue - min) / (max - min);
+        const percent = percentInRange(clampedValue, min, max);
 
         // Detect overrange condition
         const isOverrange = numValue < min || numValue > max;
@@ -16517,41 +19842,9 @@ class GaugeWidget extends DashboardWidget {
         // Update value text (always show actual value, not clamped)
         if (this.valueEl) this.valueEl.textContent = numValue.toFixed(decimals);
 
-        // Update needle rotation based on style
-        // CSS rotate: 0 = UP, positive = clockwise
-        // Position angle (math): 0 = RIGHT, positive = counter-clockwise in SVG (Y down)
-        // To point at position P: CSS angle = P - 270
-        let angle;
-        switch (style) {
-            case 'semicircle':
-                // 180° arc: LEFT (180°) to RIGHT (360°) via TOP (270°) - UPPER semicircle
-                // Position = 180 + percent*180, so CSS = (180 + p*180) - 270 = -90 + p*180
-                angle = -90 + (percent * 180);
-                break;
-            case 'arc270':
-                // 270° arc: -135 to +135
-                angle = -135 + (percent * 270);
-                break;
-            case 'speedometer':
-                // 270° arc: -135 to +135 (same as arc270)
-                angle = -135 + (percent * 270);
-                // Update digital display (use decimals config)
-                if (this.digitalEl) {
-                    this.digitalEl.textContent = numValue.toFixed(decimals);
-                }
-                break;
-            case 'dual':
-                // 270° arc: -135 to +135 (same as speedometer)
-                angle = -135 + (percent * 270);
-                // Update digital display
-                if (this.digitalEl) {
-                    this.digitalEl.textContent = numValue.toFixed(decimals);
-                }
-                break;
-            default:
-                // 180° arc: LEFT (180°) to RIGHT (360°) via TOP (270°) - UPPER semicircle
-                // Position = 180 + percent*180, so CSS = (180 + p*180) - 270 = -90 + p*180
-                angle = -90 + (percent * 180);
+        const angle = GaugeWidget.angleForPercent(style, percent);
+        if ((style === 'speedometer' || style === 'dual') && this.digitalEl) {
+            this.digitalEl.textContent = numValue.toFixed(decimals);
         }
 
         // Apply needle rotation with CSS variable for animation
@@ -16584,7 +19877,7 @@ class GaugeWidget extends DashboardWidget {
     updateSetpoint(value, error = null) {
         if (!this.targetEl) return;
 
-        const { min = 0, max = 100, style = 'default', decimals = 1 } = this.config;
+        const { min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX, style = 'default', decimals = 1 } = this.config;
 
         // Only for dual style
         if (style !== 'dual') return;
@@ -16596,12 +19889,11 @@ class GaugeWidget extends DashboardWidget {
             return;
         }
 
-        const numValue = parseFloat(value) || 0;
+        const numValue = parseNumberOrDefault(value, 0);
         const clampedValue = Math.max(min, Math.min(max, numValue));
-        const percent = (clampedValue - min) / (max - min);
+        const percent = percentInRange(clampedValue, min, max);
 
-        // Calculate rotation angle (270° arc: -135° to +135°)
-        const angle = -135 + (percent * 270);
+        const angle = GaugeWidget.angleForPercent(style, percent);
 
         // Set rotation directly without transition (instant move)
         this.targetEl.style.transform = `rotate(${angle}deg)`;
@@ -16615,10 +19907,10 @@ class GaugeWidget extends DashboardWidget {
         // Update target arc (from 0/min to target value)
         if (this.targetArcEl && this.dualParams) {
             const { cx, cy, arcR } = this.dualParams;
-            const startAngle = -135; // Start at min (0)
+            const startAngle = GaugeWidget.cssArcStartForStyle(style);
             const endAngle = angle;  // End at target
 
-            if (percent > 0.01) {
+            if (percent > GaugeWidget.GEOMETRY.TARGET_ARC_MIN_PERCENT) {
                 const arcPath = this.describeArc(cx, cy, arcR, startAngle, endAngle);
                 this.targetArcEl.setAttribute('d', arcPath);
                 this.targetArcEl.style.display = 'block';
@@ -16632,12 +19924,12 @@ class GaugeWidget extends DashboardWidget {
     describeArc(cx, cy, r, startAngle, endAngle) {
         const start = this.polarToCartesian(cx, cy, r, endAngle);
         const end = this.polarToCartesian(cx, cy, r, startAngle);
-        const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+        const largeArcFlag = endAngle - startAngle <= GaugeWidget.GEOMETRY.SEMICIRCLE_DEGREES ? "0" : "1";
         return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} 0 ${end.x} ${end.y}`;
     }
 
     polarToCartesian(cx, cy, r, angleDeg) {
-        const angleRad = (angleDeg - 90) * Math.PI / 180;
+        const angleRad = GaugeWidget.toRadians(angleDeg - 90);
         return {
             x: cx + r * Math.cos(angleRad),
             y: cy + r * Math.sin(angleRad)
@@ -16648,7 +19940,7 @@ class GaugeWidget extends DashboardWidget {
     describeSector(cx, cy, r, startAngle, endAngle) {
         const start = this.polarToCartesian(cx, cy, r, startAngle);
         const end = this.polarToCartesian(cx, cy, r, endAngle);
-        const largeArcFlag = Math.abs(endAngle - startAngle) > 180 ? 1 : 0;
+        const largeArcFlag = Math.abs(endAngle - startAngle) > GaugeWidget.GEOMETRY.SEMICIRCLE_DEGREES ? 1 : 0;
         const sweepFlag = endAngle > startAngle ? 1 : 0;
         return `M ${cx} ${cy} L ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} ${sweepFlag} ${end.x} ${end.y} Z`;
     }
@@ -16667,7 +19959,7 @@ class GaugeWidget extends DashboardWidget {
         // Store target for comparison
         this.targetPercent = targetPercent;
         const startTime = performance.now();
-        const maxDuration = 1500; // Safety timeout slightly longer than CSS transition (1.2s)
+        const maxDuration = GaugeWidget.GEOMETRY.SECTOR_ANIMATION_MAX_MS;
 
         const animate = () => {
             // Read actual needle angle from computed transform
@@ -16685,25 +19977,8 @@ class GaugeWidget extends DashboardWidget {
                     const b = values[1];
                     // Calculate rotation angle in radians, then convert to degrees
                     const angleRad = Math.atan2(b, a);
-                    const angleDeg = angleRad * (180 / Math.PI);
-
-                    // Convert angle to percent based on gauge style
-                    switch (style) {
-                        case 'semicircle':
-                            // Range: -90° to +90°, so 180° total
-                            currentPercent = (angleDeg + 90) / 180;
-                            break;
-                        case 'arc270':
-                        case 'speedometer':
-                        case 'dual':
-                            // Range: -135° to +135°, so 270° total
-                            currentPercent = (angleDeg + 135) / 270;
-                            break;
-                        default:
-                            // Default: -90° to +90°, so 180° total
-                            currentPercent = (angleDeg + 90) / 180;
-                            break;
-                    }
+                    const angleDeg = angleRad * (GaugeWidget.GEOMETRY.SEMICIRCLE_DEGREES / Math.PI);
+                    currentPercent = GaugeWidget.percentFromAngle(style, angleDeg);
                 }
             }
 
@@ -16713,7 +19988,8 @@ class GaugeWidget extends DashboardWidget {
 
             // Continue animating until needle stops (close to target or timeout)
             const elapsed = performance.now() - startTime;
-            if (Math.abs(currentPercent - this.targetPercent) > 0.002 && elapsed < maxDuration) {
+            if (Math.abs(currentPercent - this.targetPercent) > GaugeWidget.GEOMETRY.SECTOR_ANIMATION_EPSILON
+                && elapsed < maxDuration) {
                 this.sectorAnimationId = requestAnimationFrame(animate);
             }
         };
@@ -16725,7 +20001,7 @@ class GaugeWidget extends DashboardWidget {
     updateSectorPath(percent) {
         if (!this.sectorEl) return;
 
-        if (percent <= 0.001) {
+        if (percent <= GaugeWidget.GEOMETRY.SECTOR_MIN_PERCENT) {
             this.sectorEl.style.display = 'none';
             return;
         }
@@ -16733,39 +20009,10 @@ class GaugeWidget extends DashboardWidget {
         this.sectorEl.style.display = 'block';
 
         const { style = 'default' } = this.config;
-        let path = '';
-
-        switch (style) {
-            case 'semicircle': {
-                const cx = 50, cy = 46, r = 34;
-                const startAngle = -90;
-                const endAngle = -90 + (percent * 180);
-                path = this.describeSector(cx, cy, r, startAngle, endAngle);
-                break;
-            }
-            case 'arc270':
-            case 'speedometer': {
-                const cx = 60, cy = 55, r = 44;
-                const startAngle = -135;
-                const endAngle = -135 + (percent * 270);
-                path = this.describeSector(cx, cy, r, startAngle, endAngle);
-                break;
-            }
-            case 'dual': {
-                const cx = 60, cy = 62, r = 44;
-                const startAngle = -135;
-                const endAngle = -135 + (percent * 270);
-                path = this.describeSector(cx, cy, r, startAngle, endAngle);
-                break;
-            }
-            default: {
-                const cx = 50, cy = 50, r = 35;
-                const startAngle = -90;
-                const endAngle = -90 + (percent * 180);
-                path = this.describeSector(cx, cy, r, startAngle, endAngle);
-                break;
-            }
-        }
+        const { cx, cy, r } = GaugeWidget.sectorParamsForStyle(style);
+        const startAngle = GaugeWidget.cssArcStartForStyle(style);
+        const endAngle = GaugeWidget.angleForPercent(style, percent);
+        const path = this.describeSector(cx, cy, r, startAngle, endAngle);
 
         this.sectorEl.setAttribute('d', path);
         this.sectorEl.style.fill = this.getColorForValue(this.lastValue || 0);
@@ -16785,27 +20032,21 @@ class GaugeWidget extends DashboardWidget {
 
     static getConfigForm(config = {}) {
         const zones = config.zones || [];
+        const isDual = config.style === 'dual';
         return `
-            <div class="widget-config-field">
-                <label>Sensor</label>
-                <input type="text" class="widget-input" name="sensor"
-                       value="${escapeHtml(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
+            ${renderSensorBindingFields(config, { fieldPrefix: '' })}
+            <div class="dual-scale-fields" style="display: ${isDual ? 'block' : 'none'};">
+                ${renderSensorBindingFields({
+                    serverId:   config.serverId2   ?? config.serverId,
+                    objectName: config.objectName2 ?? config.objectName,
+                    sensor:     config.sensor2 || '',
+                    sensorId:   config.sensorId2 ?? null,
+                }, { fieldPrefix: 'sensor2-', sensorLabel: 'Target/Setpoint Sensor' })}
             </div>
-            <div class="dual-scale-fields" style="display: ${config.style === 'dual' ? 'block' : 'none'};">
-                <div class="widget-config-field">
-                    <label>Target Sensor</label>
-                    <input type="text" class="widget-input" name="sensor2"
-                           value="${escapeHtml(config.sensor2 || '')}" placeholder="Target/setpoint sensor..." autocomplete="off">
-                </div>
-            </div>
-            <div class="widget-config-field">
-                <label>Label</label>
-                <input type="text" class="widget-input" name="label"
-                       value="${escapeHtml(config.label || '')}" placeholder="Display label">
-            </div>
+            ${renderLabelField(config)}
             <div class="widget-config-field">
                 <label>Style</label>
-                <select class="widget-select" name="style" onchange="toggleDualScaleFields(this)">
+                <select class="widget-select" name="style">
                     <option value="default" ${!config.style || config.style === 'default' ? 'selected' : ''}>Default</option>
                     <option value="semicircle" ${config.style === 'semicircle' ? 'selected' : ''}>Semicircle White</option>
                     <option value="arc270" ${config.style === 'arc270' ? 'selected' : ''}>Arc 270° Black</option>
@@ -16816,20 +20057,18 @@ class GaugeWidget extends DashboardWidget {
             <div class="widget-config-row">
                 <div class="widget-config-field">
                     <label>Min</label>
-                    <input type="number" class="widget-input" name="min"
-                           value="${config.min ?? 0}">
+                    <input type="number" class="widget-input" name="min" value="${config.min ?? 0}">
                 </div>
                 <div class="widget-config-field">
                     <label>Max</label>
-                    <input type="number" class="widget-input" name="max"
-                           value="${config.max ?? 100}">
+                    <input type="number" class="widget-input" name="max" value="${config.max ?? 100}">
                 </div>
             </div>
             <div class="widget-config-row">
                 <div class="widget-config-field">
                     <label>Unit</label>
                     <input type="text" class="widget-input" name="unit"
-                           value="${escapeHtml(config.unit || '')}" placeholder="°C, %, etc.">
+                           value="${escapeAttr(config.unit || '')}" placeholder="°C, %, etc.">
                 </div>
                 <div class="widget-config-field">
                     <label>Decimals</label>
@@ -16847,71 +20086,72 @@ class GaugeWidget extends DashboardWidget {
                 </div>
             </div>
             <div class="widget-config-field">
-                <div class="zones-editor">
-                    <div class="zones-header">
-                        <label>Color Zones</label>
-                        <button type="button" class="zones-add-btn" onclick="addZoneField(this)">+ Add Zone</button>
-                    </div>
-                    <div class="zones-list" id="zones-list">
-                        ${zones.map((z, i) => `
-                            <div class="zone-item">
-                                <input type="color" class="zone-color" name="zone-color-${i}" value="${z.color || '#22c55e'}">
-                                <div class="zone-inputs">
-                                    <input type="number" class="zone-input" name="zone-from-${i}" value="${z.from ?? 0}" placeholder="From">
-                                    <span class="zone-separator">→</span>
-                                    <input type="number" class="zone-input" name="zone-to-${i}" value="${z.to ?? 100}" placeholder="To">
-                                </div>
-                                <button type="button" class="zone-remove-btn" onclick="removeZoneField(this)">×</button>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
+                ${renderColorZonesEditor(zones, '#22c55e')}
             </div>
         `;
     }
 
     static parseConfigForm(form) {
-        const zones = [];
-        const zoneItems = form.querySelectorAll('.zone-item');
-        zoneItems.forEach((item) => {
-            // Find elements by class/type inside item (index-independent)
-            const color = item.querySelector('.zone-color')?.value;
-            const inputs = item.querySelectorAll('.zone-input');
-            const from = parseFloat(inputs[0]?.value);
-            const to = parseFloat(inputs[1]?.value);
-            if (color && !isNaN(from) && !isNaN(to)) {
-                zones.push({ from, to, color });
-            }
-        });
+        const zones = parseColorZones(form);
 
+        const binding = parseSensorBindingFields(form, { fieldPrefix: '' });
         const style = form.querySelector('[name="style"]')?.value || 'default';
         const result = {
-            sensor: form.querySelector('[name="sensor"]')?.value || '',
+            ...binding,
             label: form.querySelector('[name="label"]')?.value || '',
             style,
-            min: parseFloat(form.querySelector('[name="min"]')?.value) || 0,
-            max: parseFloat(form.querySelector('[name="max"]')?.value) || 100,
+            min: parseNumberOrDefault(form.querySelector('[name="min"]')?.value, 0),
+            max: parseNumberOrDefault(form.querySelector('[name="max"]')?.value, 100),
             unit: form.querySelector('[name="unit"]')?.value || '',
-            decimals: parseInt(form.querySelector('[name="decimals"]')?.value) || 1,
+            decimals: parseIntegerOrDefault(form.querySelector('[name="decimals"]')?.value, 1),
             fillSector: form.querySelector('[name="fillSector"]')?.checked || false,
             zones
         };
-
-        // Dual scale fields (target sensor uses same min/max as main)
         if (style === 'dual') {
-            result.sensor2 = form.querySelector('[name="sensor2"]')?.value || '';
+            const b2 = parseSensorBindingFields(form, { fieldPrefix: 'sensor2-' });
+            result.serverId2   = b2.serverId;
+            result.objectName2 = b2.objectName;
+            result.sensor2     = b2.sensor;
+            result.sensorId2   = b2.sensorId;
         }
-
         return result;
+    }
+
+    static initConfigHandlers(form, config = {}) {
+        mountZonesReusePicker(form, 'gauge');
+        initSensorBindingHandlers(form, config, { fieldPrefix: '' });
+
+        const wireDual = () => {
+            initSensorBindingHandlers(form, {
+                serverId:   config.serverId2   ?? config.serverId,
+                objectName: config.objectName2 ?? config.objectName,
+                sensor:     config.sensor2,
+                sensorId:   config.sensorId2,
+            }, { fieldPrefix: 'sensor2-' });
+        };
+
+        if (config.style === 'dual') wireDual();
+
+        // Если юзер переключит style → dual после открытия диалога, sensor2 поля
+        // станут видны (toggleDualScaleFields), но без wiring останутся пустыми.
+        // Listener wire'ит их при первом переходе в dual; helper idempotent.
+        const styleSel = form.querySelector('[name="style"]');
+        styleSel?.addEventListener('change', () => {
+            toggleDualScaleFields(styleSel);
+            if (styleSel.value === 'dual') wireDual();
+        });
     }
 }
 
+
+// === 61-dashboard-widgets.js ===
 // ============================================================================
 // Level Widget (CSS + SVG)
 // ============================================================================
 
 class LevelWidget extends DashboardWidget {
     static type = 'level';
+    static usesNewSensorAutocomplete = true;
     static displayName = 'Level';
     static description = 'Tank level indicator';
     static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2"/><rect x="8" y="10" width="8" height="10" fill="currentColor" opacity="0.3"/></svg>';
@@ -16938,19 +20178,7 @@ class LevelWidget extends DashboardWidget {
     }
 
     getColorForValue(value) {
-        const { zones = [] } = this.config;
-
-        if (zones.length === 0) {
-            return 'var(--accent-blue)';
-        }
-
-        for (const zone of zones) {
-            if (value >= zone.from && value <= zone.to) {
-                return zone.color;
-            }
-        }
-
-        return 'var(--accent-blue)';
+        return DashboardWidget.getColorForZones(value, this.config.zones);
     }
 
     update(value, error = null) {
@@ -16963,9 +20191,9 @@ class LevelWidget extends DashboardWidget {
             return;
         }
 
-        const { min = 0, max = 100, orientation = 'vertical', unit = '%', decimals = 0 } = this.config;
-        const numValue = parseFloat(value) || 0;
-        const percent = Math.max(0, Math.min(100, ((numValue - min) / (max - min)) * 100));
+        const { min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX, orientation = 'vertical', unit = '%', decimals = 0 } = this.config;
+        const numValue = parseNumberOrDefault(value, 0);
+        const percent = percentInRange(numValue, min, max, 100);
 
         const isVertical = orientation === 'vertical';
         if (isVertical) {
@@ -16981,26 +20209,16 @@ class LevelWidget extends DashboardWidget {
     static getConfigForm(config = {}) {
         const zones = config.zones || [];
         return `
-            <div class="widget-config-field">
-                <label>Sensor</label>
-                <input type="text" class="widget-input" name="sensor"
-                       value="${escapeHtml(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
-            </div>
-            <div class="widget-config-field">
-                <label>Label</label>
-                <input type="text" class="widget-input" name="label"
-                       value="${escapeHtml(config.label || '')}" placeholder="Display label">
-            </div>
+            ${renderSensorBindingFields(config, { fieldPrefix: '' })}
+            ${renderLabelField(config)}
             <div class="widget-config-row">
                 <div class="widget-config-field">
                     <label>Min</label>
-                    <input type="number" class="widget-input" name="min"
-                           value="${config.min ?? 0}">
+                    <input type="number" class="widget-input" name="min" value="${config.min ?? WIDGET_DEFAULT_MIN}">
                 </div>
                 <div class="widget-config-field">
                     <label>Max</label>
-                    <input type="number" class="widget-input" name="max"
-                           value="${config.max ?? 100}">
+                    <input type="number" class="widget-input" name="max" value="${config.max ?? WIDGET_DEFAULT_MAX}">
                 </div>
             </div>
             <div class="widget-config-row">
@@ -17014,56 +20232,31 @@ class LevelWidget extends DashboardWidget {
                 <div class="widget-config-field">
                     <label>Unit</label>
                     <input type="text" class="widget-input" name="unit"
-                           value="${escapeHtml(config.unit || '%')}" placeholder="%">
+                           value="${escapeAttr(config.unit || '%')}" placeholder="%">
                 </div>
             </div>
             <div class="widget-config-field">
-                <div class="zones-editor">
-                    <div class="zones-header">
-                        <label>Color Zones</label>
-                        <button type="button" class="zones-add-btn" onclick="addZoneField(this)">+ Add Zone</button>
-                    </div>
-                    <div class="zones-list" id="zones-list">
-                        ${zones.map((z, i) => `
-                            <div class="zone-item">
-                                <input type="color" class="zone-color" name="zone-color-${i}" value="${z.color || '#3b82f6'}">
-                                <div class="zone-inputs">
-                                    <input type="number" class="zone-input" name="zone-from-${i}" value="${z.from ?? 0}" placeholder="From">
-                                    <span class="zone-separator">→</span>
-                                    <input type="number" class="zone-input" name="zone-to-${i}" value="${z.to ?? 100}" placeholder="To">
-                                </div>
-                                <button type="button" class="zone-remove-btn" onclick="removeZoneField(this)">×</button>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
+                ${renderColorZonesEditor(zones, '#3b82f6')}
             </div>
         `;
     }
 
     static parseConfigForm(form) {
-        const zones = [];
-        const zoneItems = form.querySelectorAll('.zone-item');
-        zoneItems.forEach((item) => {
-            // Find elements by class/type inside item (index-independent)
-            const color = item.querySelector('.zone-color')?.value;
-            const inputs = item.querySelectorAll('.zone-input');
-            const from = parseFloat(inputs[0]?.value);
-            const to = parseFloat(inputs[1]?.value);
-            if (color && !isNaN(from) && !isNaN(to)) {
-                zones.push({ from, to, color });
-            }
-        });
-
+        const zones = parseColorZones(form);
         return {
-            sensor: form.querySelector('[name="sensor"]')?.value || '',
+            ...parseSensorBindingFields(form, { fieldPrefix: '' }),
             label: form.querySelector('[name="label"]')?.value || '',
-            min: parseFloat(form.querySelector('[name="min"]')?.value) || 0,
-            max: parseFloat(form.querySelector('[name="max"]')?.value) || 100,
+            min: parseNumberOrDefault(form.querySelector('[name="min"]')?.value, WIDGET_DEFAULT_MIN),
+            max: parseNumberOrDefault(form.querySelector('[name="max"]')?.value, WIDGET_DEFAULT_MAX),
             orientation: form.querySelector('[name="orientation"]')?.value || 'vertical',
             unit: form.querySelector('[name="unit"]')?.value || '%',
             zones
         };
+    }
+
+    static initConfigHandlers(form, config = {}) {
+        mountZonesReusePicker(form, 'level');
+        initSensorBindingHandlers(form, config, { fieldPrefix: '' });
     }
 }
 
@@ -17073,6 +20266,7 @@ class LevelWidget extends DashboardWidget {
 
 class LedWidget extends DashboardWidget {
     static type = 'led';
+    static usesNewSensorAutocomplete = true;
     static displayName = 'LED';
     static description = 'On/Off indicator';
     static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>';
@@ -17117,7 +20311,7 @@ class LedWidget extends DashboardWidget {
         super.update(value, error);
 
         const { threshold = 0 } = this.config;
-        const numValue = parseFloat(value) || 0;
+        const numValue = parseNumberOrDefault(value, 0);
         const isOn = numValue > threshold;
 
         this.updateLed(isOn, !!error);
@@ -17125,16 +20319,8 @@ class LedWidget extends DashboardWidget {
 
     static getConfigForm(config = {}) {
         return `
-            <div class="widget-config-field">
-                <label>Sensor</label>
-                <input type="text" class="widget-input" name="sensor"
-                       value="${escapeHtml(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
-            </div>
-            <div class="widget-config-field">
-                <label>Label</label>
-                <input type="text" class="widget-input" name="label"
-                       value="${escapeHtml(config.label || '')}" placeholder="Display label">
-            </div>
+            ${renderSensorBindingFields(config, { fieldPrefix: '' })}
+            ${renderLabelField(config)}
             <div class="widget-config-field">
                 <label>Threshold (value > threshold = ON)</label>
                 <input type="number" class="widget-input" name="threshold"
@@ -17170,14 +20356,18 @@ class LedWidget extends DashboardWidget {
 
     static parseConfigForm(form) {
         return {
-            sensor: form.querySelector('[name="sensor"]')?.value || '',
+            ...parseSensorBindingFields(form, { fieldPrefix: '' }),
             label: form.querySelector('[name="label"]')?.value || '',
-            threshold: parseFloat(form.querySelector('[name="threshold"]')?.value) || 0,
+            threshold: parseNumberOrDefault(form.querySelector('[name="threshold"]')?.value, 0),
             onColor: form.querySelector('[name="onColor"]')?.value || '#22c55e',
             offColor: form.querySelector('[name="offColor"]')?.value || '#6b7280',
             errorColor: form.querySelector('[name="errorColor"]')?.value || '#ef4444',
             blinkOnError: form.querySelector('[name="blinkOnError"]')?.checked !== false
         };
+    }
+
+    static initConfigHandlers(form, config = {}) {
+        initSensorBindingHandlers(form, config, { fieldPrefix: '' });
     }
 }
 
@@ -17185,18 +20375,12 @@ class LedWidget extends DashboardWidget {
 // Label Widget (static text)
 // ============================================================================
 
-class LabelWidget {
+class LabelWidget extends DashboardWidget {
     static type = 'label';
     static displayName = 'Label';
     static description = 'Static text label or header';
     static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><text x="12" y="16" text-anchor="middle" font-size="14" fill="currentColor">Aa</text></svg>';
     static defaultSize = { width: 8, height: 2 };
-
-    constructor(id, config, container) {
-        this.id = id;
-        this.config = config || {};
-        this.container = container;
-    }
 
     render() {
         const {
@@ -17250,19 +20434,12 @@ class LabelWidget {
         // No-op - label is static
     }
 
-    // Update text dynamically if needed
-    setText(text) {
-        if (this.labelEl) {
-            this.labelEl.textContent = text;
-        }
-    }
-
     static getConfigForm(config = {}) {
         return `
             <div class="widget-config-field">
                 <label>Text</label>
                 <input type="text" class="widget-input" name="text"
-                       value="${escapeHtml(config.text || '')}" placeholder="Label text">
+                       value="${escapeAttr(config.text || '')}" placeholder="Label text">
             </div>
             <div class="widget-config-row">
                 <div class="widget-config-field">
@@ -17310,7 +20487,7 @@ class LabelWidget {
                 <div class="widget-config-field">
                     <label>Border Radius</label>
                     <input type="number" class="widget-input" name="borderRadius"
-                           value="${config.borderRadius || 4}" min="0" max="20">
+                           value="${config.borderRadius ?? 4}" min="0" max="20">
                 </div>
                 <div class="widget-config-field">
                     <label>Background</label>
@@ -17340,8 +20517,8 @@ class LabelWidget {
             color: form.querySelector('[name="color"]')?.value || '#d8dce2',
             border: form.querySelector('[name="border"]')?.checked || false,
             borderColor: form.querySelector('[name="borderColor"]')?.value || '#4b5563',
-            borderWidth: parseInt(form.querySelector('[name="borderWidth"]')?.value) || 1,
-            borderRadius: parseInt(form.querySelector('[name="borderRadius"]')?.value) || 4,
+            borderWidth: parseIntegerOrDefault(form.querySelector('[name="borderWidth"]')?.value, 1),
+            borderRadius: parseIntegerOrDefault(form.querySelector('[name="borderRadius"]')?.value, 4),
             backgroundColor: form.querySelector('[name="backgroundColor"]')?.value || '#1f2937'
         };
     }
@@ -17351,18 +20528,12 @@ class LabelWidget {
 // Divider Widget (visual separator)
 // ============================================================================
 
-class DividerWidget {
+class DividerWidget extends DashboardWidget {
     static type = 'divider';
     static displayName = 'Divider';
     static description = 'Horizontal or vertical separator line';
     static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="12" x2="20" y2="12"/></svg>';
     static defaultSize = { width: 12, height: 1 };
-
-    constructor(id, config, container) {
-        this.id = id;
-        this.config = config || {};
-        this.container = container;
-    }
 
     render() {
         const {
@@ -17426,7 +20597,7 @@ class DividerWidget {
                 <div class="widget-config-field">
                     <label>Margin (px)</label>
                     <input type="number" class="widget-input" name="margin"
-                           value="${config.margin || 8}" min="0" max="50">
+                           value="${config.margin ?? 8}" min="0" max="50">
                 </div>
                 <div class="widget-config-field">
                     <label>Color</label>
@@ -17441,8 +20612,8 @@ class DividerWidget {
         return {
             orientation: form.querySelector('[name="orientation"]')?.value || 'horizontal',
             style: form.querySelector('[name="style"]')?.value || 'solid',
-            thickness: parseInt(form.querySelector('[name="thickness"]')?.value) || 1,
-            margin: parseInt(form.querySelector('[name="margin"]')?.value) || 8,
+            thickness: parseIntegerOrDefault(form.querySelector('[name="thickness"]')?.value, 1),
+            margin: parseIntegerOrDefault(form.querySelector('[name="margin"]')?.value, 8),
             color: form.querySelector('[name="color"]')?.value || '#4b5563'
         };
     }
@@ -17452,17 +20623,16 @@ class DividerWidget {
 // StatusBar Widget (multiple status indicators)
 // ============================================================================
 
-class StatusBarWidget {
+class StatusBarWidget extends DashboardWidget {
     static type = 'statusbar';
+    static usesNewSensorAutocomplete = true;
     static displayName = 'Status Bar';
     static description = 'Multiple status indicators in a row';
     static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="3" fill="#22c55e"/><circle cx="12" cy="12" r="3" fill="#ef4444"/><circle cx="19" cy="12" r="3" fill="#6b7280"/></svg>';
     static defaultSize = { width: 12, height: 3 };
 
     constructor(id, config, container) {
-        this.id = id;
-        this.config = config || {};
-        this.container = container;
+        super(id, config, container);
         this.indicators = new Map();
     }
 
@@ -17536,7 +20706,12 @@ class StatusBarWidget {
         if (!indicator) return;
 
         const { item, led } = indicator;
-        const { threshold = 0.5, onColor = '#22c55e', offColor = '#6b7280', errorColor = '#ef4444' } = item;
+        const {
+            threshold = STATUS_WIDGET_DEFAULT_THRESHOLD,
+            onColor = '#22c55e',
+            offColor = '#6b7280',
+            errorColor = '#ef4444'
+        } = item;
 
         if (error) {
             led.style.background = errorColor;
@@ -17561,54 +20736,48 @@ class StatusBarWidget {
         }
     }
 
-    // Update by sensor name (called from SSE handler)
-    updateBySensor(sensorName, value, error = null) {
+    // Update by sensor name (called from SSE handler).
+    // ctx — { serverId, objectName, sensorName } для отбраковки коллизий имён
+    // на разных (server, object) парах. Если у item полный triplet — match
+    // строгий; если у item только sensor — соответствие по имени (legacy).
+    updateBySensor(sensorName, value, error = null, ctx = null) {
         const { items = [] } = this.config;
-        items.forEach((item, idx) => {
-            if (item.sensor === sensorName) {
-                this.updateIndicator(idx, value, error);
-            }
+        updateSensorItemsByName(items, sensorName, ctx, (item, idx) => {
+            this.updateIndicator(idx, value, error);
         });
     }
 
-    static getConfigForm(config = {}) {
-        const items = config.items || [{ label: 'Status 1', sensor: '', threshold: 0.5, onColor: '#22c55e', offColor: '#6b7280' }];
-
-        const itemsHtml = items.map((item, idx) => `
-            <div class="statusbar-item-config" data-idx="${idx}">
-                <div class="widget-config-row">
-                    <div class="widget-config-field" style="flex: 1;">
-                        <label>Label</label>
-                        <input type="text" class="widget-input" name="item-label-${idx}"
-                               value="${escapeHtml(item.label || '')}" placeholder="Status name">
-                    </div>
-                    <div class="widget-config-field" style="flex: 2;">
-                        <label>Sensor</label>
-                        <input type="text" class="widget-input sensor-autocomplete" name="item-sensor-${idx}"
-                               value="${escapeHtml(item.sensor || '')}" placeholder="Sensor name">
-                    </div>
+    static _renderItemRow({ idx, item }) {
+        const extraHtml = `
+            <div class="widget-config-row">
+                <div class="widget-config-field" style="flex: 1;">
+                    <label>Label</label>
+                    <input type="text" class="widget-input" name="item-${idx}-label"
+                           value="${escapeAttr(item.label || '')}" placeholder="Status name">
                 </div>
-                <div class="widget-config-row">
-                    <div class="widget-config-field">
-                        <label>Threshold</label>
-                        <input type="number" class="widget-input" name="item-threshold-${idx}"
-                               value="${item.threshold ?? 0.5}" step="0.1">
-                    </div>
-                    <div class="widget-config-field">
-                        <label>On Color</label>
-                        <input type="color" class="widget-input" name="item-onColor-${idx}"
-                               value="${item.onColor || '#22c55e'}">
-                    </div>
-                    <div class="widget-config-field">
-                        <label>Off Color</label>
-                        <input type="color" class="widget-input" name="item-offColor-${idx}"
-                               value="${item.offColor || '#6b7280'}">
-                    </div>
-                    <button type="button" class="widget-btn-small remove-statusbar-item" data-idx="${idx}" style="align-self: flex-end;">×</button>
+                <div class="widget-config-field">
+                    <label>Threshold</label>
+                    <input type="number" class="widget-input" name="item-${idx}-threshold"
+                           value="${item.threshold ?? STATUS_WIDGET_DEFAULT_THRESHOLD}" step="0.1">
+                </div>
+                <div class="widget-config-field">
+                    <label>On</label>
+                    <input type="color" class="widget-input" name="item-${idx}-onColor"
+                           value="${item.onColor || '#22c55e'}">
+                </div>
+                <div class="widget-config-field">
+                    <label>Off</label>
+                    <input type="color" class="widget-input" name="item-${idx}-offColor"
+                           value="${item.offColor || '#6b7280'}">
                 </div>
             </div>
-        `).join('');
+        `;
+        return renderSensorItemRow({ idx, item, extraFieldsHtml: extraHtml, rowClass: 'statusbar-item' });
+    }
 
+    static getConfigForm(config = {}) {
+        const items = config.items || [{ label: 'Status 1' }];
+        const itemsHtml = items.map((item, idx) => StatusBarWidget._renderItemRow({ idx, item })).join('');
         return `
             <div class="widget-config-field">
                 <label>Layout</label>
@@ -17630,99 +20799,42 @@ class StatusBarWidget {
     }
 
     static initConfigHandlers(form, config = {}) {
-        const container = form.querySelector('#statusbar-items-container');
-        const addBtn = form.querySelector('#add-statusbar-item');
-        let itemCount = (config.items || []).length || 1;
-
-        // Add new indicator
-        addBtn?.addEventListener('click', () => {
-            const idx = itemCount++;
-            const itemHtml = `
-                <div class="statusbar-item-config" data-idx="${idx}">
-                    <div class="widget-config-row">
-                        <div class="widget-config-field" style="flex: 1;">
-                            <label>Label</label>
-                            <input type="text" class="widget-input" name="item-label-${idx}"
-                                   value="" placeholder="Status name">
-                        </div>
-                        <div class="widget-config-field" style="flex: 2;">
-                            <label>Sensor</label>
-                            <input type="text" class="widget-input sensor-autocomplete" name="item-sensor-${idx}"
-                                   value="" placeholder="Sensor name">
-                        </div>
-                    </div>
-                    <div class="widget-config-row">
-                        <div class="widget-config-field">
-                            <label>Threshold</label>
-                            <input type="number" class="widget-input" name="item-threshold-${idx}"
-                                   value="0.5" step="0.1">
-                        </div>
-                        <div class="widget-config-field">
-                            <label>On Color</label>
-                            <input type="color" class="widget-input" name="item-onColor-${idx}"
-                                   value="#22c55e">
-                        </div>
-                        <div class="widget-config-field">
-                            <label>Off Color</label>
-                            <input type="color" class="widget-input" name="item-offColor-${idx}"
-                                   value="#6b7280">
-                        </div>
-                        <button type="button" class="widget-btn-small remove-statusbar-item" data-idx="${idx}" style="align-self: flex-end;">×</button>
-                    </div>
-                </div>
-            `;
-            container.insertAdjacentHTML('beforeend', itemHtml);
-
-            // Setup autocomplete for new sensor input
-            const newInput = container.querySelector(`[name="item-sensor-${idx}"]`);
-            if (newInput && typeof setupSensorAutocomplete === 'function') {
-                setupSensorAutocomplete(newInput);
-            }
-        });
-
-        // Remove indicator
-        container?.addEventListener('click', (e) => {
-            if (e.target.classList.contains('remove-statusbar-item')) {
-                const item = e.target.closest('.statusbar-item-config');
-                if (item && container.querySelectorAll('.statusbar-item-config').length > 1) {
-                    item.remove();
-                }
-            }
-        });
-
-        // Setup autocomplete for existing sensor inputs
-        form.querySelectorAll('.sensor-autocomplete').forEach(input => {
-            if (typeof setupSensorAutocomplete === 'function') {
-                setupSensorAutocomplete(input);
-            }
+        initSensorItemListHandlers(form, config, {
+            addBtnSelector: '#add-statusbar-item',
+            containerSelector: '#statusbar-items-container',
+            rowClass: 'statusbar-item',
+            defaultExtras: () => ({
+                label: '',
+                threshold: STATUS_WIDGET_DEFAULT_THRESHOLD,
+                onColor: '#22c55e',
+                offColor: '#6b7280'
+            }),
+            renderRow: StatusBarWidget._renderItemRow,
+            parseExtraFields: (el, idx) => StatusBarWidget.parseItemExtraFields(form, idx),
         });
     }
 
+    static parseItemExtraFields(form, idx) {
+        return {
+            label: form.querySelector(`[name="item-${idx}-label"]`)?.value || '',
+            threshold: parseNumberOrDefault(
+                form.querySelector(`[name="item-${idx}-threshold"]`)?.value,
+                STATUS_WIDGET_DEFAULT_THRESHOLD
+            ),
+            onColor: form.querySelector(`[name="item-${idx}-onColor"]`)?.value || '#22c55e',
+            offColor: form.querySelector(`[name="item-${idx}-offColor"]`)?.value || '#6b7280',
+        };
+    }
+
     static parseConfigForm(form) {
-        const items = [];
-        const itemElements = form.querySelectorAll('.statusbar-item-config');
-
-        itemElements.forEach(el => {
-            const idx = el.dataset.idx;
-            items.push({
-                label: form.querySelector(`[name="item-label-${idx}"]`)?.value || '',
-                sensor: form.querySelector(`[name="item-sensor-${idx}"]`)?.value || '',
-                threshold: parseFloat(form.querySelector(`[name="item-threshold-${idx}"]`)?.value) || 0.5,
-                onColor: form.querySelector(`[name="item-onColor-${idx}"]`)?.value || '#22c55e',
-                offColor: form.querySelector(`[name="item-offColor-${idx}"]`)?.value || '#6b7280'
-            });
+        const items = parseSensorItemList(form, {
+            rowClass: 'statusbar-item',
+            parseExtraFields: (el, idx) => StatusBarWidget.parseItemExtraFields(form, idx),
         });
-
         return {
             layout: form.querySelector('[name="layout"]')?.value || 'horizontal',
             items
         };
-    }
-
-    // Get list of sensors this widget uses (for SSE subscription)
-    getSensors() {
-        const { items = [] } = this.config;
-        return items.map(item => item.sensor).filter(s => s);
     }
 }
 
@@ -17730,17 +20842,16 @@ class StatusBarWidget {
 // BarGraph Widget (compare multiple values)
 // ============================================================================
 
-class BarGraphWidget {
+class BarGraphWidget extends DashboardWidget {
     static type = 'bargraph';
+    static usesNewSensorAutocomplete = true;
     static displayName = 'Bar Graph';
     static description = 'Compare multiple sensor values';
     static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="14" width="4" height="6" fill="currentColor" opacity="0.7"/><rect x="10" y="8" width="4" height="12" fill="currentColor" opacity="0.5"/><rect x="16" y="4" width="4" height="16" fill="currentColor" opacity="0.3"/></svg>';
     static defaultSize = { width: 10, height: 6 };
 
     constructor(id, config, container) {
-        this.id = id;
-        this.config = config || {};
-        this.container = container;
+        super(id, config, container);
         this.bars = new Map();
     }
 
@@ -17769,7 +20880,7 @@ class BarGraphWidget {
     }
 
     createBar(item, idx, orientation, showValues, showLabels) {
-        const { label = `Bar ${idx + 1}`, color = '#3b82f6', min = 0, max = 100 } = item;
+        const { label = `Bar ${idx + 1}`, color = '#3b82f6', min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX } = item;
         const isVertical = orientation === 'vertical';
 
         const barContainer = document.createElement('div');
@@ -17848,13 +20959,12 @@ class BarGraphWidget {
         if (!bar) return;
 
         const { item, fill, valueEl } = bar;
-        const { min = 0, max = 100, unit = '', decimals = 0 } = item;
+        const { min = WIDGET_DEFAULT_MIN, max = WIDGET_DEFAULT_MAX, unit = '', decimals = 0 } = item;
         const orientation = this.config.orientation || 'vertical';
         const isVertical = orientation === 'vertical';
 
         // Calculate percentage
-        const range = max - min;
-        const percent = range > 0 ? Math.max(0, Math.min(100, ((value - min) / range) * 100)) : 0;
+        const percent = percentInRange(value, min, max, 100);
 
         // Update fill
         if (isVertical) {
@@ -17863,9 +20973,12 @@ class BarGraphWidget {
             fill.style.width = `${percent}%`;
         }
 
-        // Update value text
+        // Update value text. value может прийти из SSE строкой — без guard'а
+        // value.toFixed бросал TypeError. Аналогично сделано в LevelWidget /
+        // DigitalWidget.update.
         if (valueEl) {
-            const displayValue = typeof decimals === 'number' ? value.toFixed(decimals) : value;
+            const numValue = typeof value === 'number' ? value : parseNumberOrDefault(value, 0);
+            const displayValue = numValue.toFixed(decimals);
             valueEl.textContent = unit ? `${displayValue} ${unit}` : displayValue;
         }
     }
@@ -17882,59 +20995,49 @@ class BarGraphWidget {
         }
     }
 
-    // Update by sensor name (called from SSE handler)
-    updateBySensor(sensorName, value, error = null) {
+    // Update by sensor name (called from SSE handler).
+    // См. StatusBarWidget.updateBySensor — тот же контракт ctx для multi-server.
+    updateBySensor(sensorName, value, error = null, ctx = null) {
         const { items = [] } = this.config;
-        items.forEach((item, idx) => {
-            if (item.sensor === sensorName) {
-                this.updateBar(idx, value);
-            }
+        updateSensorItemsByName(items, sensorName, ctx, (item, idx) => {
+            this.updateBar(idx, value);
         });
     }
 
-    static getConfigForm(config = {}) {
-        const items = config.items || [{ label: 'Bar 1', sensor: '', min: 0, max: 100, color: '#3b82f6' }];
-
-        const itemsHtml = items.map((item, idx) => `
-            <div class="bargraph-item-config" data-idx="${idx}">
-                <div class="widget-config-row">
-                    <div class="widget-config-field" style="flex: 1;">
-                        <label>Label</label>
-                        <input type="text" class="widget-input" name="bar-label-${idx}"
-                               value="${escapeHtml(item.label || '')}" placeholder="Bar name">
-                    </div>
-                    <div class="widget-config-field" style="flex: 2;">
-                        <label>Sensor</label>
-                        <input type="text" class="widget-input sensor-autocomplete" name="bar-sensor-${idx}"
-                               value="${escapeHtml(item.sensor || '')}" placeholder="Sensor name">
-                    </div>
+    static _renderItemRow({ idx, item }) {
+        const extraHtml = `
+            <div class="widget-config-row">
+                <div class="widget-config-field" style="flex: 1;">
+                    <label>Label</label>
+                    <input type="text" class="widget-input" name="item-${idx}-label"
+                           value="${escapeAttr(item.label || '')}" placeholder="Bar name">
                 </div>
-                <div class="widget-config-row">
-                    <div class="widget-config-field">
-                        <label>Min</label>
-                        <input type="number" class="widget-input" name="bar-min-${idx}"
-                               value="${item.min ?? 0}">
-                    </div>
-                    <div class="widget-config-field">
-                        <label>Max</label>
-                        <input type="number" class="widget-input" name="bar-max-${idx}"
-                               value="${item.max ?? 100}">
-                    </div>
-                    <div class="widget-config-field">
-                        <label>Unit</label>
-                        <input type="text" class="widget-input" name="bar-unit-${idx}"
-                               value="${escapeHtml(item.unit || '')}" placeholder="kW">
-                    </div>
-                    <div class="widget-config-field">
-                        <label>Color</label>
-                        <input type="color" class="widget-input" name="bar-color-${idx}"
-                               value="${item.color || '#3b82f6'}">
-                    </div>
-                    <button type="button" class="widget-btn-small remove-bargraph-item" data-idx="${idx}" style="align-self: flex-end;">×</button>
+                <div class="widget-config-field">
+                    <label>Min</label>
+                    <input type="number" class="widget-input" name="item-${idx}-min" value="${item.min ?? WIDGET_DEFAULT_MIN}">
+                </div>
+                <div class="widget-config-field">
+                    <label>Max</label>
+                    <input type="number" class="widget-input" name="item-${idx}-max" value="${item.max ?? WIDGET_DEFAULT_MAX}">
+                </div>
+                <div class="widget-config-field">
+                    <label>Unit</label>
+                    <input type="text" class="widget-input" name="item-${idx}-unit"
+                           value="${escapeAttr(item.unit || '')}" placeholder="kW">
+                </div>
+                <div class="widget-config-field">
+                    <label>Color</label>
+                    <input type="color" class="widget-input" name="item-${idx}-color"
+                           value="${item.color || '#3b82f6'}">
                 </div>
             </div>
-        `).join('');
+        `;
+        return renderSensorItemRow({ idx, item, extraFieldsHtml: extraHtml, rowClass: 'bargraph-item' });
+    }
 
+    static getConfigForm(config = {}) {
+        const items = config.items || [{ label: 'Bar 1', min: WIDGET_DEFAULT_MIN, max: WIDGET_DEFAULT_MAX, color: '#3b82f6' }];
+        const itemsHtml = items.map((item, idx) => BarGraphWidget._renderItemRow({ idx, item })).join('');
         return `
             <div class="widget-config-row">
                 <div class="widget-config-field">
@@ -17959,9 +21062,7 @@ class BarGraphWidget {
             </div>
             <div class="widget-config-field">
                 <label>Bars</label>
-                <div id="bargraph-items-container">
-                    ${itemsHtml}
-                </div>
+                <div id="bargraph-items-container">${itemsHtml}</div>
                 <button type="button" class="widget-btn" id="add-bargraph-item" style="margin-top: 8px;">
                     + Add Bar
                 </button>
@@ -17970,106 +21071,42 @@ class BarGraphWidget {
     }
 
     static initConfigHandlers(form, config = {}) {
-        const container = form.querySelector('#bargraph-items-container');
-        const addBtn = form.querySelector('#add-bargraph-item');
-        let itemCount = (config.items || []).length || 1;
-
-        // Add new bar
-        addBtn?.addEventListener('click', () => {
-            const idx = itemCount++;
-            const colors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6'];
-            const color = colors[idx % colors.length];
-
-            const itemHtml = `
-                <div class="bargraph-item-config" data-idx="${idx}">
-                    <div class="widget-config-row">
-                        <div class="widget-config-field" style="flex: 1;">
-                            <label>Label</label>
-                            <input type="text" class="widget-input" name="bar-label-${idx}"
-                                   value="" placeholder="Bar name">
-                        </div>
-                        <div class="widget-config-field" style="flex: 2;">
-                            <label>Sensor</label>
-                            <input type="text" class="widget-input sensor-autocomplete" name="bar-sensor-${idx}"
-                                   value="" placeholder="Sensor name">
-                        </div>
-                    </div>
-                    <div class="widget-config-row">
-                        <div class="widget-config-field">
-                            <label>Min</label>
-                            <input type="number" class="widget-input" name="bar-min-${idx}" value="0">
-                        </div>
-                        <div class="widget-config-field">
-                            <label>Max</label>
-                            <input type="number" class="widget-input" name="bar-max-${idx}" value="100">
-                        </div>
-                        <div class="widget-config-field">
-                            <label>Unit</label>
-                            <input type="text" class="widget-input" name="bar-unit-${idx}" placeholder="kW">
-                        </div>
-                        <div class="widget-config-field">
-                            <label>Color</label>
-                            <input type="color" class="widget-input" name="bar-color-${idx}" value="${color}">
-                        </div>
-                        <button type="button" class="widget-btn-small remove-bargraph-item" data-idx="${idx}" style="align-self: flex-end;">×</button>
-                    </div>
-                </div>
-            `;
-            container.insertAdjacentHTML('beforeend', itemHtml);
-
-            // Setup autocomplete for new sensor input
-            const newInput = container.querySelector(`[name="bar-sensor-${idx}"]`);
-            if (newInput && typeof setupSensorAutocomplete === 'function') {
-                setupSensorAutocomplete(newInput);
-            }
-        });
-
-        // Remove bar
-        container?.addEventListener('click', (e) => {
-            if (e.target.classList.contains('remove-bargraph-item')) {
-                const item = e.target.closest('.bargraph-item-config');
-                if (item && container.querySelectorAll('.bargraph-item-config').length > 1) {
-                    item.remove();
-                }
-            }
-        });
-
-        // Setup autocomplete for existing sensor inputs
-        form.querySelectorAll('.sensor-autocomplete').forEach(input => {
-            if (typeof setupSensorAutocomplete === 'function') {
-                setupSensorAutocomplete(input);
-            }
+        const colors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6'];
+        let colorIdx = (config.items || []).length;
+        initSensorItemListHandlers(form, config, {
+            addBtnSelector: '#add-bargraph-item',
+            containerSelector: '#bargraph-items-container',
+            rowClass: 'bargraph-item',
+            defaultExtras: () => ({
+                label: '', min: WIDGET_DEFAULT_MIN, max: WIDGET_DEFAULT_MAX, unit: '',
+                color: colors[(colorIdx++) % colors.length],
+            }),
+            renderRow: BarGraphWidget._renderItemRow,
+            parseExtraFields: (el, idx) => BarGraphWidget.parseItemExtraFields(form, idx),
         });
     }
 
+    static parseItemExtraFields(form, idx) {
+        return {
+            label: form.querySelector(`[name="item-${idx}-label"]`)?.value || '',
+            min: parseNumberOrDefault(form.querySelector(`[name="item-${idx}-min"]`)?.value, WIDGET_DEFAULT_MIN),
+            max: parseNumberOrDefault(form.querySelector(`[name="item-${idx}-max"]`)?.value, WIDGET_DEFAULT_MAX),
+            unit: form.querySelector(`[name="item-${idx}-unit"]`)?.value || '',
+            color: form.querySelector(`[name="item-${idx}-color"]`)?.value || '#3b82f6',
+        };
+    }
+
     static parseConfigForm(form) {
-        const items = [];
-        const itemElements = form.querySelectorAll('.bargraph-item-config');
-
-        itemElements.forEach(el => {
-            const idx = el.dataset.idx;
-            items.push({
-                label: form.querySelector(`[name="bar-label-${idx}"]`)?.value || '',
-                sensor: form.querySelector(`[name="bar-sensor-${idx}"]`)?.value || '',
-                min: parseFloat(form.querySelector(`[name="bar-min-${idx}"]`)?.value) || 0,
-                max: parseFloat(form.querySelector(`[name="bar-max-${idx}"]`)?.value) || 100,
-                unit: form.querySelector(`[name="bar-unit-${idx}"]`)?.value || '',
-                color: form.querySelector(`[name="bar-color-${idx}"]`)?.value || '#3b82f6'
-            });
+        const items = parseSensorItemList(form, {
+            rowClass: 'bargraph-item',
+            parseExtraFields: (el, idx) => BarGraphWidget.parseItemExtraFields(form, idx),
         });
-
         return {
             orientation: form.querySelector('[name="orientation"]')?.value || 'vertical',
             showValues: form.querySelector('[name="showValues"]')?.checked !== false,
             showLabels: form.querySelector('[name="showLabels"]')?.checked !== false,
             items
         };
-    }
-
-    // Get list of sensors this widget uses (for SSE subscription)
-    getSensors() {
-        const { items = [] } = this.config;
-        return items.map(item => item.sensor).filter(s => s);
     }
 }
 
@@ -18079,6 +21116,7 @@ class BarGraphWidget {
 
 class DigitalWidget extends DashboardWidget {
     static type = 'digital';
+    static usesNewSensorAutocomplete = true;
     static displayName = 'Digital';
     static description = 'Digital numeric display';
     static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><text x="12" y="15" text-anchor="middle" font-size="8" fill="currentColor">123</text></svg>';
@@ -18134,55 +21172,48 @@ class DigitalWidget extends DashboardWidget {
     }
 
     renderLCD() {
-        const { digits = 6, decimals = 0, unit = '' } = this.config;
-        const totalDigits = digits + (unit ? 2 : 0); // Extra space for unit
-
-        this.element.innerHTML = `
-            <div class="digital-lcd-display" id="digital-lcd-${this.id}">
-                <div class="digital-lcd-screen">
-                    <svg class="digital-lcd-svg" id="digital-svg-${this.id}" viewBox="0 0 ${totalDigits * 24 + 10} 48">
-                        <defs>
-                            <linearGradient id="lcd-bg-${this.id}" x1="0%" y1="0%" x2="0%" y2="100%">
-                                <stop offset="0%" style="stop-color:#c8d4c0"/>
-                                <stop offset="50%" style="stop-color:#b8c4b0"/>
-                                <stop offset="100%" style="stop-color:#a8b4a0"/>
-                            </linearGradient>
-                        </defs>
-                        <rect x="0" y="0" width="100%" height="100%" fill="url(#lcd-bg-${this.id})" rx="4"/>
-                        <g id="digital-digits-${this.id}" transform="translate(5, 6)"></g>
-                    </svg>
-                </div>
-            </div>
-        `;
-        this.svgEl = this.element.querySelector(`#digital-svg-${this.id}`);
-        this.digitsGroup = this.element.querySelector(`#digital-digits-${this.id}`);
-        this.updateSegmentDisplay('----');
+        const defs = `
+            <linearGradient id="lcd-bg-${this.id}" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" style="stop-color:#c8d4c0"/>
+                <stop offset="50%" style="stop-color:#b8c4b0"/>
+                <stop offset="100%" style="stop-color:#a8b4a0"/>
+            </linearGradient>`;
+        this._renderSegmentDisplay({ flavor: 'lcd', defs, bgGradientId: `lcd-bg-${this.id}` });
     }
 
     renderLED() {
-        const { digits = 6, decimals = 0, unit = '', color = '#ff0000' } = this.config;
+        const defs = `
+            <filter id="led-glow-${this.id}" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="1.5" result="blur"/>
+                <feMerge>
+                    <feMergeNode in="blur"/>
+                    <feMergeNode in="blur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+            </filter>
+            <linearGradient id="led-bg-${this.id}" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" style="stop-color:#2a2a2a"/>
+                <stop offset="50%" style="stop-color:#1a1a1a"/>
+                <stop offset="100%" style="stop-color:#0a0a0a"/>
+            </linearGradient>`;
+        this._renderSegmentDisplay({ flavor: 'led', defs, bgGradientId: `led-bg-${this.id}` });
+    }
+
+    // Общий каркас 7-segment display: SVG с gradient'ом фоновой панели и
+    // <g id="digital-digits-..."> для рендера цифр. Разница LCD vs LED — в
+    // <defs> (flavor-specific filter/gradient) и в CSS-классах wrapper'а.
+    // updateSegmentDisplay (общий метод) рисует цифры в digitsGroup.
+    _renderSegmentDisplay({ flavor, defs, bgGradientId }) {
+        const { digits = 6, unit = '' } = this.config;
         const totalDigits = digits + (unit ? 2 : 0);
+        const viewBoxW = totalDigits * DIGITAL_DIGIT_SLOT_WIDTH + DIGITAL_VIEWBOX_PADDING;
 
         this.element.innerHTML = `
-            <div class="digital-led-display" id="digital-led-${this.id}">
-                <div class="digital-led-screen">
-                    <svg class="digital-led-svg" id="digital-svg-${this.id}" viewBox="0 0 ${totalDigits * 24 + 10} 48">
-                        <defs>
-                            <filter id="led-glow-${this.id}" x="-50%" y="-50%" width="200%" height="200%">
-                                <feGaussianBlur stdDeviation="1.5" result="blur"/>
-                                <feMerge>
-                                    <feMergeNode in="blur"/>
-                                    <feMergeNode in="blur"/>
-                                    <feMergeNode in="SourceGraphic"/>
-                                </feMerge>
-                            </filter>
-                            <linearGradient id="led-bg-${this.id}" x1="0%" y1="0%" x2="0%" y2="100%">
-                                <stop offset="0%" style="stop-color:#2a2a2a"/>
-                                <stop offset="50%" style="stop-color:#1a1a1a"/>
-                                <stop offset="100%" style="stop-color:#0a0a0a"/>
-                            </linearGradient>
-                        </defs>
-                        <rect x="0" y="0" width="100%" height="100%" fill="url(#led-bg-${this.id})" rx="4"/>
+            <div class="digital-${flavor}-display" id="digital-${flavor}-${this.id}">
+                <div class="digital-${flavor}-screen">
+                    <svg class="digital-${flavor}-svg" id="digital-svg-${this.id}" viewBox="0 0 ${viewBoxW} ${DIGITAL_VIEWBOX_HEIGHT}">
+                        <defs>${defs}</defs>
+                        <rect x="0" y="0" width="100%" height="100%" fill="url(#${bgGradientId})" rx="4"/>
                         <g id="digital-digits-${this.id}" transform="translate(5, 6)"></g>
                     </svg>
                 </div>
@@ -18222,7 +21253,9 @@ class DigitalWidget extends DashboardWidget {
 
         // Segment paths (relative to digit position)
         // Each digit is 20px wide, 36px tall
-        const w = 16, h = 32, t = 3; // width, height, thickness
+        const w = DIGITAL_SEGMENT_WIDTH;
+        const h = DIGITAL_SEGMENT_HEIGHT;
+        const t = DIGITAL_SEGMENT_THICKNESS;
         const segments = [
             // a - top horizontal
             `<polygon points="${x+2},0 ${x+w-2},0 ${x+w-4},${t} ${x+4},${t}" fill="${pattern[0] ? onColor : offColor}" ${pattern[0] ? glowFilter : ''}/>`,
@@ -18254,10 +21287,10 @@ class DigitalWidget extends DashboardWidget {
         for (const char of text) {
             if (char === '.' || char === ':') {
                 html += this.renderDigit(char, x, isLCD);
-                x += 8; // Smaller width for dot/colon
+                x += DIGITAL_SPECIAL_CHAR_ADVANCE;
             } else {
                 html += this.renderDigit(char, x, isLCD);
-                x += 22; // Full digit width + spacing
+                x += DIGITAL_DIGIT_ADVANCE;
             }
         }
 
@@ -18265,7 +21298,7 @@ class DigitalWidget extends DashboardWidget {
 
         // Update SVG viewBox to fit content
         if (this.svgEl) {
-            this.svgEl.setAttribute('viewBox', `0 0 ${x + 10} 48`);
+            this.svgEl.setAttribute('viewBox', `0 0 ${x + DIGITAL_VIEWBOX_PADDING} ${DIGITAL_VIEWBOX_HEIGHT}`);
         }
     }
 
@@ -18283,7 +21316,7 @@ class DigitalWidget extends DashboardWidget {
                 return;
             }
 
-            const numValue = parseFloat(value) || 0;
+            const numValue = parseNumberOrDefault(value, 0);
             let text = numValue.toFixed(decimals);
 
             // Pad with zeros if needed
@@ -18306,7 +21339,7 @@ class DigitalWidget extends DashboardWidget {
                 return;
             }
 
-            const numValue = parseFloat(value) || 0;
+            const numValue = parseNumberOrDefault(value, 0);
             let text = numValue.toFixed(decimals);
 
             // Pad with leading spaces/zeros
@@ -18320,16 +21353,8 @@ class DigitalWidget extends DashboardWidget {
 
     static getConfigForm(config = {}) {
         return `
-            <div class="widget-config-field">
-                <label>Sensor</label>
-                <input type="text" class="widget-input" name="sensor"
-                       value="${escapeHtml(config.sensor || '')}" placeholder="Type to search..." autocomplete="off">
-            </div>
-            <div class="widget-config-field">
-                <label>Label</label>
-                <input type="text" class="widget-input" name="label"
-                       value="${escapeHtml(config.label || '')}" placeholder="Display label">
-            </div>
+            ${renderSensorBindingFields(config, { fieldPrefix: '' })}
+            ${renderLabelField(config)}
             <div class="widget-config-field">
                 <label>Style</label>
                 <select class="widget-select" name="style">
@@ -18359,7 +21384,7 @@ class DigitalWidget extends DashboardWidget {
                 <div class="widget-config-field">
                     <label>Unit</label>
                     <input type="text" class="widget-input" name="unit"
-                           value="${escapeHtml(config.unit || '')}" placeholder="Optional">
+                           value="${escapeAttr(config.unit || '')}" placeholder="Optional">
                 </div>
             </div>
         `;
@@ -18367,14 +21392,18 @@ class DigitalWidget extends DashboardWidget {
 
     static parseConfigForm(form) {
         return {
-            sensor: form.querySelector('[name="sensor"]')?.value || '',
+            ...parseSensorBindingFields(form, { fieldPrefix: '' }),
             label: form.querySelector('[name="label"]')?.value || '',
             style: form.querySelector('[name="style"]')?.value || 'default',
-            digits: parseInt(form.querySelector('[name="digits"]')?.value) || 6,
-            decimals: parseInt(form.querySelector('[name="decimals"]')?.value) || 0,
+            digits: parseIntegerOrDefault(form.querySelector('[name="digits"]')?.value, 6),
+            decimals: parseIntegerOrDefault(form.querySelector('[name="decimals"]')?.value, 0),
             color: form.querySelector('[name="color"]')?.value || '#22c55e',
             unit: form.querySelector('[name="unit"]')?.value || ''
         };
+    }
+
+    static initConfigHandlers(form, config = {}) {
+        initSensorBindingHandlers(form, config, { fieldPrefix: '' });
     }
 }
 
@@ -18384,13 +21413,16 @@ class DigitalWidget extends DashboardWidget {
 
 class ChartWidget extends DashboardWidget {
     static type = 'chart';
+    static usesNewSensorAutocomplete = true;
     static displayName = 'Chart';
     static description = 'Real-time line chart with multiple sensors';
     static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>';
     static defaultSize = { width: 24, height: 12 };
 
-    // Default colors for sensors
-    static COLORS = [
+    // Default colors for sensors внутри ChartWidget. Намеренно отличается от
+    // CHART_COLORS в 40-charts.js (палитра для IONC sensor charts) — у каждого
+    // контекста своя визуальная стилистика. Не сливать.
+    static SENSOR_COLORS = [
         '#3274d9', '#73bf69', '#f2cc0c', '#ff6b6b', '#a855f7',
         '#06b6d4', '#f97316', '#ec4899', '#14b8a6', '#8b5cf6'
     ];
@@ -18398,21 +21430,20 @@ class ChartWidget extends DashboardWidget {
     constructor(id, config, container) {
         super(id, config, container);
         this.charts = new Map();      // zoneId -> Chart.js instance
-        this.sensorData = new Map();  // sensorName -> { value, timestamp }
         this.chartStartTime = Date.now();
         this.updateInterval = null;
         this.visibilityHandler = null;
     }
 
     render() {
-        const { zones = [], showTable = true, tableHeight = 100 } = this.config;
+        const { zones = [], showTable = true, tableHeight = CHART_WIDGET_DEFAULT_TABLE_HEIGHT } = this.config;
 
         this.element = document.createElement('div');
         this.element.className = 'widget-content chart-widget-content';
 
         // Zones container
         const zonesHtml = zones.map((zone, idx) => `
-            <div class="chart-widget-zone" data-zone-id="${zone.id || `zone-${idx}`}">
+            <div class="chart-widget-zone" data-zone-id="${ChartWidget.getZoneId(zone, idx)}">
                 <canvas id="chart-canvas-${this.id}-${idx}"></canvas>
             </div>
         `).join('');
@@ -18442,7 +21473,7 @@ class ChartWidget extends DashboardWidget {
         ` : '';
 
         // Get saved zones height or use default
-        const zonesHeight = this.config.zonesHeight || 150;
+        const zonesHeight = this.config.zonesHeight ?? CHART_WIDGET_DEFAULT_ZONES_HEIGHT;
 
         this.element.innerHTML = `
             <div class="chart-widget-zones" style="height: ${zonesHeight}px;">
@@ -18469,12 +21500,12 @@ class ChartWidget extends DashboardWidget {
         // Load history for all sensors
         this.loadHistory();
 
-        // Start periodic update interval (every 2 seconds, only when visible)
+        // Start periodic update interval, only when visible.
         this.updateInterval = setInterval(() => {
             if (!document.hidden && this.charts.size > 0) {
                 this.syncTimeRange();
             }
-        }, 2000);
+        }, CHART_WIDGET_SYNC_INTERVAL_MS);
 
         // Add visibility change handler
         this.visibilityHandler = () => {
@@ -18495,9 +21526,10 @@ class ChartWidget extends DashboardWidget {
 
             const ctx = canvas.getContext('2d');
             const datasets = (zone.sensors || []).map((sensor, sensorIdx) => {
-                let label = sensor.label || sensor.name;
+                const sensorName = ChartWidget.getSensorName(sensor);
+                let label = sensor.label || sensorName;
                 if (useTextname && !sensor.label) {
-                    const sensorInfo = typeof getSensorInfo === 'function' ? getSensorInfo(sensor.name) : null;
+                    const sensorInfo = ChartWidget.getScopedSensorInfo(sensor);
                     if (sensorInfo?.textname) {
                         label = sensorInfo.textname;
                     }
@@ -18505,89 +21537,35 @@ class ChartWidget extends DashboardWidget {
                 return {
                     label,
                     data: [],
-                    borderColor: sensor.color || ChartWidget.COLORS[sensorIdx % ChartWidget.COLORS.length],
-                    backgroundColor: `${sensor.color || ChartWidget.COLORS[sensorIdx % ChartWidget.COLORS.length]}20`,
+                    borderColor: sensor.color || ChartWidget.SENSOR_COLORS[sensorIdx % ChartWidget.SENSOR_COLORS.length],
+                    backgroundColor: `${sensor.color || ChartWidget.SENSOR_COLORS[sensorIdx % ChartWidget.SENSOR_COLORS.length]}20`,
                     fill: sensor.fill !== false,
-                    tension: sensor.stepped ? 0 : (sensor.smooth !== false ? 0.3 : 0),
+                    tension: sensor.stepped ? 0 : (sensor.smooth !== false ? CHART_LINE_TENSION : 0),
                     stepped: sensor.stepped ? 'before' : false,
                     pointRadius: 0,
-                    borderWidth: sensor.stepped ? 2 : 1.5
+                    borderWidth: sensor.stepped ? CHART_STEPPED_LINE_BORDER_WIDTH : CHART_LINE_BORDER_WIDTH
                 };
             });
 
             const timeRange = this.getTimeRange();
-            const chart = new Chart(ctx, {
-                type: 'line',
-                data: { datasets },
+            const chart = new Chart(ctx, createLineChartConfig({
+                datasets,
+                timeRange,
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    animation: false,
                     normalized: true,
                     parsing: false,
                     spanGaps: true,
-                    interaction: {
-                        mode: 'nearest',
-                        intersect: false
-                    },
-                    plugins: {
-                        legend: {
-                            display: false
-                        },
-                        tooltip: {
-                            enabled: true,
-                            backgroundColor: '#22252a',
-                            titleColor: '#d8dce2',
-                            bodyColor: '#d8dce2',
-                            borderColor: '#333840',
-                            borderWidth: 1
-                        },
-                        decimation: {
-                            enabled: true,
-                            algorithm: 'min-max'
-                        }
-                    },
-                    scales: {
-                        x: {
-                            type: 'time',
-                            display: true,
-                            min: timeRange.min,
-                            max: timeRange.max,
-                            grid: {
-                                color: '#333840',
-                                drawBorder: false
-                            },
-                            ticks: {
-                                color: '#8a9099',
-                                maxTicksLimit: 6,
-                                autoSkip: true,
-                                source: 'auto'
-                            },
-                            time: {
-                                displayFormats: {
-                                    second: 'HH:mm:ss',
-                                    minute: 'HH:mm',
-                                    hour: 'HH:mm'
-                                }
-                            }
-                        },
-                        y: {
-                            display: true,
-                            position: 'left',
-                            grid: {
-                                color: '#333840',
-                                drawBorder: false
-                            },
-                            ticks: {
-                                color: '#8a9099',
-                                maxTicksLimit: 5
-                            }
-                        }
-                    }
+                    interactionMode: 'nearest',
+                    xMaxTicksLimit: CHART_WIDGET_X_MAX_TICKS,
+                    yMaxTicksLimit: CHART_WIDGET_Y_MAX_TICKS,
+                    autoSkip: true,
+                    tickSource: 'auto',
+                    tooltipEnabled: true,
+                    decimation: true
                 }
-            });
+            }));
 
-            this.charts.set(zone.id || `zone-${idx}`, {
+            this.charts.set(ChartWidget.getZoneId(zone, idx), {
                 chart,
                 sensors: zone.sensors || []
             });
@@ -18603,14 +21581,13 @@ class ChartWidget extends DashboardWidget {
         const allSensors = [];
         zones.forEach((zone, zoneIdx) => {
             (zone.sensors || []).forEach((sensor, sensorIdx) => {
-                // Get sensor info from global state
-                const sensorInfo = typeof getSensorInfo === 'function' ? getSensorInfo(sensor.name) : null;
+                const sensorInfo = ChartWidget.getScopedSensorInfo(sensor);
                 allSensors.push({
                     ...sensor,
                     zoneIdx,
                     sensorIdx,
-                    zoneId: zone.id || `zone-${zoneIdx}`,
-                    color: sensor.color || ChartWidget.COLORS[sensorIdx % ChartWidget.COLORS.length],
+                    zoneId: ChartWidget.getZoneId(zone, zoneIdx),
+                    color: sensor.color || ChartWidget.SENSOR_COLORS[sensorIdx % ChartWidget.SENSOR_COLORS.length],
                     iotype: sensorInfo?.iotype || '',
                     textname: sensorInfo?.textname || ''
                 });
@@ -18619,19 +21596,20 @@ class ChartWidget extends DashboardWidget {
 
         // IONC-style table rows
         tbody.innerHTML = allSensors.map((sensor, idx) => {
-            const safeId = sensor.name.replace(/[^a-zA-Z0-9]/g, '_');
-            const sensorInfo = typeof getSensorInfo === 'function' ? getSensorInfo(sensor.name) : null;
+            const sensorName = ChartWidget.getSensorName(sensor);
+            const safeId = ChartWidget.getSensorDomKey(sensor);
+            const sensorInfo = ChartWidget.getScopedSensorInfo(sensor);
             const sensorId = sensorInfo?.id || '';
             const supplier = sensorInfo?.supplier || '';
             // Use textname if enabled and available
-            const displayName = (useTextname && sensor.textname) ? sensor.textname : sensor.name;
+            const displayName = (useTextname && sensor.textname) ? sensor.textname : sensorName;
             return `
-            <tr data-sensor="${escapeHtml(sensor.name)}" data-zone="${sensor.zoneIdx}" data-idx="${sensor.sensorIdx}">
+            <tr data-sensor="${escapeAttr(sensorName)}" data-zone="${sensor.zoneIdx}" data-idx="${sensor.sensorIdx}">
                 <td class="col-color">
                     <span class="color-indicator" style="background: ${sensor.color}"></span>
                 </td>
                 <td class="col-id">${escapeHtml(String(sensorId))}</td>
-                <td class="col-name" title="${escapeHtml(sensor.name)}">${escapeHtml(displayName)}</td>
+                <td class="col-name" title="${escapeAttr(sensorName)}">${escapeHtml(displayName)}</td>
                 <td class="col-type">
                     ${sensor.iotype ? `<span class="type-badge type-${sensor.iotype}">${sensor.iotype}</span>` : ''}
                 </td>
@@ -18647,35 +21625,18 @@ class ChartWidget extends DashboardWidget {
         const resizer = this.element.querySelector('.chart-widget-table-resizer');
         if (!container || !resizer) return;
 
-        let startY, startHeight;
-
-        const onMouseMove = (e) => {
-            const delta = startY - e.clientY;
-            const newHeight = Math.max(50, Math.min(300, startHeight + delta));
-            container.style.height = `${newHeight}px`;
-        };
-
-        const onMouseUp = () => {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = '';
-
-            // Save new height to config
-            this.config.tableHeight = parseInt(container.style.height);
-            // Trigger save through dashboard manager
-            if (window.dashboardManager) {
-                dashboardManager.saveDashboard();
-            }
-        };
-
-        resizer.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            startY = e.clientY;
-            startHeight = container.offsetHeight;
-            document.body.style.cursor = 'ns-resize';
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-        });
+        setupResizeHandle(
+            resizer,
+            container,
+            CHART_WIDGET_TABLE_MIN_HEIGHT,
+            (height) => {
+                this.config.tableHeight = height;
+                if (window.dashboardManager) dashboardManager.saveDashboard();
+            },
+            CHART_WIDGET_TABLE_MAX_HEIGHT,
+            null,
+            { direction: -1, updateMaxHeight: false }
+        );
     }
 
     initZonesResizer() {
@@ -18683,42 +21644,23 @@ class ChartWidget extends DashboardWidget {
         const resizer = this.element.querySelector('.chart-widget-zones-resizer');
         if (!zones || !resizer) return;
 
-        let startY, startHeight;
-
-        const onMouseMove = (e) => {
-            const delta = e.clientY - startY;
-            const newHeight = Math.max(80, Math.min(500, startHeight + delta));
-            zones.style.height = `${newHeight}px`;
-            // Trigger chart resize
-            this.charts.forEach(({ chart }) => chart.resize());
-        };
-
-        const onMouseUp = () => {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            document.body.style.cursor = '';
-
-            // Save new height to config
-            this.config.zonesHeight = parseInt(zones.style.height);
-            // Trigger save through dashboard manager
-            if (window.dashboardManager) {
-                dashboardManager.saveDashboard();
-            }
-        };
-
-        resizer.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            startY = e.clientY;
-            startHeight = zones.offsetHeight;
-            document.body.style.cursor = 'ns-resize';
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-        });
+        setupResizeHandle(
+            resizer,
+            zones,
+            CHART_WIDGET_ZONES_MIN_HEIGHT,
+            (height) => {
+                this.config.zonesHeight = height;
+                if (window.dashboardManager) dashboardManager.saveDashboard();
+            },
+            CHART_WIDGET_ZONES_MAX_HEIGHT,
+            () => this.charts.forEach(({ chart }) => chart.resize()),
+            { updateMaxHeight: false }
+        );
     }
 
     getTimeRange() {
         // Use widget's own timeRange or default to 15 minutes
-        const rangeMs = this.config.timeRange || 900000;
+        const rangeMs = this.config.timeRange || CHART_WIDGET_DEFAULT_TIME_RANGE_MS;
         const now = Date.now();
 
         let min = this.chartStartTime;
@@ -18726,7 +21668,7 @@ class ChartWidget extends DashboardWidget {
 
         // Shift window if current time exceeds
         if (now >= max) {
-            const shiftAmount = rangeMs * 0.9;
+            const shiftAmount = rangeMs * CHART_WIDGET_TIME_WINDOW_SHIFT_RATIO;
             this.chartStartTime = min + shiftAmount;
             min = this.chartStartTime;
             max = min + rangeMs;
@@ -18738,15 +21680,16 @@ class ChartWidget extends DashboardWidget {
     async loadHistory() {
         const { zones = [] } = this.config;
 
-        for (const zone of zones) {
-            const chartData = this.charts.get(zone.id);
+        for (let zoneIdx = 0; zoneIdx < zones.length; zoneIdx++) {
+            const zone = zones[zoneIdx];
+            const chartData = this.charts.get(ChartWidget.getZoneId(zone, zoneIdx));
             if (!chartData) continue;
 
             for (let i = 0; i < (zone.sensors || []).length; i++) {
                 const sensor = zone.sensors[i];
+                const sensorName = ChartWidget.getSensorName(sensor);
                 try {
-                    // Try to load history from SM API
-                    const response = await fetch(`/api/sm/sensors/${encodeURIComponent(sensor.name)}/history?limit=200`);
+                    const response = await fetch(ChartWidget.getHistoryUrl(sensor));
                     if (response.ok) {
                         const history = await response.json();
                         if (history.points && history.points.length > 0) {
@@ -18759,7 +21702,7 @@ class ChartWidget extends DashboardWidget {
                         }
                     }
                 } catch (e) {
-                    console.warn(`Failed to load history for ${sensor.name}:`, e);
+                    console.warn(`Failed to load history for ${sensorName}:`, e);
                 }
             }
 
@@ -18772,40 +21715,46 @@ class ChartWidget extends DashboardWidget {
         // Chart widget uses updateSensor instead
     }
 
-    // Called from SSE handler for each sensor update
-    updateSensor(sensorName, value, timestamp = null) {
+    // Called from SSE handler for each sensor update.
+    // ctx — { serverId, objectName, sensorName }; используется чтобы не апдейтить
+    // sensor в zone, когда у этого имени совпадение пришло с другого (server, object).
+    //
+    // Hot path (срабатывает на каждый ionc_sensor_batch): один проход по zones
+    // для table-update + chart-update вместе. Раньше было два независимых прохода.
+    updateSensor(sensorName, value, timestamp = null, ctx = null) {
         // Use timestamp as number for decimation to work with parsing: false
         const ts = timestamp ? new Date(timestamp).getTime() : Date.now();
 
-        // Store current value
-        this.sensorData.set(sensorName, { value, timestamp: ts });
-
-        // Update table value
-        const safeId = sensorName.replace(/[^a-zA-Z0-9]/g, '_');
-        const valueEl = this.element?.querySelector(`#chart-value-${this.id}-${safeId}`);
-        if (valueEl) {
-            valueEl.textContent = typeof value === 'number' ? value.toFixed(2) : value;
-        }
-
-        // Add point to chart
         const { zones = [] } = this.config;
-        for (const zone of zones) {
-            const chartData = this.charts.get(zone.id);
-            if (!chartData) continue;
-
-            const sensorIdx = (zone.sensors || []).findIndex(s => s.name === sensorName);
+        for (let zoneIdx = 0; zoneIdx < zones.length; zoneIdx++) {
+            const zone = zones[zoneIdx];
+            const sensors = zone.sensors || [];
+            const sensorIdx = sensors.findIndex(s =>
+                ChartWidget.sensorMatchesUpdate(s, sensorName, ctx)
+            );
             if (sensorIdx === -1) continue;
 
+            const sensor = sensors[sensorIdx];
+
+            // Table value cell.
+            const safeId = ChartWidget.getSensorDomKey(sensor);
+            const valueEl = this.element?.querySelector(`#chart-value-${this.id}-${safeId}`);
+            if (valueEl) {
+                valueEl.textContent = typeof value === 'number' ? value.toFixed(2) : value;
+            }
+
+            // Chart dataset point.
+            const chartData = this.charts.get(ChartWidget.getZoneId(zone, zoneIdx));
+            if (!chartData) continue;
             const dataset = chartData.chart.data.datasets[sensorIdx];
             if (!dataset) continue;
 
             dataset.data.push({ x: ts, y: value });
-
-            // Limit data points
-            if (dataset.data.length > 1000) {
-                dataset.data.shift();
-            }
+            if (dataset.data.length > MAX_CHART_POINTS) dataset.data.shift();
         }
+        // chart.update() намеренно НЕ вызываем тут — рендер идёт пакетно в
+        // syncTimeRange() каждые CHART_WIDGET_SYNC_INTERVAL_MS (по умолчанию 2с).
+        // Это снижает CPU при частых SSE (200ms poll) ценой 0–2с задержки кадра.
     }
 
     // Called periodically to sync time range and update charts
@@ -18817,18 +21766,6 @@ class ChartWidget extends DashboardWidget {
             chart.options.scales.x.max = timeRange.max;
             chart.update('none');
         });
-    }
-
-    // Get all sensor names for SSE subscription
-    getSensorNames() {
-        const { zones = [] } = this.config;
-        const names = new Set();
-        zones.forEach(zone => {
-            (zone.sensors || []).forEach(sensor => {
-                names.add(sensor.name);
-            });
-        });
-        return Array.from(names);
     }
 
     destroy() {
@@ -18849,29 +21786,94 @@ class ChartWidget extends DashboardWidget {
             chart.destroy();
         });
         this.charts.clear();
-        this.sensorData.clear();
         super.destroy();
     }
 
-    static TIME_RANGES = [
-        { value: 60000, label: '1m' },
-        { value: 180000, label: '3m' },
-        { value: 300000, label: '5m' },
-        { value: 900000, label: '15m' },
-        { value: 3600000, label: '1h' },
-        { value: 10800000, label: '3h' }
-    ];
+    static getSensorName(sensor = {}) {
+        return getSensorNameFromBinding(sensor);
+    }
+
+    static getZoneId(zone = {}, idx = 0) {
+        return zone.id || `zone-${idx}`;
+    }
+
+    static getScopedSensorInfo(sensor = {}) {
+        const sensorName = ChartWidget.getSensorName(sensor);
+        if (sensor.serverId && sensor.objectName && typeof getSensorInfoByKey === 'function') {
+            const scoped = getSensorInfoByKey(sensor.serverId, sensor.objectName, sensorName);
+            if (scoped) return scoped;
+        }
+        return typeof getSensorInfo === 'function' ? getSensorInfo(sensorName) : null;
+    }
+
+    static getSensorDomKey(sensor = {}) {
+        const sensorName = ChartWidget.getSensorName(sensor);
+        const key = sensor.serverId && sensor.objectName && typeof makeSensorKey === 'function'
+            ? makeSensorKey(sensor.serverId, sensor.objectName, sensorName)
+            : sensorName;
+        return String(key).replace(/[^a-zA-Z0-9_-]/g, '_');
+    }
+
+    static sensorMatchesUpdate(sensor = {}, sensorName, ctx = null) {
+        return sensorItemMatchesUpdate(sensor, sensorName, ctx);
+    }
+
+    static getHistoryUrl(sensor = {}) {
+        const sensorName = ChartWidget.getSensorName(sensor);
+        const objectName = sensor.objectName || 'SharedMemory';
+        return buildObjectUrl(
+            objectName,
+            `/variables/${encodeURIComponent(sensorName)}/history`,
+            sensor.serverId || null,
+            { count: CHART_WIDGET_HISTORY_LIMIT }
+        );
+    }
+
+    static TIME_RANGES = CHART_TIME_RANGES_MS;
+
+    // === Single sensor row (renders inside chart-zone-sensors-{zoneIdx}) ===
+    static _renderChartSensorRow({ zoneIdx, sensorIdx, sensor }) {
+        const color = sensor.color || ChartWidget.SENSOR_COLORS[sensorIdx % ChartWidget.SENSOR_COLORS.length];
+        const idx = `${zoneIdx}-${sensorIdx}`; // composite — для unique field names
+        const bindingHtml = renderSensorBindingFields(sensor, { fieldPrefix: `chart-${idx}-` });
+        return `
+            <div class="chart-sensor-row" data-zone-idx="${zoneIdx}" data-sensor-idx="${sensorIdx}">
+                ${bindingHtml}
+                <div class="chart-sensor-options" style="display: flex; gap: 6px; align-items: center;">
+                    <input type="color" class="chart-sensor-color" name="chart-${idx}-color" value="${color}">
+                    <label class="chart-sensor-option" title="Smooth"><input type="checkbox" name="chart-${idx}-smooth" ${sensor.smooth !== false ? 'checked' : ''}><span>smooth</span></label>
+                    <label class="chart-sensor-option" title="Fill"><input type="checkbox" name="chart-${idx}-fill" ${sensor.fill !== false ? 'checked' : ''}><span>fill</span></label>
+                    <label class="chart-sensor-option" title="Stepped"><input type="checkbox" name="chart-${idx}-stepped" ${sensor.stepped ? 'checked' : ''}><span>stepped</span></label>
+                </div>
+                <button type="button" class="widget-btn-small chart-sensor-remove">×</button>
+            </div>
+        `;
+    }
+
+    static renderZoneEditor(zone, zoneIdx) {
+        const sensors = zone.sensors || [];
+        const sensorsHtml = sensors.map((s, i) => ChartWidget._renderChartSensorRow({
+            zoneIdx, sensorIdx: i, sensor: s
+        })).join('');
+        return `
+            <div class="chart-zone-editor" data-zone-idx="${zoneIdx}">
+                <div class="chart-zone-header">
+                    <span class="chart-zone-title">Zone ${zoneIdx + 1}</span>
+                    ${zoneIdx > 0 ? `<button type="button" class="zone-remove-btn chart-zone-remove">×</button>` : ''}
+                </div>
+                <div class="chart-zone-sensors" data-zone-container="${zoneIdx}">${sensorsHtml}</div>
+                <button type="button" class="widget-btn chart-zone-add-sensor" data-zone-idx="${zoneIdx}" style="margin-top: 6px;">+ Add Sensor</button>
+            </div>
+        `;
+    }
 
     static getConfigForm(config = {}) {
         const zones = config.zones || [{ id: 'zone-0', sensors: [] }];
-        const timeRange = config.timeRange || 900000; // default 15m
-
+        const timeRange = config.timeRange || CHART_WIDGET_DEFAULT_TIME_RANGE_MS;
         return `
-            <div class="widget-config-field">
-                <label>Label</label>
-                <input type="text" class="widget-input" name="label"
-                       value="${escapeHtml(config.label || '')}" placeholder="Chart title">
-            </div>
+            <input type="hidden" name="tableHeight" value="${config.tableHeight ?? CHART_WIDGET_DEFAULT_TABLE_HEIGHT}">
+            <input type="hidden" name="zonesHeight" value="${config.zonesHeight ?? CHART_WIDGET_DEFAULT_ZONES_HEIGHT}">
+            ${renderLabelField(config, 'Chart title')}
             <div class="widget-config-field">
                 <label>Time Range</label>
                 <div class="time-range-selector">
@@ -18898,99 +21900,112 @@ class ChartWidget extends DashboardWidget {
                 </label>
             </div>
             <div class="chart-zones-editor" id="chart-zones-editor">
-                ${zones.map((zone, zoneIdx) => ChartWidget.renderZoneEditor(zone, zoneIdx)).join('')}
+                ${zones.map((z, zi) => ChartWidget.renderZoneEditor(z, zi)).join('')}
             </div>
             <div class="widget-config-field">
-                <button type="button" class="zones-add-btn" onclick="addChartZone()">+ Add Chart Zone</button>
+                <button type="button" class="zones-add-btn" id="chart-add-zone">+ Add Chart Zone</button>
             </div>
         `;
     }
 
-    static renderZoneEditor(zone, zoneIdx) {
-        const sensors = zone.sensors || [];
-        return `
-            <div class="chart-zone-editor" data-zone-idx="${zoneIdx}">
-                <div class="chart-zone-header">
-                    <span class="chart-zone-title">Zone ${zoneIdx + 1}</span>
-                    ${zoneIdx > 0 ? `<button type="button" class="zone-remove-btn" onclick="removeChartZone(${zoneIdx})">×</button>` : ''}
-                </div>
-                <div class="chart-zone-sensors" id="chart-zone-sensors-${zoneIdx}">
-                    ${sensors.map((sensor, sensorIdx) => ChartWidget.renderSensorRow(sensor, zoneIdx, sensorIdx)).join('')}
-                </div>
-                <div class="chart-zone-add">
-                    <input type="text" class="widget-input chart-sensor-input"
-                           placeholder="Add sensor..."
-                           data-zone-idx="${zoneIdx}"
-                           autocomplete="off">
-                </div>
-            </div>
-        `;
-    }
+    static initConfigHandlers(form, config = {}) {
+        if (form.dataset.chartHandlersWired === 'true') return;
+        form.dataset.chartHandlersWired = 'true';
 
-    static renderSensorRow(sensor, zoneIdx, sensorIdx) {
-        const color = sensor.color || ChartWidget.COLORS[sensorIdx % ChartWidget.COLORS.length];
-        return `
-            <div class="chart-sensor-row" data-zone-idx="${zoneIdx}" data-sensor-idx="${sensorIdx}">
-                <input type="color" class="chart-sensor-color" value="${color}"
-                       onchange="updateChartSensorColor(${zoneIdx}, ${sensorIdx}, this.value)">
-                <span class="chart-sensor-name">${escapeHtml(sensor.name)}</span>
-                <div class="chart-sensor-options">
-                    <label class="chart-sensor-option" title="Smooth line (bezier)">
-                        <input type="checkbox" name="sensor-${zoneIdx}-${sensorIdx}-smooth" ${sensor.smooth !== false ? 'checked' : ''}>
-                        <span>smooth</span>
-                    </label>
-                    <label class="chart-sensor-option" title="Fill area under line">
-                        <input type="checkbox" name="sensor-${zoneIdx}-${sensorIdx}-fill" ${sensor.fill !== false ? 'checked' : ''}>
-                        <span>fill</span>
-                    </label>
-                    <label class="chart-sensor-option" title="Stepped line (discrete)">
-                        <input type="checkbox" name="sensor-${zoneIdx}-${sensorIdx}-stepped" ${sensor.stepped ? 'checked' : ''}>
-                        <span>stepped</span>
-                    </label>
-                </div>
-                <button type="button" class="chart-sensor-remove" onclick="removeChartSensor(${zoneIdx}, ${sensorIdx})">×</button>
-                <input type="hidden" name="sensor-${zoneIdx}-${sensorIdx}-name" value="${escapeHtml(sensor.name)}">
-                <input type="hidden" name="sensor-${zoneIdx}-${sensorIdx}-color" value="${color}">
-            </div>
-        `;
+        // Wire all existing sensor rows.
+        const wireRow = (zoneIdx, sensorIdx, sensor = {}) => {
+            initSensorBindingHandlers(form, sensor, { fieldPrefix: `chart-${zoneIdx}-${sensorIdx}-` });
+        };
+        (config.zones || []).forEach((z, zi) => (z.sensors || []).forEach((s, si) => wireRow(zi, si, s)));
+
+        // Helper: получить last sensor (для pre-fill).
+        const getLastSensor = () => {
+            const rows = form.querySelectorAll('.chart-sensor-row');
+            const last = rows[rows.length - 1];
+            if (!last) return null;
+            const zi = last.dataset.zoneIdx, si = last.dataset.sensorIdx;
+            return parseSensorBindingFields(form, { fieldPrefix: `chart-${zi}-${si}-` });
+        };
+
+        // + Add Sensor (per zone), Remove sensor, Remove zone, + Add Zone — все через delegation.
+        form.addEventListener('click', (e) => {
+            const addSensorBtn = e.target.closest('.chart-zone-add-sensor');
+            if (addSensorBtn) {
+                const zoneIdx = parseInt(addSensorBtn.dataset.zoneIdx, 10);
+                const container = form.querySelector(`[data-zone-container="${zoneIdx}"]`);
+                const sensorIdx = container.querySelectorAll('.chart-sensor-row').length;
+                const last = getLastSensor();
+                const colorIdx = sensorIdx;
+                const sensor = {
+                    serverId:   last?.serverId   || (typeof state !== 'undefined' && state?.servers ? [...state.servers.entries()].find(([,s]) => s.connected)?.[0] : ''),
+                    objectName: last?.objectName || 'SharedMemory',
+                    sensor: '', sensorId: null,
+                    name: '', // back-compat: runtime читает sensor.name
+                    color: ChartWidget.SENSOR_COLORS[colorIdx % ChartWidget.SENSOR_COLORS.length],
+                    smooth: true, fill: true, stepped: false,
+                };
+                container.insertAdjacentHTML('beforeend',
+                    ChartWidget._renderChartSensorRow({ zoneIdx, sensorIdx, sensor }));
+                wireRow(zoneIdx, sensorIdx, sensor);
+                return;
+            }
+            const removeBtn = e.target.closest('.chart-sensor-remove');
+            if (removeBtn) {
+                removeBtn.closest('.chart-sensor-row')?.remove();
+                return;
+            }
+            const removeZoneBtn = e.target.closest('.chart-zone-remove');
+            if (removeZoneBtn) {
+                removeZoneBtn.closest('.chart-zone-editor')?.remove();
+                return;
+            }
+            const addZoneBtn = e.target.closest('#chart-add-zone');
+            if (addZoneBtn) {
+                const zonesEditor = form.querySelector('#chart-zones-editor');
+                const zoneIdx = zonesEditor.querySelectorAll('.chart-zone-editor').length;
+                zonesEditor.insertAdjacentHTML('beforeend',
+                    ChartWidget.renderZoneEditor({ id: `zone-${zoneIdx}`, sensors: [] }, zoneIdx));
+                return;
+            }
+        });
     }
 
     static parseConfigForm(form) {
         const zones = [];
-        const zoneEditors = form.querySelectorAll('.chart-zone-editor');
-
-        zoneEditors.forEach((editor, zoneIdx) => {
+        form.querySelectorAll('.chart-zone-editor').forEach((zoneEl) => {
+            const zoneIdx = parseInt(zoneEl.dataset.zoneIdx, 10);
             const sensors = [];
-            const sensorRows = editor.querySelectorAll('.chart-sensor-row');
-
-            sensorRows.forEach((row, sensorIdx) => {
-                const name = row.querySelector('input[type="hidden"][name$="-name"]')?.value;
-                const color = row.querySelector('input[type="hidden"][name$="-color"]')?.value;
-                const smooth = form.querySelector(`[name="sensor-${zoneIdx}-${sensorIdx}-smooth"]`)?.checked !== false;
-                const fill = form.querySelector(`[name="sensor-${zoneIdx}-${sensorIdx}-fill"]`)?.checked !== false;
-                const stepped = form.querySelector(`[name="sensor-${zoneIdx}-${sensorIdx}-stepped"]`)?.checked || false;
-
-                if (name) {
-                    sensors.push({ name, color, smooth, fill, stepped });
-                }
+            zoneEl.querySelectorAll('.chart-sensor-row').forEach((row) => {
+                const sensorIdx = parseInt(row.dataset.sensorIdx, 10);
+                const binding = parseSensorBindingFields(form, { fieldPrefix: `chart-${zoneIdx}-${sensorIdx}-` });
+                if (!binding.sensor) return;
+                sensors.push({
+                    ...binding,
+                    name:    binding.sensor, // back-compat: runtime читает sensor.name
+                    color:   form.querySelector(`[name="chart-${zoneIdx}-${sensorIdx}-color"]`)?.value || ChartWidget.SENSOR_COLORS[sensorIdx % ChartWidget.SENSOR_COLORS.length],
+                    smooth:  form.querySelector(`[name="chart-${zoneIdx}-${sensorIdx}-smooth"]`)?.checked !== false,
+                    fill:    form.querySelector(`[name="chart-${zoneIdx}-${sensorIdx}-fill"]`)?.checked !== false,
+                    stepped: form.querySelector(`[name="chart-${zoneIdx}-${sensorIdx}-stepped"]`)?.checked || false,
+                });
             });
-
-            zones.push({
-                id: `zone-${zoneIdx}`,
-                sensors
-            });
+            zones.push({ id: `zone-${zoneIdx}`, sensors });
         });
-
-        // Get timeRange from radio button
         const timeRangeInput = form.querySelector('[name="timeRange"]:checked');
-        const timeRange = timeRangeInput ? parseInt(timeRangeInput.value) : 900000;
-
         return {
             label: form.querySelector('[name="label"]')?.value || '',
-            timeRange,
+            timeRange: timeRangeInput
+                ? parseIntegerOrDefault(timeRangeInput.value, CHART_WIDGET_DEFAULT_TIME_RANGE_MS)
+                : CHART_WIDGET_DEFAULT_TIME_RANGE_MS,
             showTable: form.querySelector('[name="showTable"]')?.checked !== false,
             useTextname: form.querySelector('[name="useTextname"]')?.checked || false,
-            tableHeight: 100,
+            tableHeight: parseIntegerOrDefault(
+                form.querySelector('[name="tableHeight"]')?.value,
+                CHART_WIDGET_DEFAULT_TABLE_HEIGHT
+            ),
+            zonesHeight: parseIntegerOrDefault(
+                form.querySelector('[name="zonesHeight"]')?.value,
+                CHART_WIDGET_DEFAULT_ZONES_HEIGHT
+            ),
             zones
         };
     }
@@ -19012,10 +22027,19 @@ const WIDGET_TYPES = {
     'statusbar': StatusBarWidget,
     'bargraph': BarGraphWidget,
     'digital': DigitalWidget,
+    'toggle': ToggleWidget,
+    'pushbutton': PushButtonWidget,
+    'setpoint': SetpointWidget,
+    'generator': GeneratorWidget,
     'chart': ChartWidget
 };
+globalThis.WIDGET_TYPES = WIDGET_TYPES;
 
-// Grid settings используют константы из 05-constants.js:
+window.registerDashboardWidgetType = function(type, WidgetClass) {
+    WIDGET_TYPES[type] = WidgetClass;
+};
+
+// Grid settings используют константы из 00-constants.js:
 // DASHBOARD_GRID_COLS, DASHBOARD_GRID_ROW_HEIGHT, DASHBOARD_GRID_GAP
 
 // ============================================================================
@@ -19104,27 +22128,61 @@ class DashboardManager {
         this.saveDashboardSettings();
     }
 
-    // Обновить все виджеты с их текущими значениями
+    // Обновить все виджеты с их текущими значениями. Используется после
+    // reconnect / при возврате на dashboard view.
+    //
+    // Multi-sensor widget'ы (StatusBar, BarGraph, ChartWidget) переопределяют
+    // update() так, что он принимает объект {sensorName: value}, а не scalar.
+    // Они роутятся через updateBySensor()/updateSensor() и не кешируют scalar
+    // в widget.value. Передавать им (widget.value, widget.error) бесполезно —
+    // skip и подождём следующего ionc_sensor_batch (max задержка = poll interval).
     refreshAllWidgets() {
         dashboardState.widgets.forEach((widget) => {
+            if (typeof widget.updateBySensor === 'function' || typeof widget.updateSensor === 'function') {
+                return; // multi-sensor — refresh не применим, придёт через SSE
+            }
             if (widget.value !== null) {
                 widget.update(widget.value, widget.error);
             }
         });
     }
 
+    getGridMetrics() {
+        const gridEl = this.gridEl || document.querySelector('.dashboard-grid');
+        if (!gridEl) return null;
+
+        const gridRect = gridEl.getBoundingClientRect();
+        const computedStyle = window.getComputedStyle(gridEl);
+        const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
+        const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
+        const gap = DASHBOARD_GRID_GAP;
+        const contentWidth = gridRect.width - paddingLeft * 2;
+        const columnsGapWidth = gap * (DASHBOARD_GRID_COLS - 1);
+        const cellWidth = (contentWidth - columnsGapWidth) / DASHBOARD_GRID_COLS;
+        const cellHeight = DASHBOARD_GRID_ROW_HEIGHT;
+
+        return {
+            gridEl,
+            gridRect,
+            paddingLeft,
+            paddingTop,
+            gap,
+            contentWidth,
+            cellWidth,
+            cellHeight
+        };
+    }
+
     loadDashboards() {
         // Load from localStorage
-        try {
-            const userDashboards = JSON.parse(localStorage.getItem('user-dashboards') || '[]');
+        const userDashboards = loadJSON('user-dashboards', []);
+        if (Array.isArray(userDashboards)) {
             userDashboards.forEach(name => {
-                const config = localStorage.getItem(`dashboard:${name}`);
+                const config = loadJSON(`dashboard:${name}`, null);
                 if (config) {
-                    dashboardState.dashboards.set(name, JSON.parse(config));
+                    dashboardState.dashboards.set(name, config);
                 }
             });
-        } catch (err) {
-            console.warn('Failed to load dashboards from localStorage:', err);
         }
 
         // Load server dashboards
@@ -19170,44 +22228,50 @@ class DashboardManager {
                 }
             }
         } catch (err) {
-            console.log('No server dashboards available');
+            debugLog('No server dashboards available');
         }
+    }
+
+    // Разбивает dashboardState.dashboards на server/user по флагу config._server.
+    // Используется в updateDashboardSelector и updateSidebarDashboards.
+    _partitionDashboards() {
+        const all = Array.from(dashboardState.dashboards.entries());
+        return {
+            server: all.filter(([_, c]) => c._server),
+            user:   all.filter(([_, c]) => !c._server),
+            all,
+        };
     }
 
     updateDashboardSelector() {
         if (!this.selectEl) return;
 
         const currentValue = this.selectEl.value;
+        const { server, user } = this._partitionDashboards();
 
         let html = '<option value="">Select dashboard...</option>';
 
-        // Server dashboards
-        const serverDashboards = Array.from(dashboardState.dashboards.entries())
-            .filter(([_, config]) => config._server);
-        if (serverDashboards.length > 0) {
-            html += '<optgroup label="Server Dashboards">';
-            serverDashboards.forEach(([name]) => {
-                html += `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
-            });
-            html += '</optgroup>';
-        }
+        const renderGroup = (label, items) => {
+            if (items.length === 0) return '';
+            const opts = items.map(([name]) =>
+                `<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`
+            ).join('');
+            return `<optgroup label="${label}">${opts}</optgroup>`;
+        };
 
-        // User dashboards
-        const userDashboards = Array.from(dashboardState.dashboards.entries())
-            .filter(([_, config]) => !config._server);
-        if (userDashboards.length > 0) {
-            html += '<optgroup label="My Dashboards">';
-            userDashboards.forEach(([name]) => {
-                html += `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
-            });
-            html += '</optgroup>';
-        }
+        html += renderGroup('Server Dashboards', server);
+        html += renderGroup('My Dashboards', user);
 
         this.selectEl.innerHTML = html;
         this.selectEl.value = currentValue;
 
-        // Also update sidebar dashboards list
+        // Also update sidebar dashboards list (legacy hidden section + новые
+        // sidebar groups). renderSidebarGroups читает 'user-dashboards' из
+        // localStorage — saveDashboard уже обновил key, нужно re-render.
         this.updateSidebarDashboards();
+        if (typeof renderSidebarGroups === 'function') {
+            renderSidebarGroups();
+        }
     }
 
     updateSidebarDashboards() {
@@ -19215,50 +22279,37 @@ class DashboardManager {
         const countEl = document.getElementById('dashboards-count');
         if (!listEl) return;
 
-        const allDashboards = Array.from(dashboardState.dashboards.entries());
-        const serverDashboards = allDashboards.filter(([_, c]) => c._server);
-        const userDashboards = allDashboards.filter(([_, c]) => !c._server);
+        const { server: serverDashboards, user: userDashboards, all: allDashboards } = this._partitionDashboards();
 
         // Update count
         if (countEl) {
             countEl.textContent = allDashboards.length;
         }
 
-        // Build list HTML
-        let html = '';
+        const dashboardIcon = `
+            <svg class="dashboard-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7"/>
+                <rect x="14" y="3" width="7" height="7"/>
+                <rect x="14" y="14" width="7" height="7"/>
+                <rect x="3" y="14" width="7" height="7"/>
+            </svg>`;
 
-        // Server dashboards first
-        serverDashboards.forEach(([name]) => {
+        const renderItem = (name, isServer) => {
             const isActive = dashboardState.currentDashboard === name;
-            html += `
-                <li class="dashboard-item server${isActive ? ' active' : ''}" data-name="${escapeHtml(name)}">
-                    <svg class="dashboard-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="7" height="7"/>
-                        <rect x="14" y="3" width="7" height="7"/>
-                        <rect x="14" y="14" width="7" height="7"/>
-                        <rect x="3" y="14" width="7" height="7"/>
-                    </svg>
+            const cls = `dashboard-item${isServer ? ' server' : ''}${isActive ? ' active' : ''}`;
+            const badge = isServer ? '<span class="dashboard-badge">srv</span>' : '';
+            return `
+                <li class="${cls}" data-name="${escapeAttr(name)}">
+                    ${dashboardIcon}
                     <span class="dashboard-name">${escapeHtml(name)}</span>
-                    <span class="dashboard-badge">srv</span>
+                    ${badge}
                 </li>
             `;
-        });
+        };
 
-        // User dashboards
-        userDashboards.forEach(([name]) => {
-            const isActive = dashboardState.currentDashboard === name;
-            html += `
-                <li class="dashboard-item${isActive ? ' active' : ''}" data-name="${escapeHtml(name)}">
-                    <svg class="dashboard-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="7" height="7"/>
-                        <rect x="14" y="3" width="7" height="7"/>
-                        <rect x="14" y="14" width="7" height="7"/>
-                        <rect x="3" y="14" width="7" height="7"/>
-                    </svg>
-                    <span class="dashboard-name">${escapeHtml(name)}</span>
-                </li>
-            `;
-        });
+        // Server dashboards first, then user dashboards
+        const html = serverDashboards.map(([name]) => renderItem(name, true)).join('')
+                   + userDashboards.map(([name]) => renderItem(name, false)).join('');
 
         listEl.innerHTML = html;
 
@@ -19275,6 +22326,117 @@ class DashboardManager {
         });
     }
 
+    // Lazy resolve binding'а из state.sensorsByKey (берёт первый match по sensorName).
+    // НЕ сохраняет dashboard на сервер — миграция в памяти; полный triplet
+    // персистится только когда юзер сам нажмёт Apply в config dialog или Export.
+    _migrateLegacyBinding() {
+        if (!state?.sensorsByKey) return 0;
+        let total = 0;
+        for (const widget of dashboardState.widgets.values()) {
+            const cfg = widget?.config;
+            if (!cfg) continue;
+            const n = _migrateBindingPure(cfg, state.sensorsByKey);
+            if (n > 0) total += n;
+        }
+        if (total > 0) {
+            console.info(`dashboard "${dashboardState.currentDashboard}": migrated ${total} legacy widget bindings; re-save to persist`);
+        }
+        return total;
+    }
+
+    // Возвращает true, если хоть один widget имеет неполный binding (sensor без триплета).
+    // Chart legacy sensors хранят имя в b.name — учитываем обе формы.
+    _anyLegacyBinding() {
+        const isUnresolved = (b) => (b?.sensor || b?.name)
+            && (!b.serverId || !b.objectName || !Number.isFinite(b.sensorId));
+        for (const w of dashboardState.widgets.values()) {
+            const cfg = w?.config;
+            if (!cfg) continue;
+            if (isUnresolved(cfg)) return true;
+            if (cfg.sensor2 && isUnresolved({
+                serverId: cfg.serverId2 ?? cfg.serverId,
+                objectName: cfg.objectName2 ?? cfg.objectName,
+                sensor: cfg.sensor2, sensorId: cfg.sensorId2,
+            })) return true;
+            if (Array.isArray(cfg.items) && cfg.items.some(isUnresolved)) return true;
+            if (Array.isArray(cfg.zones)) {
+                for (const z of cfg.zones) if ((z.sensors || []).some(isUnresolved)) return true;
+            }
+        }
+        return false;
+    }
+
+    // Вызывается из updateDashboardWidgets() в 63-dashboard-dialogs.js на каждый
+    // ionc_sensor_batch / modbus_register_batch / opcua_sensor_batch / sensor_data
+    // событие SSE. Дешёвый no-op если pending не выставлен.
+    tryResolvePendingMigration() {
+        if (!this._pendingMigration) return;
+        const filled = this._migrateLegacyBinding();
+        if (filled > 0) {
+            this.updateSensorSubscriptions();
+            this.initializeWidgetValues();
+        }
+        if (!this._anyLegacyBinding()) this._pendingMigration = false;
+    }
+
+    // Cold-start bootstrap: для legacy dashboard'ов (только sensor name без триплета),
+    // загруженных ДО прогрева state.sensorsByKey через user navigation, прогреваем
+    // registry явно — иначе SSE не приходит (нет подписок) → migration retry никогда
+    // не срабатывает (chicken-and-egg, см. docs/review/2026-04-30-pre-existing-flaky-tests.md).
+    //
+    // Стратегия: для каждого connected server'а — fetch IONC objects, для каждого
+    // (server, object) — fetch sensors list. Per-server tracking — bool guard ловил
+    // race на первой загрузке (state.servers ещё пуст → bootstrap noop → флаг true →
+    // следующие dashboards без bootstrap). Set отрабатывает каждый новый connected.
+    async _bootstrapSensorRegistry() {
+        if (typeof state === 'undefined' || !state?.servers || !state.sensorsByKey) return;
+        if (!this._bootstrappedServers) this._bootstrappedServers = new Set();
+
+        const tasks = [];
+        for (const serverId of getConnectedServerIds()) {
+            if (this._bootstrappedServers.has(serverId)) continue;
+            this._bootstrappedServers.add(serverId);
+            tasks.push(this._bootstrapServerSensors(serverId));
+        }
+        if (tasks.length === 0) return;
+        await Promise.allSettled(tasks);
+        // Re-attempt migration с прогретым registry.
+        this.tryResolvePendingMigration();
+    }
+
+    async _bootstrapServerSensors(serverId) {
+        try {
+            const objResp = await fetch(`/api/objects?server=${encodeURIComponent(serverId)}&type=IONotifyController`);
+            if (!objResp.ok) return;
+            const objData = await objResp.json();
+            const objects = (objData?.objects || [])
+                .map(o => typeof o === 'string' ? o : o?.name)
+                .filter(Boolean);
+
+            // Параллельно fetch'аем sensors per object — server'ам обычно ОК с десятком
+            // одновременных запросов.
+            await Promise.allSettled(objects.map(async (objectName) => {
+                const sensorsResp = await fetch(buildIONCSensorsUrl({
+                    objectName,
+                    serverId,
+                    limit: DASHBOARD_SENSOR_REGISTRY_FETCH_LIMIT,
+                }));
+                if (!sensorsResp.ok) return;
+                const data = await sensorsResp.json();
+                for (const s of (data?.sensors || [])) {
+                    if (s?.name && Number.isFinite(s?.id)) {
+                        state.sensorsByKey.set(
+                            makeSensorKey(serverId, objectName, s.name),
+                            { id: s.id, name: s.name, serverId, objectName, type: s.type }
+                        );
+                    }
+                }
+            }));
+        } catch (e) {
+            console.warn(`bootstrap server ${serverId} failed:`, e);
+        }
+    }
+
     async loadDashboard(name) {
         if (!name) {
             this.clearDashboard();
@@ -19285,6 +22447,19 @@ class DashboardManager {
         if (!config) {
             console.warn('Dashboard not found:', name);
             this.clearDashboard();
+            return;
+        }
+
+        // Если уже на этом dashboard и виджеты живы — НЕ пересоздаём их с нуля.
+        // sidebar-click + view-toggle теперь не «сбрасывают» layout/values/edit-mode,
+        // а лишь освежают подписки и значения (на случай новых SSE-событий или
+        // подключившихся серверов). Force-reload — через clearDashboard() либо
+        // переключение dashboard'ов.
+        if (dashboardState.currentDashboard === name && dashboardState.widgets.size > 0) {
+            this._migrateLegacyBinding();
+            this.updateSensorSubscriptions();
+            this.initializeWidgetValues();
+            this._pendingMigration = this._anyLegacyBinding();
             return;
         }
 
@@ -19359,84 +22534,104 @@ class DashboardManager {
         });
 
         // Subscribe to sensor updates
+        this._migrateLegacyBinding();
         this.updateSensorSubscriptions();
 
         // Initialize widgets with cached/fetched values
         this.initializeWidgetValues();
+
+        // Track pending migration for cold-start hook (см. tryResolvePendingMigration)
+        this._pendingMigration = this._anyLegacyBinding();
+
+        // Если binding'и не резолвятся из-за пустого sensorsByKey — async-прогреваем
+        // его через `/api/objects/...` + `/ionc/sensors`. Не ждём (fire-and-forget):
+        // dashboard рендерится сразу, виджеты заполнятся после повторной миграции.
+        if (this._pendingMigration) {
+            this._bootstrapSensorRegistry().catch(e => console.warn('sensor registry bootstrap:', e));
+        }
     }
 
     // Initialize widgets with current sensor values (from cache or API)
     async initializeWidgetValues() {
-        // Collect unique sensor names from subscriptions
-        const sensorNames = new Set();
-        for (const sensorName of dashboardState.sensorSubscriptions.keys()) {
-            sensorNames.add(sensorName);
-        }
-        for (const sensorName of dashboardState.setpointSubscriptions.keys()) {
-            sensorNames.add(sensorName);
-        }
-        for (const sensorName of dashboardState.chartSubscriptions.keys()) {
-            sensorNames.add(sensorName);
-        }
+        // Collect unique sensorKeys from subscriptions (после Step 2.5 ключи Map'ов
+        // — это полные sensorKey, не короткие имена).
+        const sensorKeys = new Set();
+        for (const k of dashboardState.sensorSubscriptions.keys()) sensorKeys.add(k);
+        for (const k of dashboardState.setpointSubscriptions.keys()) sensorKeys.add(k);
+        for (const k of dashboardState.chartSubscriptions.keys()) sensorKeys.add(k);
 
-        if (sensorNames.size === 0) return;
+        if (sensorKeys.size === 0) return;
 
-        // First, try to use cached values from SSE events
-        const uncachedSensors = [];
-        for (const name of sensorNames) {
-            const cached = state.sensorValuesCache.get(name);
+        // First, try to use cached values from SSE events.
+        const uncachedKeys = [];
+        for (const cacheKey of sensorKeys) {
+            const cached = state.sensorValuesCache.get(cacheKey);
             if (cached) {
-                // Use cached value (not older than 60 seconds)
-                if (Date.now() - cached.timestamp < 60000) {
-                    this.handleSensorUpdate(name, cached.value, cached.error);
+                if (Date.now() - cached.timestamp < DASHBOARD_SENSOR_CACHE_TTL_MS) {
+                    const meta = (cached.frozen || cached.blocked)
+                        ? { frozen: !!cached.frozen, blocked: !!cached.blocked }
+                        : null;
+                    this.handleSensorUpdate(cacheKey, cached.value, cached.error, null, meta);
                 } else {
-                    uncachedSensors.push(name);
+                    uncachedKeys.push(cacheKey);
                 }
             } else {
-                uncachedSensors.push(name);
+                uncachedKeys.push(cacheKey);
             }
         }
 
         // For uncached sensors, try to fetch from API
-        if (uncachedSensors.length > 0) {
-            this.fetchSensorValues(uncachedSensors);
+        if (uncachedKeys.length > 0) {
+            this.fetchSensorValues(uncachedKeys);
         }
     }
 
-    // Fetch sensor values from IONC API
-    async fetchSensorValues(sensorNames) {
-        // Find SharedMemory server
-        let smServerId = null;
-        for (const [id, server] of state.servers) {
-            if (server.connected) {
-                smServerId = id;
-                break;
-            }
+    // Fetch sensor values from IONC API. Принимает массив sensorKey'ев
+    // (каждый ключ уже кодирует serverId|objectName|sensorName — Step 2.6).
+    // Группирует по (serverId, objectName), делает один search request
+    // на каждый sensorName (текущий API не поддерживает batch search).
+    async fetchSensorValues(sensorKeys) {
+        // Group by (serverId, objectName) → Map<sensorName, sensorKey>.
+        const groups = new Map();
+
+        for (const key of sensorKeys) {
+            const parsed = parseSensorKey(key);
+            if (!parsed) continue; // legacy / malformed — пропускаем
+            const grpKey = makeGroupKey(parsed.serverId, parsed.objectName);
+            if (!groups.has(grpKey)) groups.set(grpKey, new Map());
+            groups.get(grpKey).set(parsed.sensorName, key);
         }
 
-        if (!smServerId) return;
-
-        // Fetch each sensor (could be optimized with batch API)
-        for (const name of sensorNames) {
-            try {
-                const response = await fetch(`/api/objects/SharedMemory/ionc/sensors?server=${smServerId}&search=${encodeURIComponent(name)}&limit=1`);
-                if (response.ok) {
+        for (const [grpKey, nameToKey] of groups) {
+            const { serverId, objectName } = parseGroupKey(grpKey);
+            for (const [sensorName, sensorKey] of nameToKey) {
+                try {
+                    const response = await fetch(buildIONCSensorsUrl({
+                        objectName,
+                        serverId,
+                        search: sensorName,
+                        limit: 1,
+                    }));
+                    if (!response.ok) continue;
                     const data = await response.json();
-                    if (data.sensors && data.sensors.length > 0) {
-                        const sensor = data.sensors.find(s => s.name === name);
-                        if (sensor) {
-                            // Cache and update
-                            state.sensorValuesCache.set(name, {
-                                value: sensor.value,
-                                error: null,
-                                timestamp: Date.now()
-                            });
-                            this.handleSensorUpdate(name, sensor.value, null);
-                        }
-                    }
+                    if (!data.sensors || data.sensors.length === 0) continue;
+                    const sensor = data.sensors.find(s => s.name === sensorName);
+                    if (!sensor) continue;
+                    const writeKey = makeSensorKey(serverId, objectName, sensor.name);
+                    state.sensorValuesCache.set(writeKey, {
+                        value: sensor.value,
+                        error: null,
+                        frozen: !!sensor.frozen,
+                        blocked: !!sensor.blocked,
+                        timestamp: Date.now()
+                    });
+                    const meta = (sensor.frozen || sensor.blocked)
+                        ? { frozen: !!sensor.frozen, blocked: !!sensor.blocked }
+                        : null;
+                    this.handleSensorUpdate(writeKey, sensor.value, null, null, meta);
+                } catch (err) {
+                    console.warn('Failed to fetch sensor value:', sensorKey, err);
                 }
-            } catch (err) {
-                console.warn('Failed to fetch sensor value:', name, err);
             }
         }
     }
@@ -19449,7 +22644,7 @@ class DashboardManager {
         }
 
         const { position = {} } = widgetConfig;
-        const { col = 0, row = 0, width = 2, height = 1, freePosition, offset } = position;
+        const { col = 0, row = 0, width = 2, height = 1, freePosition } = position;
 
         // Create widget container
         const container = document.createElement('div');
@@ -19462,20 +22657,9 @@ class DashboardManager {
         if (isTransparent) {
             container.classList.add('transparent');
         }
-        // Build transform string (offset + rotation)
-        const rotate = widgetConfig.config?.rotate || 0;
-        const transforms = [];
-        if (offset && (offset.x || offset.y)) {
-            transforms.push(`translate(${offset.x || 0}px, ${offset.y || 0}px)`);
-        }
-        if (rotate) {
-            transforms.push(`rotate(${rotate}deg)`);
-        }
-        if (transforms.length > 0) {
-            container.style.transform = transforms.join(' ');
-        }
         container.dataset.widgetId = widgetConfig.id;
         container.dataset.type = widgetConfig.type;
+        this.applyWidgetTransform(container, widgetConfig);
 
         // Free pixel positioning (Shift+drag) or grid snap
         if (freePosition) {
@@ -19483,15 +22667,9 @@ class DashboardManager {
             container.style.left = `${freePosition.left}px`;
             container.style.top = `${freePosition.top}px`;
             // Always calculate size from grid cells (width/height are always in cells)
-            const gap = DASHBOARD_GRID_GAP;
-            const gridEl = this.gridEl || document.querySelector('.dashboard-grid');
-            if (gridEl) {
-                const gridRect = gridEl.getBoundingClientRect();
-                const computedStyle = window.getComputedStyle(gridEl);
-                const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
-                const contentWidth = gridRect.width - paddingLeft * 2;
-                const cellWidth = (contentWidth - gap * (DASHBOARD_GRID_COLS - 1)) / DASHBOARD_GRID_COLS;
-                const cellHeight = DASHBOARD_GRID_ROW_HEIGHT;
+            const gridMetrics = this.getGridMetrics();
+            if (gridMetrics) {
+                const { gap, cellWidth, cellHeight } = gridMetrics;
                 container.style.width = `${width * cellWidth + (width - 1) * gap}px`;
                 container.style.height = `${height * cellHeight + (height - 1) * gap}px`;
             }
@@ -19526,20 +22704,14 @@ class DashboardManager {
 
         // Create widget instance
         const widget = new WidgetClass(widgetConfig.id, widgetConfig.config || {}, container);
-        widget.render();
 
-        // Inject title if configured (before widget-content, not inside)
-        const title = widgetConfig.config?.title;
-        if (title) {
-            const widgetContent = container.querySelector('.widget-content');
-            if (widgetContent) {
-                const titleEl = document.createElement('div');
-                titleEl.className = 'widget-title-label' + (widgetConfig.config?.titleBorder ? ' title-badge' : '');
-                titleEl.textContent = title;
-                // Insert BEFORE widget-content, not inside it
-                widgetContent.parentNode.insertBefore(titleEl, widgetContent);
-            }
+        // Маркер для CSS правил (.dashboard-widget[data-active-widget="true"]):
+        // используется для edit-mode grayscale и active-disabled индикатора.
+        if (widget instanceof ActiveDashboardWidget) {
+            container.dataset.activeWidget = 'true';
         }
+
+        this.renderWidgetContent(widget, widgetConfig);
 
         // Bind widget events
         container.querySelector('.widget-action-btn.config')?.addEventListener('click', (e) => {
@@ -19597,6 +22769,44 @@ class DashboardManager {
         return widget;
     }
 
+    applyWidgetTransform(container, widgetConfig) {
+        const rotate = widgetConfig.config?.rotate || 0;
+        const offset = widgetConfig.position?.offset;
+        const transforms = [];
+        if (offset && (offset.x || offset.y)) {
+            transforms.push(`translate(${offset.x || 0}px, ${offset.y || 0}px)`);
+        }
+        if (rotate) {
+            transforms.push(`rotate(${rotate}deg)`);
+        }
+        container.style.transform = transforms.length > 0 ? transforms.join(' ') : '';
+    }
+
+    renderWidgetTitle(container, config) {
+        const title = config?.title;
+        if (!title) return;
+
+        const widgetContent = container.querySelector('.widget-content');
+        if (!widgetContent) return;
+
+        const titleEl = document.createElement('div');
+        titleEl.className = 'widget-title-label' + (config.titleBorder ? ' title-badge' : '');
+        titleEl.textContent = title;
+        widgetContent.parentNode.insertBefore(titleEl, widgetContent);
+    }
+
+    renderWidgetContent(widget, widgetConfig) {
+        widget.render();
+
+        // Initial interactivity sync (без него виджет создаётся в правильном
+        // visual state до первого editMode toggle / controlToken event).
+        if (typeof widget._updateInteractivityClass === 'function') {
+            widget._updateInteractivityClass();
+        }
+
+        this.renderWidgetTitle(widget.container, widgetConfig.config || {});
+    }
+
     clearWidgets() {
         // Destroy all widget instances
         dashboardState.widgets.forEach(widget => {
@@ -19605,13 +22815,20 @@ class DashboardManager {
             }
         });
         dashboardState.widgets.clear();
+        // Чистим все три карты подписок одновременно с widgets — иначе stale
+        // sensor/setpoint/chart subscriptions будут слать update'ы к destroy'нутым widget'ам
+        // до следующего updateSensorSubscriptions.
         dashboardState.sensorSubscriptions.clear();
+        dashboardState.setpointSubscriptions.clear();
+        dashboardState.chartSubscriptions.clear();
     }
 
     clearDashboard() {
         dashboardState.currentDashboard = null;
         this.clearWidgets();
         this.actionsEl?.classList.add('hidden');
+        this._pendingMigration = false;
+        this._bootstrappedServers?.clear();
 
         // Reset selector to empty value
         if (this.selectEl) {
@@ -19742,6 +22959,22 @@ class DashboardManager {
 
         if (!content) return;
 
+        // widget-config-content — persistent <div> (live между открытиями
+        // диалога). Сбрасываем все idempotency-флаги, которые initConfigHandlers
+        // конкретных виджетов выставляют на этом узле, иначе для второго
+        // открытия handler'ы рано-return'ят и autocomplete не работает.
+        delete content.dataset.activeHandlersWired;
+        delete content.dataset.genHandlersWired;
+        delete content.dataset.chartHandlersWired;
+        // Helpers из 60-widget-sensor-binding.js используют dataset-флаги
+        // sensorBinding_*, sensorItemList_*, ioncCombo_*. content живёт между
+        // открытиями диалога, поэтому сбрасываем все три семейства перед новым wiring.
+        for (const key of Object.keys(content.dataset)) {
+            if (key.startsWith('sensorBinding') || key.startsWith('sensorItemList') || key.startsWith('ioncCombo')) {
+                delete content.dataset[key];
+            }
+        }
+
         let config = {};
         let position = {};
         let WidgetClass;
@@ -19764,10 +22997,6 @@ class DashboardManager {
             title.textContent = widgetId ? `Configure ${WidgetClass.displayName}` : `Add ${WidgetClass.displayName}`;
         }
 
-        // Get current size from position, or default
-        const currentWidth = position.width || WidgetClass.defaultSize.width;
-        const currentHeight = position.height || WidgetClass.defaultSize.height;
-
         // Chart widget doesn't show transparent option (always opaque)
         const showTransparent = type !== 'chart';
         const transparentHtml = showTransparent ? `
@@ -19787,7 +23016,7 @@ class DashboardManager {
             <div class="widget-config-row">
                 <div class="widget-config-field">
                     <label>Title (optional)</label>
-                    <input type="text" class="widget-input" name="title" value="${escapeHtml(config.title || '')}" placeholder="e.g. Engine RPM">
+                    <input type="text" class="widget-input" name="title" value="${escapeAttr(config.title || '')}" placeholder="e.g. Engine RPM">
                 </div>
                 <div class="widget-config-field">
                     <label class="widget-toggle">
@@ -19809,10 +23038,9 @@ class DashboardManager {
                         <input type="number" name="rotate" value="${currentRotate}" min="0" max="360" step="1">
                         <span class="rotate-unit">°</span>
                         <div class="rotate-quick-buttons">
-                            <button type="button" class="rotate-quick-btn" data-angle="0">0°</button>
-                            <button type="button" class="rotate-quick-btn" data-angle="90">90°</button>
-                            <button type="button" class="rotate-quick-btn" data-angle="180">180°</button>
-                            <button type="button" class="rotate-quick-btn" data-angle="270">270°</button>
+                            ${ROTATE_QUICK_ANGLES.map(angle =>
+                                `<button type="button" class="rotate-quick-btn" data-angle="${angle}">${angle}°</button>`
+                            ).join('')}
                         </div>
                     </div>
                 </div>
@@ -19829,15 +23057,6 @@ class DashboardManager {
         // Store context for apply
         content.dataset.widgetId = widgetId || '';
         content.dataset.widgetType = type;
-
-        // Setup sensor autocomplete for all sensor inputs
-        this.setupSensorAutocomplete(content, 'sensor');
-        this.setupSensorAutocomplete(content, 'sensor2');
-
-        // Setup chart widget autocomplete for zone sensor inputs
-        if (type === 'chart') {
-            setupChartWidgetAutocomplete();
-        }
 
         // Setup custom number inputs
         setupNumberInputs(content);
@@ -19860,160 +23079,6 @@ class DashboardManager {
         overlay?.classList.remove('hidden');
     }
 
-    setupSensorAutocomplete(container, fieldName = 'sensor') {
-        const sensorInput = container.querySelector(`[name="${fieldName}"]`);
-        if (!sensorInput) return;
-
-        // Wrap input in relative container and add autocomplete dropdown
-        const field = sensorInput.closest('.widget-config-field');
-        if (!field) return;
-
-        field.classList.add('sensor-autocomplete-field');
-
-        // Create autocomplete container
-        const autocompleteContainer = document.createElement('div');
-        autocompleteContainer.className = 'widget-sensor-autocomplete';
-        autocompleteContainer.style.display = 'none';
-        field.appendChild(autocompleteContainer);
-
-        // State
-        let autocompleteResults = [];
-        let selectedIndex = 0;
-        let debounceTimer = null;
-
-        const sensors = Array.from(state.sensorsByName.entries()).map(([name, data]) => ({
-            name,
-            iotype: data?.iotype || '?',
-            textname: data?.textname || ''
-        }));
-
-        const hideAutocomplete = () => {
-            autocompleteContainer.style.display = 'none';
-            autocompleteContainer.innerHTML = '';
-            autocompleteResults = [];
-            selectedIndex = 0;
-        };
-
-        const showAutocomplete = (matches) => {
-            if (matches.length === 0) {
-                hideAutocomplete();
-                return;
-            }
-
-            autocompleteResults = matches;
-            selectedIndex = 0;
-
-            autocompleteContainer.innerHTML = matches.map((s, i) => `
-                <div class="widget-autocomplete-item${i === 0 ? ' selected' : ''}" data-name="${escapeHtml(s.name)}">
-                    <span class="sensor-name">${escapeHtml(s.name)}</span>
-                    <span class="type-badge type-${s.iotype}">${s.iotype}</span>
-                    ${s.textname ? `<span class="sensor-textname">${escapeHtml(s.textname)}</span>` : ''}
-                </div>
-            `).join('');
-
-            // Click handlers
-            autocompleteContainer.querySelectorAll('.widget-autocomplete-item').forEach(item => {
-                item.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    sensorInput.value = item.dataset.name;
-                    hideAutocomplete();
-                });
-            });
-
-            autocompleteContainer.style.display = 'block';
-        };
-
-        const updateSelection = () => {
-            const items = autocompleteContainer.querySelectorAll('.widget-autocomplete-item');
-            items.forEach((item, i) => {
-                item.classList.toggle('selected', i === selectedIndex);
-            });
-            // Scroll selected into view
-            const selected = autocompleteContainer.querySelector('.selected');
-            if (selected) {
-                selected.scrollIntoView({ block: 'nearest' });
-            }
-        };
-
-        const navigateAutocomplete = (direction) => {
-            if (autocompleteResults.length === 0) return;
-            selectedIndex = Math.max(0, Math.min(autocompleteResults.length - 1, selectedIndex + direction));
-            updateSelection();
-        };
-
-        // Input event - debounced search
-        sensorInput.addEventListener('input', () => {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => {
-                const query = sensorInput.value.trim().toLowerCase();
-                if (query.length < AUTOCOMPLETE_MIN_QUERY) {
-                    hideAutocomplete();
-                    return;
-                }
-
-                // Filter: partial match (contains)
-                const matches = sensors
-                    .filter(s => s.name.toLowerCase().includes(query))
-                    .slice(0, 10);
-
-                showAutocomplete(matches);
-            }, 150);
-        });
-
-        // Keyboard navigation
-        sensorInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                sensorInput.value = '';
-                sensorInput.blur();
-                hideAutocomplete();
-            } else if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                navigateAutocomplete(1);
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                navigateAutocomplete(-1);
-            } else if (e.key === 'Enter') {
-                if (autocompleteResults.length > 0) {
-                    e.preventDefault();
-                    sensorInput.value = autocompleteResults[selectedIndex].name;
-                    hideAutocomplete();
-                }
-            }
-        });
-
-        // Focus - show autocomplete if text is present
-        sensorInput.addEventListener('focus', () => {
-            const query = sensorInput.value.trim().toLowerCase();
-            if (query.length >= AUTOCOMPLETE_MIN_QUERY) {
-                const matches = sensors
-                    .filter(s => s.name.toLowerCase().includes(query))
-                    .slice(0, 10);
-                showAutocomplete(matches);
-            }
-        });
-
-        // Click outside to hide
-        const clickOutsideHandler = (e) => {
-            if (!field.contains(e.target)) {
-                hideAutocomplete();
-            }
-        };
-        document.addEventListener('click', clickOutsideHandler);
-
-        // Cleanup on overlay close
-        const overlay = document.getElementById('widget-config-overlay');
-        if (overlay) {
-            const observer = new MutationObserver(() => {
-                if (overlay.classList.contains('hidden')) {
-                    document.removeEventListener('click', clickOutsideHandler);
-                    observer.disconnect();
-                }
-            });
-            observer.observe(overlay, { attributes: true, attributeFilter: ['class'] });
-        }
-    }
-
     applyWidgetConfig() {
         const content = document.getElementById('widget-config-content');
         if (!content) return;
@@ -20025,6 +23090,12 @@ class DashboardManager {
         if (!WidgetClass) return;
 
         const config = WidgetClass.parseConfigForm(content);
+
+        // Save zones to reuse-history (Recent group of zones reuse picker)
+        if (Array.isArray(config.zones) && config.zones.length > 0) {
+            addZonesToHistory(config.zones, type);
+        }
+
         const transparent = content.querySelector('[name="transparent"]')?.checked || false;
         config.transparent = transparent;
 
@@ -20040,7 +23111,7 @@ class DashboardManager {
 
         // Read rotate value
         const rotateInput = content.querySelector('[name="rotate"]');
-        const rotate = parseInt(rotateInput?.value) || 0;
+        const rotate = parseIntegerOrDefault(rotateInput?.value, 0);
         config.rotate = rotate;
 
         const dashboard = dashboardState.dashboards.get(dashboardState.currentDashboard);
@@ -20064,40 +23135,25 @@ class DashboardManager {
                     if (dashboardState.editMode) {
                         widget.container.classList.add('edit-mode');
                     }
-                    // Apply transform (offset + rotation)
-                    const offset = widgetConfig.position?.offset;
-                    const transforms = [];
-                    if (offset && (offset.x || offset.y)) {
-                        transforms.push(`translate(${offset.x || 0}px, ${offset.y || 0}px)`);
-                    }
-                    if (rotate) {
-                        transforms.push(`rotate(${rotate}deg)`);
-                    }
-                    widget.container.style.transform = transforms.length > 0 ? transforms.join(' ') : '';
+                    this.applyWidgetTransform(widget.container, widgetConfig);
                     widget.container.querySelector('.widget-title').textContent = config.label || type;
                     // Remove old title and content before re-render
                     widget.container.querySelector('.widget-title-label')?.remove();
                     widget.container.querySelector('.widget-content')?.remove();
-                    widget.render();
-
-                    // Inject title if configured (before widget-content, not inside)
-                    if (config.title) {
-                        const widgetContent = widget.container.querySelector('.widget-content');
-                        if (widgetContent) {
-                            const titleEl = document.createElement('div');
-                            titleEl.className = 'widget-title-label' + (config.titleBorder ? ' title-badge' : '');
-                            titleEl.textContent = config.title;
-                            // Insert BEFORE widget-content, not inside it
-                            widgetContent.parentNode.insertBefore(titleEl, widgetContent);
-                        }
-                    }
+                    this.renderWidgetContent(widget, widgetConfig);
                 }
             }
         } else {
-            // Add new widget with default size
+            // Add new widget with default size. Style-aware override:
+            // PushButton mushroom круглый и хочет 3×3, flat 3×2, pill 3×1.
+            // Если у класса есть getDefaultSizeForStyle и юзер выбрал style
+            // в форме конфига — используем тот размер, иначе static defaultSize.
             const newId = `widget-${Date.now()}`;
-            const width = WidgetClass.defaultSize.width;
-            const height = WidgetClass.defaultSize.height;
+            const sizeOverride = (typeof WidgetClass.getDefaultSizeForStyle === 'function' && config.style)
+                ? WidgetClass.getDefaultSizeForStyle(config.style, config)
+                : null;
+            const width  = sizeOverride?.width  ?? WidgetClass.defaultSize.width;
+            const height = sizeOverride?.height ?? WidgetClass.defaultSize.height;
             const position = this.findEmptyPosition(width, height);
 
             const widgetConfig = {
@@ -20136,7 +23192,7 @@ class DashboardManager {
         });
 
         // Find first empty position
-        for (let row = 0; row < 100; row++) {
+        for (let row = 0; row < DASHBOARD_POSITION_SCAN_ROWS; row++) {
             for (let col = 0; col <= cols - width; col++) {
                 let fits = true;
                 for (let c = col; c < col + width && fits; c++) {
@@ -20172,8 +23228,10 @@ class DashboardManager {
         // Remove widget instance
         const widget = dashboardState.widgets.get(widgetId);
         if (widget) {
-            widget.container.remove();
-            widget.destroy();
+            if (typeof widget.destroy === 'function') {
+                widget.destroy();
+            }
+            widget.container?.remove();
             dashboardState.widgets.delete(widgetId);
         }
 
@@ -20188,16 +23246,23 @@ class DashboardManager {
         const widgetConfig = dashboard.widgets.find(w => w.id === widgetId);
         if (!widgetConfig) return;
 
-        const gridRect = this.gridEl.getBoundingClientRect();
         const startX = startEvent.clientX;
         const startY = startEvent.clientY;
-        const startWidth = widgetConfig.position.width || 2;
-        const startHeight = widgetConfig.position.height || 1;
+        const startWidth = widgetConfig.position.width || DASHBOARD_DEFAULT_WIDGET_WIDTH;
+        const startHeight = widgetConfig.position.height || DASHBOARD_DEFAULT_WIDGET_HEIGHT;
 
         // Calculate cell size
-        const gap = DASHBOARD_GRID_GAP;
-        const cellWidth = (gridRect.width - gap * (DASHBOARD_GRID_COLS - 1)) / DASHBOARD_GRID_COLS;
-        const cellHeight = DASHBOARD_GRID_ROW_HEIGHT;
+        const gridMetrics = this.getGridMetrics();
+        if (!gridMetrics) return;
+        const { gap, cellWidth, cellHeight } = gridMetrics;
+
+        // minSize widget'а — fall back на 1×1 если static minSize не задан.
+        // Без этого resize мог сжать любой widget до 1×1, игнорируя задекларированные
+        // в классе ограничения (напр. ToggleWidget.minSize = { width: 2, height: 1 }).
+        const widget = dashboardState.widgets.get(widgetId);
+        const minSize = widget?.constructor?.minSize || { width: 1, height: 1 };
+        const minWidth = minSize.width || 1;
+        const minHeight = minSize.height || 1;
 
         container.classList.add('resizing');
 
@@ -20208,8 +23273,8 @@ class DashboardManager {
             // Calculate new size in cells
             const col = widgetConfig.position.col || 0;
             const maxWidth = DASHBOARD_GRID_COLS - col; // Can't extend beyond grid
-            let newWidth = Math.max(1, Math.min(maxWidth, Math.round(startWidth + deltaX / (cellWidth + gap))));
-            let newHeight = Math.max(1, Math.min(20, Math.round(startHeight + deltaY / (cellHeight + gap))));
+            let newWidth = Math.max(minWidth, Math.min(maxWidth, Math.round(startWidth + deltaX / (cellWidth + gap))));
+            let newHeight = Math.max(minHeight, Math.min(DASHBOARD_MAX_WIDGET_HEIGHT, Math.round(startHeight + deltaY / (cellHeight + gap))));
 
             // Update visual preview
             container.style.gridColumn = `${(widgetConfig.position.col || 0) + 1} / span ${newWidth}`;
@@ -20226,8 +23291,8 @@ class DashboardManager {
             document.removeEventListener('mouseup', onMouseUp);
 
             // Apply new size
-            const newWidth = parseInt(container.dataset.pendingWidth) || startWidth;
-            const newHeight = parseInt(container.dataset.pendingHeight) || startHeight;
+            const newWidth = parseIntegerOrDefault(container.dataset.pendingWidth, startWidth);
+            const newHeight = parseIntegerOrDefault(container.dataset.pendingHeight, startHeight);
 
             if (newWidth !== startWidth || newHeight !== startHeight) {
                 widgetConfig.position.width = newWidth;
@@ -20259,24 +23324,17 @@ class DashboardManager {
         const widgetConfig = dashboard.widgets.find(w => w.id === widgetId);
         if (!widgetConfig) return;
 
-        const gridRect = this.gridEl.getBoundingClientRect();
+        const gridMetrics = this.getGridMetrics();
+        if (!gridMetrics) return;
+        const { gridEl, gridRect, paddingLeft, paddingTop, gap, cellWidth, cellHeight } = gridMetrics;
         const containerRect = container.getBoundingClientRect();
-        const computedStyle = window.getComputedStyle(this.gridEl);
-        const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
-        const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
 
         // Offset from mouse to container top-left
         const offsetX = startEvent.clientX - containerRect.left;
         const offsetY = startEvent.clientY - containerRect.top;
 
-        // Calculate cell size (grid content area = width minus padding on both sides)
-        const gap = DASHBOARD_GRID_GAP;
-        const contentWidth = gridRect.width - paddingLeft * 2;
-        const cellWidth = (contentWidth - gap * (DASHBOARD_GRID_COLS - 1)) / DASHBOARD_GRID_COLS;
-        const cellHeight = DASHBOARD_GRID_ROW_HEIGHT;
-
-        const width = widgetConfig.position.width || 2;
-        const height = widgetConfig.position.height || 1;
+        const width = widgetConfig.position.width || DASHBOARD_DEFAULT_WIDGET_WIDTH;
+        const height = widgetConfig.position.height || DASHBOARD_DEFAULT_WIDGET_HEIGHT;
 
         // Switch to absolute positioning for smooth drag
         container.classList.add('dragging');
@@ -20285,7 +23343,7 @@ class DashboardManager {
         container.style.height = `${containerRect.height}px`;
         container.style.left = `${containerRect.left}px`;
         container.style.top = `${containerRect.top}px`;
-        container.style.zIndex = '1000';
+        container.style.zIndex = String(DASHBOARD_DRAG_Z_INDEX);
         container.style.gridColumn = '';
         container.style.gridRow = '';
 
@@ -20306,7 +23364,7 @@ class DashboardManager {
             placeholder.style.left = `${initCol * (cellWidth + gap)}px`;
             placeholder.style.top = `${initRow * (cellHeight + gap)}px`;
         }
-        this.gridEl.appendChild(placeholder);
+        gridEl.appendChild(placeholder);
 
         let pendingCol = initCol;
         let pendingRow = initRow;
@@ -20378,8 +23436,8 @@ class DashboardManager {
                 container.style.position = 'absolute';
                 container.style.left = `${pendingFreePosition.left}px`;
                 container.style.top = `${pendingFreePosition.top}px`;
-                container.style.width = `${pendingFreePosition.width}px`;
-                container.style.height = `${pendingFreePosition.height}px`;
+                container.style.width = `${containerRect.width}px`;
+                container.style.height = `${containerRect.height}px`;
                 container.classList.add('free-position');
                 this.saveDashboard();
             } else {
@@ -20403,6 +23461,9 @@ class DashboardManager {
 
     toggleEditMode() {
         dashboardState.editMode = !dashboardState.editMode;
+        document.dispatchEvent(new CustomEvent('dashboardEditModeChanged', {
+            detail: { editMode: dashboardState.editMode }
+        }));
 
         const editBtn = document.getElementById('dashboard-edit-btn');
         editBtn?.classList.toggle('active', dashboardState.editMode);
@@ -20413,10 +23474,7 @@ class DashboardManager {
             widget.container.classList.toggle('edit-mode', dashboardState.editMode);
         });
 
-        if (dashboardState.editMode) {
-            this.enableDragAndDrop();
-        } else {
-            this.disableDragAndDrop();
+        if (!dashboardState.editMode) {
             // Deselect widget when exiting edit mode
             this.selectWidget(null);
         }
@@ -20454,16 +23512,12 @@ class DashboardManager {
         const container = widget.container;
 
         // Calculate grid parameters
-        const gridRect = this.gridEl.getBoundingClientRect();
-        const computedStyle = window.getComputedStyle(this.gridEl);
-        const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
-        const gap = DASHBOARD_GRID_GAP;
-        const contentWidth = gridRect.width - paddingLeft * 2;
-        const cellWidth = (contentWidth - gap * (DASHBOARD_GRID_COLS - 1)) / DASHBOARD_GRID_COLS;
-        const cellHeight = DASHBOARD_GRID_ROW_HEIGHT;
+        const gridMetrics = this.getGridMetrics();
+        if (!gridMetrics) return;
+        const { gap, cellWidth, cellHeight } = gridMetrics;
 
-        const width = widgetConfig.position.width || 2;
-        const height = widgetConfig.position.height || 1;
+        const width = widgetConfig.position.width || DASHBOARD_DEFAULT_WIDGET_WIDTH;
+        const height = widgetConfig.position.height || DASHBOARD_DEFAULT_WIDGET_HEIGHT;
 
         if (fineMode) {
             // Fine mode (Shift): move by 1px using freePosition
@@ -20479,7 +23533,7 @@ class DashboardManager {
                 };
             }
 
-            const step = 1;
+            const step = DASHBOARD_FINE_MOVE_STEP_PX;
             switch (key) {
                 case 'ArrowUp':
                     freePos.top = Math.max(0, freePos.top - step);
@@ -20542,105 +23596,120 @@ class DashboardManager {
         this.saveDashboard();
     }
 
-    enableDragAndDrop() {
-        dashboardState.widgets.forEach((widget, id) => {
-            widget.container.draggable = true;
-
-            widget.container.addEventListener('dragstart', (e) => {
-                e.dataTransfer.setData('text/plain', id);
-                widget.container.classList.add('dragging');
-            });
-
-            widget.container.addEventListener('dragend', () => {
-                widget.container.classList.remove('dragging');
-            });
-        });
-
-        this.gridEl?.addEventListener('dragover', (e) => {
-            e.preventDefault();
-        });
-
-        this.gridEl?.addEventListener('drop', (e) => {
-            e.preventDefault();
-            // TODO: Implement grid position calculation
-        });
-    }
-
-    disableDragAndDrop() {
-        dashboardState.widgets.forEach((widget) => {
-            widget.container.draggable = false;
-        });
-    }
-
     updateSensorSubscriptions() {
         dashboardState.sensorSubscriptions.clear();
         dashboardState.setpointSubscriptions.clear();
         dashboardState.chartSubscriptions.clear();
 
+        const addSub = (map, key, id) => {
+            if (!map.has(key)) map.set(key, new Set());
+            map.get(key).add(id);
+        };
+        const addBinding = (map, b, id) => {
+            const sensorName = b?.sensor || b?.name;
+            if (!b?.serverId || !b?.objectName || !sensorName) return;
+            addSub(map, makeSensorKey(b.serverId, b.objectName, sensorName), id);
+        };
+
         dashboardState.widgets.forEach((widget, id) => {
-            // Main sensor subscription
-            const sensor = widget.config?.sensor;
-            if (sensor) {
-                if (!dashboardState.sensorSubscriptions.has(sensor)) {
-                    dashboardState.sensorSubscriptions.set(sensor, new Set());
-                }
-                dashboardState.sensorSubscriptions.get(sensor).add(id);
+            const cfg = widget.config;
+            if (!cfg) return;
+
+            // 1. Main sensor
+            addBinding(dashboardState.sensorSubscriptions, cfg, id);
+
+            // 2. Setpoint sensor2 (используется в SetpointWidget feedback и Gauge style=dual)
+            if (cfg.sensor2) {
+                addBinding(dashboardState.setpointSubscriptions, {
+                    serverId:   cfg.serverId2   || cfg.serverId,
+                    objectName: cfg.objectName2 || cfg.objectName,
+                    sensor:     cfg.sensor2,
+                }, id);
             }
 
-            // Setpoint sensor subscription (for dual scale)
-            const sensor2 = widget.config?.sensor2;
-            if (sensor2) {
-                if (!dashboardState.setpointSubscriptions.has(sensor2)) {
-                    dashboardState.setpointSubscriptions.set(sensor2, new Set());
-                }
-                dashboardState.setpointSubscriptions.get(sensor2).add(id);
+            // 3. Multi-sensor items (StatusBar, BarGraph)
+            if (Array.isArray(cfg.items)) {
+                cfg.items.forEach(it => addBinding(dashboardState.sensorSubscriptions, it, id));
             }
 
-            // StatusBar items subscription (multiple sensors in items array)
-            const items = widget.config?.items;
-            if (Array.isArray(items)) {
-                items.forEach(item => {
-                    if (item.sensor) {
-                        if (!dashboardState.sensorSubscriptions.has(item.sensor)) {
-                            dashboardState.sensorSubscriptions.set(item.sensor, new Set());
-                        }
-                        dashboardState.sensorSubscriptions.get(item.sensor).add(id);
-                    }
-                });
-            }
-
-            // Chart widget subscriptions (multiple sensors from zones)
-            if (widget instanceof ChartWidget && typeof widget.getSensorNames === 'function') {
-                const sensorNames = widget.getSensorNames();
-                for (const sensorName of sensorNames) {
-                    if (!dashboardState.chartSubscriptions.has(sensorName)) {
-                        dashboardState.chartSubscriptions.set(sensorName, new Set());
-                    }
-                    dashboardState.chartSubscriptions.get(sensorName).add(id);
-                }
+            // 4. Chart zones
+            if (Array.isArray(cfg.zones)) {
+                cfg.zones.forEach(z => (z.sensors || []).forEach(s =>
+                    addBinding(dashboardState.chartSubscriptions, s, id)));
             }
         });
+
+        this._subscribeActiveSensorsBackend();
     }
 
-    handleSensorUpdate(sensorName, value, error = null, timestamp = null) {
+    _subscribeActiveSensorsBackend() {
+        // Group key (serverId|objectName) → Set<sensorId>.
+        const groups = new Map();
+
+        const addId = (b) => {
+            if (!b?.serverId || !b?.objectName) return;
+            if (!Number.isFinite(b.sensorId)) return;
+            const k = makeGroupKey(b.serverId, b.objectName);
+            if (!groups.has(k)) groups.set(k, new Set());
+            groups.get(k).add(b.sensorId);
+        };
+
+        dashboardState.widgets.forEach(widget => {
+            const cfg = widget?.config;
+            if (!cfg) return;
+            // Main + sensor2 + items + zones
+            addId(cfg);
+            if (cfg.sensor2) addId({
+                serverId:   cfg.serverId2   || cfg.serverId,
+                objectName: cfg.objectName2 || cfg.objectName,
+                sensorId:   cfg.sensorId2,
+            });
+            if (Array.isArray(cfg.items)) cfg.items.forEach(addId);
+            if (Array.isArray(cfg.zones)) cfg.zones.forEach(z => (z.sensors || []).forEach(addId));
+        });
+
+        for (const [grpKey, idSet] of groups) {
+            const { serverId, objectName } = parseGroupKey(grpKey);
+            const url = `/api/objects/${encodeURIComponent(objectName)}/ionc/subscribe`
+                + `?server=${encodeURIComponent(serverId)}`;
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sensor_ids: Array.from(idSet) })
+            }).catch(err => console.warn('dashboard: subscribe failed', grpKey, err));
+        }
+    }
+
+    handleSensorUpdate(sensorKey, value, error = null, timestamp = null, meta = null) {
+        // sensorKey = ${serverId}|${objectName}|${sensorName} — canonical identity.
+        // ctx передаётся в updateBySensor/updateSensor чтобы multi-sensor widget'ы
+        // могли отбраковать совпадающие по имени, но пришедшие с другого (server, object).
+        // meta = { frozen, blocked } — статусные флаги датчика для active widget'ов;
+        // read-only widget'ы (LevelWidget и т.п.) этот аргумент игнорируют.
+        const parsed = (typeof parseSensorKey === 'function') ? parseSensorKey(sensorKey) : null;
+        const sensorName = parsed?.sensorName ?? sensorKey;
+        const ctx = parsed
+            ? { serverId: parsed.serverId, objectName: parsed.objectName, sensorName }
+            : null;
+
         // Main sensor updates
-        const widgetIds = dashboardState.sensorSubscriptions.get(sensorName);
+        const widgetIds = dashboardState.sensorSubscriptions.get(sensorKey);
         if (widgetIds) {
             widgetIds.forEach(id => {
                 const widget = dashboardState.widgets.get(id);
                 if (widget) {
                     // StatusBar widget uses updateBySensor for items
                     if (typeof widget.updateBySensor === 'function') {
-                        widget.updateBySensor(sensorName, value, error);
+                        widget.updateBySensor(sensorName, value, error, ctx);
                     } else {
-                        widget.update(value, error);
+                        widget.update(value, error, meta);
                     }
                 }
             });
         }
 
         // Setpoint sensor updates
-        const setpointWidgetIds = dashboardState.setpointSubscriptions.get(sensorName);
+        const setpointWidgetIds = dashboardState.setpointSubscriptions.get(sensorKey);
         if (setpointWidgetIds) {
             setpointWidgetIds.forEach(id => {
                 const widget = dashboardState.widgets.get(id);
@@ -20651,12 +23720,12 @@ class DashboardManager {
         }
 
         // Chart widget updates
-        const chartWidgetIds = dashboardState.chartSubscriptions.get(sensorName);
+        const chartWidgetIds = dashboardState.chartSubscriptions.get(sensorKey);
         if (chartWidgetIds) {
             chartWidgetIds.forEach(id => {
                 const widget = dashboardState.widgets.get(id);
                 if (widget && typeof widget.updateSensor === 'function') {
-                    widget.updateSensor(sensorName, value, timestamp);
+                    widget.updateSensor(sensorName, value, timestamp, ctx);
                 }
             });
         }
@@ -20690,7 +23759,15 @@ class DashboardManager {
 
         if (!dropzone || !fileInput) return;
 
-        dropzone.addEventListener('click', () => fileInput.click());
+        // Guard against double-trigger: <input type="file"> лежит ВНУТРИ dropzone,
+        // поэтому programmatic fileInput.click() bubbles обратно к этому handler'у
+        // и зовёт fileInput.click() ещё раз. Браузер при этом сначала открывает
+        // file picker, а второй вызов мгновенно его dismiss'ит → user видит мигание
+        // и не успевает выбрать файл.
+        dropzone.addEventListener('click', (e) => {
+            if (e.target === fileInput) return;
+            fileInput.click();
+        });
 
         dropzone.addEventListener('dragover', (e) => {
             e.preventDefault();
@@ -20744,10 +23821,15 @@ class DashboardManager {
 
                 dashboardState.pendingImport = migrated;
 
-                // Update UI
+                // Update UI. Optional chain на classList выше прятал null, но
+                // следующая строка всё равно дереференсила — TypeError при
+                // отсутствии dropzone'а. Объединяем под одним guard'ом.
                 const dropzone = document.getElementById('import-dropzone');
-                dropzone?.classList.add('has-file');
-                dropzone.querySelector('p').textContent = `${file.name} (${config.widgets.length} widgets)`;
+                if (dropzone) {
+                    dropzone.classList.add('has-file');
+                    const p = dropzone.querySelector('p');
+                    if (p) p.textContent = `${file.name} (${config.widgets.length} widgets)`;
+                }
 
                 const nameInput = document.getElementById('import-name-input');
                 if (nameInput) {
@@ -20819,17 +23901,26 @@ class DashboardManager {
         this.loadDashboard(name);
     }
 
-    deleteDashboard() {
+    async deleteDashboard() {
         const name = dashboardState.currentDashboard;
         if (!name) return;
 
         const config = dashboardState.dashboards.get(name);
         if (config?._server) {
+            // TODO: server dashboards — Delete-кнопку лучше дисейблить заранее в UI;
+            // пока fallback на alert, чтобы кейс не пропадал тихо.
             alert('Cannot delete server dashboards');
             return;
         }
 
-        if (!confirm(`Delete dashboard "${name}"?`)) return;
+        // showConfirmDialog (Promise<bool>) вместо нативного confirm — единый
+        // стиль модалок проекта, не блокирует event loop.
+        const confirmed = await showConfirmDialog(
+            'Delete Dashboard',
+            `Delete dashboard "${name}"?`,
+            'Delete'
+        );
+        if (!confirmed) return;
 
         dashboardState.dashboards.delete(name);
         localStorage.removeItem(`dashboard:${name}`);
@@ -20844,8 +23935,6 @@ class DashboardManager {
         this.clearDashboard();
     }
 }
-
-// Dashboard migration
 
 
 // === 63-dashboard-dialogs.js ===
@@ -20954,7 +24043,6 @@ function setupNumberInputs(container) {
         wrapper.appendChild(arrows);
 
         // Arrow button handlers
-        const step = parseFloat(input.step) || 1;
         arrows.querySelector('.up').addEventListener('click', (e) => {
             e.preventDefault();
             input.stepUp();
@@ -20985,207 +24073,16 @@ function addZoneField(btn) {
     const form = btn.closest('.widget-config-form') || btn.closest('#widget-config-content');
     const minInput = form?.querySelector('[name="min"]');
     const maxInput = form?.querySelector('[name="max"]');
-    const min = parseFloat(minInput?.value) || 0;
-    const max = parseFloat(maxInput?.value) || 100;
+    const min = parseNumberOrDefault(minInput?.value, 0);
+    const max = parseNumberOrDefault(maxInput?.value, 100);
 
     const index = zonesList.children.length;
-    const zoneHtml = `
-        <div class="zone-item">
-            <input type="color" class="zone-color" name="zone-color-${index}" value="#ef4444">
-            <div class="zone-inputs">
-                <input type="number" class="zone-input" name="zone-from-${index}" value="${min}" placeholder="From">
-                <span class="zone-separator">→</span>
-                <input type="number" class="zone-input" name="zone-to-${index}" value="${max}" placeholder="To">
-            </div>
-            <button type="button" class="zone-remove-btn" onclick="removeZoneField(this)">×</button>
-        </div>
-    `;
-    zonesList.insertAdjacentHTML('beforeend', zoneHtml);
+    zonesList.insertAdjacentHTML('beforeend',
+        renderColorZoneItem({ from: min, to: max, color: '#ef4444' }, index, '#ef4444'));
 }
 
 function removeZoneField(btn) {
     btn.closest('.zone-item')?.remove();
-}
-
-// ============================================================================
-// Chart Widget Zone Helpers
-// ============================================================================
-
-function addChartZone() {
-    const editor = document.getElementById('chart-zones-editor');
-    if (!editor) return;
-
-    const zoneIdx = editor.querySelectorAll('.chart-zone-editor').length;
-    const zoneHtml = ChartWidget.renderZoneEditor({ id: `zone-${zoneIdx}`, sensors: [] }, zoneIdx);
-    editor.insertAdjacentHTML('beforeend', zoneHtml);
-
-    // Setup autocomplete for new zone
-    setupChartSensorAutocomplete(zoneIdx);
-}
-
-function removeChartZone(zoneIdx) {
-    const editor = document.querySelector(`.chart-zone-editor[data-zone-idx="${zoneIdx}"]`);
-    editor?.remove();
-
-    // Re-index remaining zones
-    document.querySelectorAll('.chart-zone-editor').forEach((zone, idx) => {
-        zone.dataset.zoneIdx = idx;
-        zone.querySelector('.chart-zone-title').textContent = `Zone ${idx + 1}`;
-        // Update remove button
-        const removeBtn = zone.querySelector('.zone-remove-btn');
-        if (removeBtn) {
-            removeBtn.onclick = () => removeChartZone(idx);
-        }
-    });
-}
-
-function removeChartSensor(zoneIdx, sensorIdx) {
-    const row = document.querySelector(`.chart-sensor-row[data-zone-idx="${zoneIdx}"][data-sensor-idx="${sensorIdx}"]`);
-    row?.remove();
-
-    // Re-index remaining sensors in this zone
-    const sensorsContainer = document.getElementById(`chart-zone-sensors-${zoneIdx}`);
-    if (sensorsContainer) {
-        sensorsContainer.querySelectorAll('.chart-sensor-row').forEach((row, idx) => {
-            row.dataset.sensorIdx = idx;
-            // Update hidden inputs names
-            row.querySelectorAll('input[type="hidden"]').forEach(input => {
-                const nameParts = input.name.split('-');
-                nameParts[2] = idx;
-                input.name = nameParts.join('-');
-            });
-        });
-    }
-}
-
-function updateChartSensorColor(zoneIdx, sensorIdx, color) {
-    const row = document.querySelector(`.chart-sensor-row[data-zone-idx="${zoneIdx}"][data-sensor-idx="${sensorIdx}"]`);
-    const colorInput = row?.querySelector('input[name$="-color"]');
-    if (colorInput) {
-        colorInput.value = color;
-    }
-}
-
-function setupChartSensorAutocomplete(zoneIdx) {
-    const input = document.querySelector(`.chart-sensor-input[data-zone-idx="${zoneIdx}"]`);
-    if (!input) return;
-
-    let autocompleteContainer = null;
-    let autocompleteResults = [];
-    let selectedIndex = 0;
-
-    input.addEventListener('input', async (e) => {
-        const query = e.target.value.trim();
-        if (query.length < 2) {
-            closeAutocomplete();
-            return;
-        }
-
-        // Search sensors (use sensorsByName to avoid duplicates from multiple servers)
-        const allSensors = Array.from(state.sensorsByName.values());
-        autocompleteResults = allSensors
-            .filter(s => s.name.toLowerCase().includes(query.toLowerCase()))
-            .slice(0, 10);
-
-        if (autocompleteResults.length === 0) {
-            closeAutocomplete();
-            return;
-        }
-
-        showAutocomplete();
-    });
-
-    input.addEventListener('keydown', (e) => {
-        if (!autocompleteContainer) return;
-
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            selectedIndex = Math.min(selectedIndex + 1, autocompleteResults.length - 1);
-            updateSelection();
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            selectedIndex = Math.max(selectedIndex - 1, 0);
-            updateSelection();
-        } else if (e.key === 'Enter') {
-            e.preventDefault();
-            if (autocompleteResults[selectedIndex]) {
-                selectSensor(autocompleteResults[selectedIndex]);
-            }
-        } else if (e.key === 'Escape') {
-            closeAutocomplete();
-        }
-    });
-
-    input.addEventListener('blur', () => {
-        setTimeout(closeAutocomplete, 200);
-    });
-
-    function showAutocomplete() {
-        if (!autocompleteContainer) {
-            autocompleteContainer = document.createElement('div');
-            autocompleteContainer.className = 'widget-autocomplete';
-            input.parentNode.style.position = 'relative';
-            input.parentNode.appendChild(autocompleteContainer);
-        }
-
-        selectedIndex = 0;
-        autocompleteContainer.innerHTML = autocompleteResults.map((s, i) => `
-            <div class="widget-autocomplete-item${i === 0 ? ' selected' : ''}" data-name="${escapeHtml(s.name)}">
-                <span class="autocomplete-name">${escapeHtml(s.name)}</span>
-                ${s.textname ? `<span class="autocomplete-desc">${escapeHtml(s.textname)}</span>` : ''}
-            </div>
-        `).join('');
-
-        autocompleteContainer.querySelectorAll('.widget-autocomplete-item').forEach((item, i) => {
-            item.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                selectSensor(autocompleteResults[i]);
-            });
-        });
-    }
-
-    function updateSelection() {
-        autocompleteContainer?.querySelectorAll('.widget-autocomplete-item').forEach((item, i) => {
-            item.classList.toggle('selected', i === selectedIndex);
-        });
-    }
-
-    function closeAutocomplete() {
-        autocompleteContainer?.remove();
-        autocompleteContainer = null;
-    }
-
-    function selectSensor(sensor) {
-        // Add sensor to zone
-        const sensorsContainer = document.getElementById(`chart-zone-sensors-${zoneIdx}`);
-        if (!sensorsContainer) return;
-
-        // Check if sensor is discrete (DI/DO) - set stepped=true, smooth=false
-        const isDiscrete = sensor.iotype === 'DI' || sensor.iotype === 'DO';
-        const sensorConfig = {
-            name: sensor.name,
-            fill: true,
-            smooth: !isDiscrete,  // smooth off for discrete
-            stepped: isDiscrete   // stepped on for discrete
-        };
-
-        const sensorIdx = sensorsContainer.querySelectorAll('.chart-sensor-row').length;
-        const sensorHtml = ChartWidget.renderSensorRow(sensorConfig, zoneIdx, sensorIdx);
-        sensorsContainer.insertAdjacentHTML('beforeend', sensorHtml);
-
-        // Clear input
-        input.value = '';
-        closeAutocomplete();
-    }
-}
-
-// Setup autocomplete when widget config dialog opens for chart widget
-function setupChartWidgetAutocomplete() {
-    const zoneEditors = document.querySelectorAll('.chart-zone-editor');
-    zoneEditors.forEach((editor) => {
-        const zoneIdx = parseInt(editor.dataset.zoneIdx);
-        setupChartSensorAutocomplete(zoneIdx);
-    });
 }
 
 // ============================================================================
@@ -21196,16 +24093,37 @@ function setupChartWidgetAutocomplete() {
 let addToDashboardState = {
     sensorName: null,
     sensorLabel: null,
-    selectedType: 'gauge'
+    binding: null,
+    selectedType: 'gauge',
+    cleanupListeners: null,  // вызывается в closeAddToDashboard, отвязывает onChange/onOk
 };
+
+const ADD_TO_DASHBOARD_WIDGET_TYPES = ['gauge', 'level', 'led', 'label', 'divider', 'statusbar', 'bargraph', 'digital'];
+
+function getDashboardBindingFromButton(btn) {
+    const rawSensorId = btn?.dataset?.sensorId;
+    const sensorId = rawSensorId !== undefined && rawSensorId !== ''
+        ? parseIntegerOrDefault(rawSensorId, null)
+        : null;
+    return {
+        serverId: btn?.dataset?.serverId || null,
+        objectName: btn?.dataset?.objectName || null,
+        sensorId,
+    };
+}
 
 function closeAddToDashboard() {
     document.getElementById('add-to-dashboard-overlay')?.classList.add('hidden');
+    if (typeof addToDashboardState.cleanupListeners === 'function') {
+        addToDashboardState.cleanupListeners();
+        addToDashboardState.cleanupListeners = null;
+    }
     addToDashboardState.sensorName = null;
     addToDashboardState.sensorLabel = null;
+    addToDashboardState.binding = null;
 }
 
-function showAddToDashboardDialog(sensorName, sensorLabel = null) {
+function showAddToDashboardDialog(sensorName, sensorLabel = null, binding = null) {
     const overlay = document.getElementById('add-to-dashboard-overlay');
     const sensorNameEl = document.getElementById('add-to-dashboard-sensor-name');
     const selectEl = document.getElementById('add-to-dashboard-select');
@@ -21219,6 +24137,7 @@ function showAddToDashboardDialog(sensorName, sensorLabel = null) {
     // Store sensor info
     addToDashboardState.sensorName = sensorName;
     addToDashboardState.sensorLabel = sensorLabel || sensorName;
+    addToDashboardState.binding = binding;
     addToDashboardState.selectedType = 'gauge';
 
     // Show sensor name
@@ -21227,16 +24146,17 @@ function showAddToDashboardDialog(sensorName, sensorLabel = null) {
     // Populate dashboard select
     selectEl.innerHTML = '<option value="__new__">+ Create New Dashboard</option>';
 
-    // Add user dashboards (editable)
+    // Add user dashboards (editable). Серверные дашборды (config._server) — read-only,
+    // в "Add to Dashboard" не предлагаем.
     for (const [name, dashboard] of dashboardState.dashboards) {
-        // Skip server dashboards (they're read-only)
-        if (!dashboardState.serverDashboards.some(sd => sd.meta?.name === name)) {
-            selectEl.innerHTML += `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
-        }
+        if (dashboard._server) continue;
+        selectEl.innerHTML += `<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`;
     }
 
-    // Handle select change
-    selectEl.onchange = () => {
+    // Handle select change. addEventListener (не onchange) + cleanup в close —
+    // иначе при повторных открытиях диалога старые handlers оставались бы на
+    // overlay-элементах, который не пересоздаётся.
+    const onSelectChange = () => {
         if (selectEl.value === '__new__') {
             newNameField.style.display = 'block';
             newNameInput.focus();
@@ -21244,18 +24164,16 @@ function showAddToDashboardDialog(sensorName, sensorLabel = null) {
             newNameField.style.display = 'none';
         }
     };
+    selectEl.addEventListener('change', onSelectChange);
 
-    // Populate widget types
-    const widgetTypes = [
-        { type: 'gauge', name: 'Gauge', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>' },
-        { type: 'level', name: 'Level', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2"/><rect x="8" y="10" width="8" height="10" fill="currentColor" opacity="0.3"/></svg>' },
-        { type: 'led', name: 'LED', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>' },
-        { type: 'label', name: 'Label', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><text x="12" y="16" text-anchor="middle" font-size="12" fill="currentColor">Aa</text></svg>' },
-        { type: 'divider', name: 'Divider', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="12" x2="20" y2="12"/></svg>' },
-        { type: 'statusbar', name: 'Status Bar', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="3" fill="#22c55e"/><circle cx="12" cy="12" r="3" fill="#ef4444"/><circle cx="19" cy="12" r="3" fill="#6b7280"/></svg>' },
-        { type: 'bargraph', name: 'Bar Graph', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="14" width="4" height="6" fill="currentColor" opacity="0.7"/><rect x="10" y="8" width="4" height="12" fill="currentColor" opacity="0.5"/><rect x="16" y="4" width="4" height="16" fill="currentColor" opacity="0.3"/></svg>' },
-        { type: 'digital', name: 'Digital', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><text x="12" y="15" text-anchor="middle" font-size="8" fill="currentColor">123</text></svg>' }
-    ];
+    const widgetTypes = ADD_TO_DASHBOARD_WIDGET_TYPES
+        .map(type => WIDGET_TYPES[type])
+        .filter(Boolean)
+        .map(WidgetClass => ({
+            type: WidgetClass.type,
+            name: WidgetClass.displayName,
+            icon: WidgetClass.icon,
+        }));
 
     typesEl.innerHTML = widgetTypes.map(w => `
         <div class="add-to-dashboard-type ${w.type === addToDashboardState.selectedType ? 'selected' : ''}"
@@ -21275,7 +24193,7 @@ function showAddToDashboardDialog(sensorName, sensorLabel = null) {
     });
 
     // Handle OK button
-    okBtn.onclick = () => {
+    const onOkClick = () => {
         const dashboardName = selectEl.value === '__new__'
             ? newNameInput.value.trim()
             : selectEl.value;
@@ -21290,10 +24208,17 @@ function showAddToDashboardDialog(sensorName, sensorLabel = null) {
             addToDashboardState.sensorLabel,
             dashboardName,
             addToDashboardState.selectedType,
-            selectEl.value === '__new__'
+            selectEl.value === '__new__',
+            addToDashboardState.binding
         );
 
         closeAddToDashboard();
+    };
+    okBtn.addEventListener('click', onOkClick);
+
+    addToDashboardState.cleanupListeners = () => {
+        selectEl.removeEventListener('change', onSelectChange);
+        okBtn.removeEventListener('click', onOkClick);
     };
 
     // Reset and show
@@ -21302,7 +24227,7 @@ function showAddToDashboardDialog(sensorName, sensorLabel = null) {
     overlay.classList.remove('hidden');
 }
 
-function addSensorToDashboard(sensorName, sensorLabel, dashboardName, widgetType, createNew) {
+function addSensorToDashboard(sensorName, sensorLabel, dashboardName, widgetType, createNew, binding = null) {
     if (!dashboardManager) {
         console.warn('Dashboard manager not initialized');
         return;
@@ -21317,7 +24242,7 @@ function addSensorToDashboard(sensorName, sensorLabel, dashboardName, widgetType
             widgets: []
         };
         dashboardState.dashboards.set(dashboardName, newDashboard);
-        dashboardManager.updateDashboardList();
+        dashboardManager.updateDashboardSelector();
     }
 
     // Get or set current dashboard
@@ -21339,8 +24264,11 @@ function addSensorToDashboard(sensorName, sensorLabel, dashboardName, widgetType
         config: {
             sensor: sensorName,
             label: sensorLabel,
-            min: 0,
-            max: 100,
+            ...(binding?.serverId ? { serverId: binding.serverId } : {}),
+            ...(binding?.objectName ? { objectName: binding.objectName } : {}),
+            ...(Number.isFinite(binding?.sensorId) ? { sensorId: binding.sensorId } : {}),
+            min: WIDGET_DEFAULT_MIN,
+            max: WIDGET_DEFAULT_MAX,
             unit: '',
             decimals: 1
         }
@@ -21367,15 +24295,26 @@ function addSensorToDashboard(sensorName, sensorLabel, dashboardName, widgetType
         dashboardState.currentDashboard = prevDashboard;
     }
 
-    console.log(`Added ${sensorName} as ${widgetType} to dashboard "${dashboardName}"`);
+    debugLog(`Added ${sensorName} as ${widgetType} to dashboard "${dashboardName}"`);
 }
 
 // Global dashboard manager instance (exposed on window for tests)
 let dashboardManager = window.dashboardManager = null;
 
-// Helper to update dashboard widgets from SSE events
-function updateDashboardWidgets(sensors, timestamp = null) {
+// Helper to update dashboard widgets from SSE events.
+// ctx: { serverId, objectName, timestamp } — нужен для построения sensorKey
+// (canonical identity sensors во frontend — см. CLAUDE.md "Sensor identity").
+function updateDashboardWidgets(sensors, ctx) {
     if (!dashboardManager || !sensors) return;
+    if (!ctx || !ctx.serverId || !ctx.objectName) {
+        console.warn('updateDashboardWidgets: ctx без serverId/objectName, skip');
+        return;
+    }
+
+    // Cold-start migration retry: если SSE прилетел ДО первого _migrateLegacyBinding
+    // (state.sensorsByKey ещё не прогрет), это была no-op миграция. Сейчас sensors[]
+    // приходит с полными triplet'ами — пробуем снова.
+    dashboardManager.tryResolvePendingMigration?.();
 
     for (const sensor of sensors) {
         const name = sensor.name;
@@ -21383,7 +24322,14 @@ function updateDashboardWidgets(sensors, timestamp = null) {
         const error = sensor.error || null;
 
         if (name !== undefined && value !== undefined) {
-            dashboardManager.handleSensorUpdate(name, value, error, timestamp);
+            const key = makeSensorKey(ctx.serverId, ctx.objectName, name);
+            // meta — статусные флаги датчика (frozen/blocked) для active widget'ов.
+            // Active base class смотрит meta?.frozen чтобы блокировать запись и
+            // показать ❄ marker; старые read-only widget'ы meta игнорируют.
+            const meta = (sensor.frozen || sensor.blocked)
+                ? { frozen: !!sensor.frozen, blocked: !!sensor.blocked }
+                : null;
+            dashboardManager.handleSensorUpdate(key, value, error, ctx.timestamp || null, meta);
         }
     }
 }
@@ -21423,26 +24369,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Загружаем sidebar конфигурацию (группы)
     await loadSidebar();
 
-    // Загружаем список объектов (заполняет state.servers)
+    // Загружаем список объектов (fire-and-forget — НЕ блокируем DOMContentLoaded
+    // init: dashboardManager и прочие должны быть готовы сразу. Тесты опираются
+    // на быструю инициализацию window.dashboardManager независимо от fetch).
     fetchObjects()
         .then(data => {
             renderObjectsList(data);
-            // Загружаем конфигурацию сенсоров per-server (после того как state.servers заполнен)
-            loadSensorsConfig().catch(err => {
-                console.warn('Не удалось загрузить конфигурацию сенсоров:', err);
-            });
+            // Per-server конфигурация сенсоров — после заполнения state.servers
+            return loadSensorsConfig();
         })
         .catch(err => {
-            console.error('Error загрузки объектов:', err);
-            document.getElementById('objects-list').innerHTML =
-                '<li class="alert alert-error">Error loading objects</li>';
+            console.error('Failed to load objects:', err);
+            const list = document.getElementById('objects-list');
+            if (list) list.innerHTML = '<li class="alert alert-error">Error loading objects</li>';
         });
 
     // Кнопка обновления
-    document.getElementById('refresh-objects').addEventListener('click', () => {
-        fetchObjects()
-            .then(renderObjectsList)
-            .catch(console.error);
+    document.getElementById('refresh-objects').addEventListener('click', async () => {
+        try {
+            renderObjectsList(await fetchObjects());
+        } catch (err) {
+            console.error('Failed to refresh objects:', err);
+        }
     });
 
     // Кнопка очистки кэша
@@ -21473,14 +24421,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Инициализация Dashboard Manager
     dashboardManager = window.dashboardManager = new DashboardManager();
 
-    // Загрузка Launcher нод (не блокируем)
-    loadLauncherNodes().catch(err => {
-        console.warn('Failed to load launcher nodes:', err);
-    });
-
-    // Инициализация Journals (не блокируем)
-    initJournals().catch(err => {
-        console.warn('Failed to initialize journals:', err);
+    // Загрузка Launcher нод и инициализация Journals — fire-and-forget,
+    // не ждём (Promise rejection логируем).
+    Promise.allSettled([
+        loadLauncherNodes(),
+        initJournals(),
+    ]).then(([lr, jr]) => {
+        if (lr.status === 'rejected') console.warn('Failed to load launcher nodes:', lr.reason);
+        if (jr.status === 'rejected') console.warn('Failed to initialize journals:', jr.reason);
     });
 
     // Показываем sidebar группы, скрываем hardcoded секции
@@ -21516,13 +24464,13 @@ function initPollIntervalSelector() {
         setActive(savedInterval);
     } else {
         // По умолчанию 1s
-        setActive(1000);
+        setActive(POLL_INTERVAL_SELECTOR_DEFAULT_MS);
     }
 
     // Обработчики кликов
     buttons.forEach(btn => {
         btn.addEventListener('click', async () => {
-            const interval = parseInt(btn.dataset.interval);
+            const interval = parseIntegerOrDefault(btn.dataset.interval, state.sse.pollInterval);
             setActive(interval);
             localStorage.setItem('pollInterval', interval);
 
@@ -21542,12 +24490,12 @@ function initPollIntervalSelector() {
                     body: JSON.stringify({ interval })
                 });
                 if (response.ok) {
-                    console.log(`Poll interval изменён на ${interval}ms`);
+                    debugLog(`Poll interval изменён на ${interval}ms`);
                 } else {
                     console.warn('Не удалось изменить poll interval');
                 }
             } catch (err) {
-                console.error('Error изменения poll interval:', err);
+                console.error('Failed to change poll interval:', err);
             }
         });
     });

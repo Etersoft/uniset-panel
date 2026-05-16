@@ -42,8 +42,7 @@ func (h *Handlers) TakeControl(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req controlTokenRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, http.StatusBadRequest, "invalid request body")
+	if !h.decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -78,8 +77,7 @@ func (h *Handlers) ReleaseControl(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req controlTokenRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, http.StatusBadRequest, "invalid request body")
+	if !h.decodeJSONBody(w, r, &req) {
 		return
 	}
 

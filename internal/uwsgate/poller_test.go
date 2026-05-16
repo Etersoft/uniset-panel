@@ -81,6 +81,62 @@ func TestPollerSubscribeEmpty(t *testing.T) {
 	}
 }
 
+// При повторной подписке другого объекта на УЖЕ-подписанный sensor poller должен
+// сразу выдать ему текущее закэшированное значение через callback (replay).
+// Иначе новый подписчик висит на initial state до следующего push'а — для стабильно
+// не меняющихся датчиков это может быть бесконечно (issue: dashboard widget'ы
+// при возврате на dashboard оставались в initial OFF).
+func TestPollerSubscribeReplaysCachedValue(t *testing.T) {
+	var batches [][]SensorUpdate
+	cb := func(updates []SensorUpdate) {
+		batches = append(batches, updates)
+	}
+	p := NewPoller("http://localhost:8080", cb, nil)
+
+	// Object1 уже подписан и получил значение. Имитируем кэшированный value
+	// (поминаем поля под блокировкой — тест в том же пакете).
+	_ = p.Subscribe("Object1", []string{"SensorA"})
+	p.mu.Lock()
+	p.currentValues["SensorA"] = SensorData{Name: "SensorA", Value: 42}
+	p.lastValues["SensorA"] = "42|0"
+	p.mu.Unlock()
+	batches = nil
+
+	// Object2 подписался на тот же sensor — replay из кэша должен прийти СРАЗУ.
+	_ = p.Subscribe("Object2", []string{"SensorA"})
+	if len(batches) != 1 || len(batches[0]) != 1 {
+		t.Fatalf("expected 1 replay batch with 1 update, got %d batches: %+v", len(batches), batches)
+	}
+	if batches[0][0].ObjectName != "Object2" || batches[0][0].Sensor.Name != "SensorA" || batches[0][0].Sensor.Value != 42 {
+		t.Errorf("replay update mismatch: %+v", batches[0][0])
+	}
+}
+
+// При resubscribe lastValues для подписываемых имён должен сбрасываться,
+// иначе следующий handleData пропустит callback из-за dedup'а (если значение
+// совпало с прошлым).
+func TestPollerSubscribeResetsLastValues(t *testing.T) {
+	p := NewPoller("http://localhost:8080", nil, nil)
+
+	// Имитируем накопленные lastValues.
+	p.mu.Lock()
+	p.lastValues["SensorA"] = "stale-hash"
+	p.lastValues["SensorB"] = "stale-hash"
+	p.mu.Unlock()
+
+	_ = p.Subscribe("Object1", []string{"SensorA"})
+
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	if _, ok := p.lastValues["SensorA"]; ok {
+		t.Errorf("lastValues[SensorA] should be cleared by Subscribe, still present")
+	}
+	// SensorB не подписывался — его lastValues не трогаем.
+	if _, ok := p.lastValues["SensorB"]; !ok {
+		t.Errorf("lastValues[SensorB] should not be touched, got cleared")
+	}
+}
+
 func TestPollerSubscribeDuplicates(t *testing.T) {
 	p := NewPoller("http://localhost:8080", nil, nil)
 

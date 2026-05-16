@@ -14,7 +14,6 @@ import (
 	"github.com/pv/uniset-panel/internal/logserver"
 	"github.com/pv/uniset-panel/internal/modbus"
 	"github.com/pv/uniset-panel/internal/opcua"
-	"github.com/pv/uniset-panel/internal/poller"
 	"github.com/pv/uniset-panel/internal/recording"
 	"github.com/pv/uniset-panel/internal/sensorconfig"
 	"github.com/pv/uniset-panel/internal/server"
@@ -28,10 +27,7 @@ const (
 )
 
 type Handlers struct {
-	client          *uniset.Client
 	storage         storage.Storage
-	poller          *poller.Poller
-	sensorConfig    *sensorconfig.SensorConfig            // deprecated: глобальный конфиг (backward compat)
 	sensorConfigs   map[string]*sensorconfig.SensorConfig // serverID → per-server config
 	sseHub          *SSEHub
 	pollInterval    time.Duration
@@ -40,25 +36,22 @@ type Handlers struct {
 	ioncPoller      *ionc.Poller
 	modbusPoller    *modbus.Poller
 	opcuaPoller     *opcua.Poller
-	serverMgr   *server.Manager  // менеджер нескольких серверов
-	controlsEnabled bool             // true if uniset-config was specified (IONC controls visible)
+	serverMgr       *server.Manager // менеджер нескольких серверов
+	controlsEnabled bool            // true if uniset-config was specified (IONC controls visible)
 	uiConfig        *config.UIConfig
 	logStreamConfig *config.LogStreamConfig
-	controlMgr      *ControlManager      // менеджер сессий контроля
-	recordingMgr    *recording.Manager   // менеджер записи истории
-	version         string               // версия приложения
-	dashboardMgr    *dashboard.Manager   // менеджер серверных dashboard'ов
-	journalMgr      *journal.Manager     // менеджер журналов сообщений
-	launcherMgr     *launcher.Manager              // менеджер Launcher'ов
-	sidebarConfig   *config.SidebarConfig          // конфиг sidebar (nil = дефолт по типам)
+	controlMgr      *ControlManager       // менеджер сессий контроля
+	recordingMgr    *recording.Manager    // менеджер записи истории
+	version         string                // версия приложения
+	dashboardMgr    *dashboard.Manager    // менеджер серверных dashboard'ов
+	journalMgr      *journal.Manager      // менеджер журналов сообщений
+	launcherMgr     *launcher.Manager     // менеджер Launcher'ов
+	sidebarConfig   *config.SidebarConfig // конфиг sidebar (nil = дефолт по типам)
 }
 
-func NewHandlers(client *uniset.Client, store storage.Storage, p *poller.Poller, sensorCfg *sensorconfig.SensorConfig, pollInterval time.Duration) *Handlers {
+func NewHandlers(store storage.Storage, pollInterval time.Duration) *Handlers {
 	return &Handlers{
-		client:        client,
 		storage:       store,
-		poller:        p,
-		sensorConfig:  sensorCfg,
 		sensorConfigs: make(map[string]*sensorconfig.SensorConfig),
 		sseHub:        NewSSEHub(),
 		pollInterval:  pollInterval,
@@ -168,24 +161,19 @@ func (h *Handlers) GetVersion(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"version": h.version})
 }
 
-// getUniSetClient возвращает UniSet2 client с учётом serverID (multi-server)
-// В multi-server режиме параметр serverID обязателен
+// getUniSetClient возвращает UniSet2 client для указанного сервера.
+// serverID обязателен; режим без serverMgr (single-client legacy) не поддерживается.
 func (h *Handlers) getUniSetClient(serverID string) (*uniset.Client, int, string) {
-	if h.serverMgr != nil {
-		if serverID == "" {
-			return nil, http.StatusBadRequest, "server parameter is required"
-		}
-		if instance, ok := h.serverMgr.GetServer(serverID); ok {
-			return instance.Client, 0, ""
-		}
-		return nil, http.StatusNotFound, "server not found"
+	if h.serverMgr == nil {
+		return nil, http.StatusServiceUnavailable, "server manager not configured"
 	}
-
-	if h.client != nil {
-		return h.client, 0, ""
+	if serverID == "" {
+		return nil, http.StatusBadRequest, "server parameter is required"
 	}
-
-	return nil, http.StatusServiceUnavailable, "no client configured"
+	if instance, ok := h.serverMgr.GetServer(serverID); ok {
+		return instance.Client, 0, ""
+	}
+	return nil, http.StatusNotFound, "server not found"
 }
 
 func (h *Handlers) writeJSON(w http.ResponseWriter, data interface{}) {
@@ -216,48 +204,79 @@ func (h *Handlers) GetConfig(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetObjects возвращает список доступных объектов
-// GET /api/objects
+// GetObjects возвращает список доступных объектов.
+//   GET /api/objects?server=ID                          — плоский список имён {objects: ["A","B",...]}.
+//   GET /api/objects?server=ID&type=IONotifyController  — отфильтрованный список [{name, objectType}, ...].
 func (h *Handlers) GetObjects(w http.ResponseWriter, r *http.Request) {
-	list, err := h.client.GetObjectList()
+	serverID := r.URL.Query().Get("server")
+	typeFilter := r.URL.Query().Get("type")
+
+	if h.serverMgr == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "server manager not configured")
+		return
+	}
+	if serverID == "" {
+		h.writeError(w, http.StatusBadRequest, "server parameter is required")
+		return
+	}
+
+	// Получаем имена объектов на сервере (single-server lookup)
+	names, err := h.serverMgr.GetServerObjects(serverID)
 	if err != nil {
 		h.writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	// Возвращаем в формате {objects: [...]} для совместимости с UI
-	h.writeJSON(w, map[string]interface{}{
-		"objects": list,
-	})
+
+	// Без type-фильтра — возвращаем плоский список имён (с server параметром)
+	if typeFilter == "" {
+		h.writeJSON(w, map[string]interface{}{"objects": names})
+		return
+	}
+
+	// С type-фильтром — для каждого имени запрашиваем object data и фильтруем по ObjectType.
+	// N+1 запросов; для типичных uniset-серверов N — десятки, приемлемо.
+	// TODO(cache): ввести per-server кеш типов (invalidate по object list change),
+	// если фильтр станет hot-path. Сейчас вызывается только при открытии config-формы
+	// активного widget'а, поэтому защёлки кеша преждевременны.
+	type objectWithType struct {
+		Name       string `json:"name"`
+		ObjectType string `json:"objectType"`
+	}
+	result := make([]objectWithType, 0, len(names))
+	for _, name := range names {
+		data, err := h.serverMgr.GetObjectData(serverID, name)
+		if err != nil || data == nil || data.Object == nil {
+			continue // пропускаем недоступные (server-level errors уже залогированы в Manager)
+		}
+		if data.Object.ObjectType == typeFilter {
+			result = append(result, objectWithType{
+				Name:       name,
+				ObjectType: data.Object.ObjectType,
+			})
+		}
+	}
+	h.writeJSON(w, map[string]interface{}{"objects": result})
 }
 
 // GetObjectData возвращает текущие данные объекта
 // GET /api/objects/{name}?server=serverID
 func (h *Handlers) GetObjectData(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
 	serverID := r.URL.Query().Get("server")
-
-	var data *uniset.ObjectData
-	var err error
-
-	if h.serverMgr != nil {
-		if serverID == "" {
-			h.writeError(w, http.StatusBadRequest, "server parameter is required")
-			return
-		}
-		data, err = h.serverMgr.GetObjectData(serverID, name)
-	} else if h.client != nil {
-		// Fallback на старый клиент (для совместимости)
-		data, err = h.client.GetObjectData(name)
-	} else {
-		h.writeError(w, http.StatusServiceUnavailable, "no client configured")
+	if h.serverMgr == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "server manager not configured")
+		return
+	}
+	if serverID == "" {
+		h.writeError(w, http.StatusBadRequest, "server parameter is required")
 		return
 	}
 
+	data, err := h.serverMgr.GetObjectData(serverID, name)
 	if err != nil {
 		h.writeError(w, http.StatusBadGateway, err.Error())
 		return
@@ -290,21 +309,23 @@ func (h *Handlers) GetObjectData(w http.ResponseWriter, r *http.Request) {
 // WatchObject добавляет объект в список наблюдения
 // POST /api/objects/{name}/watch?server=serverID
 func (h *Handlers) WatchObject(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
 	serverID := r.URL.Query().Get("server")
-
-	if h.serverMgr != nil && serverID != "" {
-		if err := h.serverMgr.Watch(serverID, name); err != nil {
-			h.writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-	} else if h.poller != nil {
-		h.poller.Watch(name)
+	if h.serverMgr == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "server manager not configured")
+		return
+	}
+	if serverID == "" {
+		h.writeError(w, http.StatusBadRequest, "server parameter is required")
+		return
+	}
+	if err := h.serverMgr.Watch(serverID, name); err != nil {
+		h.writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	h.writeJSON(w, map[string]string{"status": "watching", "object": name})
@@ -313,21 +334,23 @@ func (h *Handlers) WatchObject(w http.ResponseWriter, r *http.Request) {
 // UnwatchObject удаляет объект из списка наблюдения
 // DELETE /api/objects/{name}/watch?server=serverID
 func (h *Handlers) UnwatchObject(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
 	serverID := r.URL.Query().Get("server")
-
-	if h.serverMgr != nil && serverID != "" {
-		if err := h.serverMgr.Unwatch(serverID, name); err != nil {
-			h.writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-	} else if h.poller != nil {
-		h.poller.Unwatch(name)
+	if h.serverMgr == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "server manager not configured")
+		return
+	}
+	if serverID == "" {
+		h.writeError(w, http.StatusBadRequest, "server parameter is required")
+		return
+	}
+	if err := h.serverMgr.Unwatch(serverID, name); err != nil {
+		h.writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	h.writeJSON(w, map[string]string{"status": "unwatched", "object": name})
@@ -401,13 +424,11 @@ func (h *Handlers) GetVariableHistoryRange(w http.ResponseWriter, r *http.Reques
 	h.writeJSON(w, history)
 }
 
-// getSensorConfig возвращает SensorConfig для указанного сервера.
+// getSensorConfig возвращает SensorConfig для указанного сервера или nil,
+// если для сервера sensor-config не загружен (это валидный режим — клиент
+// упадёт на SM-fallback).
 func (h *Handlers) getSensorConfig(serverID string) *sensorconfig.SensorConfig {
-	if cfg, ok := h.sensorConfigs[serverID]; ok {
-		return cfg
-	}
-	// Fallback на глобальный
-	return h.sensorConfig
+	return h.sensorConfigs[serverID]
 }
 
 // GetSensors возвращает список всех датчиков из конфигурации
@@ -464,10 +485,15 @@ func (h *Handlers) GetSensorByName(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, sensor.ToInfo())
 }
 
-// GetSMSensors возвращает список датчиков из SharedMemory
-// GET /api/sm/sensors
+// GetSMSensors возвращает список датчиков из SharedMemory указанного сервера.
+// GET /api/sm/sensors?server=serverID  (параметр server обязателен)
 func (h *Handlers) GetSMSensors(w http.ResponseWriter, r *http.Request) {
-	result, err := h.client.GetSMSensors()
+	client, ok := h.requireClient(w, r)
+	if !ok {
+		return
+	}
+
+	result, err := client.GetSMSensors()
 	if err != nil {
 		h.writeError(w, http.StatusBadGateway, err.Error())
 		return
@@ -499,9 +525,8 @@ type ExternalSensorsRequest struct {
 // SubscribeExternalSensors подписывает объект на внешние датчики из SM
 // POST /api/objects/{name}/external-sensors
 func (h *Handlers) SubscribeExternalSensors(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 
@@ -511,8 +536,7 @@ func (h *Handlers) SubscribeExternalSensors(w http.ResponseWriter, r *http.Reque
 	}
 
 	var req ExternalSensorsRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, http.StatusBadRequest, "invalid request body")
+	if !h.decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -555,9 +579,8 @@ func (h *Handlers) UnsubscribeExternalSensor(w http.ResponseWriter, r *http.Requ
 // GetExternalSensors возвращает список подписанных внешних датчиков для объекта
 // GET /api/objects/{name}/external-sensors
 func (h *Handlers) GetExternalSensors(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" {
-		h.writeError(w, http.StatusBadRequest, "object name required")
+	name, ok := h.requireObjectName(w, r)
+	if !ok {
 		return
 	}
 

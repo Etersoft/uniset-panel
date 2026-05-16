@@ -12,10 +12,19 @@ const WIDGET_TYPES = {
     'statusbar': StatusBarWidget,
     'bargraph': BarGraphWidget,
     'digital': DigitalWidget,
+    'toggle': ToggleWidget,
+    'pushbutton': PushButtonWidget,
+    'setpoint': SetpointWidget,
+    'generator': GeneratorWidget,
     'chart': ChartWidget
 };
+globalThis.WIDGET_TYPES = WIDGET_TYPES;
 
-// Grid settings используют константы из 05-constants.js:
+window.registerDashboardWidgetType = function(type, WidgetClass) {
+    WIDGET_TYPES[type] = WidgetClass;
+};
+
+// Grid settings используют константы из 00-constants.js:
 // DASHBOARD_GRID_COLS, DASHBOARD_GRID_ROW_HEIGHT, DASHBOARD_GRID_GAP
 
 // ============================================================================
@@ -104,27 +113,61 @@ class DashboardManager {
         this.saveDashboardSettings();
     }
 
-    // Обновить все виджеты с их текущими значениями
+    // Обновить все виджеты с их текущими значениями. Используется после
+    // reconnect / при возврате на dashboard view.
+    //
+    // Multi-sensor widget'ы (StatusBar, BarGraph, ChartWidget) переопределяют
+    // update() так, что он принимает объект {sensorName: value}, а не scalar.
+    // Они роутятся через updateBySensor()/updateSensor() и не кешируют scalar
+    // в widget.value. Передавать им (widget.value, widget.error) бесполезно —
+    // skip и подождём следующего ionc_sensor_batch (max задержка = poll interval).
     refreshAllWidgets() {
         dashboardState.widgets.forEach((widget) => {
+            if (typeof widget.updateBySensor === 'function' || typeof widget.updateSensor === 'function') {
+                return; // multi-sensor — refresh не применим, придёт через SSE
+            }
             if (widget.value !== null) {
                 widget.update(widget.value, widget.error);
             }
         });
     }
 
+    getGridMetrics() {
+        const gridEl = this.gridEl || document.querySelector('.dashboard-grid');
+        if (!gridEl) return null;
+
+        const gridRect = gridEl.getBoundingClientRect();
+        const computedStyle = window.getComputedStyle(gridEl);
+        const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
+        const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
+        const gap = DASHBOARD_GRID_GAP;
+        const contentWidth = gridRect.width - paddingLeft * 2;
+        const columnsGapWidth = gap * (DASHBOARD_GRID_COLS - 1);
+        const cellWidth = (contentWidth - columnsGapWidth) / DASHBOARD_GRID_COLS;
+        const cellHeight = DASHBOARD_GRID_ROW_HEIGHT;
+
+        return {
+            gridEl,
+            gridRect,
+            paddingLeft,
+            paddingTop,
+            gap,
+            contentWidth,
+            cellWidth,
+            cellHeight
+        };
+    }
+
     loadDashboards() {
         // Load from localStorage
-        try {
-            const userDashboards = JSON.parse(localStorage.getItem('user-dashboards') || '[]');
+        const userDashboards = loadJSON('user-dashboards', []);
+        if (Array.isArray(userDashboards)) {
             userDashboards.forEach(name => {
-                const config = localStorage.getItem(`dashboard:${name}`);
+                const config = loadJSON(`dashboard:${name}`, null);
                 if (config) {
-                    dashboardState.dashboards.set(name, JSON.parse(config));
+                    dashboardState.dashboards.set(name, config);
                 }
             });
-        } catch (err) {
-            console.warn('Failed to load dashboards from localStorage:', err);
         }
 
         // Load server dashboards
@@ -170,44 +213,50 @@ class DashboardManager {
                 }
             }
         } catch (err) {
-            console.log('No server dashboards available');
+            debugLog('No server dashboards available');
         }
+    }
+
+    // Разбивает dashboardState.dashboards на server/user по флагу config._server.
+    // Используется в updateDashboardSelector и updateSidebarDashboards.
+    _partitionDashboards() {
+        const all = Array.from(dashboardState.dashboards.entries());
+        return {
+            server: all.filter(([_, c]) => c._server),
+            user:   all.filter(([_, c]) => !c._server),
+            all,
+        };
     }
 
     updateDashboardSelector() {
         if (!this.selectEl) return;
 
         const currentValue = this.selectEl.value;
+        const { server, user } = this._partitionDashboards();
 
         let html = '<option value="">Select dashboard...</option>';
 
-        // Server dashboards
-        const serverDashboards = Array.from(dashboardState.dashboards.entries())
-            .filter(([_, config]) => config._server);
-        if (serverDashboards.length > 0) {
-            html += '<optgroup label="Server Dashboards">';
-            serverDashboards.forEach(([name]) => {
-                html += `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
-            });
-            html += '</optgroup>';
-        }
+        const renderGroup = (label, items) => {
+            if (items.length === 0) return '';
+            const opts = items.map(([name]) =>
+                `<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`
+            ).join('');
+            return `<optgroup label="${label}">${opts}</optgroup>`;
+        };
 
-        // User dashboards
-        const userDashboards = Array.from(dashboardState.dashboards.entries())
-            .filter(([_, config]) => !config._server);
-        if (userDashboards.length > 0) {
-            html += '<optgroup label="My Dashboards">';
-            userDashboards.forEach(([name]) => {
-                html += `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
-            });
-            html += '</optgroup>';
-        }
+        html += renderGroup('Server Dashboards', server);
+        html += renderGroup('My Dashboards', user);
 
         this.selectEl.innerHTML = html;
         this.selectEl.value = currentValue;
 
-        // Also update sidebar dashboards list
+        // Also update sidebar dashboards list (legacy hidden section + новые
+        // sidebar groups). renderSidebarGroups читает 'user-dashboards' из
+        // localStorage — saveDashboard уже обновил key, нужно re-render.
         this.updateSidebarDashboards();
+        if (typeof renderSidebarGroups === 'function') {
+            renderSidebarGroups();
+        }
     }
 
     updateSidebarDashboards() {
@@ -215,50 +264,37 @@ class DashboardManager {
         const countEl = document.getElementById('dashboards-count');
         if (!listEl) return;
 
-        const allDashboards = Array.from(dashboardState.dashboards.entries());
-        const serverDashboards = allDashboards.filter(([_, c]) => c._server);
-        const userDashboards = allDashboards.filter(([_, c]) => !c._server);
+        const { server: serverDashboards, user: userDashboards, all: allDashboards } = this._partitionDashboards();
 
         // Update count
         if (countEl) {
             countEl.textContent = allDashboards.length;
         }
 
-        // Build list HTML
-        let html = '';
+        const dashboardIcon = `
+            <svg class="dashboard-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7"/>
+                <rect x="14" y="3" width="7" height="7"/>
+                <rect x="14" y="14" width="7" height="7"/>
+                <rect x="3" y="14" width="7" height="7"/>
+            </svg>`;
 
-        // Server dashboards first
-        serverDashboards.forEach(([name]) => {
+        const renderItem = (name, isServer) => {
             const isActive = dashboardState.currentDashboard === name;
-            html += `
-                <li class="dashboard-item server${isActive ? ' active' : ''}" data-name="${escapeHtml(name)}">
-                    <svg class="dashboard-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="7" height="7"/>
-                        <rect x="14" y="3" width="7" height="7"/>
-                        <rect x="14" y="14" width="7" height="7"/>
-                        <rect x="3" y="14" width="7" height="7"/>
-                    </svg>
+            const cls = `dashboard-item${isServer ? ' server' : ''}${isActive ? ' active' : ''}`;
+            const badge = isServer ? '<span class="dashboard-badge">srv</span>' : '';
+            return `
+                <li class="${cls}" data-name="${escapeAttr(name)}">
+                    ${dashboardIcon}
                     <span class="dashboard-name">${escapeHtml(name)}</span>
-                    <span class="dashboard-badge">srv</span>
+                    ${badge}
                 </li>
             `;
-        });
+        };
 
-        // User dashboards
-        userDashboards.forEach(([name]) => {
-            const isActive = dashboardState.currentDashboard === name;
-            html += `
-                <li class="dashboard-item${isActive ? ' active' : ''}" data-name="${escapeHtml(name)}">
-                    <svg class="dashboard-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="7" height="7"/>
-                        <rect x="14" y="3" width="7" height="7"/>
-                        <rect x="14" y="14" width="7" height="7"/>
-                        <rect x="3" y="14" width="7" height="7"/>
-                    </svg>
-                    <span class="dashboard-name">${escapeHtml(name)}</span>
-                </li>
-            `;
-        });
+        // Server dashboards first, then user dashboards
+        const html = serverDashboards.map(([name]) => renderItem(name, true)).join('')
+                   + userDashboards.map(([name]) => renderItem(name, false)).join('');
 
         listEl.innerHTML = html;
 
@@ -275,6 +311,117 @@ class DashboardManager {
         });
     }
 
+    // Lazy resolve binding'а из state.sensorsByKey (берёт первый match по sensorName).
+    // НЕ сохраняет dashboard на сервер — миграция в памяти; полный triplet
+    // персистится только когда юзер сам нажмёт Apply в config dialog или Export.
+    _migrateLegacyBinding() {
+        if (!state?.sensorsByKey) return 0;
+        let total = 0;
+        for (const widget of dashboardState.widgets.values()) {
+            const cfg = widget?.config;
+            if (!cfg) continue;
+            const n = _migrateBindingPure(cfg, state.sensorsByKey);
+            if (n > 0) total += n;
+        }
+        if (total > 0) {
+            console.info(`dashboard "${dashboardState.currentDashboard}": migrated ${total} legacy widget bindings; re-save to persist`);
+        }
+        return total;
+    }
+
+    // Возвращает true, если хоть один widget имеет неполный binding (sensor без триплета).
+    // Chart legacy sensors хранят имя в b.name — учитываем обе формы.
+    _anyLegacyBinding() {
+        const isUnresolved = (b) => (b?.sensor || b?.name)
+            && (!b.serverId || !b.objectName || !Number.isFinite(b.sensorId));
+        for (const w of dashboardState.widgets.values()) {
+            const cfg = w?.config;
+            if (!cfg) continue;
+            if (isUnresolved(cfg)) return true;
+            if (cfg.sensor2 && isUnresolved({
+                serverId: cfg.serverId2 ?? cfg.serverId,
+                objectName: cfg.objectName2 ?? cfg.objectName,
+                sensor: cfg.sensor2, sensorId: cfg.sensorId2,
+            })) return true;
+            if (Array.isArray(cfg.items) && cfg.items.some(isUnresolved)) return true;
+            if (Array.isArray(cfg.zones)) {
+                for (const z of cfg.zones) if ((z.sensors || []).some(isUnresolved)) return true;
+            }
+        }
+        return false;
+    }
+
+    // Вызывается из updateDashboardWidgets() в 63-dashboard-dialogs.js на каждый
+    // ionc_sensor_batch / modbus_register_batch / opcua_sensor_batch / sensor_data
+    // событие SSE. Дешёвый no-op если pending не выставлен.
+    tryResolvePendingMigration() {
+        if (!this._pendingMigration) return;
+        const filled = this._migrateLegacyBinding();
+        if (filled > 0) {
+            this.updateSensorSubscriptions();
+            this.initializeWidgetValues();
+        }
+        if (!this._anyLegacyBinding()) this._pendingMigration = false;
+    }
+
+    // Cold-start bootstrap: для legacy dashboard'ов (только sensor name без триплета),
+    // загруженных ДО прогрева state.sensorsByKey через user navigation, прогреваем
+    // registry явно — иначе SSE не приходит (нет подписок) → migration retry никогда
+    // не срабатывает (chicken-and-egg, см. docs/review/2026-04-30-pre-existing-flaky-tests.md).
+    //
+    // Стратегия: для каждого connected server'а — fetch IONC objects, для каждого
+    // (server, object) — fetch sensors list. Per-server tracking — bool guard ловил
+    // race на первой загрузке (state.servers ещё пуст → bootstrap noop → флаг true →
+    // следующие dashboards без bootstrap). Set отрабатывает каждый новый connected.
+    async _bootstrapSensorRegistry() {
+        if (typeof state === 'undefined' || !state?.servers || !state.sensorsByKey) return;
+        if (!this._bootstrappedServers) this._bootstrappedServers = new Set();
+
+        const tasks = [];
+        for (const serverId of getConnectedServerIds()) {
+            if (this._bootstrappedServers.has(serverId)) continue;
+            this._bootstrappedServers.add(serverId);
+            tasks.push(this._bootstrapServerSensors(serverId));
+        }
+        if (tasks.length === 0) return;
+        await Promise.allSettled(tasks);
+        // Re-attempt migration с прогретым registry.
+        this.tryResolvePendingMigration();
+    }
+
+    async _bootstrapServerSensors(serverId) {
+        try {
+            const objResp = await fetch(`/api/objects?server=${encodeURIComponent(serverId)}&type=IONotifyController`);
+            if (!objResp.ok) return;
+            const objData = await objResp.json();
+            const objects = (objData?.objects || [])
+                .map(o => typeof o === 'string' ? o : o?.name)
+                .filter(Boolean);
+
+            // Параллельно fetch'аем sensors per object — server'ам обычно ОК с десятком
+            // одновременных запросов.
+            await Promise.allSettled(objects.map(async (objectName) => {
+                const sensorsResp = await fetch(buildIONCSensorsUrl({
+                    objectName,
+                    serverId,
+                    limit: DASHBOARD_SENSOR_REGISTRY_FETCH_LIMIT,
+                }));
+                if (!sensorsResp.ok) return;
+                const data = await sensorsResp.json();
+                for (const s of (data?.sensors || [])) {
+                    if (s?.name && Number.isFinite(s?.id)) {
+                        state.sensorsByKey.set(
+                            makeSensorKey(serverId, objectName, s.name),
+                            { id: s.id, name: s.name, serverId, objectName, type: s.type }
+                        );
+                    }
+                }
+            }));
+        } catch (e) {
+            console.warn(`bootstrap server ${serverId} failed:`, e);
+        }
+    }
+
     async loadDashboard(name) {
         if (!name) {
             this.clearDashboard();
@@ -285,6 +432,19 @@ class DashboardManager {
         if (!config) {
             console.warn('Dashboard not found:', name);
             this.clearDashboard();
+            return;
+        }
+
+        // Если уже на этом dashboard и виджеты живы — НЕ пересоздаём их с нуля.
+        // sidebar-click + view-toggle теперь не «сбрасывают» layout/values/edit-mode,
+        // а лишь освежают подписки и значения (на случай новых SSE-событий или
+        // подключившихся серверов). Force-reload — через clearDashboard() либо
+        // переключение dashboard'ов.
+        if (dashboardState.currentDashboard === name && dashboardState.widgets.size > 0) {
+            this._migrateLegacyBinding();
+            this.updateSensorSubscriptions();
+            this.initializeWidgetValues();
+            this._pendingMigration = this._anyLegacyBinding();
             return;
         }
 
@@ -359,84 +519,104 @@ class DashboardManager {
         });
 
         // Subscribe to sensor updates
+        this._migrateLegacyBinding();
         this.updateSensorSubscriptions();
 
         // Initialize widgets with cached/fetched values
         this.initializeWidgetValues();
+
+        // Track pending migration for cold-start hook (см. tryResolvePendingMigration)
+        this._pendingMigration = this._anyLegacyBinding();
+
+        // Если binding'и не резолвятся из-за пустого sensorsByKey — async-прогреваем
+        // его через `/api/objects/...` + `/ionc/sensors`. Не ждём (fire-and-forget):
+        // dashboard рендерится сразу, виджеты заполнятся после повторной миграции.
+        if (this._pendingMigration) {
+            this._bootstrapSensorRegistry().catch(e => console.warn('sensor registry bootstrap:', e));
+        }
     }
 
     // Initialize widgets with current sensor values (from cache or API)
     async initializeWidgetValues() {
-        // Collect unique sensor names from subscriptions
-        const sensorNames = new Set();
-        for (const sensorName of dashboardState.sensorSubscriptions.keys()) {
-            sensorNames.add(sensorName);
-        }
-        for (const sensorName of dashboardState.setpointSubscriptions.keys()) {
-            sensorNames.add(sensorName);
-        }
-        for (const sensorName of dashboardState.chartSubscriptions.keys()) {
-            sensorNames.add(sensorName);
-        }
+        // Collect unique sensorKeys from subscriptions (после Step 2.5 ключи Map'ов
+        // — это полные sensorKey, не короткие имена).
+        const sensorKeys = new Set();
+        for (const k of dashboardState.sensorSubscriptions.keys()) sensorKeys.add(k);
+        for (const k of dashboardState.setpointSubscriptions.keys()) sensorKeys.add(k);
+        for (const k of dashboardState.chartSubscriptions.keys()) sensorKeys.add(k);
 
-        if (sensorNames.size === 0) return;
+        if (sensorKeys.size === 0) return;
 
-        // First, try to use cached values from SSE events
-        const uncachedSensors = [];
-        for (const name of sensorNames) {
-            const cached = state.sensorValuesCache.get(name);
+        // First, try to use cached values from SSE events.
+        const uncachedKeys = [];
+        for (const cacheKey of sensorKeys) {
+            const cached = state.sensorValuesCache.get(cacheKey);
             if (cached) {
-                // Use cached value (not older than 60 seconds)
-                if (Date.now() - cached.timestamp < 60000) {
-                    this.handleSensorUpdate(name, cached.value, cached.error);
+                if (Date.now() - cached.timestamp < DASHBOARD_SENSOR_CACHE_TTL_MS) {
+                    const meta = (cached.frozen || cached.blocked)
+                        ? { frozen: !!cached.frozen, blocked: !!cached.blocked }
+                        : null;
+                    this.handleSensorUpdate(cacheKey, cached.value, cached.error, null, meta);
                 } else {
-                    uncachedSensors.push(name);
+                    uncachedKeys.push(cacheKey);
                 }
             } else {
-                uncachedSensors.push(name);
+                uncachedKeys.push(cacheKey);
             }
         }
 
         // For uncached sensors, try to fetch from API
-        if (uncachedSensors.length > 0) {
-            this.fetchSensorValues(uncachedSensors);
+        if (uncachedKeys.length > 0) {
+            this.fetchSensorValues(uncachedKeys);
         }
     }
 
-    // Fetch sensor values from IONC API
-    async fetchSensorValues(sensorNames) {
-        // Find SharedMemory server
-        let smServerId = null;
-        for (const [id, server] of state.servers) {
-            if (server.connected) {
-                smServerId = id;
-                break;
-            }
+    // Fetch sensor values from IONC API. Принимает массив sensorKey'ев
+    // (каждый ключ уже кодирует serverId|objectName|sensorName — Step 2.6).
+    // Группирует по (serverId, objectName), делает один search request
+    // на каждый sensorName (текущий API не поддерживает batch search).
+    async fetchSensorValues(sensorKeys) {
+        // Group by (serverId, objectName) → Map<sensorName, sensorKey>.
+        const groups = new Map();
+
+        for (const key of sensorKeys) {
+            const parsed = parseSensorKey(key);
+            if (!parsed) continue; // legacy / malformed — пропускаем
+            const grpKey = makeGroupKey(parsed.serverId, parsed.objectName);
+            if (!groups.has(grpKey)) groups.set(grpKey, new Map());
+            groups.get(grpKey).set(parsed.sensorName, key);
         }
 
-        if (!smServerId) return;
-
-        // Fetch each sensor (could be optimized with batch API)
-        for (const name of sensorNames) {
-            try {
-                const response = await fetch(`/api/objects/SharedMemory/ionc/sensors?server=${smServerId}&search=${encodeURIComponent(name)}&limit=1`);
-                if (response.ok) {
+        for (const [grpKey, nameToKey] of groups) {
+            const { serverId, objectName } = parseGroupKey(grpKey);
+            for (const [sensorName, sensorKey] of nameToKey) {
+                try {
+                    const response = await fetch(buildIONCSensorsUrl({
+                        objectName,
+                        serverId,
+                        search: sensorName,
+                        limit: 1,
+                    }));
+                    if (!response.ok) continue;
                     const data = await response.json();
-                    if (data.sensors && data.sensors.length > 0) {
-                        const sensor = data.sensors.find(s => s.name === name);
-                        if (sensor) {
-                            // Cache and update
-                            state.sensorValuesCache.set(name, {
-                                value: sensor.value,
-                                error: null,
-                                timestamp: Date.now()
-                            });
-                            this.handleSensorUpdate(name, sensor.value, null);
-                        }
-                    }
+                    if (!data.sensors || data.sensors.length === 0) continue;
+                    const sensor = data.sensors.find(s => s.name === sensorName);
+                    if (!sensor) continue;
+                    const writeKey = makeSensorKey(serverId, objectName, sensor.name);
+                    state.sensorValuesCache.set(writeKey, {
+                        value: sensor.value,
+                        error: null,
+                        frozen: !!sensor.frozen,
+                        blocked: !!sensor.blocked,
+                        timestamp: Date.now()
+                    });
+                    const meta = (sensor.frozen || sensor.blocked)
+                        ? { frozen: !!sensor.frozen, blocked: !!sensor.blocked }
+                        : null;
+                    this.handleSensorUpdate(writeKey, sensor.value, null, null, meta);
+                } catch (err) {
+                    console.warn('Failed to fetch sensor value:', sensorKey, err);
                 }
-            } catch (err) {
-                console.warn('Failed to fetch sensor value:', name, err);
             }
         }
     }
@@ -449,7 +629,7 @@ class DashboardManager {
         }
 
         const { position = {} } = widgetConfig;
-        const { col = 0, row = 0, width = 2, height = 1, freePosition, offset } = position;
+        const { col = 0, row = 0, width = 2, height = 1, freePosition } = position;
 
         // Create widget container
         const container = document.createElement('div');
@@ -462,20 +642,9 @@ class DashboardManager {
         if (isTransparent) {
             container.classList.add('transparent');
         }
-        // Build transform string (offset + rotation)
-        const rotate = widgetConfig.config?.rotate || 0;
-        const transforms = [];
-        if (offset && (offset.x || offset.y)) {
-            transforms.push(`translate(${offset.x || 0}px, ${offset.y || 0}px)`);
-        }
-        if (rotate) {
-            transforms.push(`rotate(${rotate}deg)`);
-        }
-        if (transforms.length > 0) {
-            container.style.transform = transforms.join(' ');
-        }
         container.dataset.widgetId = widgetConfig.id;
         container.dataset.type = widgetConfig.type;
+        this.applyWidgetTransform(container, widgetConfig);
 
         // Free pixel positioning (Shift+drag) or grid snap
         if (freePosition) {
@@ -483,15 +652,9 @@ class DashboardManager {
             container.style.left = `${freePosition.left}px`;
             container.style.top = `${freePosition.top}px`;
             // Always calculate size from grid cells (width/height are always in cells)
-            const gap = DASHBOARD_GRID_GAP;
-            const gridEl = this.gridEl || document.querySelector('.dashboard-grid');
-            if (gridEl) {
-                const gridRect = gridEl.getBoundingClientRect();
-                const computedStyle = window.getComputedStyle(gridEl);
-                const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
-                const contentWidth = gridRect.width - paddingLeft * 2;
-                const cellWidth = (contentWidth - gap * (DASHBOARD_GRID_COLS - 1)) / DASHBOARD_GRID_COLS;
-                const cellHeight = DASHBOARD_GRID_ROW_HEIGHT;
+            const gridMetrics = this.getGridMetrics();
+            if (gridMetrics) {
+                const { gap, cellWidth, cellHeight } = gridMetrics;
                 container.style.width = `${width * cellWidth + (width - 1) * gap}px`;
                 container.style.height = `${height * cellHeight + (height - 1) * gap}px`;
             }
@@ -526,20 +689,14 @@ class DashboardManager {
 
         // Create widget instance
         const widget = new WidgetClass(widgetConfig.id, widgetConfig.config || {}, container);
-        widget.render();
 
-        // Inject title if configured (before widget-content, not inside)
-        const title = widgetConfig.config?.title;
-        if (title) {
-            const widgetContent = container.querySelector('.widget-content');
-            if (widgetContent) {
-                const titleEl = document.createElement('div');
-                titleEl.className = 'widget-title-label' + (widgetConfig.config?.titleBorder ? ' title-badge' : '');
-                titleEl.textContent = title;
-                // Insert BEFORE widget-content, not inside it
-                widgetContent.parentNode.insertBefore(titleEl, widgetContent);
-            }
+        // Маркер для CSS правил (.dashboard-widget[data-active-widget="true"]):
+        // используется для edit-mode grayscale и active-disabled индикатора.
+        if (widget instanceof ActiveDashboardWidget) {
+            container.dataset.activeWidget = 'true';
         }
+
+        this.renderWidgetContent(widget, widgetConfig);
 
         // Bind widget events
         container.querySelector('.widget-action-btn.config')?.addEventListener('click', (e) => {
@@ -597,6 +754,44 @@ class DashboardManager {
         return widget;
     }
 
+    applyWidgetTransform(container, widgetConfig) {
+        const rotate = widgetConfig.config?.rotate || 0;
+        const offset = widgetConfig.position?.offset;
+        const transforms = [];
+        if (offset && (offset.x || offset.y)) {
+            transforms.push(`translate(${offset.x || 0}px, ${offset.y || 0}px)`);
+        }
+        if (rotate) {
+            transforms.push(`rotate(${rotate}deg)`);
+        }
+        container.style.transform = transforms.length > 0 ? transforms.join(' ') : '';
+    }
+
+    renderWidgetTitle(container, config) {
+        const title = config?.title;
+        if (!title) return;
+
+        const widgetContent = container.querySelector('.widget-content');
+        if (!widgetContent) return;
+
+        const titleEl = document.createElement('div');
+        titleEl.className = 'widget-title-label' + (config.titleBorder ? ' title-badge' : '');
+        titleEl.textContent = title;
+        widgetContent.parentNode.insertBefore(titleEl, widgetContent);
+    }
+
+    renderWidgetContent(widget, widgetConfig) {
+        widget.render();
+
+        // Initial interactivity sync (без него виджет создаётся в правильном
+        // visual state до первого editMode toggle / controlToken event).
+        if (typeof widget._updateInteractivityClass === 'function') {
+            widget._updateInteractivityClass();
+        }
+
+        this.renderWidgetTitle(widget.container, widgetConfig.config || {});
+    }
+
     clearWidgets() {
         // Destroy all widget instances
         dashboardState.widgets.forEach(widget => {
@@ -605,13 +800,20 @@ class DashboardManager {
             }
         });
         dashboardState.widgets.clear();
+        // Чистим все три карты подписок одновременно с widgets — иначе stale
+        // sensor/setpoint/chart subscriptions будут слать update'ы к destroy'нутым widget'ам
+        // до следующего updateSensorSubscriptions.
         dashboardState.sensorSubscriptions.clear();
+        dashboardState.setpointSubscriptions.clear();
+        dashboardState.chartSubscriptions.clear();
     }
 
     clearDashboard() {
         dashboardState.currentDashboard = null;
         this.clearWidgets();
         this.actionsEl?.classList.add('hidden');
+        this._pendingMigration = false;
+        this._bootstrappedServers?.clear();
 
         // Reset selector to empty value
         if (this.selectEl) {
@@ -742,6 +944,22 @@ class DashboardManager {
 
         if (!content) return;
 
+        // widget-config-content — persistent <div> (live между открытиями
+        // диалога). Сбрасываем все idempotency-флаги, которые initConfigHandlers
+        // конкретных виджетов выставляют на этом узле, иначе для второго
+        // открытия handler'ы рано-return'ят и autocomplete не работает.
+        delete content.dataset.activeHandlersWired;
+        delete content.dataset.genHandlersWired;
+        delete content.dataset.chartHandlersWired;
+        // Helpers из 60-widget-sensor-binding.js используют dataset-флаги
+        // sensorBinding_*, sensorItemList_*, ioncCombo_*. content живёт между
+        // открытиями диалога, поэтому сбрасываем все три семейства перед новым wiring.
+        for (const key of Object.keys(content.dataset)) {
+            if (key.startsWith('sensorBinding') || key.startsWith('sensorItemList') || key.startsWith('ioncCombo')) {
+                delete content.dataset[key];
+            }
+        }
+
         let config = {};
         let position = {};
         let WidgetClass;
@@ -764,10 +982,6 @@ class DashboardManager {
             title.textContent = widgetId ? `Configure ${WidgetClass.displayName}` : `Add ${WidgetClass.displayName}`;
         }
 
-        // Get current size from position, or default
-        const currentWidth = position.width || WidgetClass.defaultSize.width;
-        const currentHeight = position.height || WidgetClass.defaultSize.height;
-
         // Chart widget doesn't show transparent option (always opaque)
         const showTransparent = type !== 'chart';
         const transparentHtml = showTransparent ? `
@@ -787,7 +1001,7 @@ class DashboardManager {
             <div class="widget-config-row">
                 <div class="widget-config-field">
                     <label>Title (optional)</label>
-                    <input type="text" class="widget-input" name="title" value="${escapeHtml(config.title || '')}" placeholder="e.g. Engine RPM">
+                    <input type="text" class="widget-input" name="title" value="${escapeAttr(config.title || '')}" placeholder="e.g. Engine RPM">
                 </div>
                 <div class="widget-config-field">
                     <label class="widget-toggle">
@@ -809,10 +1023,9 @@ class DashboardManager {
                         <input type="number" name="rotate" value="${currentRotate}" min="0" max="360" step="1">
                         <span class="rotate-unit">°</span>
                         <div class="rotate-quick-buttons">
-                            <button type="button" class="rotate-quick-btn" data-angle="0">0°</button>
-                            <button type="button" class="rotate-quick-btn" data-angle="90">90°</button>
-                            <button type="button" class="rotate-quick-btn" data-angle="180">180°</button>
-                            <button type="button" class="rotate-quick-btn" data-angle="270">270°</button>
+                            ${ROTATE_QUICK_ANGLES.map(angle =>
+                                `<button type="button" class="rotate-quick-btn" data-angle="${angle}">${angle}°</button>`
+                            ).join('')}
                         </div>
                     </div>
                 </div>
@@ -829,15 +1042,6 @@ class DashboardManager {
         // Store context for apply
         content.dataset.widgetId = widgetId || '';
         content.dataset.widgetType = type;
-
-        // Setup sensor autocomplete for all sensor inputs
-        this.setupSensorAutocomplete(content, 'sensor');
-        this.setupSensorAutocomplete(content, 'sensor2');
-
-        // Setup chart widget autocomplete for zone sensor inputs
-        if (type === 'chart') {
-            setupChartWidgetAutocomplete();
-        }
 
         // Setup custom number inputs
         setupNumberInputs(content);
@@ -860,160 +1064,6 @@ class DashboardManager {
         overlay?.classList.remove('hidden');
     }
 
-    setupSensorAutocomplete(container, fieldName = 'sensor') {
-        const sensorInput = container.querySelector(`[name="${fieldName}"]`);
-        if (!sensorInput) return;
-
-        // Wrap input in relative container and add autocomplete dropdown
-        const field = sensorInput.closest('.widget-config-field');
-        if (!field) return;
-
-        field.classList.add('sensor-autocomplete-field');
-
-        // Create autocomplete container
-        const autocompleteContainer = document.createElement('div');
-        autocompleteContainer.className = 'widget-sensor-autocomplete';
-        autocompleteContainer.style.display = 'none';
-        field.appendChild(autocompleteContainer);
-
-        // State
-        let autocompleteResults = [];
-        let selectedIndex = 0;
-        let debounceTimer = null;
-
-        const sensors = Array.from(state.sensorsByName.entries()).map(([name, data]) => ({
-            name,
-            iotype: data?.iotype || '?',
-            textname: data?.textname || ''
-        }));
-
-        const hideAutocomplete = () => {
-            autocompleteContainer.style.display = 'none';
-            autocompleteContainer.innerHTML = '';
-            autocompleteResults = [];
-            selectedIndex = 0;
-        };
-
-        const showAutocomplete = (matches) => {
-            if (matches.length === 0) {
-                hideAutocomplete();
-                return;
-            }
-
-            autocompleteResults = matches;
-            selectedIndex = 0;
-
-            autocompleteContainer.innerHTML = matches.map((s, i) => `
-                <div class="widget-autocomplete-item${i === 0 ? ' selected' : ''}" data-name="${escapeHtml(s.name)}">
-                    <span class="sensor-name">${escapeHtml(s.name)}</span>
-                    <span class="type-badge type-${s.iotype}">${s.iotype}</span>
-                    ${s.textname ? `<span class="sensor-textname">${escapeHtml(s.textname)}</span>` : ''}
-                </div>
-            `).join('');
-
-            // Click handlers
-            autocompleteContainer.querySelectorAll('.widget-autocomplete-item').forEach(item => {
-                item.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    sensorInput.value = item.dataset.name;
-                    hideAutocomplete();
-                });
-            });
-
-            autocompleteContainer.style.display = 'block';
-        };
-
-        const updateSelection = () => {
-            const items = autocompleteContainer.querySelectorAll('.widget-autocomplete-item');
-            items.forEach((item, i) => {
-                item.classList.toggle('selected', i === selectedIndex);
-            });
-            // Scroll selected into view
-            const selected = autocompleteContainer.querySelector('.selected');
-            if (selected) {
-                selected.scrollIntoView({ block: 'nearest' });
-            }
-        };
-
-        const navigateAutocomplete = (direction) => {
-            if (autocompleteResults.length === 0) return;
-            selectedIndex = Math.max(0, Math.min(autocompleteResults.length - 1, selectedIndex + direction));
-            updateSelection();
-        };
-
-        // Input event - debounced search
-        sensorInput.addEventListener('input', () => {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => {
-                const query = sensorInput.value.trim().toLowerCase();
-                if (query.length < AUTOCOMPLETE_MIN_QUERY) {
-                    hideAutocomplete();
-                    return;
-                }
-
-                // Filter: partial match (contains)
-                const matches = sensors
-                    .filter(s => s.name.toLowerCase().includes(query))
-                    .slice(0, 10);
-
-                showAutocomplete(matches);
-            }, 150);
-        });
-
-        // Keyboard navigation
-        sensorInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                sensorInput.value = '';
-                sensorInput.blur();
-                hideAutocomplete();
-            } else if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                navigateAutocomplete(1);
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                navigateAutocomplete(-1);
-            } else if (e.key === 'Enter') {
-                if (autocompleteResults.length > 0) {
-                    e.preventDefault();
-                    sensorInput.value = autocompleteResults[selectedIndex].name;
-                    hideAutocomplete();
-                }
-            }
-        });
-
-        // Focus - show autocomplete if text is present
-        sensorInput.addEventListener('focus', () => {
-            const query = sensorInput.value.trim().toLowerCase();
-            if (query.length >= AUTOCOMPLETE_MIN_QUERY) {
-                const matches = sensors
-                    .filter(s => s.name.toLowerCase().includes(query))
-                    .slice(0, 10);
-                showAutocomplete(matches);
-            }
-        });
-
-        // Click outside to hide
-        const clickOutsideHandler = (e) => {
-            if (!field.contains(e.target)) {
-                hideAutocomplete();
-            }
-        };
-        document.addEventListener('click', clickOutsideHandler);
-
-        // Cleanup on overlay close
-        const overlay = document.getElementById('widget-config-overlay');
-        if (overlay) {
-            const observer = new MutationObserver(() => {
-                if (overlay.classList.contains('hidden')) {
-                    document.removeEventListener('click', clickOutsideHandler);
-                    observer.disconnect();
-                }
-            });
-            observer.observe(overlay, { attributes: true, attributeFilter: ['class'] });
-        }
-    }
-
     applyWidgetConfig() {
         const content = document.getElementById('widget-config-content');
         if (!content) return;
@@ -1025,6 +1075,12 @@ class DashboardManager {
         if (!WidgetClass) return;
 
         const config = WidgetClass.parseConfigForm(content);
+
+        // Save zones to reuse-history (Recent group of zones reuse picker)
+        if (Array.isArray(config.zones) && config.zones.length > 0) {
+            addZonesToHistory(config.zones, type);
+        }
+
         const transparent = content.querySelector('[name="transparent"]')?.checked || false;
         config.transparent = transparent;
 
@@ -1040,7 +1096,7 @@ class DashboardManager {
 
         // Read rotate value
         const rotateInput = content.querySelector('[name="rotate"]');
-        const rotate = parseInt(rotateInput?.value) || 0;
+        const rotate = parseIntegerOrDefault(rotateInput?.value, 0);
         config.rotate = rotate;
 
         const dashboard = dashboardState.dashboards.get(dashboardState.currentDashboard);
@@ -1064,40 +1120,25 @@ class DashboardManager {
                     if (dashboardState.editMode) {
                         widget.container.classList.add('edit-mode');
                     }
-                    // Apply transform (offset + rotation)
-                    const offset = widgetConfig.position?.offset;
-                    const transforms = [];
-                    if (offset && (offset.x || offset.y)) {
-                        transforms.push(`translate(${offset.x || 0}px, ${offset.y || 0}px)`);
-                    }
-                    if (rotate) {
-                        transforms.push(`rotate(${rotate}deg)`);
-                    }
-                    widget.container.style.transform = transforms.length > 0 ? transforms.join(' ') : '';
+                    this.applyWidgetTransform(widget.container, widgetConfig);
                     widget.container.querySelector('.widget-title').textContent = config.label || type;
                     // Remove old title and content before re-render
                     widget.container.querySelector('.widget-title-label')?.remove();
                     widget.container.querySelector('.widget-content')?.remove();
-                    widget.render();
-
-                    // Inject title if configured (before widget-content, not inside)
-                    if (config.title) {
-                        const widgetContent = widget.container.querySelector('.widget-content');
-                        if (widgetContent) {
-                            const titleEl = document.createElement('div');
-                            titleEl.className = 'widget-title-label' + (config.titleBorder ? ' title-badge' : '');
-                            titleEl.textContent = config.title;
-                            // Insert BEFORE widget-content, not inside it
-                            widgetContent.parentNode.insertBefore(titleEl, widgetContent);
-                        }
-                    }
+                    this.renderWidgetContent(widget, widgetConfig);
                 }
             }
         } else {
-            // Add new widget with default size
+            // Add new widget with default size. Style-aware override:
+            // PushButton mushroom круглый и хочет 3×3, flat 3×2, pill 3×1.
+            // Если у класса есть getDefaultSizeForStyle и юзер выбрал style
+            // в форме конфига — используем тот размер, иначе static defaultSize.
             const newId = `widget-${Date.now()}`;
-            const width = WidgetClass.defaultSize.width;
-            const height = WidgetClass.defaultSize.height;
+            const sizeOverride = (typeof WidgetClass.getDefaultSizeForStyle === 'function' && config.style)
+                ? WidgetClass.getDefaultSizeForStyle(config.style, config)
+                : null;
+            const width  = sizeOverride?.width  ?? WidgetClass.defaultSize.width;
+            const height = sizeOverride?.height ?? WidgetClass.defaultSize.height;
             const position = this.findEmptyPosition(width, height);
 
             const widgetConfig = {
@@ -1136,7 +1177,7 @@ class DashboardManager {
         });
 
         // Find first empty position
-        for (let row = 0; row < 100; row++) {
+        for (let row = 0; row < DASHBOARD_POSITION_SCAN_ROWS; row++) {
             for (let col = 0; col <= cols - width; col++) {
                 let fits = true;
                 for (let c = col; c < col + width && fits; c++) {
@@ -1172,8 +1213,10 @@ class DashboardManager {
         // Remove widget instance
         const widget = dashboardState.widgets.get(widgetId);
         if (widget) {
-            widget.container.remove();
-            widget.destroy();
+            if (typeof widget.destroy === 'function') {
+                widget.destroy();
+            }
+            widget.container?.remove();
             dashboardState.widgets.delete(widgetId);
         }
 
@@ -1188,16 +1231,23 @@ class DashboardManager {
         const widgetConfig = dashboard.widgets.find(w => w.id === widgetId);
         if (!widgetConfig) return;
 
-        const gridRect = this.gridEl.getBoundingClientRect();
         const startX = startEvent.clientX;
         const startY = startEvent.clientY;
-        const startWidth = widgetConfig.position.width || 2;
-        const startHeight = widgetConfig.position.height || 1;
+        const startWidth = widgetConfig.position.width || DASHBOARD_DEFAULT_WIDGET_WIDTH;
+        const startHeight = widgetConfig.position.height || DASHBOARD_DEFAULT_WIDGET_HEIGHT;
 
         // Calculate cell size
-        const gap = DASHBOARD_GRID_GAP;
-        const cellWidth = (gridRect.width - gap * (DASHBOARD_GRID_COLS - 1)) / DASHBOARD_GRID_COLS;
-        const cellHeight = DASHBOARD_GRID_ROW_HEIGHT;
+        const gridMetrics = this.getGridMetrics();
+        if (!gridMetrics) return;
+        const { gap, cellWidth, cellHeight } = gridMetrics;
+
+        // minSize widget'а — fall back на 1×1 если static minSize не задан.
+        // Без этого resize мог сжать любой widget до 1×1, игнорируя задекларированные
+        // в классе ограничения (напр. ToggleWidget.minSize = { width: 2, height: 1 }).
+        const widget = dashboardState.widgets.get(widgetId);
+        const minSize = widget?.constructor?.minSize || { width: 1, height: 1 };
+        const minWidth = minSize.width || 1;
+        const minHeight = minSize.height || 1;
 
         container.classList.add('resizing');
 
@@ -1208,8 +1258,8 @@ class DashboardManager {
             // Calculate new size in cells
             const col = widgetConfig.position.col || 0;
             const maxWidth = DASHBOARD_GRID_COLS - col; // Can't extend beyond grid
-            let newWidth = Math.max(1, Math.min(maxWidth, Math.round(startWidth + deltaX / (cellWidth + gap))));
-            let newHeight = Math.max(1, Math.min(20, Math.round(startHeight + deltaY / (cellHeight + gap))));
+            let newWidth = Math.max(minWidth, Math.min(maxWidth, Math.round(startWidth + deltaX / (cellWidth + gap))));
+            let newHeight = Math.max(minHeight, Math.min(DASHBOARD_MAX_WIDGET_HEIGHT, Math.round(startHeight + deltaY / (cellHeight + gap))));
 
             // Update visual preview
             container.style.gridColumn = `${(widgetConfig.position.col || 0) + 1} / span ${newWidth}`;
@@ -1226,8 +1276,8 @@ class DashboardManager {
             document.removeEventListener('mouseup', onMouseUp);
 
             // Apply new size
-            const newWidth = parseInt(container.dataset.pendingWidth) || startWidth;
-            const newHeight = parseInt(container.dataset.pendingHeight) || startHeight;
+            const newWidth = parseIntegerOrDefault(container.dataset.pendingWidth, startWidth);
+            const newHeight = parseIntegerOrDefault(container.dataset.pendingHeight, startHeight);
 
             if (newWidth !== startWidth || newHeight !== startHeight) {
                 widgetConfig.position.width = newWidth;
@@ -1259,24 +1309,17 @@ class DashboardManager {
         const widgetConfig = dashboard.widgets.find(w => w.id === widgetId);
         if (!widgetConfig) return;
 
-        const gridRect = this.gridEl.getBoundingClientRect();
+        const gridMetrics = this.getGridMetrics();
+        if (!gridMetrics) return;
+        const { gridEl, gridRect, paddingLeft, paddingTop, gap, cellWidth, cellHeight } = gridMetrics;
         const containerRect = container.getBoundingClientRect();
-        const computedStyle = window.getComputedStyle(this.gridEl);
-        const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
-        const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
 
         // Offset from mouse to container top-left
         const offsetX = startEvent.clientX - containerRect.left;
         const offsetY = startEvent.clientY - containerRect.top;
 
-        // Calculate cell size (grid content area = width minus padding on both sides)
-        const gap = DASHBOARD_GRID_GAP;
-        const contentWidth = gridRect.width - paddingLeft * 2;
-        const cellWidth = (contentWidth - gap * (DASHBOARD_GRID_COLS - 1)) / DASHBOARD_GRID_COLS;
-        const cellHeight = DASHBOARD_GRID_ROW_HEIGHT;
-
-        const width = widgetConfig.position.width || 2;
-        const height = widgetConfig.position.height || 1;
+        const width = widgetConfig.position.width || DASHBOARD_DEFAULT_WIDGET_WIDTH;
+        const height = widgetConfig.position.height || DASHBOARD_DEFAULT_WIDGET_HEIGHT;
 
         // Switch to absolute positioning for smooth drag
         container.classList.add('dragging');
@@ -1285,7 +1328,7 @@ class DashboardManager {
         container.style.height = `${containerRect.height}px`;
         container.style.left = `${containerRect.left}px`;
         container.style.top = `${containerRect.top}px`;
-        container.style.zIndex = '1000';
+        container.style.zIndex = String(DASHBOARD_DRAG_Z_INDEX);
         container.style.gridColumn = '';
         container.style.gridRow = '';
 
@@ -1306,7 +1349,7 @@ class DashboardManager {
             placeholder.style.left = `${initCol * (cellWidth + gap)}px`;
             placeholder.style.top = `${initRow * (cellHeight + gap)}px`;
         }
-        this.gridEl.appendChild(placeholder);
+        gridEl.appendChild(placeholder);
 
         let pendingCol = initCol;
         let pendingRow = initRow;
@@ -1378,8 +1421,8 @@ class DashboardManager {
                 container.style.position = 'absolute';
                 container.style.left = `${pendingFreePosition.left}px`;
                 container.style.top = `${pendingFreePosition.top}px`;
-                container.style.width = `${pendingFreePosition.width}px`;
-                container.style.height = `${pendingFreePosition.height}px`;
+                container.style.width = `${containerRect.width}px`;
+                container.style.height = `${containerRect.height}px`;
                 container.classList.add('free-position');
                 this.saveDashboard();
             } else {
@@ -1403,6 +1446,9 @@ class DashboardManager {
 
     toggleEditMode() {
         dashboardState.editMode = !dashboardState.editMode;
+        document.dispatchEvent(new CustomEvent('dashboardEditModeChanged', {
+            detail: { editMode: dashboardState.editMode }
+        }));
 
         const editBtn = document.getElementById('dashboard-edit-btn');
         editBtn?.classList.toggle('active', dashboardState.editMode);
@@ -1413,10 +1459,7 @@ class DashboardManager {
             widget.container.classList.toggle('edit-mode', dashboardState.editMode);
         });
 
-        if (dashboardState.editMode) {
-            this.enableDragAndDrop();
-        } else {
-            this.disableDragAndDrop();
+        if (!dashboardState.editMode) {
             // Deselect widget when exiting edit mode
             this.selectWidget(null);
         }
@@ -1454,16 +1497,12 @@ class DashboardManager {
         const container = widget.container;
 
         // Calculate grid parameters
-        const gridRect = this.gridEl.getBoundingClientRect();
-        const computedStyle = window.getComputedStyle(this.gridEl);
-        const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
-        const gap = DASHBOARD_GRID_GAP;
-        const contentWidth = gridRect.width - paddingLeft * 2;
-        const cellWidth = (contentWidth - gap * (DASHBOARD_GRID_COLS - 1)) / DASHBOARD_GRID_COLS;
-        const cellHeight = DASHBOARD_GRID_ROW_HEIGHT;
+        const gridMetrics = this.getGridMetrics();
+        if (!gridMetrics) return;
+        const { gap, cellWidth, cellHeight } = gridMetrics;
 
-        const width = widgetConfig.position.width || 2;
-        const height = widgetConfig.position.height || 1;
+        const width = widgetConfig.position.width || DASHBOARD_DEFAULT_WIDGET_WIDTH;
+        const height = widgetConfig.position.height || DASHBOARD_DEFAULT_WIDGET_HEIGHT;
 
         if (fineMode) {
             // Fine mode (Shift): move by 1px using freePosition
@@ -1479,7 +1518,7 @@ class DashboardManager {
                 };
             }
 
-            const step = 1;
+            const step = DASHBOARD_FINE_MOVE_STEP_PX;
             switch (key) {
                 case 'ArrowUp':
                     freePos.top = Math.max(0, freePos.top - step);
@@ -1542,105 +1581,120 @@ class DashboardManager {
         this.saveDashboard();
     }
 
-    enableDragAndDrop() {
-        dashboardState.widgets.forEach((widget, id) => {
-            widget.container.draggable = true;
-
-            widget.container.addEventListener('dragstart', (e) => {
-                e.dataTransfer.setData('text/plain', id);
-                widget.container.classList.add('dragging');
-            });
-
-            widget.container.addEventListener('dragend', () => {
-                widget.container.classList.remove('dragging');
-            });
-        });
-
-        this.gridEl?.addEventListener('dragover', (e) => {
-            e.preventDefault();
-        });
-
-        this.gridEl?.addEventListener('drop', (e) => {
-            e.preventDefault();
-            // TODO: Implement grid position calculation
-        });
-    }
-
-    disableDragAndDrop() {
-        dashboardState.widgets.forEach((widget) => {
-            widget.container.draggable = false;
-        });
-    }
-
     updateSensorSubscriptions() {
         dashboardState.sensorSubscriptions.clear();
         dashboardState.setpointSubscriptions.clear();
         dashboardState.chartSubscriptions.clear();
 
+        const addSub = (map, key, id) => {
+            if (!map.has(key)) map.set(key, new Set());
+            map.get(key).add(id);
+        };
+        const addBinding = (map, b, id) => {
+            const sensorName = b?.sensor || b?.name;
+            if (!b?.serverId || !b?.objectName || !sensorName) return;
+            addSub(map, makeSensorKey(b.serverId, b.objectName, sensorName), id);
+        };
+
         dashboardState.widgets.forEach((widget, id) => {
-            // Main sensor subscription
-            const sensor = widget.config?.sensor;
-            if (sensor) {
-                if (!dashboardState.sensorSubscriptions.has(sensor)) {
-                    dashboardState.sensorSubscriptions.set(sensor, new Set());
-                }
-                dashboardState.sensorSubscriptions.get(sensor).add(id);
+            const cfg = widget.config;
+            if (!cfg) return;
+
+            // 1. Main sensor
+            addBinding(dashboardState.sensorSubscriptions, cfg, id);
+
+            // 2. Setpoint sensor2 (используется в SetpointWidget feedback и Gauge style=dual)
+            if (cfg.sensor2) {
+                addBinding(dashboardState.setpointSubscriptions, {
+                    serverId:   cfg.serverId2   || cfg.serverId,
+                    objectName: cfg.objectName2 || cfg.objectName,
+                    sensor:     cfg.sensor2,
+                }, id);
             }
 
-            // Setpoint sensor subscription (for dual scale)
-            const sensor2 = widget.config?.sensor2;
-            if (sensor2) {
-                if (!dashboardState.setpointSubscriptions.has(sensor2)) {
-                    dashboardState.setpointSubscriptions.set(sensor2, new Set());
-                }
-                dashboardState.setpointSubscriptions.get(sensor2).add(id);
+            // 3. Multi-sensor items (StatusBar, BarGraph)
+            if (Array.isArray(cfg.items)) {
+                cfg.items.forEach(it => addBinding(dashboardState.sensorSubscriptions, it, id));
             }
 
-            // StatusBar items subscription (multiple sensors in items array)
-            const items = widget.config?.items;
-            if (Array.isArray(items)) {
-                items.forEach(item => {
-                    if (item.sensor) {
-                        if (!dashboardState.sensorSubscriptions.has(item.sensor)) {
-                            dashboardState.sensorSubscriptions.set(item.sensor, new Set());
-                        }
-                        dashboardState.sensorSubscriptions.get(item.sensor).add(id);
-                    }
-                });
-            }
-
-            // Chart widget subscriptions (multiple sensors from zones)
-            if (widget instanceof ChartWidget && typeof widget.getSensorNames === 'function') {
-                const sensorNames = widget.getSensorNames();
-                for (const sensorName of sensorNames) {
-                    if (!dashboardState.chartSubscriptions.has(sensorName)) {
-                        dashboardState.chartSubscriptions.set(sensorName, new Set());
-                    }
-                    dashboardState.chartSubscriptions.get(sensorName).add(id);
-                }
+            // 4. Chart zones
+            if (Array.isArray(cfg.zones)) {
+                cfg.zones.forEach(z => (z.sensors || []).forEach(s =>
+                    addBinding(dashboardState.chartSubscriptions, s, id)));
             }
         });
+
+        this._subscribeActiveSensorsBackend();
     }
 
-    handleSensorUpdate(sensorName, value, error = null, timestamp = null) {
+    _subscribeActiveSensorsBackend() {
+        // Group key (serverId|objectName) → Set<sensorId>.
+        const groups = new Map();
+
+        const addId = (b) => {
+            if (!b?.serverId || !b?.objectName) return;
+            if (!Number.isFinite(b.sensorId)) return;
+            const k = makeGroupKey(b.serverId, b.objectName);
+            if (!groups.has(k)) groups.set(k, new Set());
+            groups.get(k).add(b.sensorId);
+        };
+
+        dashboardState.widgets.forEach(widget => {
+            const cfg = widget?.config;
+            if (!cfg) return;
+            // Main + sensor2 + items + zones
+            addId(cfg);
+            if (cfg.sensor2) addId({
+                serverId:   cfg.serverId2   || cfg.serverId,
+                objectName: cfg.objectName2 || cfg.objectName,
+                sensorId:   cfg.sensorId2,
+            });
+            if (Array.isArray(cfg.items)) cfg.items.forEach(addId);
+            if (Array.isArray(cfg.zones)) cfg.zones.forEach(z => (z.sensors || []).forEach(addId));
+        });
+
+        for (const [grpKey, idSet] of groups) {
+            const { serverId, objectName } = parseGroupKey(grpKey);
+            const url = `/api/objects/${encodeURIComponent(objectName)}/ionc/subscribe`
+                + `?server=${encodeURIComponent(serverId)}`;
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sensor_ids: Array.from(idSet) })
+            }).catch(err => console.warn('dashboard: subscribe failed', grpKey, err));
+        }
+    }
+
+    handleSensorUpdate(sensorKey, value, error = null, timestamp = null, meta = null) {
+        // sensorKey = ${serverId}|${objectName}|${sensorName} — canonical identity.
+        // ctx передаётся в updateBySensor/updateSensor чтобы multi-sensor widget'ы
+        // могли отбраковать совпадающие по имени, но пришедшие с другого (server, object).
+        // meta = { frozen, blocked } — статусные флаги датчика для active widget'ов;
+        // read-only widget'ы (LevelWidget и т.п.) этот аргумент игнорируют.
+        const parsed = (typeof parseSensorKey === 'function') ? parseSensorKey(sensorKey) : null;
+        const sensorName = parsed?.sensorName ?? sensorKey;
+        const ctx = parsed
+            ? { serverId: parsed.serverId, objectName: parsed.objectName, sensorName }
+            : null;
+
         // Main sensor updates
-        const widgetIds = dashboardState.sensorSubscriptions.get(sensorName);
+        const widgetIds = dashboardState.sensorSubscriptions.get(sensorKey);
         if (widgetIds) {
             widgetIds.forEach(id => {
                 const widget = dashboardState.widgets.get(id);
                 if (widget) {
                     // StatusBar widget uses updateBySensor for items
                     if (typeof widget.updateBySensor === 'function') {
-                        widget.updateBySensor(sensorName, value, error);
+                        widget.updateBySensor(sensorName, value, error, ctx);
                     } else {
-                        widget.update(value, error);
+                        widget.update(value, error, meta);
                     }
                 }
             });
         }
 
         // Setpoint sensor updates
-        const setpointWidgetIds = dashboardState.setpointSubscriptions.get(sensorName);
+        const setpointWidgetIds = dashboardState.setpointSubscriptions.get(sensorKey);
         if (setpointWidgetIds) {
             setpointWidgetIds.forEach(id => {
                 const widget = dashboardState.widgets.get(id);
@@ -1651,12 +1705,12 @@ class DashboardManager {
         }
 
         // Chart widget updates
-        const chartWidgetIds = dashboardState.chartSubscriptions.get(sensorName);
+        const chartWidgetIds = dashboardState.chartSubscriptions.get(sensorKey);
         if (chartWidgetIds) {
             chartWidgetIds.forEach(id => {
                 const widget = dashboardState.widgets.get(id);
                 if (widget && typeof widget.updateSensor === 'function') {
-                    widget.updateSensor(sensorName, value, timestamp);
+                    widget.updateSensor(sensorName, value, timestamp, ctx);
                 }
             });
         }
@@ -1690,7 +1744,15 @@ class DashboardManager {
 
         if (!dropzone || !fileInput) return;
 
-        dropzone.addEventListener('click', () => fileInput.click());
+        // Guard against double-trigger: <input type="file"> лежит ВНУТРИ dropzone,
+        // поэтому programmatic fileInput.click() bubbles обратно к этому handler'у
+        // и зовёт fileInput.click() ещё раз. Браузер при этом сначала открывает
+        // file picker, а второй вызов мгновенно его dismiss'ит → user видит мигание
+        // и не успевает выбрать файл.
+        dropzone.addEventListener('click', (e) => {
+            if (e.target === fileInput) return;
+            fileInput.click();
+        });
 
         dropzone.addEventListener('dragover', (e) => {
             e.preventDefault();
@@ -1744,10 +1806,15 @@ class DashboardManager {
 
                 dashboardState.pendingImport = migrated;
 
-                // Update UI
+                // Update UI. Optional chain на classList выше прятал null, но
+                // следующая строка всё равно дереференсила — TypeError при
+                // отсутствии dropzone'а. Объединяем под одним guard'ом.
                 const dropzone = document.getElementById('import-dropzone');
-                dropzone?.classList.add('has-file');
-                dropzone.querySelector('p').textContent = `${file.name} (${config.widgets.length} widgets)`;
+                if (dropzone) {
+                    dropzone.classList.add('has-file');
+                    const p = dropzone.querySelector('p');
+                    if (p) p.textContent = `${file.name} (${config.widgets.length} widgets)`;
+                }
 
                 const nameInput = document.getElementById('import-name-input');
                 if (nameInput) {
@@ -1819,17 +1886,26 @@ class DashboardManager {
         this.loadDashboard(name);
     }
 
-    deleteDashboard() {
+    async deleteDashboard() {
         const name = dashboardState.currentDashboard;
         if (!name) return;
 
         const config = dashboardState.dashboards.get(name);
         if (config?._server) {
+            // TODO: server dashboards — Delete-кнопку лучше дисейблить заранее в UI;
+            // пока fallback на alert, чтобы кейс не пропадал тихо.
             alert('Cannot delete server dashboards');
             return;
         }
 
-        if (!confirm(`Delete dashboard "${name}"?`)) return;
+        // showConfirmDialog (Promise<bool>) вместо нативного confirm — единый
+        // стиль модалок проекта, не блокирует event loop.
+        const confirmed = await showConfirmDialog(
+            'Delete Dashboard',
+            `Delete dashboard "${name}"?`,
+            'Delete'
+        );
+        if (!confirmed) return;
 
         dashboardState.dashboards.delete(name);
         localStorage.removeItem(`dashboard:${name}`);
@@ -1844,5 +1920,3 @@ class DashboardManager {
         this.clearDashboard();
     }
 }
-
-// Dashboard migration
