@@ -274,6 +274,20 @@ Dashboards - система визуализации данных в реаль�
 опциональным миганием. Используется для status-индикаторов (RUN / STOP /
 FAULT / WARN).
 
+![State Label Widget](images/widget-state-label.png)
+
+На скриншоте показаны крупные status-блоки (ENGINE, TEMPERATURE, MODE,
+PRESSURE) и compact row для status bar внизу. Виджеты ALARM, TIMEOUT,
+POWER LOSS и АВАРИЯ настроены с blink — они пойманы в faded-фазу
+цикла мигания, более тёмные.
+
+**Диалог настроек:**
+
+![State Label Config](images/config-state-label.png)
+
+Колонки строки state: ↑ / ↓ (reorder, как у секций tab-панели) ·
+from → to (пусто = `-∞` / `+∞`) · text · fg · bg · ⏱ blink (popover) · ✕ remove.
+
 **Настройки:**
 
 | Параметр | Описание |
