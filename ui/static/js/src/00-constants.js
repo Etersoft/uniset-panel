@@ -259,6 +259,12 @@ const IONC_COMBO_DEBOUNCE_MS  = 100;            // короче чем sensor-au
 const IONC_COMBO_DROPDOWN_TOP_OFFSET_PX = 2;    // отступ dropdown'а от низа input'а
 const IONC_COMBO_DROPDOWN_MAX_HEIGHT_PX = 320;  // max-height dropdown'а (sync с CSS)
 
+// === State Label widget ===
+const STATE_LABEL_BLINK_MIN_INTERVAL_MS    = 100;   // sanity floor для interval (иначе CPU spinner)
+const STATE_LABEL_BLINK_DEFAULT_INTERVAL_MS = 500;
+const STATE_LABEL_DEFAULT_FONT_SIZE_PX     = 14;
+const STATE_LABEL_BLINK_FADED_OPACITY      = 0.25;  // opacity в "выключенной" половине blink цикла
+
 if (typeof globalThis !== 'undefined') {
     Object.assign(globalThis, {
         CHART_LINE_TENSION,
@@ -273,5 +279,9 @@ if (typeof globalThis !== 'undefined') {
         IONC_COMBO_DEBOUNCE_MS,
         IONC_COMBO_DROPDOWN_TOP_OFFSET_PX,
         IONC_COMBO_DROPDOWN_MAX_HEIGHT_PX,
+        STATE_LABEL_BLINK_MIN_INTERVAL_MS,
+        STATE_LABEL_BLINK_DEFAULT_INTERVAL_MS,
+        STATE_LABEL_DEFAULT_FONT_SIZE_PX,
+        STATE_LABEL_BLINK_FADED_OPACITY,
     });
 }

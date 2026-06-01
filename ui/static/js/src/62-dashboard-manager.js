@@ -8,6 +8,7 @@ const WIDGET_TYPES = {
     'level': LevelWidget,
     'led': LedWidget,
     'label': LabelWidget,
+    'state-label': StateLabelWidget,
     'divider': DividerWidget,
     'statusbar': StatusBarWidget,
     'bargraph': BarGraphWidget,

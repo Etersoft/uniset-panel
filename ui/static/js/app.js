@@ -263,6 +263,12 @@ const IONC_COMBO_DEBOUNCE_MS  = 100;            // короче чем sensor-au
 const IONC_COMBO_DROPDOWN_TOP_OFFSET_PX = 2;    // отступ dropdown'а от низа input'а
 const IONC_COMBO_DROPDOWN_MAX_HEIGHT_PX = 320;  // max-height dropdown'а (sync с CSS)
 
+// === State Label widget ===
+const STATE_LABEL_BLINK_MIN_INTERVAL_MS    = 100;   // sanity floor для interval (иначе CPU spinner)
+const STATE_LABEL_BLINK_DEFAULT_INTERVAL_MS = 500;
+const STATE_LABEL_DEFAULT_FONT_SIZE_PX     = 14;
+const STATE_LABEL_BLINK_FADED_OPACITY      = 0.25;  // opacity в "выключенной" половине blink цикла
+
 if (typeof globalThis !== 'undefined') {
     Object.assign(globalThis, {
         CHART_LINE_TENSION,
@@ -277,6 +283,10 @@ if (typeof globalThis !== 'undefined') {
         IONC_COMBO_DEBOUNCE_MS,
         IONC_COMBO_DROPDOWN_TOP_OFFSET_PX,
         IONC_COMBO_DROPDOWN_MAX_HEIGHT_PX,
+        STATE_LABEL_BLINK_MIN_INTERVAL_MS,
+        STATE_LABEL_BLINK_DEFAULT_INTERVAL_MS,
+        STATE_LABEL_DEFAULT_FONT_SIZE_PX,
+        STATE_LABEL_BLINK_FADED_OPACITY,
     });
 }
 
@@ -2157,6 +2167,232 @@ function mountZonesReusePicker(form, widgetType) {
     setupZonesReusePicker(form);
 }
 
+// ============================================================================
+// State list editor — для StateLabelWidget.
+// Аналог renderColorZonesEditor, но row содержит: reorder buttons, from/to
+// inputs (open-ended via empty), text input, fg/bg color pickers, blink
+// popover trigger, remove button.
+// ============================================================================
+
+function renderStateListEditor(states = []) {
+    const rows = states.map((s, idx) => renderStateListRow(s, idx, states.length)).join('');
+    return `
+        <div class="state-list-editor">
+            <div class="state-list-header">
+                <label>States (first-match wins)</label>
+                <button type="button" class="state-list-add-btn">+ Add State</button>
+            </div>
+            <div class="state-list-rows">
+                ${rows}
+            </div>
+        </div>
+    `;
+}
+
+function renderStateListRow(s = {}, idx = 0, total = 1) {
+    const fromVal = s.from !== undefined && s.from !== null ? String(s.from) : '';
+    const toVal   = s.to   !== undefined && s.to   !== null ? String(s.to)   : '';
+    const blink = s.blink || 'none';
+    const blinkActive = blink !== 'none' && typeof blink === 'object';
+    return `
+        <div class="state-list-row" data-idx="${idx}">
+            <div class="section-reorder-buttons">
+                <button type="button" class="section-move-btn" data-move="up"   title="Move up"  ${idx === 0 ? 'disabled' : ''}>↑</button>
+                <button type="button" class="section-move-btn" data-move="down" title="Move down" ${idx === total - 1 ? 'disabled' : ''}>↓</button>
+            </div>
+            <input type="text"   class="state-list-input state-list-from" name="state-from-${idx}" placeholder="−∞" value="${escapeAttr(fromVal)}">
+            <span class="state-list-sep">→</span>
+            <input type="text"   class="state-list-input state-list-to"   name="state-to-${idx}"   placeholder="+∞" value="${escapeAttr(toVal)}">
+            <input type="text"   class="state-list-text" name="state-text-${idx}" placeholder="Text" value="${escapeAttr(s.text || '')}">
+            <input type="color"  class="state-list-color state-list-fg" name="state-fg-${idx}" value="${escapeAttr(s.fg || '#ffffff')}" title="Text color">
+            <input type="color"  class="state-list-color state-list-bg" name="state-bg-${idx}" value="${escapeAttr(s.bg || '#1f2937')}" title="Background color">
+            <button type="button" class="state-list-blink-btn ${blinkActive ? 'active' : ''}" data-idx="${idx}" title="Blink settings">⏱</button>
+            <input type="hidden" class="state-list-blink-data" name="state-blink-${idx}" value="${escapeAttr(JSON.stringify(blink))}">
+            <button type="button" class="state-list-remove" data-idx="${idx}" title="Remove">×</button>
+        </div>
+    `;
+}
+
+function parseStateList(form) {
+    const out = [];
+    form.querySelectorAll('.state-list-row').forEach((row) => {
+        const idx = parseIntegerOrDefault(row.dataset.idx, NaN);
+        if (!Number.isFinite(idx)) return;
+        const fromRaw = (row.querySelector('.state-list-from')?.value ?? '').trim();
+        const toRaw   = (row.querySelector('.state-list-to')?.value ?? '').trim();
+        const text    = row.querySelector('.state-list-text')?.value ?? '';
+        const fg      = row.querySelector('.state-list-fg')?.value || '';
+        const bg      = row.querySelector('.state-list-bg')?.value || '';
+        const blinkRaw = row.querySelector('.state-list-blink-data')?.value || '"none"';
+        let blink;
+        try { blink = JSON.parse(blinkRaw); } catch { blink = 'none'; }
+
+        const s = { text, fg, bg, blink };
+        if (fromRaw !== '') {
+            const n = Number(fromRaw);
+            if (Number.isFinite(n)) s.from = n;
+        }
+        if (toRaw !== '') {
+            const n = Number(toRaw);
+            if (Number.isFinite(n)) s.to = n;
+        }
+        out.push(s);
+    });
+    return out;
+}
+
+function setupStateListHandlers(form) {
+    if (!form || form.dataset.stateListWired === '1') return;
+    form.dataset.stateListWired = '1';
+
+    const editor = form.querySelector('.state-list-editor');
+    if (!editor) return;
+
+    function rerender() {
+        const states = parseStateList(form);
+        const rowsContainer = editor.querySelector('.state-list-rows');
+        rowsContainer.innerHTML = states.map((s, i) => renderStateListRow(s, i, states.length)).join('');
+        _updateStateListOverlaps(editor, states);
+    }
+
+    function _updateStateListOverlaps(editor, states) {
+        const overlaps = (typeof findStateOverlaps === 'function') ? findStateOverlaps(states) : [];
+        editor.querySelectorAll('.state-list-row').forEach(r => r.classList.remove('has-overlap'));
+        editor.querySelectorAll('.state-list-overlap-warn').forEach(w => w.remove());
+        if (overlaps.length === 0) return;
+        const shadowedIdx = new Set(overlaps.map(([, j]) => j));
+        editor.querySelectorAll('.state-list-row').forEach((row) => {
+            const idx = parseIntegerOrDefault(row.dataset.idx, NaN);
+            if (shadowedIdx.has(idx)) {
+                row.classList.add('has-overlap');
+                const warn = document.createElement('div');
+                warn.className = 'state-list-overlap-warn';
+                const pair = overlaps.find(([, j]) => j === idx);
+                warn.textContent = pair
+                    ? `⚠ Overlaps state #${pair[0] + 1} — first-match wins, this state may not trigger`
+                    : '⚠ Overlap';
+                row.insertAdjacentElement('afterend', warn);
+            }
+        });
+    }
+
+    // Initial overlap render
+    rerender();
+
+    editor.addEventListener('click', (e) => {
+        const target = e.target;
+        if (!(target instanceof HTMLElement)) return;
+
+        // Add new state
+        if (target.classList.contains('state-list-add-btn')) {
+            const states = parseStateList(form);
+            states.push({ text: '', fg: '#ffffff', bg: '#1f2937', blink: 'none' });
+            const rowsContainer = editor.querySelector('.state-list-rows');
+            rowsContainer.innerHTML = states.map((s, i) => renderStateListRow(s, i, states.length)).join('');
+            _updateStateListOverlaps(editor, states);
+            return;
+        }
+
+        // Remove
+        if (target.classList.contains('state-list-remove')) {
+            const row = target.closest('.state-list-row');
+            if (row) {
+                if (row.nextElementSibling?.classList.contains('state-list-overlap-warn')) {
+                    row.nextElementSibling.remove();
+                }
+                row.remove();
+                rerender();
+            }
+            return;
+        }
+
+        // Reorder up/down
+        if (target.classList.contains('section-move-btn')) {
+            const direction = target.dataset.move;
+            const states = parseStateList(form);
+            const row = target.closest('.state-list-row');
+            const idx = parseIntegerOrDefault(row?.dataset.idx, -1);
+            if (idx < 0 || idx >= states.length) return;
+            if (direction === 'up' && idx > 0) {
+                [states[idx], states[idx - 1]] = [states[idx - 1], states[idx]];
+            } else if (direction === 'down' && idx < states.length - 1) {
+                [states[idx], states[idx + 1]] = [states[idx + 1], states[idx]];
+            } else {
+                return;
+            }
+            const rowsContainer = editor.querySelector('.state-list-rows');
+            rowsContainer.innerHTML = states.map((s, i) => renderStateListRow(s, i, states.length)).join('');
+            _updateStateListOverlaps(editor, states);
+            return;
+        }
+
+        // Blink popover toggle
+        if (target.classList.contains('state-list-blink-btn')) {
+            const row = target.closest('.state-list-row');
+            const existing = row?.querySelector('.state-list-blink-popover');
+            if (existing) { existing.remove(); return; }
+            if (!row) return;
+            const hiddenInput = row.querySelector('.state-list-blink-data');
+            let blink;
+            try { blink = JSON.parse(hiddenInput?.value || '"none"'); } catch { blink = 'none'; }
+            const popover = _renderBlinkPopover(blink);
+            row.insertAdjacentElement('afterend', popover);
+            _wireBlinkPopover(popover, hiddenInput, target, row);
+            return;
+        }
+    });
+
+    // Recompute overlaps on from/to/text change
+    editor.addEventListener('input', (e) => {
+        const target = e.target;
+        if (!(target instanceof HTMLElement)) return;
+        if (target.matches('.state-list-from, .state-list-to')) {
+            const states = parseStateList(form);
+            _updateStateListOverlaps(editor, states);
+        }
+    });
+}
+
+function _renderBlinkPopover(blink) {
+    const isObj = blink && typeof blink === 'object';
+    const mode = blink === 'none' || !isObj ? 'none' : (blink.duration ? 'duration' : 'forever');
+    const interval = isObj ? (blink.interval || STATE_LABEL_BLINK_DEFAULT_INTERVAL_MS) : STATE_LABEL_BLINK_DEFAULT_INTERVAL_MS;
+    const duration = isObj && blink.duration ? blink.duration : '';
+    const pop = document.createElement('div');
+    pop.className = 'state-list-blink-popover';
+    pop.innerHTML = `
+        <label class="state-list-blink-row"><input type="radio" name="blink-mode" value="none"     ${mode==='none'?'checked':''}> None</label>
+        <label class="state-list-blink-row"><input type="radio" name="blink-mode" value="forever"  ${mode==='forever'?'checked':''}> Forever</label>
+        <label class="state-list-blink-row"><input type="radio" name="blink-mode" value="duration" ${mode==='duration'?'checked':''}> For duration</label>
+        <div class="state-list-blink-fields">
+            <label>Interval (ms) <input type="number" class="blink-interval" value="${interval}" min="${STATE_LABEL_BLINK_MIN_INTERVAL_MS}" step="50"></label>
+            <label>Duration (ms) <input type="number" class="blink-duration" value="${duration}" min="100" step="100"></label>
+        </div>
+    `;
+    return pop;
+}
+
+function _wireBlinkPopover(popover, hiddenInput, blinkBtn, row) {
+    function commit() {
+        const mode = popover.querySelector('input[name="blink-mode"]:checked')?.value || 'none';
+        if (mode === 'none') {
+            hiddenInput.value = JSON.stringify('none');
+            blinkBtn.classList.remove('active');
+            return;
+        }
+        const interval = parseIntegerOrDefault(popover.querySelector('.blink-interval')?.value, STATE_LABEL_BLINK_DEFAULT_INTERVAL_MS);
+        const obj = { interval };
+        if (mode === 'duration') {
+            const d = parseIntegerOrDefault(popover.querySelector('.blink-duration')?.value, 0);
+            if (d > 0) obj.duration = d;
+        }
+        hiddenInput.value = JSON.stringify(obj);
+        blinkBtn.classList.add('active');
+    }
+    popover.addEventListener('change', commit);
+    popover.addEventListener('input', commit);
+}
+
 if (typeof globalThis !== 'undefined') {
     globalThis.parseNumberOrDefault = parseNumberOrDefault;
     globalThis.parseDecimalInputOrDefault = parseDecimalInputOrDefault;
@@ -2185,6 +2421,9 @@ if (typeof globalThis !== 'undefined') {
     globalThis.applyZonesToEditor = applyZonesToEditor;
     globalThis.setupZonesReusePicker = setupZonesReusePicker;
     globalThis.mountZonesReusePicker = mountZonesReusePicker;
+    globalThis.renderStateListEditor = renderStateListEditor;
+    globalThis.parseStateList = parseStateList;
+    globalThis.setupStateListHandlers = setupStateListHandlers;
 }
 
 
@@ -19904,13 +20143,25 @@ class GaugeWidget extends DashboardWidget {
             this.targetDigitalEl.textContent = numValue.toFixed(decimals);
         }
 
-        // Update target arc (from 0/min to target value)
+        // Update target arc — рисуем от ZERO_ORIGIN до target если ноль внутри
+        // [min, max] (signed fill), иначе от min до target.
+        // Раньше всегда от min: при шкале -100..100 и target=50 дуга шла от -100
+        // до 50, что визуально неверно (задатчик "выезжает" из левого края).
         if (this.targetArcEl && this.dualParams) {
             const { cx, cy, arcR } = this.dualParams;
-            const startAngle = GaugeWidget.cssArcStartForStyle(style);
-            const endAngle = angle;  // End at target
+            const hasZeroInRange = min < 0 && max > 0;
+            const zeroPercent = hasZeroInRange ? percentInRange(0, min, max) : 0;
+            const originAngle = hasZeroInRange
+                ? GaugeWidget.angleForPercent(style, zeroPercent)
+                : GaugeWidget.cssArcStartForStyle(style);
 
-            if (percent > GaugeWidget.GEOMETRY.TARGET_ARC_MIN_PERCENT) {
+            // Signed arc: если value >= 0 (или ноль вне диапазона) — от origin до target
+            // вправо; если value < 0 — от target до origin вправо (рисуется "влево" от нуля).
+            const startAngle = Math.min(originAngle, angle);
+            const endAngle = Math.max(originAngle, angle);
+
+            const distancePercent = Math.abs(percent - zeroPercent);
+            if (distancePercent > GaugeWidget.GEOMETRY.TARGET_ARC_MIN_PERCENT) {
                 const arcPath = this.describeArc(cx, cy, arcR, startAngle, endAngle);
                 this.targetArcEl.setAttribute('d', arcPath);
                 this.targetArcEl.style.display = 'block';
@@ -20141,6 +20392,304 @@ class GaugeWidget extends DashboardWidget {
             if (styleSel.value === 'dual') wireDual();
         });
     }
+}
+
+
+// === 61-dashboard-widget-state-label.js ===
+// ============================================================================
+// StateLabelWidget — passive widget с маппингом value → {text, fg, bg, blink}
+// через список диапазонов (first-match wins, открытые границы через
+// optional from/to).
+//
+// Spec: docs/superpowers/specs/2026-06-01-state-label-widget-design.md
+// ============================================================================
+
+// resolveStateLabel — чистая функция. Возвращает { source, state }:
+//   source: 'match' | 'raw' | 'ignore' | 'default'
+//   state:  { text, fg?, bg?, blink? } | null (для 'ignore' без hold)
+// prevState нужен только для fallback 'ignore' + hold path.
+function resolveStateLabel(value, states, fallbackCfg, prevState) {
+    if (value === null || value === undefined || Number.isNaN(Number(value))) {
+        return _applyStateLabelFallback(fallbackCfg, prevState, value);
+    }
+    const numValue = Number(value);
+    if (Array.isArray(states)) {
+        for (const s of states) {
+            const lo = s.from !== undefined && s.from !== '' && s.from !== null ? Number(s.from) : -Infinity;
+            const hi = s.to   !== undefined && s.to   !== '' && s.to   !== null ? Number(s.to)   : +Infinity;
+            if (Number.isFinite(lo) === false && lo !== -Infinity) continue;  // garbage skip
+            if (Number.isFinite(hi) === false && hi !== +Infinity) continue;
+            if (numValue >= lo && numValue <= hi) {
+                return { source: 'match', state: s };
+            }
+        }
+    }
+    return _applyStateLabelFallback(fallbackCfg, prevState, numValue);
+}
+
+function _applyStateLabelFallback(cfg, prevState, value) {
+    const policy = cfg && cfg.policy ? cfg.policy : 'raw';
+    if (policy === 'raw') {
+        return { source: 'raw', state: { text: String(value == null ? '--' : value) } };
+    }
+    if (policy === 'ignore') {
+        if (cfg && cfg.hold && prevState) return { source: 'ignore', state: prevState };
+        return { source: 'ignore', state: null };
+    }
+    if (policy === 'default') {
+        return { source: 'default', state: (cfg && cfg.defaultState) ? cfg.defaultState : { text: '--' } };
+    }
+    return { source: 'raw', state: { text: String(value) } };
+}
+
+// findStateOverlaps — возвращает массив [i, j] (i<j) пар индексов перекрывающихся
+// state'ов. State #j потенциально никогда не сработает (first-match wins).
+function findStateOverlaps(states) {
+    const pairs = [];
+    if (!Array.isArray(states)) return pairs;
+    const norm = states.map(s => {
+        const lo = s.from !== undefined && s.from !== '' && s.from !== null ? Number(s.from) : -Infinity;
+        const hi = s.to   !== undefined && s.to   !== '' && s.to   !== null ? Number(s.to)   : +Infinity;
+        return { lo, hi };
+    });
+    for (let i = 0; i < norm.length; i++) {
+        for (let j = i + 1; j < norm.length; j++) {
+            // ranges overlap iff a.lo <= b.hi && b.lo <= a.hi
+            if (norm[i].lo <= norm[j].hi && norm[j].lo <= norm[i].hi) {
+                pairs.push([i, j]);
+            }
+        }
+    }
+    return pairs;
+}
+
+// ============================================================================
+// StateLabelWidget class
+// ============================================================================
+
+class StateLabelWidget extends DashboardWidget {
+    static type = 'state-label';
+    static usesNewSensorAutocomplete = true;
+    static displayName = 'State Label';
+    static description = 'Text + color + blink по значению датчика';
+    static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="2"/><text x="12" y="15" text-anchor="middle" font-size="8" fill="currentColor" stroke="none">STATE</text></svg>';
+    static defaultSize = { width: 6, height: 2 };
+
+    constructor(id, config, container) {
+        super(id, config, container);
+        this._lastValidState = null;
+        this._blinkTimer = null;
+        this._blinkStopTimer = null;
+        this._blinkVisible = true;
+    }
+
+    render() {
+        const { align = 'center', bold = false, fontSize = 'auto' } = this.config;
+
+        this.element = document.createElement('div');
+        this.element.className = 'widget-content state-label-widget';
+        this.element.style.cssText = `
+            display: flex;
+            align-items: center;
+            justify-content: ${align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center'};
+            height: 100%;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: background-color 0.15s;
+        `;
+
+        this.textEl = document.createElement('div');
+        this.textEl.className = 'state-label-text';
+        const fontSizePx = fontSize === 'auto'
+            ? ''
+            : `font-size: ${parseIntegerOrDefault(fontSize, STATE_LABEL_DEFAULT_FONT_SIZE_PX)}px;`;
+        this.textEl.style.cssText = `
+            font-weight: ${bold ? 700 : 500};
+            ${fontSizePx}
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        `;
+
+        this.element.appendChild(this.textEl);
+        this.container.appendChild(this.element);
+    }
+
+    update(value, error = null) {
+        const v = error ? null : value;
+        const { states = [], fallback = 'raw', fallbackHold = false, defaultState } = this.config;
+        const fallbackCfg = { policy: fallback, hold: fallbackHold, defaultState };
+
+        const { source, state } = resolveStateLabel(v, states, fallbackCfg, this._lastValidState);
+
+        if (source === 'match' || source === 'default') {
+            this._lastValidState = state;
+        }
+        this._applyState(state, source);
+    }
+
+    _applyState(state, source) {
+        this._stopBlink();
+        if (!state) {  // 'ignore' + no hold
+            this.textEl.textContent = '';
+            this.element.style.background = '';
+            this.textEl.style.color = '';
+            return;
+        }
+        this.textEl.textContent = state.text != null ? String(state.text) : '';
+        this.textEl.style.color = state.fg || '';
+        this.element.style.background = (source === 'raw') ? '' : (state.bg || '');
+        if (state.blink && state.blink !== 'none' && source !== 'raw') {
+            this._startBlink(state.blink);
+        }
+    }
+
+    _startBlink(blinkCfg) {
+        if (!blinkCfg || typeof blinkCfg !== 'object') return;
+        const interval = parseIntegerOrDefault(blinkCfg.interval, STATE_LABEL_BLINK_DEFAULT_INTERVAL_MS);
+        if (interval < STATE_LABEL_BLINK_MIN_INTERVAL_MS) return;
+        this._blinkVisible = true;
+        this.element.style.opacity = '1';
+        this._blinkTimer = setInterval(() => {
+            this._blinkVisible = !this._blinkVisible;
+            this.element.style.opacity = this._blinkVisible ? '1' : String(STATE_LABEL_BLINK_FADED_OPACITY);
+        }, interval);
+        if (blinkCfg.duration && blinkCfg.duration > 0) {
+            this._blinkStopTimer = setTimeout(() => this._stopBlink(), blinkCfg.duration);
+        }
+    }
+
+    _stopBlink() {
+        if (this._blinkTimer) { clearInterval(this._blinkTimer); this._blinkTimer = null; }
+        if (this._blinkStopTimer) { clearTimeout(this._blinkStopTimer); this._blinkStopTimer = null; }
+        if (this.element) this.element.style.opacity = '1';
+    }
+
+    destroy() {
+        this._stopBlink();
+        if (super.destroy) super.destroy();
+    }
+
+    static getConfigForm(config = {}) {
+        const states = Array.isArray(config.states) && config.states.length > 0
+            ? config.states
+            : [
+                { from: 0, to: 0, text: 'OFF', fg: '#ffffff', bg: '#6b7280', blink: 'none' },
+                { from: 1, to: 1, text: 'RUN', fg: '#ffffff', bg: '#22c55e', blink: 'none' },
+            ];
+        const fallback = config.fallback || 'raw';
+        const fallbackHold = !!config.fallbackHold;
+        const def = config.defaultState || { text: '--', fg: '#9ca3af', bg: '#1f2937', blink: 'none' };
+        const fontSize = config.fontSize || 'auto';
+        const bold = !!config.bold;
+        const align = config.align || 'center';
+
+        return `
+            ${renderSensorBindingFields(config)}
+            ${renderStateListEditor(states)}
+            <div class="widget-config-field">
+                <label>Fallback (no match)</label>
+                <div class="state-label-fallback-options">
+                    <label class="widget-checkbox-label">
+                        <input type="radio" name="fallback" value="raw" ${fallback === 'raw' ? 'checked' : ''}>
+                        <span>Show raw value</span>
+                    </label>
+                    <label class="widget-checkbox-label">
+                        <input type="radio" name="fallback" value="ignore" ${fallback === 'ignore' ? 'checked' : ''}>
+                        <span>Ignore</span>
+                        <label class="widget-checkbox-label state-label-hold">
+                            <input type="checkbox" name="fallbackHold" ${fallbackHold ? 'checked' : ''}>
+                            <span>Hold last state</span>
+                        </label>
+                    </label>
+                    <label class="widget-checkbox-label">
+                        <input type="radio" name="fallback" value="default" ${fallback === 'default' ? 'checked' : ''}>
+                        <span>Default state</span>
+                    </label>
+                </div>
+                <div class="state-label-default-editor" style="${fallback === 'default' ? '' : 'display:none'}">
+                    <input type="text"  name="defaultState-text" placeholder="--"      value="${escapeAttr(def.text || '--')}" class="widget-input">
+                    <input type="color" name="defaultState-fg"   value="${escapeAttr(def.fg || '#9ca3af')}">
+                    <input type="color" name="defaultState-bg"   value="${escapeAttr(def.bg || '#1f2937')}">
+                </div>
+            </div>
+            <div class="widget-config-row">
+                <div class="widget-config-field">
+                    <label>Font size</label>
+                    <select class="widget-select" name="fontSize">
+                        <option value="auto" ${fontSize === 'auto' ? 'selected' : ''}>auto</option>
+                        <option value="12"   ${fontSize === '12'   ? 'selected' : ''}>12px</option>
+                        <option value="14"   ${fontSize === '14'   ? 'selected' : ''}>14px</option>
+                        <option value="16"   ${fontSize === '16'   ? 'selected' : ''}>16px</option>
+                        <option value="20"   ${fontSize === '20'   ? 'selected' : ''}>20px</option>
+                        <option value="24"   ${fontSize === '24'   ? 'selected' : ''}>24px</option>
+                        <option value="32"   ${fontSize === '32'   ? 'selected' : ''}>32px</option>
+                    </select>
+                </div>
+                <div class="widget-config-field">
+                    <label>Align</label>
+                    <select class="widget-select" name="align">
+                        <option value="left"   ${align === 'left'   ? 'selected' : ''}>Left</option>
+                        <option value="center" ${align === 'center' ? 'selected' : ''}>Center</option>
+                        <option value="right"  ${align === 'right'  ? 'selected' : ''}>Right</option>
+                    </select>
+                </div>
+                <div class="widget-config-field">
+                    <label class="widget-checkbox-label">
+                        <input type="checkbox" name="bold" ${bold ? 'checked' : ''}>
+                        <span>Bold</span>
+                    </label>
+                </div>
+            </div>
+        `;
+    }
+
+    static initConfigHandlers(form, config = {}) {
+        if (typeof initSensorBindingHandlers === 'function') initSensorBindingHandlers(form, config);
+        if (typeof setupStateListHandlers === 'function')    setupStateListHandlers(form);
+
+        if (form.dataset.stateLabelHandlersWired === '1') return;
+        form.dataset.stateLabelHandlersWired = '1';
+
+        const defaultEditor = form.querySelector('.state-label-default-editor');
+        form.querySelectorAll('input[name="fallback"]').forEach((radio) => {
+            radio.addEventListener('change', () => {
+                if (defaultEditor) {
+                    defaultEditor.style.display =
+                        form.querySelector('input[name="fallback"]:checked')?.value === 'default' ? '' : 'none';
+                }
+            });
+        });
+    }
+
+    static parseConfigForm(form) {
+        const binding = parseSensorBindingFields(form);
+        const states  = parseStateList(form);
+        const fallback = form.querySelector('input[name="fallback"]:checked')?.value || 'raw';
+        const fallbackHold = form.querySelector('input[name="fallbackHold"]')?.checked || false;
+        const defaultState = {
+            text: form.querySelector('[name="defaultState-text"]')?.value || '--',
+            fg:   form.querySelector('[name="defaultState-fg"]')?.value || '#9ca3af',
+            bg:   form.querySelector('[name="defaultState-bg"]')?.value || '#1f2937',
+            blink: 'none',
+        };
+        return {
+            ...binding,
+            states,
+            fallback,
+            fallbackHold,
+            defaultState,
+            fontSize: form.querySelector('[name="fontSize"]')?.value || 'auto',
+            align:    form.querySelector('[name="align"]')?.value || 'center',
+            bold:     form.querySelector('[name="bold"]')?.checked || false,
+        };
+    }
+}
+
+if (typeof globalThis !== 'undefined') {
+    globalThis.resolveStateLabel = resolveStateLabel;
+    globalThis.findStateOverlaps = findStateOverlaps;
+    globalThis.StateLabelWidget = StateLabelWidget;
 }
 
 
@@ -22023,6 +22572,7 @@ const WIDGET_TYPES = {
     'level': LevelWidget,
     'led': LedWidget,
     'label': LabelWidget,
+    'state-label': StateLabelWidget,
     'divider': DividerWidget,
     'statusbar': StatusBarWidget,
     'bargraph': BarGraphWidget,

@@ -9954,3 +9954,81 @@ button.rotate-quick-btn:active {
     font-size: 12px;
     font-style: italic;
 }
+
+/* === State Label widget === */
+.state-label-widget {
+    border-radius: 4px;
+}
+.state-label-text {
+    line-height: 1.2;
+    user-select: none;
+}
+
+/* State list editor */
+.state-list-editor { display: flex; flex-direction: column; gap: 6px; }
+.state-list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.state-list-add-btn {
+    background: transparent; color: #60a5fa;
+    border: 1px dashed #374151; border-radius: 4px;
+    padding: 4px 10px; font-size: 12px; cursor: pointer;
+}
+.state-list-rows { display: flex; flex-direction: column; gap: 4px; max-height: 280px; overflow-y: auto; padding-right: 4px; }
+.state-list-rows::-webkit-scrollbar { width: 6px; }
+.state-list-rows::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
+
+.state-list-row {
+    display: grid;
+    grid-template-columns: 50px 70px 16px 70px 1fr 32px 32px 28px 24px;
+    gap: 6px; align-items: center;
+    padding: 4px 2px;
+    border-radius: 3px;
+    background: #0b1220;
+}
+.state-list-row.has-overlap { border-left: 2px solid #fbbf24; padding-left: 4px; }
+
+.state-list-input,
+.state-list-text {
+    background: #1f2937; border: 1px solid #374151; border-radius: 3px;
+    color: #d1d5db; padding: 5px 6px; font-size: 12px;
+}
+.state-list-input { width: 60px; text-align: right; }
+.state-list-sep { color: #6b7280; text-align: center; }
+.state-list-text { width: 100%; font-weight: 600; }
+.state-list-color { width: 28px; height: 28px; border-radius: 3px; border: 1px solid #374151; cursor: pointer; padding: 0; }
+.state-list-blink-btn {
+    width: 28px; height: 28px; background: transparent;
+    border: 1px solid #374151; border-radius: 3px; cursor: pointer; color: #6b7280;
+}
+.state-list-blink-btn.active { color: #fbbf24; border-color: #fbbf24; }
+.state-list-remove {
+    background: transparent; border: none; color: #6b7280;
+    cursor: pointer; font-size: 16px;
+}
+.state-list-overlap-warn {
+    margin: 2px 0 4px;
+    padding: 4px 8px;
+    background: rgba(251,191,36,.08);
+    border-left: 3px solid #fbbf24;
+    font-size: 11px; color: #fbbf24;
+}
+
+/* Blink popover */
+.state-list-blink-popover {
+    margin: 4px 0 6px;
+    padding: 8px 10px;
+    background: #111827; border: 1px solid #374151; border-radius: 4px;
+    display: flex; flex-direction: column; gap: 4px;
+}
+.state-list-blink-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #d1d5db; }
+.state-list-blink-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+.state-list-blink-fields label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: #6b7280; }
+.state-list-blink-fields input { background: #1f2937; border: 1px solid #374151; border-radius: 3px; color: #d1d5db; padding: 5px 6px; }
+
+/* Default-state editor */
+.state-label-default-editor {
+    display: flex; gap: 8px; margin-top: 6px; align-items: center;
+}
+.state-label-default-editor input[type="text"] { flex: 1; }
+
+/* Inline "Hold last state" sub-option */
+.state-label-hold { margin-left: 24px; }

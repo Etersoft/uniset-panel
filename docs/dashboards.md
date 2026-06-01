@@ -268,6 +268,55 @@ Dashboards - система визуализации данных в реаль�
 
 ---
 
+### State Label
+
+Привязывает значение датчика к человеко-читаемому тексту с цветом и
+опциональным миганием. Используется для status-индикаторов (RUN / STOP /
+FAULT / WARN).
+
+![State Label Widget](images/widget-state-label.png)
+
+На скриншоте показаны крупные status-блоки (ENGINE, TEMPERATURE, MODE,
+PRESSURE) и compact row для status bar внизу. Виджеты ALARM, TIMEOUT,
+POWER LOSS и АВАРИЯ настроены с blink — они пойманы в faded-фазу
+цикла мигания, более тёмные.
+
+**Диалог настроек:**
+
+![State Label Config](images/config-state-label.png)
+
+Колонки строки state: ↑ / ↓ (reorder, как у секций tab-панели) ·
+from → to (пусто = `-∞` / `+∞`) · text · fg · bg · ⏱ blink (popover) · ✕ remove.
+
+**Настройки:**
+
+| Параметр | Описание |
+|----------|----------|
+| `states` | Список диапазонов `{from, to, text, fg, bg, blink}`. First-match wins. |
+| `from` / `to` | Числа или пусто (`-∞` / `+∞`). Inclusive. |
+| `blink` | `'none'` или `{ interval: ms, duration?: ms }`. |
+| `fallback` | `'raw'` (default), `'ignore'` (+ `fallbackHold`), `'default'` (+ `defaultState`). |
+| `fontSize` | `'auto'` (default) или px. |
+| `align` | `'left'`, `'center'`, `'right'`. |
+| `bold` | bool. |
+
+**Reorder диапазонов** через кнопки `↑` / `↓` (тот же стиль что и reorder
+секций в tab-панели). Когда диапазоны перекрываются — редактор показывает
+warning под «поглощённым» state.
+
+**Мигание:** `interval` — период (ms), `duration` — на сколько ms мигать
+при переходе в state (опустить для бесконечного). Sanity floor — interval
+не менее 100 ms.
+
+**Fallback policies:**
+- `raw` — показывает голое число без fg/bg (визуальный сигнал «не
+  сконфигурировано»).
+- `ignore` — пусто (или удержать последний valid state при
+  `fallbackHold: true`).
+- `default` — отдельный configurable `defaultState`.
+
+---
+
 ### Divider
 
 Разделительная линия (горизонтальная или вертикальная).

@@ -647,6 +647,232 @@ function mountZonesReusePicker(form, widgetType) {
     setupZonesReusePicker(form);
 }
 
+// ============================================================================
+// State list editor — для StateLabelWidget.
+// Аналог renderColorZonesEditor, но row содержит: reorder buttons, from/to
+// inputs (open-ended via empty), text input, fg/bg color pickers, blink
+// popover trigger, remove button.
+// ============================================================================
+
+function renderStateListEditor(states = []) {
+    const rows = states.map((s, idx) => renderStateListRow(s, idx, states.length)).join('');
+    return `
+        <div class="state-list-editor">
+            <div class="state-list-header">
+                <label>States (first-match wins)</label>
+                <button type="button" class="state-list-add-btn">+ Add State</button>
+            </div>
+            <div class="state-list-rows">
+                ${rows}
+            </div>
+        </div>
+    `;
+}
+
+function renderStateListRow(s = {}, idx = 0, total = 1) {
+    const fromVal = s.from !== undefined && s.from !== null ? String(s.from) : '';
+    const toVal   = s.to   !== undefined && s.to   !== null ? String(s.to)   : '';
+    const blink = s.blink || 'none';
+    const blinkActive = blink !== 'none' && typeof blink === 'object';
+    return `
+        <div class="state-list-row" data-idx="${idx}">
+            <div class="section-reorder-buttons">
+                <button type="button" class="section-move-btn" data-move="up"   title="Move up"  ${idx === 0 ? 'disabled' : ''}>↑</button>
+                <button type="button" class="section-move-btn" data-move="down" title="Move down" ${idx === total - 1 ? 'disabled' : ''}>↓</button>
+            </div>
+            <input type="text"   class="state-list-input state-list-from" name="state-from-${idx}" placeholder="−∞" value="${escapeAttr(fromVal)}">
+            <span class="state-list-sep">→</span>
+            <input type="text"   class="state-list-input state-list-to"   name="state-to-${idx}"   placeholder="+∞" value="${escapeAttr(toVal)}">
+            <input type="text"   class="state-list-text" name="state-text-${idx}" placeholder="Text" value="${escapeAttr(s.text || '')}">
+            <input type="color"  class="state-list-color state-list-fg" name="state-fg-${idx}" value="${escapeAttr(s.fg || '#ffffff')}" title="Text color">
+            <input type="color"  class="state-list-color state-list-bg" name="state-bg-${idx}" value="${escapeAttr(s.bg || '#1f2937')}" title="Background color">
+            <button type="button" class="state-list-blink-btn ${blinkActive ? 'active' : ''}" data-idx="${idx}" title="Blink settings">⏱</button>
+            <input type="hidden" class="state-list-blink-data" name="state-blink-${idx}" value="${escapeAttr(JSON.stringify(blink))}">
+            <button type="button" class="state-list-remove" data-idx="${idx}" title="Remove">×</button>
+        </div>
+    `;
+}
+
+function parseStateList(form) {
+    const out = [];
+    form.querySelectorAll('.state-list-row').forEach((row) => {
+        const idx = parseIntegerOrDefault(row.dataset.idx, NaN);
+        if (!Number.isFinite(idx)) return;
+        const fromRaw = (row.querySelector('.state-list-from')?.value ?? '').trim();
+        const toRaw   = (row.querySelector('.state-list-to')?.value ?? '').trim();
+        const text    = row.querySelector('.state-list-text')?.value ?? '';
+        const fg      = row.querySelector('.state-list-fg')?.value || '';
+        const bg      = row.querySelector('.state-list-bg')?.value || '';
+        const blinkRaw = row.querySelector('.state-list-blink-data')?.value || '"none"';
+        let blink;
+        try { blink = JSON.parse(blinkRaw); } catch { blink = 'none'; }
+
+        const s = { text, fg, bg, blink };
+        if (fromRaw !== '') {
+            const n = Number(fromRaw);
+            if (Number.isFinite(n)) s.from = n;
+        }
+        if (toRaw !== '') {
+            const n = Number(toRaw);
+            if (Number.isFinite(n)) s.to = n;
+        }
+        out.push(s);
+    });
+    return out;
+}
+
+function setupStateListHandlers(form) {
+    if (!form || form.dataset.stateListWired === '1') return;
+    form.dataset.stateListWired = '1';
+
+    const editor = form.querySelector('.state-list-editor');
+    if (!editor) return;
+
+    function rerender() {
+        const states = parseStateList(form);
+        const rowsContainer = editor.querySelector('.state-list-rows');
+        rowsContainer.innerHTML = states.map((s, i) => renderStateListRow(s, i, states.length)).join('');
+        _updateStateListOverlaps(editor, states);
+    }
+
+    function _updateStateListOverlaps(editor, states) {
+        const overlaps = (typeof findStateOverlaps === 'function') ? findStateOverlaps(states) : [];
+        editor.querySelectorAll('.state-list-row').forEach(r => r.classList.remove('has-overlap'));
+        editor.querySelectorAll('.state-list-overlap-warn').forEach(w => w.remove());
+        if (overlaps.length === 0) return;
+        const shadowedIdx = new Set(overlaps.map(([, j]) => j));
+        editor.querySelectorAll('.state-list-row').forEach((row) => {
+            const idx = parseIntegerOrDefault(row.dataset.idx, NaN);
+            if (shadowedIdx.has(idx)) {
+                row.classList.add('has-overlap');
+                const warn = document.createElement('div');
+                warn.className = 'state-list-overlap-warn';
+                const pair = overlaps.find(([, j]) => j === idx);
+                warn.textContent = pair
+                    ? `⚠ Overlaps state #${pair[0] + 1} — first-match wins, this state may not trigger`
+                    : '⚠ Overlap';
+                row.insertAdjacentElement('afterend', warn);
+            }
+        });
+    }
+
+    // Initial overlap render
+    rerender();
+
+    editor.addEventListener('click', (e) => {
+        const target = e.target;
+        if (!(target instanceof HTMLElement)) return;
+
+        // Add new state
+        if (target.classList.contains('state-list-add-btn')) {
+            const states = parseStateList(form);
+            states.push({ text: '', fg: '#ffffff', bg: '#1f2937', blink: 'none' });
+            const rowsContainer = editor.querySelector('.state-list-rows');
+            rowsContainer.innerHTML = states.map((s, i) => renderStateListRow(s, i, states.length)).join('');
+            _updateStateListOverlaps(editor, states);
+            return;
+        }
+
+        // Remove
+        if (target.classList.contains('state-list-remove')) {
+            const row = target.closest('.state-list-row');
+            if (row) {
+                if (row.nextElementSibling?.classList.contains('state-list-overlap-warn')) {
+                    row.nextElementSibling.remove();
+                }
+                row.remove();
+                rerender();
+            }
+            return;
+        }
+
+        // Reorder up/down
+        if (target.classList.contains('section-move-btn')) {
+            const direction = target.dataset.move;
+            const states = parseStateList(form);
+            const row = target.closest('.state-list-row');
+            const idx = parseIntegerOrDefault(row?.dataset.idx, -1);
+            if (idx < 0 || idx >= states.length) return;
+            if (direction === 'up' && idx > 0) {
+                [states[idx], states[idx - 1]] = [states[idx - 1], states[idx]];
+            } else if (direction === 'down' && idx < states.length - 1) {
+                [states[idx], states[idx + 1]] = [states[idx + 1], states[idx]];
+            } else {
+                return;
+            }
+            const rowsContainer = editor.querySelector('.state-list-rows');
+            rowsContainer.innerHTML = states.map((s, i) => renderStateListRow(s, i, states.length)).join('');
+            _updateStateListOverlaps(editor, states);
+            return;
+        }
+
+        // Blink popover toggle
+        if (target.classList.contains('state-list-blink-btn')) {
+            const row = target.closest('.state-list-row');
+            const existing = row?.querySelector('.state-list-blink-popover');
+            if (existing) { existing.remove(); return; }
+            if (!row) return;
+            const hiddenInput = row.querySelector('.state-list-blink-data');
+            let blink;
+            try { blink = JSON.parse(hiddenInput?.value || '"none"'); } catch { blink = 'none'; }
+            const popover = _renderBlinkPopover(blink);
+            row.insertAdjacentElement('afterend', popover);
+            _wireBlinkPopover(popover, hiddenInput, target, row);
+            return;
+        }
+    });
+
+    // Recompute overlaps on from/to/text change
+    editor.addEventListener('input', (e) => {
+        const target = e.target;
+        if (!(target instanceof HTMLElement)) return;
+        if (target.matches('.state-list-from, .state-list-to')) {
+            const states = parseStateList(form);
+            _updateStateListOverlaps(editor, states);
+        }
+    });
+}
+
+function _renderBlinkPopover(blink) {
+    const isObj = blink && typeof blink === 'object';
+    const mode = blink === 'none' || !isObj ? 'none' : (blink.duration ? 'duration' : 'forever');
+    const interval = isObj ? (blink.interval || STATE_LABEL_BLINK_DEFAULT_INTERVAL_MS) : STATE_LABEL_BLINK_DEFAULT_INTERVAL_MS;
+    const duration = isObj && blink.duration ? blink.duration : '';
+    const pop = document.createElement('div');
+    pop.className = 'state-list-blink-popover';
+    pop.innerHTML = `
+        <label class="state-list-blink-row"><input type="radio" name="blink-mode" value="none"     ${mode==='none'?'checked':''}> None</label>
+        <label class="state-list-blink-row"><input type="radio" name="blink-mode" value="forever"  ${mode==='forever'?'checked':''}> Forever</label>
+        <label class="state-list-blink-row"><input type="radio" name="blink-mode" value="duration" ${mode==='duration'?'checked':''}> For duration</label>
+        <div class="state-list-blink-fields">
+            <label>Interval (ms) <input type="number" class="blink-interval" value="${interval}" min="${STATE_LABEL_BLINK_MIN_INTERVAL_MS}" step="50"></label>
+            <label>Duration (ms) <input type="number" class="blink-duration" value="${duration}" min="100" step="100"></label>
+        </div>
+    `;
+    return pop;
+}
+
+function _wireBlinkPopover(popover, hiddenInput, blinkBtn, row) {
+    function commit() {
+        const mode = popover.querySelector('input[name="blink-mode"]:checked')?.value || 'none';
+        if (mode === 'none') {
+            hiddenInput.value = JSON.stringify('none');
+            blinkBtn.classList.remove('active');
+            return;
+        }
+        const interval = parseIntegerOrDefault(popover.querySelector('.blink-interval')?.value, STATE_LABEL_BLINK_DEFAULT_INTERVAL_MS);
+        const obj = { interval };
+        if (mode === 'duration') {
+            const d = parseIntegerOrDefault(popover.querySelector('.blink-duration')?.value, 0);
+            if (d > 0) obj.duration = d;
+        }
+        hiddenInput.value = JSON.stringify(obj);
+        blinkBtn.classList.add('active');
+    }
+    popover.addEventListener('change', commit);
+    popover.addEventListener('input', commit);
+}
+
 if (typeof globalThis !== 'undefined') {
     globalThis.parseNumberOrDefault = parseNumberOrDefault;
     globalThis.parseDecimalInputOrDefault = parseDecimalInputOrDefault;
@@ -675,4 +901,7 @@ if (typeof globalThis !== 'undefined') {
     globalThis.applyZonesToEditor = applyZonesToEditor;
     globalThis.setupZonesReusePicker = setupZonesReusePicker;
     globalThis.mountZonesReusePicker = mountZonesReusePicker;
+    globalThis.renderStateListEditor = renderStateListEditor;
+    globalThis.parseStateList = parseStateList;
+    globalThis.setupStateListHandlers = setupStateListHandlers;
 }
