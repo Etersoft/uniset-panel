@@ -17,6 +17,7 @@ function loadDashboardManager() {
         class LevelWidget {}
         class LedWidget {}
         class LabelWidget {}
+        class StateLabelWidget {}
         class DividerWidget {}
         class StatusBarWidget {}
         class BarGraphWidget {}
