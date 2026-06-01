@@ -794,13 +794,25 @@ class GaugeWidget extends DashboardWidget {
             this.targetDigitalEl.textContent = numValue.toFixed(decimals);
         }
 
-        // Update target arc (from 0/min to target value)
+        // Update target arc — рисуем от ZERO_ORIGIN до target если ноль внутри
+        // [min, max] (signed fill), иначе от min до target.
+        // Раньше всегда от min: при шкале -100..100 и target=50 дуга шла от -100
+        // до 50, что визуально неверно (задатчик "выезжает" из левого края).
         if (this.targetArcEl && this.dualParams) {
             const { cx, cy, arcR } = this.dualParams;
-            const startAngle = GaugeWidget.cssArcStartForStyle(style);
-            const endAngle = angle;  // End at target
+            const hasZeroInRange = min < 0 && max > 0;
+            const zeroPercent = hasZeroInRange ? percentInRange(0, min, max) : 0;
+            const originAngle = hasZeroInRange
+                ? GaugeWidget.angleForPercent(style, zeroPercent)
+                : GaugeWidget.cssArcStartForStyle(style);
 
-            if (percent > GaugeWidget.GEOMETRY.TARGET_ARC_MIN_PERCENT) {
+            // Signed arc: если value >= 0 (или ноль вне диапазона) — от origin до target
+            // вправо; если value < 0 — от target до origin вправо (рисуется "влево" от нуля).
+            const startAngle = Math.min(originAngle, angle);
+            const endAngle = Math.max(originAngle, angle);
+
+            const distancePercent = Math.abs(percent - zeroPercent);
+            if (distancePercent > GaugeWidget.GEOMETRY.TARGET_ARC_MIN_PERCENT) {
                 const arcPath = this.describeArc(cx, cy, arcR, startAngle, endAngle);
                 this.targetArcEl.setAttribute('d', arcPath);
                 this.targetArcEl.style.display = 'block';
