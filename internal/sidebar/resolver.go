@@ -3,11 +3,47 @@ package sidebar
 import (
 	"fmt"
 	"log/slog"
-	"path"
 	"strings"
 
 	"github.com/pv/uniset-panel/internal/config"
 )
+
+// matchGlob — простой glob matcher с поддержкой `*` (любая последовательность
+// символов, включая `/`) и `?` (один символ). Используем вместо path.Match
+// потому что entityID — НЕ файловый путь, и `/` в имени (напр. dashboard
+// "DP/IJ Control") не должен ломать pattern `dashboard:*`. Возвращает
+// (matched, ok); ok=false для malformed pattern.
+func matchGlob(pattern, s string) (bool, bool) {
+	// Iterative two-pointer алгоритм с backtracking на `*`.
+	// Сложность O(n*m) worst case, что для коротких sidebar patterns ОК.
+	pi, si := 0, 0
+	starPi, starSi := -1, -1
+	for si < len(s) {
+		if pi < len(pattern) && (pattern[pi] == '?' || pattern[pi] == s[si]) {
+			pi++
+			si++
+			continue
+		}
+		if pi < len(pattern) && pattern[pi] == '*' {
+			starPi = pi
+			starSi = si
+			pi++
+			continue
+		}
+		if starPi != -1 {
+			pi = starPi + 1
+			starSi++
+			si = starSi
+			continue
+		}
+		return false, true
+	}
+	// Consume trailing `*` in pattern
+	for pi < len(pattern) && pattern[pi] == '*' {
+		pi++
+	}
+	return pi == len(pattern), true
+}
 
 // SidebarItem представляет одну сущность в резолвленном дереве sidebar
 type SidebarItem struct {
@@ -36,22 +72,16 @@ func BuildEntityID(entityType, name, serverID string) string {
 // Паттерн с @ (напр. "object:*@diesel-srv") — матчит с учётом serverId
 // Паттерн без @ (напр. "launcher:*") — матчит без учёта serverId
 func MatchEntity(pattern, entityID string) bool {
-	if strings.Contains(pattern, "@") {
-		matched, err := path.Match(pattern, entityID)
-		if err != nil {
-			slog.Warn("invalid glob pattern", "pattern", pattern, "error", err)
-			return false
+	target := entityID
+	if !strings.Contains(pattern, "@") {
+		// Паттерн без @ — сравниваем с entityID без @serverId
+		if idx := strings.Index(entityID, "@"); idx >= 0 {
+			target = entityID[:idx]
 		}
-		return matched
 	}
-	// Паттерн без @ — сравниваем с entityID без @serverId
-	bareID := entityID
-	if idx := strings.Index(entityID, "@"); idx >= 0 {
-		bareID = entityID[:idx]
-	}
-	matched, err := path.Match(pattern, bareID)
-	if err != nil {
-		slog.Warn("invalid glob pattern", "pattern", pattern, "error", err)
+	matched, ok := matchGlob(pattern, target)
+	if !ok {
+		slog.Warn("invalid glob pattern", "pattern", pattern)
 		return false
 	}
 	return matched

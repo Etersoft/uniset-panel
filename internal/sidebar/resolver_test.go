@@ -44,6 +44,16 @@ func TestMatchEntity_GlobPatterns(t *testing.T) {
 		// Match all
 		{"*", "object:DieselGen1", true},
 		{"*:*", "object:DieselGen1", true},
+
+		// `/` in name — path.Match would fail (`*` doesn't cross `/`),
+		// custom matcher must succeed. Real example: server-side
+		// dashboard файлы с именами вида "DP/IJ Control (board 1)".
+		{"dashboard:*", "dashboard:SES_GEU-17050", true},
+		{"dashboard:*", "dashboard:Imit-Local (FC + VRK)", true},
+		{"dashboard:*", "dashboard:DP/IJ Control (board 1)", true},
+		{"dashboard:*", "dashboard:DP/IJ Control (board 2)", true},
+		{"object:*", "object:foo/bar", true},
+		{"object:foo/*", "object:foo/bar", true},
 	}
 	for _, tt := range tests {
 		got := MatchEntity(tt.pattern, tt.entityID)
