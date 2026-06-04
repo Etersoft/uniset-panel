@@ -6507,6 +6507,15 @@ button.rotate-quick-btn:active {
     color: var(--text-secondary);
 }
 
+.import-option-disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.import-option-disabled span {
+    font-style: italic;
+}
+
 .import-name-field {
     margin-top: 16px;
     display: flex;

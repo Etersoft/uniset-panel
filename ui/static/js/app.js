@@ -24414,6 +24414,43 @@ class DashboardManager {
         document.getElementById('import-error')?.classList.add('hidden');
         document.getElementById('import-file-input').value = '';
 
+        // Server dashboards read-only — нельзя перетирать импортом. Дисейблим
+        // radio "Replace current dashboard", форсим mode='new' и показываем hint.
+        // Defensive guard в confirmImport дублирует это на случай DevTools обхода.
+        const currentName = dashboardState.currentDashboard;
+        const currentConfig = currentName ? dashboardState.dashboards.get(currentName) : null;
+        const isServer = !!currentConfig?._server;
+
+        const replaceRadio = document.querySelector('[name="import-mode"][value="replace"]');
+        const newRadio = document.querySelector('[name="import-mode"][value="new"]');
+        const replaceLabel = replaceRadio?.closest('.import-option');
+        const replaceText = replaceLabel?.querySelector('span');
+        const nameField = document.getElementById('import-name-field');
+
+        if (replaceRadio) {
+            replaceRadio.disabled = isServer || !currentName;
+            if (replaceRadio.disabled) replaceRadio.checked = false;
+        }
+        if (newRadio && (isServer || !currentName)) {
+            newRadio.checked = true;
+        }
+        if (replaceLabel) {
+            replaceLabel.classList.toggle('import-option-disabled', isServer || !currentName);
+        }
+        if (replaceText) {
+            if (isServer) {
+                replaceText.textContent = 'Replace current dashboard (read-only — server dashboard)';
+            } else if (!currentName) {
+                replaceText.textContent = 'Replace current dashboard (no active dashboard)';
+            } else {
+                replaceText.textContent = 'Replace current dashboard';
+            }
+        }
+        // Name field видим всегда когда replace недоступен (mode='new').
+        if (nameField && (isServer || !currentName)) {
+            nameField.classList.remove('hidden');
+        }
+
         overlay?.classList.remove('hidden');
     }
 
@@ -24424,6 +24461,14 @@ class DashboardManager {
         let name;
 
         if (mode === 'replace' && dashboardState.currentDashboard) {
+            // Defensive guard: серверные dashboard'ы read-only, UI radio для них
+            // дисейблено в showImportDialog. Этот guard ловит DevTools-обход:
+            // если кто-то снимет disabled и нажмёт Import — alert + abort.
+            const currentConfig = dashboardState.dashboards.get(dashboardState.currentDashboard);
+            if (currentConfig?._server) {
+                alert('Cannot replace server dashboards');
+                return;
+            }
             name = dashboardState.currentDashboard;
         } else {
             name = document.getElementById('import-name-input')?.value?.trim();
