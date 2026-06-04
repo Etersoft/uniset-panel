@@ -6516,6 +6516,34 @@ button.rotate-quick-btn:active {
     font-style: italic;
 }
 
+.dashboard-dirty-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    margin-right: 8px;
+    background: rgba(251, 191, 36, 0.12);
+    border: 1px solid rgba(251, 191, 36, 0.5);
+    color: #fbbf24;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: help;
+    user-select: none;
+}
+
+.dashboard-dirty-badge.hidden {
+    display: none;
+}
+
+.dashboard-dirty-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #fbbf24;
+    box-shadow: 0 0 6px rgba(251, 191, 36, 0.6);
+}
+
 .import-name-field {
     margin-top: 16px;
     display: flex;

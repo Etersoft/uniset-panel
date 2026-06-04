@@ -59,9 +59,10 @@ class DashboardManager {
         document.getElementById('dashboard-delete-btn')?.addEventListener('click', () => this.deleteDashboard());
 
         // Dialog events
-        document.getElementById('dashboard-name-confirm')?.addEventListener('click', () => this.createDashboard());
+        document.getElementById('dashboard-name-confirm')?.addEventListener('click', () => this.confirmNameDialog());
         document.getElementById('widget-config-apply')?.addEventListener('click', () => this.applyWidgetConfig());
         document.getElementById('import-confirm')?.addEventListener('click', () => this.confirmImport());
+        document.getElementById('dashboard-fork-btn')?.addEventListener('click', () => this.showForkDialog());
 
         // Import dropzone
         this.setupImportDropzone();
@@ -474,6 +475,11 @@ class DashboardManager {
         dashboardState.currentDashboard = name;
         this.actionsEl?.classList.remove('hidden');
 
+        // Fresh load — серверный config совпадает с диском, dirty сбрасываем.
+        // Любая последующая мутация (drag/resize/widget config) пройдёт через
+        // saveDashboard и снова выставит _dirty: true.
+        if (config._server) config._dirty = false;
+
         // Update sidebar active state
         this.updateSidebarDashboards();
 
@@ -486,14 +492,19 @@ class DashboardManager {
         // Save last viewed
         localStorage.setItem('last-dashboard', name);
 
-        // Hide delete button for server dashboards (they are read-only on server)
-        // Edit button remains visible - user can modify and export to JSON
+        // Hide delete button for server dashboards (they are read-only on server).
+        // Edit button остаётся доступным — user может редактировать, потом
+        // Export/Fork. Кнопка Fork видна только для серверных.
         const deleteBtn = document.getElementById('dashboard-delete-btn');
+        const forkBtn = document.getElementById('dashboard-fork-btn');
         if (config._server) {
             deleteBtn?.classList.add('hidden');
+            forkBtn?.classList.remove('hidden');
         } else {
             deleteBtn?.classList.remove('hidden');
+            forkBtn?.classList.add('hidden');
         }
+        this._updateServerDashboardDirtyIndicator();
     }
 
     renderDashboard(config) {
@@ -821,6 +832,10 @@ class DashboardManager {
             this.selectEl.value = '';
         }
 
+        // Скрываем server-only UI (Fork кнопка, Modified badge) — current отсутствует.
+        document.getElementById('dashboard-fork-btn')?.classList.add('hidden');
+        document.getElementById('dashboard-dirty-badge')?.classList.add('hidden');
+
         // Update sidebar to remove active state
         this.updateSidebarDashboards();
 
@@ -845,10 +860,42 @@ class DashboardManager {
         const input = document.getElementById('dashboard-name-input');
         const title = document.getElementById('dashboard-name-title');
 
+        this._nameDialogMode = 'create';
+        this._nameDialogSrcName = null;
+
         if (title) title.textContent = 'New Dashboard';
         if (input) input.value = '';
         overlay?.classList.remove('hidden');
         input?.focus();
+    }
+
+    showForkDialog() {
+        const srcName = dashboardState.currentDashboard;
+        if (!srcName) return;
+        const src = dashboardState.dashboards.get(srcName);
+        if (!src?._server) return;
+
+        const overlay = document.getElementById('dashboard-name-overlay');
+        const input = document.getElementById('dashboard-name-input');
+        const title = document.getElementById('dashboard-name-title');
+
+        this._nameDialogMode = 'fork';
+        this._nameDialogSrcName = srcName;
+
+        if (title) title.textContent = 'Fork as User Dashboard';
+        if (input) input.value = `${srcName} (copy)`;
+        overlay?.classList.remove('hidden');
+        // Pre-select имя, чтобы было удобно перепечатать.
+        input?.focus();
+        input?.select?.();
+    }
+
+    confirmNameDialog() {
+        if (this._nameDialogMode === 'fork') {
+            this._doFork();
+            return;
+        }
+        this.createDashboard();
     }
 
     createDashboard() {
@@ -889,11 +936,69 @@ class DashboardManager {
         this.loadDashboard(name);
     }
 
+    _doFork() {
+        const input = document.getElementById('dashboard-name-input');
+        const name = input?.value?.trim();
+        if (!name) {
+            alert('Please enter a dashboard name');
+            return;
+        }
+        if (dashboardState.dashboards.has(name)) {
+            alert('A dashboard with this name already exists');
+            return;
+        }
+        const srcName = this._nameDialogSrcName;
+        const src = srcName ? dashboardState.dashboards.get(srcName) : null;
+        if (!src) {
+            alert('Source dashboard not found');
+            return;
+        }
+
+        // Deep clone + strip internal флаги — fork становится user dashboard'ом.
+        const cloned = JSON.parse(JSON.stringify(src));
+        delete cloned._server;
+        delete cloned._loaded;
+        delete cloned._dirty;
+        cloned.meta = cloned.meta || {};
+        cloned.meta.name = name;
+        const now = new Date().toISOString();
+        cloned.meta.created = now;
+        cloned.meta.modified = now;
+        cloned.meta.forkedFrom = srcName;
+
+        dashboardState.dashboards.set(name, cloned);
+        this.saveDashboard(name);
+        this.updateDashboardSelector();
+
+        closeDashboardNameDialog();
+        this._nameDialogMode = 'create';
+        this._nameDialogSrcName = null;
+
+        if (this.selectEl) this.selectEl.value = name;
+        this.loadDashboard(name);
+    }
+
+    _updateServerDashboardDirtyIndicator() {
+        const badge = document.getElementById('dashboard-dirty-badge');
+        if (!badge) return;
+        const config = dashboardState.dashboards.get(dashboardState.currentDashboard);
+        const show = !!(config?._server && config?._dirty);
+        badge.classList.toggle('hidden', !show);
+    }
+
     saveDashboard(name = dashboardState.currentDashboard) {
         if (!name) return;
 
         const config = dashboardState.dashboards.get(name);
-        if (!config || config._server) return; // Don't save server dashboards
+        if (!config) return;
+        if (config._server) {
+            // Серверные dashboard'ы read-only на диске. Не пишем в localStorage,
+            // но помечаем in-memory как dirty — UI badge подскажет пользователю,
+            // что изменения теряются при reload, нужно Export/Fork.
+            config._dirty = true;
+            this._updateServerDashboardDirtyIndicator();
+            return;
+        }
 
         config.meta = config.meta || {};
         config.meta.modified = new Date().toISOString();
