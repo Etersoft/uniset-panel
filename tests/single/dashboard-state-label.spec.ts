@@ -101,4 +101,42 @@ test.describe('Dashboard State Label widget', () => {
         await expect(page.locator('.state-list-row .section-move-btn[data-move="up"]').first()).toBeVisible();
         await expect(page.locator('.state-list-row .section-move-btn[data-move="down"]').first()).toBeVisible();
     });
+
+    test('Add State button works after dialog is closed and reopened (regression)', async ({ page }) => {
+        // Regression: persistent #widget-config-content div сохранял dataset
+        // флаги (stateListWired, stateLabelHandlersWired) между открытиями
+        // диалога — second open рано-return'ил, click handler не подключался,
+        // "+ Add State" становился silent no-op. Fix — universal *Wired cleanup
+        // в showWidgetConfig.
+        await setupDashboardWithStateLabel(page);
+        await expect(page.locator('.state-label-widget')).toBeVisible({ timeout: 5000 });
+
+        const openDialog = async () => {
+            await page.evaluate(() => {
+                const dm = (window as any).dashboardManager;
+                if (!(window as any).dashboardState.editMode) dm.toggleEditMode();
+                dm.showWidgetConfig('w-sl');
+            });
+            await page.waitForSelector('.state-list-editor', { timeout: 5000 });
+        };
+        const closeDialog = async () => {
+            await page.evaluate(() => {
+                document.getElementById('widget-config-overlay')?.classList.add('hidden');
+            });
+            await expect(page.locator('#widget-config-overlay')).toBeHidden();
+        };
+
+        // First open — sanity: Add State работает (3 → 4 строки)
+        await openDialog();
+        const beforeFirst = await page.locator('.state-list-row').count();
+        await page.locator('.state-list-add-btn').click();
+        await expect(page.locator('.state-list-row')).toHaveCount(beforeFirst + 1);
+
+        // Close, reopen — Add State должна работать (bug: была silent no-op)
+        await closeDialog();
+        await openDialog();
+        const beforeSecond = await page.locator('.state-list-row').count();
+        await page.locator('.state-list-add-btn').click();
+        await expect(page.locator('.state-list-row')).toHaveCount(beforeSecond + 1);
+    });
 });

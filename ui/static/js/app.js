@@ -23754,17 +23754,25 @@ class DashboardManager {
         if (!content) return;
 
         // widget-config-content — persistent <div> (live между открытиями
-        // диалога). Сбрасываем все idempotency-флаги, которые initConfigHandlers
-        // конкретных виджетов выставляют на этом узле, иначе для второго
-        // открытия handler'ы рано-return'ят и autocomplete не работает.
-        delete content.dataset.activeHandlersWired;
-        delete content.dataset.genHandlersWired;
-        delete content.dataset.chartHandlersWired;
-        // Helpers из 60-widget-sensor-binding.js используют dataset-флаги
-        // sensorBinding_*, sensorItemList_*, ioncCombo_*. content живёт между
-        // открытиями диалога, поэтому сбрасываем все три семейства перед новым wiring.
+        // диалога). Сбрасываем ВСЕ idempotency-флаги, которые initConfigHandlers
+        // и helpers ставят на этом узле, иначе для второго открытия handler'ы
+        // рано-return'ят (silent breakage — Add State / Zones picker / Setpoint
+        // conditional fields / autocomplete перестают работать).
+        //
+        // Покрываемые семейства флагов:
+        //   *Wired           — все handler-guard'ы (active/gen/chart/stateList/
+        //                      stateLabelHandlers/zonesPicker/setpointStyleHandlers).
+        //   sensorBinding_*  — helpers из 60-widget-sensor-binding.js
+        //   sensorItemList_* — то же
+        //   ioncCombo_*      — то же
+        //
+        // Универсальное правило вместо явного списка — каждый новый wired-флаг
+        // подхватывается автоматически (см. конвенцию суффикса `Wired`).
         for (const key of Object.keys(content.dataset)) {
-            if (key.startsWith('sensorBinding') || key.startsWith('sensorItemList') || key.startsWith('ioncCombo')) {
+            if (key.endsWith('Wired')
+                || key.startsWith('sensorBinding')
+                || key.startsWith('sensorItemList')
+                || key.startsWith('ioncCombo')) {
                 delete content.dataset[key];
             }
         }
