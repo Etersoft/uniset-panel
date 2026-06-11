@@ -9188,7 +9188,7 @@ button.rotate-quick-btn:active {
 .toggle-widget .toggle-track[data-handle-pos="left"]  .toggle-handle { left: 2px; }
 .toggle-widget .toggle-track[data-handle-pos="right"] .toggle-handle { left: 42px; }
 
-.toggle-widget .toggle-track.fb-on      { background: #22c55e; }
+.toggle-widget .toggle-track.fb-on      { background: var(--awc-bg, #22c55e); }
 .toggle-widget .toggle-track.fb-off     { background: #374151; border: 1px solid #4b5563; }
 .toggle-widget .toggle-track.fb-unknown { background: #1f2937; border: 1px dashed #6b7280; }
 
@@ -9234,12 +9234,12 @@ button.rotate-quick-btn:active {
 }
 
 .toggle-widget .toggle-cb.fb-on {
-    background: #22c55e;
-    border-color: #22c55e;
+    background: var(--awc-bg, #22c55e);
+    border-color: var(--awc-bg, #22c55e);
 }
 .toggle-widget .toggle-cb.fb-on::after {
     content: '✓';
-    color: #fff;
+    color: var(--awc-fg, #fff);
     font-weight: bold;
     font-size: 16px;
     line-height: 1;

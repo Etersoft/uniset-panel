@@ -19153,6 +19153,8 @@ class ToggleWidget extends ActiveDashboardWidget {
     static styles = ['slider', 'checkbox'];
     static defaultStyle = 'slider';
 
+    static supportsColorTheme = true;
+
     // === Render ===
     render() {
         if (this._currentStyle() === 'checkbox') {
@@ -19160,6 +19162,7 @@ class ToggleWidget extends ActiveDashboardWidget {
         } else {
             this.renderSlider();
         }
+        this._applyColorTheme();
     }
 
     _currentStyle() {
