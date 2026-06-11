@@ -17651,9 +17651,47 @@ class ActiveDashboardWidget extends DashboardWidget {
             `
             : '';
 
+        const themeBlock = this.supportsColorTheme
+            ? `
+            <div class="widget-config-field">
+                <label>Color theme</label>
+                <select class="widget-input" name="colorTheme" data-test="cfg-colorTheme">
+                    <option value="default" ${(config.colorTheme || 'default') === 'default' ? 'selected' : ''}>Default (style-native)</option>
+                    <option value="primary" ${config.colorTheme === 'primary' ? 'selected' : ''}>Primary (blue)</option>
+                    <option value="danger"  ${config.colorTheme === 'danger'  ? 'selected' : ''}>Danger (red)</option>
+                    <option value="warning" ${config.colorTheme === 'warning' ? 'selected' : ''}>Warning (amber)</option>
+                    <option value="success" ${config.colorTheme === 'success' ? 'selected' : ''}>Success (green)</option>
+                    <option value="neutral" ${config.colorTheme === 'neutral' ? 'selected' : ''}>Neutral (gray)</option>
+                    <option value="custom"  ${config.colorTheme === 'custom'  ? 'selected' : ''}>Custom…</option>
+                </select>
+                <small class="widget-config-hint">
+                    Theme влияет на «активное» состояние (нажатая кнопка / ON-toggle).
+                </small>
+            </div>
+            <div class="widget-config-row" data-color-custom-row style="display:${config.colorTheme === 'custom' ? '' : 'none'}">
+                <div class="widget-config-field">
+                    <label>Custom bg</label>
+                    <input type="color" class="widget-input" name="customBg"
+                           value="${escapeAttr(config.customBg || ACTIVE_WIDGET_CUSTOM_BG_DEFAULT)}"
+                           data-test="cfg-customBg">
+                </div>
+                <div class="widget-config-field">
+                    <label>Custom fg</label>
+                    <input type="color" class="widget-input" name="customFg"
+                           value="${escapeAttr(config.customFg || ACTIVE_WIDGET_CUSTOM_FG_DEFAULT)}"
+                           data-test="cfg-customFg">
+                    <small class="widget-config-hint">
+                        Видим только на виджетах с текстом (label).
+                    </small>
+                </div>
+            </div>
+            `
+            : '';
+
         return `
             ${renderSensorBindingFields(config, { fieldPrefix: '' })}
             ${styleSelect}
+            ${themeBlock}
             <div class="widget-config-field">
                 <label>Label (optional)</label>
                 <input type="text" class="widget-input" name="label"

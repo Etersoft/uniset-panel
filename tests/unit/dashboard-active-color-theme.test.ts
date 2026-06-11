@@ -35,6 +35,10 @@ declare global {
     var HEX_COLOR_REGEX: RegExp;
 }
 
+// Load once at module level so describe-block class declarations
+// (which run at collection time, before beforeEach) can extend the base class.
+loadBaseClass();
+
 const widgets: any[] = [];
 beforeEach(() => {
     widgets.length = 0;
@@ -123,5 +127,68 @@ describe('_applyColorTheme — base class theme application', () => {
         w._applyColorTheme();
         expect(w.container.style.getPropertyValue('--awc-bg')).toBe(ACTIVE_WIDGET_CUSTOM_BG_DEFAULT);
         expect(w.container.style.getPropertyValue('--awc-fg')).toBe(ACTIVE_WIDGET_CUSTOM_FG_DEFAULT);
+    });
+});
+
+describe('getConfigForm — theme block rendering', () => {
+    class Supports extends globalThis.ActiveDashboardWidget {
+        static supportsColorTheme = true;
+    }
+    class NoSupport extends globalThis.ActiveDashboardWidget {
+        static supportsColorTheme = false;
+    }
+
+    it('renders theme select with 7 options when supportsColorTheme=true', () => {
+        const html = Supports.getConfigForm({});
+        const div = document.createElement('div');
+        div.innerHTML = html;
+        const sel = div.querySelector('[name="colorTheme"]') as HTMLSelectElement;
+        expect(sel).toBeTruthy();
+        expect(sel.querySelectorAll('option')).toHaveLength(7);
+    });
+
+    it('omits theme select when supportsColorTheme=false', () => {
+        const html = NoSupport.getConfigForm({});
+        const div = document.createElement('div');
+        div.innerHTML = html;
+        expect(div.querySelector('[name="colorTheme"]')).toBeNull();
+        expect(div.querySelector('[name="customBg"]')).toBeNull();
+    });
+
+    it('theme select appears AFTER style select AND BEFORE requireConfirmation', () => {
+        class Styled extends globalThis.ActiveDashboardWidget {
+            static supportsColorTheme = true;
+            static styles = ['flat', 'mushroom']; // > 1 → style select рендерится
+        }
+        const html = Styled.getConfigForm({});
+        const div = document.createElement('div');
+        div.innerHTML = html;
+        const styleSel = div.querySelector('[name="style"]') as HTMLElement;
+        const themeSel = div.querySelector('[name="colorTheme"]') as HTMLElement;
+        const reqCb   = div.querySelector('[name="requireConfirmation"]') as HTMLElement;
+        expect(styleSel && themeSel && reqCb).toBeTruthy();
+        // compareDocumentPosition: returns DOCUMENT_POSITION_FOLLOWING (4) если B следует за A.
+        expect(styleSel.compareDocumentPosition(themeSel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(themeSel.compareDocumentPosition(reqCb)   & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('pre-selects current colorTheme on reopen', () => {
+        const html = Supports.getConfigForm({ colorTheme: 'warning' });
+        const div = document.createElement('div');
+        div.innerHTML = html;
+        const sel = div.querySelector('[name="colorTheme"]') as HTMLSelectElement;
+        expect(sel.value).toBe('warning');
+    });
+
+    it('custom row уже видима при reopen с colorTheme=custom', () => {
+        const html = Supports.getConfigForm({ colorTheme: 'custom', customBg: '#abc123', customFg: '#222222' });
+        const div = document.createElement('div');
+        div.innerHTML = html;
+        const row = div.querySelector('[data-color-custom-row]') as HTMLElement;
+        expect(row).toBeTruthy();
+        const bg = div.querySelector('[name="customBg"]') as HTMLInputElement;
+        const fg = div.querySelector('[name="customFg"]') as HTMLInputElement;
+        expect(bg.value).toBe('#abc123');
+        expect(fg.value).toBe('#222222');
     });
 });
