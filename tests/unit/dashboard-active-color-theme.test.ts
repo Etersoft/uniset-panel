@@ -13,7 +13,13 @@ function loadBaseClass() {
     // Binding helpers нужны для super.getConfigForm / parseConfigForm reuse.
     const binding   = readFileSync(resolve(SRC_DIR, '60-widget-sensor-binding.js'), 'utf8');
     const activeBase = readFileSync(resolve(SRC_DIR, '61-dashboard-active-base.js'), 'utf8');
+    // Минимальные stubs для initConfigHandlers — sandbox не грузит 41-sensor-autocomplete.js
+    // и не имеет state.ioncRegistry. initSensorBindingHandlers вызывает setupIONCComboAutocomplete
+    // (нужен state.ioncRegistry) и setupSensorAutocomplete.
     new Function(`
+        var state = { ioncRegistry: { servers: new Map(), fetchedAt: 0, fetchPromise: null, isFetching: false, lastError: null } };
+        globalThis.state = state;
+        globalThis.setupSensorAutocomplete = function() { return { resetOnObjectChange() {} }; };
         ${constants}
         ${utils}
         ${binding}
@@ -283,5 +289,73 @@ describe('parseConfigForm — theme normalization', () => {
         expect(out.serverId).toBe('srv1');
         expect(out.label).toBe('');
         expect(out.requireConfirmation).toBe(false);
+    });
+});
+
+describe('initConfigHandlers — custom row reveal', () => {
+    class Supports extends globalThis.ActiveDashboardWidget {
+        static supportsColorTheme = true;
+    }
+
+    function buildForm() {
+        const f = document.createElement('form');
+        f.innerHTML = `
+            <input type="text" name="sensor" value="" />
+            <input type="hidden" name="sensorId" value="" />
+            <input type="text" name="objectName" value="SharedMemory" />
+            <input type="text" name="serverId" value="" />
+            <select name="colorTheme">
+                <option value="default">d</option>
+                <option value="danger">danger</option>
+                <option value="custom">custom</option>
+            </select>
+            <div data-color-custom-row style="display:none">
+                <input type="text" name="customBg" value="" />
+                <input type="text" name="customFg" value="" />
+            </div>
+        `;
+        return f;
+    }
+
+    it('default selection → custom row hidden', () => {
+        const f = buildForm();
+        Supports.initConfigHandlers(f, { colorTheme: 'default' });
+        const row = f.querySelector('[data-color-custom-row]') as HTMLElement;
+        expect(row.style.display).toBe('none');
+    });
+
+    it('change to custom → row revealed', () => {
+        const f = buildForm();
+        Supports.initConfigHandlers(f, { colorTheme: 'default' });
+        const sel = f.querySelector('[name="colorTheme"]') as HTMLSelectElement;
+        sel.value = 'custom';
+        sel.dispatchEvent(new Event('change'));
+        const row = f.querySelector('[data-color-custom-row]') as HTMLElement;
+        expect(row.style.display).toBe('');
+    });
+
+    it('change custom → preset → row hidden again', () => {
+        const f = buildForm();
+        Supports.initConfigHandlers(f, { colorTheme: 'custom' });
+        const sel = f.querySelector('[name="colorTheme"]') as HTMLSelectElement;
+        sel.value = 'danger';
+        sel.dispatchEvent(new Event('change'));
+        const row = f.querySelector('[data-color-custom-row]') as HTMLElement;
+        expect(row.style.display).toBe('none');
+    });
+
+    it('idempotency: повторный init не вешает второй listener', () => {
+        const f = buildForm();
+        Supports.initConfigHandlers(f, {});
+        Supports.initConfigHandlers(f, {});
+        const sel = f.querySelector('[name="colorTheme"]') as HTMLSelectElement;
+        sel.value = 'custom';
+        const row = f.querySelector('[data-color-custom-row]') as HTMLElement;
+        const observer = new MutationObserver(() => {});
+        observer.observe(row, { attributes: true, attributeFilter: ['style'] });
+        sel.dispatchEvent(new Event('change'));
+        const records = observer.takeRecords();
+        observer.disconnect();
+        expect(records.length).toBe(1); // ровно один style-mutation, не два
     });
 });

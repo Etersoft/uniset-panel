@@ -427,6 +427,17 @@ class ActiveDashboardWidget extends DashboardWidget {
         if (form.dataset.activeHandlersWired === 'true') return;
         form.dataset.activeHandlersWired = 'true';
         initSensorBindingHandlers(form, config, { fieldPrefix: '' });
+
+        // --- THEME reveal handler (всё выше — без изменений) ---
+        if (!this.supportsColorTheme) return;
+        const themeSel = form.querySelector('[name="colorTheme"]');
+        const customRow = form.querySelector('[data-color-custom-row]');
+        if (!themeSel || !customRow) return;  // graceful: themeBlock не отрендерился
+        const update = () => {
+            customRow.style.display = themeSel.value === 'custom' ? '' : 'none';
+        };
+        themeSel.addEventListener('change', update);
+        update();  // initial sync (для reopen с config.colorTheme === 'custom')
     }
 
     static parseActiveConfigFields(form) {
