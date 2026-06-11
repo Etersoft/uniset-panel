@@ -1,7 +1,5 @@
 import { test, expect } from '@playwright/test';
 
-const VIEWER_URL = process.env.BASE_URL || 'http://localhost:8000';
-
 test.describe('PushButton color theme', () => {
     test.beforeEach(async ({ page }) => {
         await page.route('**/api/control/status', async (route) => {
@@ -57,10 +55,8 @@ test.describe('PushButton color theme', () => {
 
     test('theme=danger: computed background — красный (#ef4444)', async ({ page }) => {
         await createPbDashboard(page, { colorTheme: 'danger', style: 'flat' });
-        const bg = await page.evaluate(() => {
-            const btn = document.querySelector('.pushbutton-widget .pb-btn') as HTMLElement;
-            return getComputedStyle(btn).backgroundColor;
-        });
+        const btn = page.locator('.pushbutton-widget .pb-btn').first();
+        const bg = await btn.evaluate((el) => getComputedStyle(el).backgroundColor);
         // #ef4444 → rgb(239, 68, 68)
         expect(bg).toMatch(/rgb\(\s*239,\s*68,\s*68\s*\)/);
     });
@@ -72,10 +68,8 @@ test.describe('PushButton color theme', () => {
         const hasDataAttr = await container.evaluate((el) => 'colorTheme' in (el as HTMLElement).dataset);
         expect(hasDataAttr).toBe(false);
 
-        const bg = await page.evaluate(() => {
-            const btn = document.querySelector('.pushbutton-widget .pb-btn') as HTMLElement;
-            return getComputedStyle(btn).backgroundColor;
-        });
+        const btn = page.locator('.pushbutton-widget .pb-btn').first();
+        const bg = await btn.evaluate((el) => getComputedStyle(el).backgroundColor);
         // #3b82f6 → rgb(59, 130, 246)
         expect(bg).toMatch(/rgb\(\s*59,\s*130,\s*246\s*\)/);
     });
