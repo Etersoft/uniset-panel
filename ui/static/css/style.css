@@ -10075,3 +10075,34 @@ button.rotate-quick-btn:active {
 
 /* Inline "Hold last state" sub-option */
 .state-label-hold { margin-left: 24px; }
+
+/* ============================================================================
+ * Active widget color themes — preset palette + derive contract.
+ * Опт-ин через JS static supportsColorTheme; класс/inline-vars ставятся на
+ * widget.container (.dashboard-widget) методом _applyColorTheme.
+ *
+ * Single source of truth для палитры. CSS-переменные --awc-bg-pressed и
+ * --awc-bg-light auto-derive'ятся для ЛЮБОГО themed элемента через атрибут
+ * data-color-theme (выставляется в _applyColorTheme) — DRY: одно правило
+ * на все 5 пресетов + custom.
+ * ============================================================================ */
+.awc-theme-primary  { --awc-bg: #3b82f6; --awc-fg: #fff;    }
+.awc-theme-danger   { --awc-bg: #ef4444; --awc-fg: #fff;    }
+.awc-theme-warning  { --awc-bg: #fbbf24; --awc-fg: #1f2937; }
+.awc-theme-success  { --awc-bg: #22c55e; --awc-fg: #fff;    }
+.awc-theme-neutral  { --awc-bg: #6b7280; --awc-fg: #fff;    }
+/* custom — vars приходят inline через style.setProperty в _applyColorTheme */
+
+/* Auto-derive pressed/light для всех themed widget'ов (preset и custom).
+   Условие [data-color-theme] совпадает только для tagged container'ов,
+   так что default widget'ы остаются на своих fallback хексах. */
+[data-color-theme] {
+    --awc-bg-pressed: color-mix(in srgb, var(--awc-bg), black 15%);
+    --awc-bg-light:   color-mix(in srgb, var(--awc-bg), white 25%);
+}
+
+/* Themed mushroom border — переопределяет default literal (#7f1d1d из Task 4).
+   Derived от theme через color-mix; default остаётся literal'ом (см. Task 4 fix). */
+[data-color-theme] .pushbutton-style-mushroom .pb-btn {
+    border-color: color-mix(in srgb, var(--awc-bg), black 30%);
+}
