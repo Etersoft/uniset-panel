@@ -17377,6 +17377,14 @@ class ActiveDashboardWidget extends DashboardWidget {
     static styles = [];
     static defaultStyle = '';
 
+    // === Color theming ===
+    // Opt-in флаг: subclass переопределяет в true, чтобы получить:
+    //  - "Color theme" select в config form
+    //  - валидацию colorTheme в parseConfigForm
+    //  - применение _applyColorTheme в render
+    // Subclass'ы без CSS-поддержки --awc-* остаются false → нет нерабочего select'а.
+    static supportsColorTheme = false;
+
     constructor(id, config, container) {
         super(id, config, container);
         this.commandValue = null;
@@ -17690,6 +17698,50 @@ class ActiveDashboardWidget extends DashboardWidget {
     static parseActiveConfigFields(form) {
         // Override: разобрать поля из getActiveConfigFields().
         return {};
+    }
+
+    // Применяет theme к this.container (а не this.element — для consistency со
+    // статус-классами data-active-widget / active-success / active-error и т.п.,
+    // которые тоже живут на container).
+    //
+    // Идемпотентен: чистит прошлое состояние перед установкой нового. Это load-bearing
+    // для in-place reconfigure path (если будущая live preview перестанет делать full
+    // re-render). При текущем full-rebuild через applyWidgetConfig (62-dashboard-manager.js)
+    // container.className wipe'ится — но inline style.--awc-bg НЕ затрагивается,
+    // поэтому removeProperty обязателен.
+    _applyColorTheme() {
+        if (!this.constructor.supportsColorTheme) return;
+        const c = this.container;
+        if (!c) return;
+
+        // 1. Cleanup previous theme classes.
+        Array.from(c.classList)
+            .filter(cls => cls.startsWith('awc-theme-'))
+            .forEach(cls => c.classList.remove(cls));
+
+        // 2. Cleanup previous inline vars (для случая custom → preset / default).
+        c.style.removeProperty('--awc-bg');
+        c.style.removeProperty('--awc-fg');
+
+        const theme = this.config?.colorTheme;
+        const valid = theme === 'custom'
+            || (theme && ACTIVE_WIDGET_THEME_NAMES.includes(theme));
+
+        if (!valid) {
+            delete c.dataset.colorTheme;
+            return;
+        }
+        c.dataset.colorTheme = theme;
+
+        if (theme === 'custom') {
+            c.classList.add('awc-theme-custom');
+            c.style.setProperty('--awc-bg',
+                this.config.customBg || ACTIVE_WIDGET_CUSTOM_BG_DEFAULT);
+            c.style.setProperty('--awc-fg',
+                this.config.customFg || ACTIVE_WIDGET_CUSTOM_FG_DEFAULT);
+        } else {
+            c.classList.add(`awc-theme-${theme}`);
+        }
     }
 
     destroy() {
