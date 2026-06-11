@@ -9307,8 +9307,10 @@ button.rotate-quick-btn:active {
 }
 
 /* === mushroom — SCADA круглая ===
-   Default visual fallback: light=#ef4444, dark=#b91c1c, border=#7f1d1d.
-   При теме: light/dark/border derive'ятся от --awc-bg через color-mix. */
+   Default: light=#ef4444, dark=#b91c1c, border=#7f1d1d (literal — иначе
+   color-mix на fallback'е затемняет border, ломая visual identity).
+   При теме: light/dark derive'ятся от --awc-bg через color-mix; border
+   override приходит из themed scope ([data-color-theme] селектор, Task 6). */
 .pushbutton-style-mushroom .pb-btn {
     width: 64px;
     height: 64px;
@@ -9316,8 +9318,7 @@ button.rotate-quick-btn:active {
     background: radial-gradient(circle at 30% 30%,
                                 var(--awc-bg-light, #ef4444),
                                 var(--awc-bg,       #b91c1c));
-    border: 3px solid;
-    border-color: color-mix(in srgb, var(--awc-bg, #7f1d1d), black 30%);
+    border: 3px solid #7f1d1d;
     color: var(--awc-fg, #fff);
     font-size: 11px;
     box-shadow: 0 4px 8px rgba(0,0,0,.5), inset 0 -4px 8px rgba(0,0,0,.3);
