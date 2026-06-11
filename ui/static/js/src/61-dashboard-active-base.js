@@ -53,10 +53,12 @@ class ActiveDashboardWidget extends DashboardWidget {
     static defaultStyle = '';
 
     // === Color theming ===
-    // Opt-in флаг: subclass переопределяет в true, чтобы получить:
-    //  - "Color theme" select в config form
-    //  - валидацию colorTheme в parseConfigForm
-    //  - применение _applyColorTheme в render
+    // Opt-in флаг. Subclass переопределяет в true чтобы участвовать в темизации.
+    // Используется в следующих местах (по мере реализации):
+    //  - _applyColorTheme() — применяет theme class и inline vars к container
+    //    (реализовано здесь, Task 3 plan'а).
+    //  - getConfigForm — conditional "Color theme" select (Task 7).
+    //  - parseConfigForm — normalization colorTheme (Task 8).
     // Subclass'ы без CSS-поддержки --awc-* остаются false → нет нерабочего select'а.
     static supportsColorTheme = false;
 

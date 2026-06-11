@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SRC_DIR = resolve(__dirname, '../../ui/static/js/src');
@@ -35,7 +35,14 @@ declare global {
     var HEX_COLOR_REGEX: RegExp;
 }
 
-beforeEach(() => loadBaseClass());
+const widgets: any[] = [];
+beforeEach(() => {
+    widgets.length = 0;
+    loadBaseClass();
+});
+afterEach(() => {
+    while (widgets.length) widgets.pop()?.destroy?.();
+});
 
 // Minimal subclass для тестов: skip ctor side-effects.
 function makeTestable(config: any, supports = true) {
@@ -45,7 +52,9 @@ function makeTestable(config: any, supports = true) {
             super('test-id', c, document.createElement('div'));
         }
     }
-    return new W(config);
+    const w = new W(config);
+    widgets.push(w);
+    return w;
 }
 
 describe('_applyColorTheme — base class theme application', () => {
