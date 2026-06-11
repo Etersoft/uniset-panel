@@ -192,3 +192,96 @@ describe('getConfigForm — theme block rendering', () => {
         expect(fg.value).toBe('#222222');
     });
 });
+
+describe('parseConfigForm — theme normalization', () => {
+    class Supports extends globalThis.ActiveDashboardWidget {
+        static supportsColorTheme = true;
+    }
+    class NoSupport extends globalThis.ActiveDashboardWidget {
+        static supportsColorTheme = false;
+    }
+
+    function buildForm(html: string) {
+        const f = document.createElement('form');
+        f.innerHTML = html;
+        return f;
+    }
+
+    function baseHtml(extra = '') {
+        // Минимум что должен распарсить super-parse: sensor binding + label + requireConfirmation.
+        return `
+            <input type="text" name="sensor" value="X" />
+            <input type="hidden" name="sensorId" value="42" />
+            <input type="text" name="objectName" value="SharedMemory" />
+            <input type="text" name="serverId" value="srv1" />
+            <input type="text" name="label" value="" />
+            <input type="checkbox" name="requireConfirmation" />
+            ${extra}
+        `;
+    }
+
+    it('default → выпускается из result (sparse)', () => {
+        const f = buildForm(baseHtml(`<select name="colorTheme"><option value="default" selected /></select>`));
+        const out = Supports.parseConfigForm(f);
+        expect(out.colorTheme).toBeUndefined();
+        expect(out.customBg).toBeUndefined();
+        expect(out.customFg).toBeUndefined();
+    });
+
+    it('preset value preserved', () => {
+        const f = buildForm(baseHtml(`<select name="colorTheme"><option value="danger" selected /></select>`));
+        const out = Supports.parseConfigForm(f);
+        expect(out.colorTheme).toBe('danger');
+    });
+
+    it('corrupted value → normalized to default → выпускается', () => {
+        const f = buildForm(baseHtml(`<select name="colorTheme"><option value="hacked" selected /></select>`));
+        const out = Supports.parseConfigForm(f);
+        expect(out.colorTheme).toBeUndefined();
+    });
+
+    it('custom с валидными hex', () => {
+        const f = buildForm(baseHtml(`
+            <select name="colorTheme"><option value="custom" selected /></select>
+            <input type="text" name="customBg" value="#abcdef" />
+            <input type="text" name="customFg" value="#000000" />
+        `));
+        const out = Supports.parseConfigForm(f);
+        expect(out.colorTheme).toBe('custom');
+        expect(out.customBg).toBe('#abcdef');
+        expect(out.customFg).toBe('#000000');
+    });
+
+    it('custom с невалидным customBg → дефолт', () => {
+        const f = buildForm(baseHtml(`
+            <select name="colorTheme"><option value="custom" selected /></select>
+            <input type="text" name="customBg" value="red" />
+            <input type="text" name="customFg" value="" />
+        `));
+        const out = Supports.parseConfigForm(f);
+        expect(out.colorTheme).toBe('custom');
+        expect(out.customBg).toBe(ACTIVE_WIDGET_CUSTOM_BG_DEFAULT);
+        expect(out.customFg).toBe(ACTIVE_WIDGET_CUSTOM_FG_DEFAULT);
+    });
+
+    it('supportsColorTheme=false — все theme поля игнорируются', () => {
+        const f = buildForm(baseHtml(`
+            <select name="colorTheme"><option value="danger" selected /></select>
+            <input type="text" name="customBg" value="#abcdef" />
+        `));
+        const out = NoSupport.parseConfigForm(f);
+        expect(out.colorTheme).toBeUndefined();
+        expect(out.customBg).toBeUndefined();
+    });
+
+    it('preserves base fields (sensor binding, label, requireConfirmation)', () => {
+        const f = buildForm(baseHtml());
+        const out = Supports.parseConfigForm(f);
+        expect(out.sensor).toBe('X');
+        expect(out.sensorId).toBe(42);
+        expect(out.objectName).toBe('SharedMemory');
+        expect(out.serverId).toBe('srv1');
+        expect(out.label).toBe('');
+        expect(out.requireConfirmation).toBe(false);
+    });
+});

@@ -397,7 +397,26 @@ class ActiveDashboardWidget extends DashboardWidget {
         const styleEl = form.querySelector('[name="style"]');
         if (styleEl) base.style = styleEl.value;
         const extra = this.parseActiveConfigFields ? this.parseActiveConfigFields(form) : {};
-        return { ...base, ...extra };
+        const result = { ...base, ...extra };
+
+        // --- THEME normalization (Task 8) ---
+        if (!this.supportsColorTheme) return result;
+
+        const raw = form.querySelector('[name="colorTheme"]')?.value || 'default';
+        const allowed = ['default', 'custom', ...ACTIVE_WIDGET_THEME_NAMES];
+        const theme = allowed.includes(raw) ? raw : 'default';
+
+        // Sparse: 'default' выпускается (не пачкает JSON dashboard'а).
+        if (theme === 'default') return result;
+
+        if (theme !== 'custom') return { ...result, colorTheme: theme };
+
+        // Custom — нормализуем hex'ы: пустые / невалидные → дефолты.
+        const rawBg = form.querySelector('[name="customBg"]')?.value?.trim() || '';
+        const rawFg = form.querySelector('[name="customFg"]')?.value?.trim() || '';
+        const customBg = HEX_COLOR_REGEX.test(rawBg) ? rawBg : ACTIVE_WIDGET_CUSTOM_BG_DEFAULT;
+        const customFg = HEX_COLOR_REGEX.test(rawFg) ? rawFg : ACTIVE_WIDGET_CUSTOM_FG_DEFAULT;
+        return { ...result, colorTheme: 'custom', customBg, customFg };
     }
 
     // IMPORTANT для subclass'ов: если переопределяешь — ОБЯЗАТЕЛЬНО вызывай
