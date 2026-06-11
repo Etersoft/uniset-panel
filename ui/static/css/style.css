@@ -9188,7 +9188,7 @@ button.rotate-quick-btn:active {
 .toggle-widget .toggle-track[data-handle-pos="left"]  .toggle-handle { left: 2px; }
 .toggle-widget .toggle-track[data-handle-pos="right"] .toggle-handle { left: 42px; }
 
-.toggle-widget .toggle-track.fb-on      { background: #22c55e; }
+.toggle-widget .toggle-track.fb-on      { background: var(--awc-bg, #22c55e); }
 .toggle-widget .toggle-track.fb-off     { background: #374151; border: 1px solid #4b5563; }
 .toggle-widget .toggle-track.fb-unknown { background: #1f2937; border: 1px dashed #6b7280; }
 
@@ -9234,12 +9234,12 @@ button.rotate-quick-btn:active {
 }
 
 .toggle-widget .toggle-cb.fb-on {
-    background: #22c55e;
-    border-color: #22c55e;
+    background: var(--awc-bg, #22c55e);
+    border-color: var(--awc-bg, #22c55e);
 }
 .toggle-widget .toggle-cb.fb-on::after {
     content: '✓';
-    color: #fff;
+    color: var(--awc-fg, #fff);
     font-weight: bold;
     font-size: 16px;
     line-height: 1;
@@ -9293,27 +9293,33 @@ button.rotate-quick-btn:active {
 /* === flat (default) — Material primary === */
 .pushbutton-style-flat .pb-btn {
     padding: 10px 24px;
-    background: #3b82f6;
-    color: #fff;
+    background: var(--awc-bg, #3b82f6);
+    color: var(--awc-fg, #fff);
     border: none;
     border-radius: 6px;
     font-size: 13px;
     box-shadow: 0 2px 4px rgba(0,0,0,.3);
 }
 .pushbutton-style-flat .pb-btn.pressed {
-    background: #2563eb;
+    background: var(--awc-bg-pressed, #2563eb);
     transform: translateY(1px);
     box-shadow: 0 1px 2px rgba(0,0,0,.3);
 }
 
-/* === mushroom — SCADA круглая === */
+/* === mushroom — SCADA круглая ===
+   Default: light=#ef4444, dark=#b91c1c, border=#7f1d1d (literal — иначе
+   color-mix на fallback'е затемняет border, ломая visual identity).
+   При теме: light/dark derive'ятся от --awc-bg через color-mix; border
+   override приходит из themed scope ([data-color-theme] селектор, Task 6). */
 .pushbutton-style-mushroom .pb-btn {
     width: 64px;
     height: 64px;
     border-radius: 50%;
-    background: radial-gradient(circle at 30% 30%, #ef4444, #b91c1c);
+    background: radial-gradient(circle at 30% 30%,
+                                var(--awc-bg-light, #ef4444),
+                                var(--awc-bg,       #b91c1c));
     border: 3px solid #7f1d1d;
-    color: #fff;
+    color: var(--awc-fg, #fff);
     font-size: 11px;
     box-shadow: 0 4px 8px rgba(0,0,0,.5), inset 0 -4px 8px rgba(0,0,0,.3);
 }
@@ -9332,13 +9338,13 @@ button.rotate-quick-btn:active {
     font-size: 12px;
 }
 .pushbutton-style-pill .pb-btn:hover {
-    border-color: #22c55e;
-    color: #22c55e;
+    border-color: var(--awc-bg, #22c55e);
+    color: var(--awc-bg, #22c55e);
 }
 .pushbutton-style-pill .pb-btn.pressed {
-    background: #22c55e;
-    color: #fff;
-    border-color: #22c55e;
+    background: var(--awc-bg, #22c55e);
+    color: var(--awc-fg, #fff);
+    border-color: var(--awc-bg, #22c55e);
 }
 
 /* === pulsing — кратковременный flash для pulse mode === */
@@ -10069,3 +10075,34 @@ button.rotate-quick-btn:active {
 
 /* Inline "Hold last state" sub-option */
 .state-label-hold { margin-left: 24px; }
+
+/* ============================================================================
+ * Active widget color themes — preset palette + derive contract.
+ * Опт-ин через JS static supportsColorTheme; класс/inline-vars ставятся на
+ * widget.container (.dashboard-widget) методом _applyColorTheme.
+ *
+ * Single source of truth для палитры. CSS-переменные --awc-bg-pressed и
+ * --awc-bg-light auto-derive'ятся для ЛЮБОГО themed элемента через атрибут
+ * data-color-theme (выставляется в _applyColorTheme) — DRY: одно правило
+ * на все 5 пресетов + custom.
+ * ============================================================================ */
+.awc-theme-primary  { --awc-bg: #3b82f6; --awc-fg: #fff;    }
+.awc-theme-danger   { --awc-bg: #ef4444; --awc-fg: #fff;    }
+.awc-theme-warning  { --awc-bg: #fbbf24; --awc-fg: #1f2937; }
+.awc-theme-success  { --awc-bg: #22c55e; --awc-fg: #fff;    }
+.awc-theme-neutral  { --awc-bg: #6b7280; --awc-fg: #fff;    }
+/* custom — vars приходят inline через style.setProperty в _applyColorTheme */
+
+/* Auto-derive pressed/light для всех themed widget'ов (preset и custom).
+   Условие [data-color-theme] совпадает только для tagged container'ов,
+   так что default widget'ы остаются на своих fallback хексах. */
+[data-color-theme] {
+    --awc-bg-pressed: color-mix(in srgb, var(--awc-bg), black 15%);
+    --awc-bg-light:   color-mix(in srgb, var(--awc-bg), white 25%);
+}
+
+/* Themed mushroom border — переопределяет default literal (#7f1d1d из Task 4).
+   Derived от theme через color-mix; default остаётся literal'ом (см. Task 4 fix). */
+[data-color-theme] .pushbutton-style-mushroom .pb-btn {
+    border-color: color-mix(in srgb, var(--awc-bg), black 30%);
+}

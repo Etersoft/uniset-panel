@@ -52,6 +52,16 @@ class ActiveDashboardWidget extends DashboardWidget {
     static styles = [];
     static defaultStyle = '';
 
+    // === Color theming ===
+    // Opt-in флаг. Subclass переопределяет в true чтобы участвовать в темизации.
+    // Используется в следующих местах (по мере реализации):
+    //  - _applyColorTheme() — применяет theme class и inline vars к container
+    //    (реализовано здесь, Task 3 plan'а).
+    //  - getConfigForm — conditional "Color theme" select (Task 7).
+    //  - parseConfigForm — normalization colorTheme (Task 8).
+    // Subclass'ы без CSS-поддержки --awc-* остаются false → нет нерабочего select'а.
+    static supportsColorTheme = false;
+
     constructor(id, config, container) {
         super(id, config, container);
         this.commandValue = null;
@@ -316,9 +326,47 @@ class ActiveDashboardWidget extends DashboardWidget {
             `
             : '';
 
+        const themeBlock = this.supportsColorTheme
+            ? `
+            <div class="widget-config-field">
+                <label>Color theme</label>
+                <select class="widget-input" name="colorTheme" data-test="cfg-colorTheme">
+                    <option value="default" ${(config.colorTheme || 'default') === 'default' ? 'selected' : ''}>Default (style-native)</option>
+                    <option value="primary" ${config.colorTheme === 'primary' ? 'selected' : ''}>Primary (blue)</option>
+                    <option value="danger"  ${config.colorTheme === 'danger'  ? 'selected' : ''}>Danger (red)</option>
+                    <option value="warning" ${config.colorTheme === 'warning' ? 'selected' : ''}>Warning (amber)</option>
+                    <option value="success" ${config.colorTheme === 'success' ? 'selected' : ''}>Success (green)</option>
+                    <option value="neutral" ${config.colorTheme === 'neutral' ? 'selected' : ''}>Neutral (gray)</option>
+                    <option value="custom"  ${config.colorTheme === 'custom'  ? 'selected' : ''}>Custom…</option>
+                </select>
+                <small class="widget-config-hint">
+                    Theme влияет на «активное» состояние (нажатая кнопка / ON-toggle).
+                </small>
+            </div>
+            <div class="widget-config-row" data-color-custom-row style="display:${config.colorTheme === 'custom' ? '' : 'none'}">
+                <div class="widget-config-field">
+                    <label>Custom bg</label>
+                    <input type="color" class="widget-input" name="customBg"
+                           value="${escapeAttr(config.customBg || ACTIVE_WIDGET_CUSTOM_BG_DEFAULT)}"
+                           data-test="cfg-customBg">
+                </div>
+                <div class="widget-config-field">
+                    <label>Custom fg</label>
+                    <input type="color" class="widget-input" name="customFg"
+                           value="${escapeAttr(config.customFg || ACTIVE_WIDGET_CUSTOM_FG_DEFAULT)}"
+                           data-test="cfg-customFg">
+                    <small class="widget-config-hint">
+                        Видим только на виджетах с текстом (label).
+                    </small>
+                </div>
+            </div>
+            `
+            : '';
+
         return `
             ${renderSensorBindingFields(config, { fieldPrefix: '' })}
             ${styleSelect}
+            ${themeBlock}
             <div class="widget-config-field">
                 <label>Label (optional)</label>
                 <input type="text" class="widget-input" name="label"
@@ -349,7 +397,26 @@ class ActiveDashboardWidget extends DashboardWidget {
         const styleEl = form.querySelector('[name="style"]');
         if (styleEl) base.style = styleEl.value;
         const extra = this.parseActiveConfigFields ? this.parseActiveConfigFields(form) : {};
-        return { ...base, ...extra };
+        const result = { ...base, ...extra };
+
+        // --- THEME normalization (Task 8) ---
+        if (!this.supportsColorTheme) return result;
+
+        const raw = form.querySelector('[name="colorTheme"]')?.value || 'default';
+        const allowed = ['default', 'custom', ...ACTIVE_WIDGET_THEME_NAMES];
+        const theme = allowed.includes(raw) ? raw : 'default';
+
+        // Sparse: 'default' выпускается (не пачкает JSON dashboard'а).
+        if (theme === 'default') return result;
+
+        if (theme !== 'custom') return { ...result, colorTheme: theme };
+
+        // Custom — нормализуем hex'ы: пустые / невалидные → дефолты.
+        const rawBg = form.querySelector('[name="customBg"]')?.value?.trim() || '';
+        const rawFg = form.querySelector('[name="customFg"]')?.value?.trim() || '';
+        const customBg = HEX_COLOR_REGEX.test(rawBg) ? rawBg : ACTIVE_WIDGET_CUSTOM_BG_DEFAULT;
+        const customFg = HEX_COLOR_REGEX.test(rawFg) ? rawFg : ACTIVE_WIDGET_CUSTOM_FG_DEFAULT;
+        return { ...result, colorTheme: 'custom', customBg, customFg };
     }
 
     // IMPORTANT для subclass'ов: если переопределяешь — ОБЯЗАТЕЛЬНО вызывай
@@ -360,11 +427,66 @@ class ActiveDashboardWidget extends DashboardWidget {
         if (form.dataset.activeHandlersWired === 'true') return;
         form.dataset.activeHandlersWired = 'true';
         initSensorBindingHandlers(form, config, { fieldPrefix: '' });
+
+        // --- THEME reveal handler (всё выше — без изменений) ---
+        if (!this.supportsColorTheme) return;
+        const themeSel = form.querySelector('[name="colorTheme"]');
+        const customRow = form.querySelector('[data-color-custom-row]');
+        if (!themeSel || !customRow) return;  // graceful: themeBlock не отрендерился
+        const update = () => {
+            customRow.style.display = themeSel.value === 'custom' ? '' : 'none';
+        };
+        themeSel.addEventListener('change', update);
+        update();  // initial sync (для reopen с config.colorTheme === 'custom')
     }
 
     static parseActiveConfigFields(form) {
         // Override: разобрать поля из getActiveConfigFields().
         return {};
+    }
+
+    // Применяет theme к this.container (а не this.element — для consistency со
+    // статус-классами data-active-widget / active-success / active-error и т.п.,
+    // которые тоже живут на container).
+    //
+    // Идемпотентен: чистит прошлое состояние перед установкой нового. Это load-bearing
+    // для in-place reconfigure path (если будущая live preview перестанет делать full
+    // re-render). При текущем full-rebuild через applyWidgetConfig (62-dashboard-manager.js)
+    // container.className wipe'ится — но inline style.--awc-bg НЕ затрагивается,
+    // поэтому removeProperty обязателен.
+    _applyColorTheme() {
+        if (!this.constructor.supportsColorTheme) return;
+        const c = this.container;
+        if (!c) return;
+
+        // 1. Cleanup previous theme classes.
+        Array.from(c.classList)
+            .filter(cls => cls.startsWith('awc-theme-'))
+            .forEach(cls => c.classList.remove(cls));
+
+        // 2. Cleanup previous inline vars (для случая custom → preset / default).
+        c.style.removeProperty('--awc-bg');
+        c.style.removeProperty('--awc-fg');
+
+        const theme = this.config?.colorTheme;
+        const valid = theme === 'custom'
+            || (theme && ACTIVE_WIDGET_THEME_NAMES.includes(theme));
+
+        if (!valid) {
+            delete c.dataset.colorTheme;
+            return;
+        }
+        c.dataset.colorTheme = theme;
+
+        if (theme === 'custom') {
+            c.classList.add('awc-theme-custom');
+            c.style.setProperty('--awc-bg',
+                this.config.customBg || ACTIVE_WIDGET_CUSTOM_BG_DEFAULT);
+            c.style.setProperty('--awc-fg',
+                this.config.customFg || ACTIVE_WIDGET_CUSTOM_FG_DEFAULT);
+        } else {
+            c.classList.add(`awc-theme-${theme}`);
+        }
     }
 
     destroy() {

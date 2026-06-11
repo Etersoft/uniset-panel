@@ -322,6 +322,11 @@ make build
   `_setWriteState`, `_recomputeTitle` — наследуется и достаточно
 - `initConfigHandlers` можно переопределять только для дополнительных form handlers; обязательно вызвать `super.initConfigHandlers(form, config)` ровно один раз
 - `_updateInteractivityClass` можно переопределять только для дополнительной реакции на блокировку; обязательно вызвать `super._updateInteractivityClass()`
+- `_applyColorTheme()` — наследуется из base, вызывается из render subclass'а
+  ОДНОЙ строкой. Сам метод трогать не надо.
+- `static supportsColorTheme` — opt-in флаг (default `false` в base).
+  Subclass переопределяет в `true`, чтобы получить «Color theme» select в
+  config form и применение темы в render. См. подраздел ниже.
 
 **CSS-маркер:** dashboard-manager в `createWidget` выставляет `container.dataset.activeWidget = 'true'`
 для всех `widget instanceof ActiveDashboardWidget`. CSS правила (edit-mode grayscale, active-disabled)
@@ -538,6 +543,53 @@ IONC renderer'ом (`20-ionc-renderer.js`) и активным generator-вид�
 отдельными spec'ами: `dashboard-active-toggle.spec.ts`, `dashboard-active-button.spec.ts`,
 `dashboard-active-setpoint.spec.ts`, `dashboard-active-generator.spec.ts`; config persistence —
 `dashboard-widget-settings.spec.ts`.
+
+### Color themes для active widgets
+
+5 preset тем (primary/danger/warning/success/neutral) + custom через color
+pickers. Реализованы через CSS-variables (`--awc-bg`, `--awc-fg`,
+derived `--awc-bg-pressed`, `--awc-bg-light`) и theme classes
+(`awc-theme-<name>`) на `widget.container`.
+
+**Opt-in:**
+
+```javascript
+class MyWidget extends ActiveDashboardWidget {
+    static supportsColorTheme = true;  // получает theme select в config form
+    render() {
+        // ... existing logic ...
+        this._applyColorTheme();  // одна строка в конце render
+    }
+}
+```
+
+**Контракт subclass:**
+- `static supportsColorTheme = true` (default `false` в base).
+- Вызов `this._applyColorTheme()` в конце `render()` (на `this.container`
+  каскадирует во все вложенные элементы виджета через CSS-vars).
+- В CSS использовать `var(--awc-bg, <current-hex>)` / `var(--awc-fg, …)` /
+  `var(--awc-bg-pressed, …)` с fallback на текущий хекс — default-вид
+  не меняется.
+
+**Палитра — single source of truth в `style.css`** (раздел
+«Active widget color themes — preset palette»). JS знает только имена
+(`ACTIVE_WIDGET_THEME_NAMES` в `00-constants.js`).
+
+**Defaults для custom** (`ACTIVE_WIDGET_CUSTOM_BG_DEFAULT`,
+`ACTIVE_WIDGET_CUSTOM_FG_DEFAULT`) — используются в config form template,
+parseConfigForm normalization, и runtime fallback'е `_applyColorTheme`.
+
+**Не темизуются** (статусные индикаторы, SCADA-конвенция):
+- `pb-pulse-flash` keyframe (жёлтый flash при pulse click)
+- `active-success` (зелёный) / `active-error` (purple) / `active-pending` /
+  dirty (янтарный) / frozen (icy cyan)
+- `divergence`-граница на toggle (жёлтая)
+
+**Sparse serialization:** `colorTheme === 'default'` НЕ записывается в
+JSON dashboard'а (выпускается из parseConfigForm). Это сохраняет clean
+diff'ы export'ов.
+
+Spec: `docs/superpowers/specs/2026-06-11-active-widget-color-themes-design.md`.
 
 ### Zones reuse picker
 

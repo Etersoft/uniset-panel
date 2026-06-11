@@ -24,6 +24,7 @@ class PushButtonWidget extends ActiveDashboardWidget {
     static description = 'Momentary/pulse command button (write-only)';
     static icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>';
     static styles = ['flat', 'mushroom', 'pill'];
+    static supportsColorTheme = true;
     static defaultStyle = 'flat';
     // Default — для flat (наиболее частый стиль). 2×1 был тесен: текст
     // вроде «STOP/EMERGENCY» налезал на края, оператору неудобно. 3×2 даёт
@@ -83,6 +84,7 @@ class PushButtonWidget extends ActiveDashboardWidget {
         } else {
             btn.addEventListener('click', () => this._onPulseClick());
         }
+        this._applyColorTheme();
     }
 
     // === Pulse mode handler ===
