@@ -73,4 +73,69 @@ test.describe('PushButton color theme', () => {
         // #3b82f6 → rgb(59, 130, 246)
         expect(bg).toMatch(/rgb\(\s*59,\s*130,\s*246\s*\)/);
     });
+
+    test('theme=custom: inline vars set, container получает awc-theme-custom', async ({ page }) => {
+        await createPbDashboard(page, { colorTheme: 'custom', customBg: '#ff6600', customFg: '#000000' });
+        const container = page.locator('.dashboard-widget').filter({ has: page.locator('.pushbutton-widget') }).first();
+        await expect(container).toHaveClass(/awc-theme-custom/);
+        await expect(container).toHaveAttribute('data-color-theme', 'custom');
+
+        const vars = await container.evaluate((el: HTMLElement) => ({
+            bg: el.style.getPropertyValue('--awc-bg'),
+            fg: el.style.getPropertyValue('--awc-fg'),
+        }));
+        expect(vars.bg).toBe('#ff6600');
+        expect(vars.fg).toBe('#000000');
+
+        const btn = page.locator('.pushbutton-widget .pb-btn').first();
+        const bg = await btn.evaluate((el) => getComputedStyle(el).backgroundColor);
+        // #ff6600 → rgb(255, 102, 0)
+        expect(bg).toMatch(/rgb\(\s*255,\s*102,\s*0\s*\)/);
+    });
+
+    test('switching: danger → custom → default cleanup (inline vars cleared)', async ({ page }) => {
+        await createPbDashboard(page, { colorTheme: 'danger' });
+        // applyWidgetConfig() в реальной реализации читает config из dialog DOM —
+        // напрямую вызывать с config не получается. Воспроизводим его внутренний
+        // re-render path: cfg mutate + className reset + widget.config + render().
+        // Это то же самое, что делает 62-dashboard-manager.js applyWidgetConfig
+        // в ветке "Update existing widget" (см. строки 1213+).
+        await page.evaluate(() => {
+            const w: any = window;
+            const dash = w.dashboardState.dashboards.get('TEST_PB_THEME');
+            const wc = dash.widgets[0];
+            wc.config = { ...wc.config, colorTheme: 'custom', customBg: '#ff6600', customFg: '#000000' };
+            const widget = w.dashboardState.widgets.get(wc.id);
+            widget.config = wc.config;
+            // applyWidgetConfig wipe'ает className до базового + transparent.
+            // _applyColorTheme (вызываемый из render()) восстановит theme class.
+            widget.container.className = `dashboard-widget widget-${wc.position.width}x${wc.position.height} transparent`;
+            widget.container.querySelector('.widget-title-label')?.remove();
+            widget.container.querySelector('.widget-content')?.remove();
+            w.dashboardManager.renderWidgetContent(widget, wc);
+        });
+        const container = page.locator('.dashboard-widget').filter({ has: page.locator('.pushbutton-widget') }).first();
+        await expect(container).toHaveClass(/awc-theme-custom/);
+
+        // Переключаемся обратно в default — inline vars должны очиститься.
+        await page.evaluate(() => {
+            const w: any = window;
+            const dash = w.dashboardState.dashboards.get('TEST_PB_THEME');
+            const wc = dash.widgets[0];
+            wc.config = { ...wc.config, colorTheme: 'default', customBg: undefined, customFg: undefined };
+            const widget = w.dashboardState.widgets.get(wc.id);
+            widget.config = wc.config;
+            widget.container.className = `dashboard-widget widget-${wc.position.width}x${wc.position.height} transparent`;
+            widget.container.querySelector('.widget-title-label')?.remove();
+            widget.container.querySelector('.widget-content')?.remove();
+            w.dashboardManager.renderWidgetContent(widget, wc);
+        });
+        await expect(container).not.toHaveClass(/awc-theme-/);
+        const vars = await container.evaluate((el: HTMLElement) => ({
+            bg: el.style.getPropertyValue('--awc-bg'),
+            fg: el.style.getPropertyValue('--awc-fg'),
+        }));
+        expect(vars.bg).toBe('');
+        expect(vars.fg).toBe('');
+    });
 });
