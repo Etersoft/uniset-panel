@@ -9328,22 +9328,27 @@ button.rotate-quick-btn:active {
     transform: translateY(2px);
 }
 
-/* === pill — Compact outline === */
+/* === pill — Compact outline ===
+   Idle тоже темизуется (var(--awc-bg) с fallback на нейтрал) — оператор
+   на touchscreen видит SCADA-семантику цвета без hover'а. Без темы pill
+   остаётся серым outline (default-вид сохраняется через fallback). */
 .pushbutton-style-pill .pb-btn {
     padding: 8px 18px;
     background: transparent;
-    color: #d8dce2;
-    border: 2px solid #6b7280;
+    color: var(--awc-bg, #d8dce2);
+    border: 2px solid var(--awc-bg, #6b7280);
     border-radius: 20px;
     font-size: 12px;
 }
 .pushbutton-style-pill .pb-btn:hover {
-    border-color: var(--awc-bg, #22c55e);
-    color: var(--awc-bg, #22c55e);
+    /* В hover слегка ярче — color-mix lighten 15% от accent. Default (без темы):
+       fallback на старый ярко-зелёный #22c55e (бывший hover hint). */
+    border-color: color-mix(in srgb, var(--awc-bg, #22c55e), white 15%);
+    color:        color-mix(in srgb, var(--awc-bg, #22c55e), white 15%);
 }
 .pushbutton-style-pill .pb-btn.pressed {
-    background: var(--awc-bg, #22c55e);
-    color: var(--awc-fg, #fff);
+    background:   var(--awc-bg, #22c55e);
+    color:        var(--awc-fg, #fff);
     border-color: var(--awc-bg, #22c55e);
 }
 
