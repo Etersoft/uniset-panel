@@ -138,4 +138,32 @@ test.describe('PushButton color theme', () => {
         expect(vars.bg).toBe('');
         expect(vars.fg).toBe('');
     });
+
+    test('pill idle: tема перекрашивает border/color без hover (touchscreen-friendly)', async ({ page }) => {
+        // Regression: до этого фикса pill в idle оставался серым outline
+        // даже с темой — оператор не видел SCADA-семантику без hover'а
+        // (что не работает на touchscreen). Fix: var(--awc-bg) теперь
+        // применяется и в idle, не только на hover/pressed.
+        await createPbDashboard(page, { style: 'pill', colorTheme: 'danger' });
+        const btn = page.locator('.pushbutton-widget .pb-btn').first();
+        const styles = await btn.evaluate((el) => ({
+            color: getComputedStyle(el).color,
+            border: getComputedStyle(el).borderColor,
+        }));
+        // #ef4444 → rgb(239, 68, 68) на color и border-color
+        expect(styles.color).toMatch(/rgb\(\s*239,\s*68,\s*68\s*\)/);
+        expect(styles.border).toMatch(/rgb\(\s*239,\s*68,\s*68\s*\)/);
+    });
+
+    test('pill idle backwards-compat: без темы — старый нейтральный outline', async ({ page }) => {
+        await createPbDashboard(page, { style: 'pill' }); // no colorTheme
+        const btn = page.locator('.pushbutton-widget .pb-btn').first();
+        const styles = await btn.evaluate((el) => ({
+            color: getComputedStyle(el).color,
+            border: getComputedStyle(el).borderColor,
+        }));
+        // #d8dce2 → rgb(216, 220, 226) color, #6b7280 → rgb(107, 114, 128) border
+        expect(styles.color).toMatch(/rgb\(\s*216,\s*220,\s*226\s*\)/);
+        expect(styles.border).toMatch(/rgb\(\s*107,\s*114,\s*128\s*\)/);
+    });
 });

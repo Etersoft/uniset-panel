@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "meta": {
+    "name": "Push Button Themes Demo",
+    "description": "Демонстрация 5 preset тем + custom + default + темизованный mushroom"
+  },
+  "grid": {
+    "cols": 24,
+    "rowHeight": 30,
+    "gap": 8
+  },
+  "widgets": [
+    {
+      "id": "header",
+      "type": "label",
+      "position": { "col": 0, "row": 0, "width": 24, "height": 2 },
+      "config": {
+        "text": "Push Button Color Themes",
+        "fontSize": "large",
+        "align": "center",
+        "color": "#9ca3af",
+        "transparent": true
+      }
+    },
+
+    { "id": "lbl-presets-flat", "type": "label",
+      "position": { "col": 0, "row": 3, "width": 24, "height": 1 },
+      "config": { "text": "Preset themes — flat style", "fontSize": "small", "align": "left", "color": "#9ca3af", "transparent": true } },
+
+    { "id": "pb-primary", "type": "pushbutton",
+      "position": { "col": 0, "row": 4, "width": 4, "height": 2 },
+      "config": { "sensor": "DemoBtn", "sensorId": 1, "objectName": "SharedMemory", "style": "flat", "label": "PRIMARY", "colorTheme": "primary" } },
+
+    { "id": "pb-danger", "type": "pushbutton",
+      "position": { "col": 5, "row": 4, "width": 4, "height": 2 },
+      "config": { "sensor": "DemoBtn", "sensorId": 1, "objectName": "SharedMemory", "style": "flat", "label": "DANGER", "colorTheme": "danger" } },
+
+    { "id": "pb-warning", "type": "pushbutton",
+      "position": { "col": 10, "row": 4, "width": 4, "height": 2 },
+      "config": { "sensor": "DemoBtn", "sensorId": 1, "objectName": "SharedMemory", "style": "flat", "label": "WARNING", "colorTheme": "warning" } },
+
+    { "id": "pb-success", "type": "pushbutton",
+      "position": { "col": 15, "row": 4, "width": 4, "height": 2 },
+      "config": { "sensor": "DemoBtn", "sensorId": 1, "objectName": "SharedMemory", "style": "flat", "label": "SUCCESS", "colorTheme": "success" } },
+
+    { "id": "pb-neutral", "type": "pushbutton",
+      "position": { "col": 20, "row": 4, "width": 4, "height": 2 },
+      "config": { "sensor": "DemoBtn", "sensorId": 1, "objectName": "SharedMemory", "style": "flat", "label": "NEUTRAL", "colorTheme": "neutral" } },
+
+    { "id": "lbl-others-flat", "type": "label",
+      "position": { "col": 0, "row": 7, "width": 24, "height": 1 },
+      "config": { "text": "Default (нет темы) + Custom (color pickers)", "fontSize": "small", "align": "left", "color": "#9ca3af", "transparent": true } },
+
+    { "id": "pb-default", "type": "pushbutton",
+      "position": { "col": 0, "row": 8, "width": 4, "height": 2 },
+      "config": { "sensor": "DemoBtn", "sensorId": 1, "objectName": "SharedMemory", "style": "flat", "label": "DEFAULT" } },
+
+    { "id": "pb-custom-orange", "type": "pushbutton",
+      "position": { "col": 5, "row": 8, "width": 4, "height": 2 },
+      "config": { "sensor": "DemoBtn", "sensorId": 1, "objectName": "SharedMemory", "style": "flat", "label": "CUSTOM 1", "colorTheme": "custom", "customBg": "#ff6600", "customFg": "#000000" } },
+
+    { "id": "pb-custom-purple", "type": "pushbutton",
+      "position": { "col": 10, "row": 8, "width": 4, "height": 2 },
+      "config": { "sensor": "DemoBtn", "sensorId": 1, "objectName": "SharedMemory", "style": "flat", "label": "CUSTOM 2", "colorTheme": "custom", "customBg": "#8b5cf6", "customFg": "#ffffff" } },
+
+    { "id": "pb-custom-pink", "type": "pushbutton",
+      "position": { "col": 15, "row": 8, "width": 4, "height": 2 },
+      "config": { "sensor": "DemoBtn", "sensorId": 1, "objectName": "SharedMemory", "style": "flat", "label": "CUSTOM 3", "colorTheme": "custom", "customBg": "#ec4899", "customFg": "#ffffff" } },
+
+    { "id": "lbl-mushroom", "type": "label",
+      "position": { "col": 0, "row": 11, "width": 24, "height": 1 },
+      "config": { "text": "Mushroom style + темы (3D radial gradient)", "fontSize": "small", "align": "left", "color": "#9ca3af", "transparent": true } },
+
+    { "id": "pb-mush-default", "type": "pushbutton",
+      "position": { "col": 0, "row": 12, "width": 3, "height": 3 },
+      "config": { "sensor": "DemoBtn", "sensorId": 1, "objectName": "SharedMemory", "style": "mushroom", "label": "STOP" } },
+
+    { "id": "pb-mush-danger", "type": "pushbutton",
+      "position": { "col": 4, "row": 12, "width": 3, "height": 3 },
+      "config": { "sensor": "DemoBtn", "sensorId": 1, "objectName": "SharedMemory", "style": "mushroom", "label": "STOP", "colorTheme": "danger" } },
+
+    { "id": "pb-mush-warning", "type": "pushbutton",
+      "position": { "col": 8, "row": 12, "width": 3, "height": 3 },
+      "config": { "sensor": "DemoBtn", "sensorId": 1, "objectName": "SharedMemory", "style": "mushroom", "label": "HOLD", "colorTheme": "warning" } },
+
+    { "id": "pb-mush-success", "type": "pushbutton",
+      "position": { "col": 12, "row": 12, "width": 3, "height": 3 },
+      "config": { "sensor": "DemoBtn", "sensorId": 1, "objectName": "SharedMemory", "style": "mushroom", "label": "START", "colorTheme": "success" } },
+
+    { "id": "lbl-pill", "type": "label",
+      "position": { "col": 0, "row": 16, "width": 24, "height": 1 },
+      "config": { "text": "Pill style + темы (compact outline)", "fontSize": "small", "align": "left", "color": "#9ca3af", "transparent": true } },
+
+    { "id": "pb-pill-default", "type": "pushbutton",
+      "position": { "col": 0, "row": 17, "width": 4, "height": 1 },
+      "config": { "sensor": "DemoBtn", "sensorId": 1, "objectName": "SharedMemory", "style": "pill", "label": "ACK" } },
+
+    { "id": "pb-pill-danger", "type": "pushbutton",
+      "position": { "col": 5, "row": 17, "width": 4, "height": 1 },
+      "config": { "sensor": "DemoBtn", "sensorId": 1, "objectName": "SharedMemory", "style": "pill", "label": "ABORT", "colorTheme": "danger" } },
+
+    { "id": "pb-pill-warning", "type": "pushbutton",
+      "position": { "col": 10, "row": 17, "width": 4, "height": 1 },
+      "config": { "sensor": "DemoBtn", "sensorId": 1, "objectName": "SharedMemory", "style": "pill", "label": "WARN", "colorTheme": "warning" } },
+
+    { "id": "pb-pill-success", "type": "pushbutton",
+      "position": { "col": 15, "row": 17, "width": 4, "height": 1 },
+      "config": { "sensor": "DemoBtn", "sensorId": 1, "objectName": "SharedMemory", "style": "pill", "label": "OK", "colorTheme": "success" } }
+  ]
+}
