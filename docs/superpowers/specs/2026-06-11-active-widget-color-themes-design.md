@@ -217,22 +217,22 @@ class ActiveDashboardWidget extends DashboardWidget {
 
 ### Widget integration
 
+> **Все snippet'ы ниже — деltа поверх существующих implementation'ов**, а не
+> их replacement. Показаны только новые строки и контекст вокруг них.
+> Существующий код render() / momentary handlers / pulse timing / dispatch
+> renderSlider()/renderCheckbox() — НЕ меняется.
+
 **PushButton (`61-dashboard-active-button.js`):**
 
 ```js
 class PushButtonWidget extends ActiveDashboardWidget {
-    static supportsColorTheme = true;  // opt-in
-    // ... existing fields ...
+    static supportsColorTheme = true;  // ← добавить (opt-in)
+    // ... existing static fields, constructor, all helpers — БЕЗ изменений ...
 
     render() {
-        const style = this._currentStyle();
-        const label = this.config?.label || this.config?.sensor || 'BUTTON';
-        this.element = document.createElement('div');
-        this.element.className = `widget-content pushbutton-widget pushbutton-style-${style}`;
-        this.element.innerHTML = `<button class="pb-btn" data-test="btn">${escapeHtml(label)}</button>`;
-        this.container.appendChild(this.element);
-        this._applyColorTheme();  // ← одна строка subclass touch
-        // ... existing click/momentary binding ...
+        // ... existing logic построения this.element и appendChild ...
+        this._applyColorTheme();  // ← одна новая строка в конце render
+        // ... existing click/momentary binding — без изменений ...
     }
 }
 ```
@@ -241,30 +241,54 @@ class PushButtonWidget extends ActiveDashboardWidget {
 
 ```js
 class ToggleWidget extends ActiveDashboardWidget {
-    static supportsColorTheme = true;  // opt-in
+    static supportsColorTheme = true;  // ← добавить (opt-in)
     // ...
 
     render() {
-        // ... existing className build для toggle-style-${style} ...
-        this._applyColorTheme();  // ← одна строка subclass touch
+        // existing render() — диспатчер на renderSlider() / renderCheckbox().
+        // Тема применяется на корне (this.container), не зависит от внутренней разметки,
+        // поэтому вызов делаем на уровне render() (не в renderSlider/renderCheckbox).
+        // ... existing dispatch ...
+        this._applyColorTheme();  // ← одна новая строка после dispatch'а
     }
 }
 ```
 
-> Subclass touch per widget — ровно одна строка в render. Setpoint / Generator
-> остаются на `static supportsColorTheme = false` (наследуется из base) → их
-> config form не получает theme select.
+> Subclass touch per widget — `supportsColorTheme = true` + одна строка
+> `this._applyColorTheme()` в render. Setpoint / Generator остаются на
+> унаследованном `supportsColorTheme = false` → их config form не получает
+> theme select (см. opt-in в base, ниже).
 
 ### Re-render контракт
 
-`62-dashboard-manager.js applyWidgetConfig` после save конфига полностью
-удаляет `.widget-content` и вызывает `renderWidgetContent` заново → создаётся
-новый widget instance, у которого `render()` зовёт `_applyColorTheme()` уже
-свежим. Cleanup происходит автоматически (старый container с прошлым классом
-удаляется вместе с widget instance, новый создаётся с актуальным).
+`62-dashboard-manager.js applyWidgetConfig` после save конфига:
 
-**Контракт `_applyColorTheme()` идемпотентен** — пункты 1–3 чистят прошлое
-состояние перед установкой нового. Это позволяет:
+1. **Widget instance ПЕРЕИСПОЛЬЗУЕТСЯ** — `widget.config = config` (не пересоздаётся).
+2. **`widget.container` ПЕРЕИСПОЛЬЗУЕТСЯ** — тот же DOM-узел `.dashboard-widget`.
+3. **`widget.container.className` ПЕРЕПРИСВАИВАЕТСЯ** на
+   `"dashboard-widget widget-${w}x${h}"` — это **стирает все классы на
+   container**, включая `awc-theme-*` и `data-active-widget`-производные.
+4. **Только `.widget-content` и `.widget-title-label` удаляются и
+   пересоздаются** через `renderWidgetContent` → `widget.render()`.
+5. `widget.render()` зовёт `this._applyColorTheme()` (последняя строка),
+   который **re-устанавливает** актуальный `awc-theme-*` класс и (для custom)
+   inline CSS-vars на ту же container.
+
+**Cleanup происходит за счёт идемпотентности `_applyColorTheme`, а НЕ за счёт
+пересоздания container.** Это критично:
+
+- При переключении preset_A → preset_B: container.className wipe убрал бы
+  старый класс «бесплатно», но при in-place reconfigure (если когда-то
+  добавим live preview без full save) wipe'а не будет — нужен явный cleanup
+  в `_applyColorTheme` (шаги 1–3 в его теле). Это и так сделано — спецификация
+  корректна для обоих path'ей.
+- При переключении custom → default/preset: inline `--awc-bg`/`--awc-fg`
+  vars остаются на `container.style` после wipe className (style — отдельное
+  свойство). Шаг 2 в `_applyColorTheme` (`removeProperty`) обязательно их
+  снимает.
+
+**Контракт `_applyColorTheme()` идемпотентен** — пункты 1–3 в его теле чистят
+прошлое состояние перед установкой нового. Это позволяет:
 - вызывать на каждом render (включая в потенциальном live-preview path);
 - безопасно использовать при in-place reconfigure (если когда-то добавим без
   full rebuild — спецификация уже корректна).
@@ -392,36 +416,85 @@ const themeBlock = this.constructor.supportsColorTheme
 Pre-select правильной опции при reopen: тот же паттерн `selected` на нужном
 `<option>` (обычный для проекта; не выписываю отдельно).
 
-`initConfigHandlers` в base — conditional reveal custom-блока при выборе
-`custom` (idempotent через `form.dataset.colorHandlersWired`, как у
-`setpoint-style`).
+`initConfigHandlers` в base расширяется conditional-reveal handler'ом для
+custom-row. Idempotency обеспечивается **существующим** outer guard
+`form.dataset.activeHandlersWired` (`61-dashboard-active-base.js:360`) —
+отдельный `colorHandlersWired` flag НЕ нужен.
 
-`parseConfigForm` в base — нормализация (см. ниже).
+```js
+// 61-dashboard-active-base.js — full new body of initConfigHandlers.
+// Сравни с текущей версией (lines 359-363) — добавлен только theme-блок,
+// существующая логика sensor binding handlers НЕ меняется.
+static initConfigHandlers(form, config = {}) {
+    if (form.dataset.activeHandlersWired === 'true') return;
+    form.dataset.activeHandlersWired = 'true';
+    initSensorBindingHandlers(form, config, { fieldPrefix: '' });
+
+    // --- THEME (новое, всё выше — без изменений) ---
+    if (!this.supportsColorTheme) return;
+    const themeSel = form.querySelector('[name="colorTheme"]');
+    const customRow = form.querySelector('[data-color-custom-row]');
+    if (!themeSel || !customRow) return;  // graceful: themeBlock не отрендерился
+    const update = () => {
+        customRow.style.display = themeSel.value === 'custom' ? '' : 'none';
+    };
+    themeSel.addEventListener('change', update);
+    update();  // initial sync (для reopen с config.colorTheme === 'custom')
+}
+```
+
+**Subclass interaction:** subclass'ы (PushButton, Toggle, Setpoint, Generator)
+вызывают `super.initConfigHandlers(form, config)` ровно один раз (контракт
+CLAUDE.md). Для subclass'ов с `supportsColorTheme = false` (Setpoint/Generator)
+theme select в форме НЕ отрендерится → `themeSel === null` → graceful no-op
+без attach'а listener'а. Без false-positive wiring.
 
 ### Config validation & normalization
 
-Вся канонизация — **в одном месте**, `parseConfigForm` в base:
+Вся theme-канонизация добавляется **в существующий `parseConfigForm` base
+class'а** (`61-dashboard-active-base.js:342-353`). НЕЛЬЗЯ заменить тело на
+`super.parseConfigForm(form) + theme handling` — `super` это
+`DashboardWidget` (`60-dashboard-base.js`), который возвращает только
+`{sensor, label}` и пропустил бы sensor binding / style /
+requireConfirmation / `parseActiveConfigFields` spread. Это уничтожило бы
+config persistence ВСЕХ active widget'ов.
+
+Правильная форма — добавить theme-блок поверх существующих полей:
 
 ```js
-parseConfigForm(form) {
-    const base = super.parseConfigForm(form);
-    if (!this.constructor.supportsColorTheme) return base;
+// 61-dashboard-active-base.js — full new body of parseConfigForm.
+// Сравни с текущей версией (lines 342-353) — добавлен только theme-блок
+// в конце, остальное идентично существующему коду.
+static parseConfigForm(form) {
+    const binding = parseSensorBindingFields(form, { fieldPrefix: '' });
+    const base = {
+        ...binding,
+        label:      form.querySelector('[name="label"]')?.value || '',
+        requireConfirmation: form.querySelector('[name="requireConfirmation"]')?.checked || false,
+    };
+    const styleEl = form.querySelector('[name="style"]');
+    if (styleEl) base.style = styleEl.value;
+    const extra = this.parseActiveConfigFields ? this.parseActiveConfigFields(form) : {};
+    const result = { ...base, ...extra };
+
+    // --- THEME (новое, остальное выше — без изменений) ---
+    if (!this.supportsColorTheme) return result;
 
     const raw = form.querySelector('[name="colorTheme"]')?.value || 'default';
     const allowed = ['default', 'custom', ...ACTIVE_WIDGET_THEME_NAMES];
     const theme = allowed.includes(raw) ? raw : 'default';
 
-    // Sparse: 'default' выпускается из JSON.
-    if (theme === 'default') return base;
+    // Sparse: 'default' — поле НЕ записывается в result (выпускается из JSON).
+    if (theme === 'default') return result;
 
-    if (theme !== 'custom') return { ...base, colorTheme: theme };
+    if (theme !== 'custom') return { ...result, colorTheme: theme };
 
     // Custom — нормализуем hex'ы: пустые / невалидные → дефолты.
     const rawBg = form.querySelector('[name="customBg"]')?.value?.trim() || '';
     const rawFg = form.querySelector('[name="customFg"]')?.value?.trim() || '';
     const customBg = HEX_COLOR_REGEX.test(rawBg) ? rawBg : ACTIVE_WIDGET_CUSTOM_BG_DEFAULT;
     const customFg = HEX_COLOR_REGEX.test(rawFg) ? rawFg : ACTIVE_WIDGET_CUSTOM_FG_DEFAULT;
-    return { ...base, colorTheme: 'custom', customBg, customFg };
+    return { ...result, colorTheme: 'custom', customBg, customFg };
 }
 ```
 
@@ -449,8 +522,13 @@ config не падает, рендерится как default. При перво
 
 **`dashboard-active-color-theme.test.ts`:**
 - `getConfigForm` рендерит theme select с 7 опциями когда `supportsColorTheme=true`.
+- `getConfigForm` рендерит theme select **после** style select'а и **перед**
+  requireConfirmation checkbox'ом (DOM order assertion через
+  `compareDocumentPosition`).
 - `getConfigForm` НЕ рендерит theme select когда `supportsColorTheme=false`
   (regression guard для Setpoint/Generator).
+- `getConfigForm` НЕ рендерит theme select при отсутствии флага (default
+  `false` в base class — наследуется без override).
 - `parseConfigForm` для `colorTheme='default'` — поле НЕ попадает в результат
   (sparse serialization).
 - `parseConfigForm` для каждого preset'а — возвращает корректное имя.
