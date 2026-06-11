@@ -290,6 +290,18 @@ if (typeof globalThis !== 'undefined') {
     });
 }
 
+// === Active widget color themes ===
+// Список валидных имён preset-тем. Палитра хексов — в CSS (.awc-theme-*).
+const ACTIVE_WIDGET_THEME_NAMES = ['primary', 'danger', 'warning', 'success', 'neutral'];
+
+// Defaults для custom pickers — используются и в config form template,
+// и в runtime fallback'е (_applyColorTheme), и в parseConfigForm normalization.
+const ACTIVE_WIDGET_CUSTOM_BG_DEFAULT = '#3b82f6';
+const ACTIVE_WIDGET_CUSTOM_FG_DEFAULT = '#ffffff';
+
+// Hex validation pattern для нормализации custom pickers'а в parseConfigForm.
+const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/;
+
 
 // === 00-state.js ===
 // Идентификатор сервера для SharedMemory (SM) событий
