@@ -295,5 +295,8 @@ const ACTIVE_WIDGET_THEME_NAMES = ['primary', 'danger', 'warning', 'success', 'n
 const ACTIVE_WIDGET_CUSTOM_BG_DEFAULT = '#3b82f6';
 const ACTIVE_WIDGET_CUSTOM_FG_DEFAULT = '#ffffff';
 
+// Default LED color для ToggleWidget style='button' — amber, SCADA convention.
+const TOGGLE_BUTTON_LED_DEFAULT = '#fde047';
+
 // Hex validation pattern для нормализации custom pickers'а в parseConfigForm.
 const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/;

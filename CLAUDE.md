@@ -334,21 +334,36 @@ make build
 
 **ToggleWidget (`61-dashboard-active-toggle.js`):** двух-состояный переключатель для DI/DO/AI/AO датчиков.
 Конфиг: `serverId`/`objectName`/`sensor`/`sensorId` (от base), `valueOff`/`valueOn` (любые числа),
-`labelOff`/`labelOn` (текстовые подписи), `style` (default `'slider'` — список из `static styles`).
+`labelOff`/`labelOn` (текстовые подписи), `style` (default `'slider'` — список из `static styles`),
+`ledColor` (hex string, только для `style='button'`, default `#fde047`).
 
-**Поддерживаемые стили** через `static styles = ['slider', 'checkbox']`:
+**Поддерживаемые стили** через `static styles = ['slider', 'checkbox', 'button']`:
 - **`slider`** (default, defaultSize 3×2): слитая композиция — цвет track = feedback,
   позиция handle = command, жёлтая граница на `.toggle-track` при divergence.
   Layout column: name (top) + track + state-text (bottom).
 - **`checkbox`** (defaultSize 2×1 рекомендован): material flat 24×24 + label справа.
   ✓ при ON, dashed «?» при unknown, жёлтая граница на корневом `.toggle-widget` при divergence.
   Click anywhere on widget triggers writeValue. Layout row: `[checkbox] name`.
+- **`button`** (defaultSize 3×2): material flat button с LED индикатором.
+  OFF — нейтральный gray + потушенный LED. ON — `var(--awc-bg)` (цвет темы) + inset
+  shadow; LED `::before` горит цветом `var(--awc-led, #fde047)` с outer glow (default
+  amber, настраивается через `config.ledColor`).
+  Divergence — жёлтая outer рамка на корневом `.toggle-widget`. Label из chain:
+  `config.label` → `labelOn`/`labelOff` по `commandValue ?? feedbackValue`
+  (при pending command — показывает команду, не feedback) → `'—'`.
 
-`render()` диспатчит на `renderSlider()` / `renderCheckbox()` по `config.style`. Аналогично
-`renderCommand()` / `renderFeedback()`. Корневой div получает класс `toggle-style-{slider|checkbox}`.
+`render()` диспатчит на `renderSlider()` / `renderCheckbox()` / `renderButton()` по `config.style`.
+Аналогично `renderCommand()` / `renderFeedback()`. Корневой div получает класс
+`toggle-style-{slider|checkbox|button}`.
 
 Серый «unknown» при `feedback ≠ valueOn ≠ valueOff` (типично для AI/AO) — фактическое
-число в `title` tooltip обоих стилей.
+число в `title` tooltip всех стилей (для button — на самом `<button>` элементе).
+
+**ledColor:** для `style='button'` config form содержит color picker (показывается
+conditionally — только при `style='button'`). Sparse — дефолт `#fde047` не пишется
+в JSON dashboard'а. Применяется через inline `style.setProperty('--awc-led')` на
+container; CSS использует `var(--awc-led, #fde047)`. При переключении стиля на
+slider/checkbox inline var снимается.
 
 **PushButtonWidget (`61-dashboard-active-button.js`):** write-only momentary/pulse
 кнопка для команд (RESET, START, STOP, ACK ALARM). Семантически отличается от
