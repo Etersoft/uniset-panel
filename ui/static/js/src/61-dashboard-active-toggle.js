@@ -26,22 +26,29 @@ class ToggleWidget extends ActiveDashboardWidget {
 
     // Доступные визуальные стили. base.getConfigForm рендерит style select
     // когда length > 1.
-    static styles = ['slider', 'checkbox', 'button'];
+    static styles = ['slider', 'checkbox', 'button', 'round'];
     static defaultStyle = 'slider';
 
     static supportsColorTheme = true;
 
+    // Style-aware default size — для round плотнее (2×2 ≈ touch-friendly icon),
+    // для button/slider/checkbox используем static defaultSize (3×2).
+    static getDefaultSizeForStyle(style) {
+        if (style === 'round') return { width: 2, height: 2 };
+        return undefined;
+    }
+
     // === Render ===
     render() {
         const style = this._currentStyle();
-        // Inline --awc-led ставим ТОЛЬКО для button style с не-дефолтным ledColor.
+        // Inline --awc-led ставим ТОЛЬКО для button и round style с не-дефолтным ledColor.
         // Иначе CSS использует fallback var(--awc-led, #fde047). Нормализуем
         // case + валидируем hex (защита от вручную правленых JSON / legacy
         // экспортов с uppercase).
         const ledRaw = typeof this.config?.ledColor === 'string'
             ? this.config.ledColor.toLowerCase()
             : null;
-        if (style === 'button'
+        if ((style === 'button' || style === 'round')
             && ledRaw
             && HEX_COLOR_REGEX.test(ledRaw)
             && ledRaw !== TOGGLE_BUTTON_LED_DEFAULT) {
@@ -53,6 +60,8 @@ class ToggleWidget extends ActiveDashboardWidget {
             this.renderCheckbox();
         } else if (style === 'button') {
             this.renderButton();
+        } else if (style === 'round') {
+            this.renderRound();
         } else {
             this.renderSlider();
         }
@@ -135,6 +144,8 @@ class ToggleWidget extends ActiveDashboardWidget {
             this.renderCheckboxCommand();
         } else if (style === 'button') {
             this.renderButtonCommand();
+        } else if (style === 'round') {
+            this.renderRoundCommand();
         } else {
             this.renderSliderCommand();
         }
@@ -171,6 +182,8 @@ class ToggleWidget extends ActiveDashboardWidget {
             this.renderCheckboxFeedback();
         } else if (style === 'button') {
             this.renderButtonFeedback();
+        } else if (style === 'round') {
+            this.renderRoundFeedback();
         } else {
             this.renderSliderFeedback();
         }
@@ -262,6 +275,53 @@ class ToggleWidget extends ActiveDashboardWidget {
         this.renderCommand();
     }
 
+    // === Round style ===
+
+    renderRound() {
+        const label = this._resolveButtonLabel();
+        this.element = document.createElement('div');
+        this.element.className = 'widget-content toggle-widget toggle-style-round';
+        this.element.innerHTML = `
+            <button class="toggle-btn" data-test="btn" data-state="off" type="button">${escapeHtml(label)}</button>
+        `;
+        this.container.appendChild(this.element);
+        const btnEl = this.element.querySelector('[data-test="btn"]');
+        btnEl.addEventListener('click', () => this.onClick());
+
+        this.renderFeedback();
+        this.renderCommand();
+    }
+
+    renderRoundCommand() {
+        // diverge применяется к корневому .toggle-widget (рамка вокруг круга
+        // лучше читается чем border на самой кнопке — конфликт с темами).
+        const root = this.element;
+        if (!root) return;
+        const diverges = this.commandValue !== null
+            && this.commandValue !== undefined
+            && this.commandValue !== this.feedbackValue;
+        root.classList.toggle('diverge', !!diverges);
+
+        // Label должен сразу показать новое состояние при click (commandValue
+        // опережает feedbackValue в pending window).
+        const btn = root.querySelector('[data-test="btn"]');
+        if (btn) btn.textContent = this._resolveButtonLabel();
+    }
+
+    renderRoundFeedback() {
+        const btn = this.element?.querySelector('[data-test="btn"]');
+        if (!btn) return;
+        const valueOn = this.config?.valueOn ?? 1;
+        btn.dataset.state = (this.feedbackValue === valueOn) ? 'on' : 'off';
+        btn.textContent = this._resolveButtonLabel();
+        if (this.feedbackValue !== null && this.feedbackValue !== undefined) {
+            btn.title = `actual: ${this.feedbackValue}`;
+        }
+        // Sync divergence — иначе после SSE update остаётся stale (паттерн из
+        // button feedback'а).
+        this.renderCommand();
+    }
+
     _resolveButtonLabel() {
         // Fallback chain:
         // 1) config.label если непустой
@@ -280,8 +340,9 @@ class ToggleWidget extends ActiveDashboardWidget {
 
     static getActiveConfigFields(config = {}) {
         const ledColor = config.ledColor || TOGGLE_BUTTON_LED_DEFAULT;
-        const isButtonStyle = (config.style || ToggleWidget.defaultStyle) === 'button';
-        const ledRowStyle = isButtonStyle ? '' : 'display: none;';
+        const style = config.style || ToggleWidget.defaultStyle;
+        const usesLed = (style === 'button' || style === 'round');
+        const ledRowStyle = usesLed ? '' : 'display: none;';
         return `
             <div class="widget-config-row">
                 <div class="widget-config-field">
@@ -309,7 +370,7 @@ class ToggleWidget extends ActiveDashboardWidget {
             </div>
             <div class="widget-config-row" data-button-style-row style="${ledRowStyle}">
                 <div class="widget-config-field">
-                    <label>LED color (button style only)</label>
+                    <label>LED color (button / round styles)</label>
                     <input type="color" class="widget-input" name="ledColor"
                            value="${ledColor}" data-test="cfg-ledColor">
                 </div>
@@ -327,7 +388,8 @@ class ToggleWidget extends ActiveDashboardWidget {
         if (!styleSelect || !ledRow) return;
 
         styleSelect.addEventListener('change', () => {
-            ledRow.style.display = styleSelect.value === 'button' ? '' : 'none';
+            const v = styleSelect.value;
+            ledRow.style.display = (v === 'button' || v === 'round') ? '' : 'none';
         });
     }
 
@@ -347,9 +409,9 @@ class ToggleWidget extends ActiveDashboardWidget {
             labelOn:  form.querySelector('[name="labelOn"]')?.value || '',
         };
 
-        // ledColor: только при style='button' и только если не-дефолт (sparse).
+        // ledColor: только при style='button' OR 'round', sparse (default не пишем).
         const style = form.querySelector('[name="style"]')?.value || ToggleWidget.defaultStyle;
-        if (style === 'button') {
+        if (style === 'button' || style === 'round') {
             const raw = (form.querySelector('[name="ledColor"]')?.value || '').toLowerCase();
             if (HEX_COLOR_REGEX.test(raw) && raw !== TOGGLE_BUTTON_LED_DEFAULT) {
                 out.ledColor = raw;
