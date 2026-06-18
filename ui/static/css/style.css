@@ -9333,6 +9333,83 @@ button.rotate-quick-btn:active {
     border-radius: 10px;
 }
 
+/* === Toggle widget (round style) === */
+
+.toggle-widget.toggle-style-round {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    box-sizing: border-box;
+}
+
+.toggle-widget.toggle-style-round .toggle-btn {
+    /* width: 100% + aspect-ratio 1/1 — height остаётся implicit, поэтому
+     * CSS-engine вычисляет height = width, получая истинный квадрат (и круг
+     * через border-radius: 50%) даже в non-square cells (например 3×2).
+     * max-height: 100% защищает от выхода за высоту контейнера. */
+    width: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    aspect-ratio: 1 / 1;
+    border: none;
+    border-radius: 50%;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: background 150ms ease, color 150ms ease;
+    font-family: inherit;
+    position: relative;
+    color: #d1d5db;
+    background: #374151;
+    padding: 0;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08),
+                0 2px 4px rgba(0, 0, 0, 0.4);
+    /* Label сдвинут вниз чтобы LED (::before, top: 14%) не пересекался с текстом. */
+    padding-top: 28%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+}
+
+/* ON state: цвет фона из темы */
+.toggle-widget.toggle-style-round .toggle-btn[data-state="on"] {
+    background: var(--awc-bg, #3b82f6);
+    color: var(--awc-fg, #ffffff);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.35);
+}
+
+/* LED dot — главный индикатор состояния, top center */
+.toggle-widget.toggle-style-round .toggle-btn::before {
+    content: "";
+    position: absolute;
+    top: 14%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 12%;
+    height: 12%;
+    border-radius: 50%;
+    transition: background 150ms ease, box-shadow 150ms ease;
+    background: #1f2937;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+.toggle-widget.toggle-style-round .toggle-btn[data-state="on"]::before {
+    background: var(--awc-led, #fde047);
+    box-shadow: 0 0 6px var(--awc-led, #fde047),
+                0 0 10px color-mix(in srgb, var(--awc-led, #fde047) 70%, transparent);
+}
+
+/* Divergence: жёлтая outer рамка вокруг круга */
+.toggle-widget.toggle-style-round.diverge {
+    box-shadow: 0 0 0 2px #fbbf24, 0 0 10px rgba(251, 191, 36, 0.5);
+    border-radius: 50%;
+}
+
 /* ============================================================================
  * PushButtonWidget — base layout
  * ============================================================================ */

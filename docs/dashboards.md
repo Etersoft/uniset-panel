@@ -465,6 +465,7 @@ dialog widget'а и поменяй вручную.
 | `slider` (default) | Слитая композиция: цвет track = feedback, позиция handle = command, жёлтая граница на divergence. Под track — текстовая state-label (ON/OFF) |
 | `checkbox` | Material flat 24×24 + label справа. ✓ при ON, dashed `?` при unknown (значение ≠ valueOn ≠ valueOff). Click anywhere on widget triggers writeValue |
 | `button` | Material flat button с LED индикатором. OFF — нейтральный gray + потушенный LED. ON — цвет [color theme](#color-themes) + горящий LED (default amber `#fde047`, настраивается через `ledColor`). Divergence — жёлтая outer рамка |
+| `round` | Круглая material flat кнопка с LED dot вверху. Default 2×2. LED цвет настраивается через `ledColor`. |
 
 **Clean state** (cmd === fb) — широкие style варианты для разных макетов:
 
@@ -478,6 +479,10 @@ dialog widget'а и поменяй вручную.
 
 ![Toggle button style](images/widget-toggle-button.png)
 
+**Round style** — компактная круглая кнопка с LED dot вверху. Default 2×2, плотнее чем button 3×2, для densely packed dashboard'ов:
+
+![Toggle round style](images/widget-toggle-round.png)
+
 **Настройки:**
 
 | Параметр | Описание |
@@ -485,12 +490,12 @@ dialog widget'а и поменяй вручную.
 | `objectName` | IONC объект (default `SharedMemory`) |
 | `sensor` | Имя датчика (autocomplete из IONC) |
 | `sensorId` | Числовой ID (резолвится autocomplete'ом) |
-| `style` | `slider`, `checkbox` или `button` |
+| `style` | `slider`, `checkbox`, `button` или `round` |
 | `valueOff` / `valueOn` | Числовые значения «выключено» / «включено» (default 0 / 1) |
-| `labelOff` / `labelOn` | Текстовые подписи (показываются в slider/checkbox; для `button` — fallback когда `label` пустой) |
-| `label` | Заголовок виджета. Для `button` — текст на самой кнопке (если пустой — fallback на labelOn/labelOff по value, потом `'—'`) |
-| `colorTheme` | Цветовая тема (primary/danger/warning/success/neutral/custom) — определяет цвет ON-фона для button style |
-| `ledColor` | (только `style='button'`) hex цвет LED индикатора, default `#fde047` (amber). Дефолт sparse — не пишется в JSON |
+| `labelOff` / `labelOn` | Текстовые подписи (показываются в slider/checkbox; для `button`/`round` — fallback когда `label` пустой) |
+| `label` | Заголовок виджета. Для `button`/`round` — текст на самой кнопке (если пустой — fallback на labelOn/labelOff по value, потом `'—'`) |
+| `colorTheme` | Цветовая тема (primary/danger/warning/success/neutral/custom) — определяет цвет ON-фона для button и round style |
+| `ledColor` | (только `style='button'` или `style='round'`) hex цвет LED индикатора, default `#fde047` (amber). Дефолт sparse — не пишется в JSON |
 | `requireConfirmation` | Спрашивать confirm перед записью |
 
 **Поведение:** click → POST `valueOn` если текущее `valueOff` (или unknown), иначе POST `valueOff`. Dirty снимается когда SSE feedback совпадёт с командой.
